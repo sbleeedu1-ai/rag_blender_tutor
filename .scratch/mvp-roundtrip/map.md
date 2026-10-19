@@ -15,6 +15,7 @@ Blender 5.2 애드온(단축키·N 패널 채팅·작업 상태 읽기)과 내 P
 - **시간 재기:** 시작은 질문하려고 손을 움직인 순간(GPT: 스크린샷 찍기 시작, 우리: 단축키), 끝은 답이 다 나온 순간. 질문 준비 시간과 보낸 뒤 시간을 나눠 기록한다.
 - **공개·라이선스:** 설명서 CC BY-SA 4.0, Blender Studio 강좌 CC BY 4.0(강좌 쪽에서 문구 미확인, 강좌 글을 데이터로 쓰기 전 확인). 내려받은 원문·번역은 `data/`(커밋 안 함). 답에 근거 링크와 출처 표시. 평가 질문에 설명서 문장을 그대로 옮기지 않는다.
 - **참고할 이전 프로젝트:** `C:\sample\rag_korea_history`의 `docs/결정.md`(원문·번역·풀이를 담은 청크, gpt-6-luna, text-embedding-3-large, RRF + 리랭커, 대화 이력 분리 D2).
+- **조사 브랜치:** `research/*` 브랜치는 main에 합치지 않고 지도가 진행되는 동안 근거로 둔다. **명세(`/to-spec`)가 완성되면 로컬·원격 모두 지운다**(요지는 각 티켓의 Answer에 있다).
 - **쓸 스킬:** grilling 티켓은 `grilling` + `domain-modeling`, 용어는 `CONTEXT.md`를 따른다.
 
 ## Decisions so far
