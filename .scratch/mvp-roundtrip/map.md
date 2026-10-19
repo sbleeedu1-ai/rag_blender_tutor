@@ -39,7 +39,9 @@ Blender 5.2 애드온(단축키·작업 상태 읽기)과 Blender 위에 떠 있
 
 ## Not yet specified
 
-<!-- 비어 있음: 남은 티켓 없음. 길이 다 보였으니 `/to-spec`으로 넘긴다 -->
+<!-- 비어 있음: 남은 티켓 없음 -->
+
+명세: [spec.md](spec.md) (2026-10-19, `ready-for-agent`)
 
 ## Out of scope
 
