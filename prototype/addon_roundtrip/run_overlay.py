@@ -18,6 +18,14 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 BLENDER = os.environ.get("BLENDER", r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe")
 user32 = ctypes.windll.user32
+# 64비트 창 번호가 잘리지 않게 자료형을 정해 둔다
+from ctypes import wintypes
+user32.GetForegroundWindow.restype = wintypes.HWND
+user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_uint]
+user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.c_void_p]
+user32.IsWindowVisible.argtypes = user32.IsIconic.argtypes = user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)  # 글자가 흐리게 보이지 않게
 except Exception:
@@ -49,8 +57,7 @@ threading.Thread(target=server.serve_forever, daemon=True).start()
 # ---- 창 ----
 root = tk.Tk()
 root.title("도우미 (시제품)")
-root.attributes("-topmost", True)
-root.attributes("-alpha", 0.93)
+root.attributes("-alpha", 0.93)  # 맨 위 여부는 follow_blender가 정한다
 sw = root.winfo_screenwidth()
 root.geometry(f"460x560+{sw - 500}+120")
 FONT = ("Malgun Gothic", 11)
@@ -94,9 +101,8 @@ def show_status(extra=""):
 
 def summon(body):
     S["summon"] = body
-    root.deiconify()
-    root.lift()
-    root.attributes("-topmost", True)
+    user32.ShowWindow(hwnd(), SW_SHOWNOACTIVATE)
+    user32.SetWindowPos(hwnd(), HWND_TOPMOST, 0, 0, 0, 0, SWP_KEEP)
     user32.SetForegroundWindow(hwnd())
     entry.focus_force()
 
@@ -141,7 +147,10 @@ blender = subprocess.Popen([BLENDER, "--python", str(HERE / "tutor_overlay_addon
 
 
 MY_PID = os.getpid()
-_owner = {"on_top": None}
+_owner = {"mode": None}
+HWND_TOPMOST, HWND_NOTOPMOST = -1, -2
+SWP_KEEP = 0x0002 | 0x0001 | 0x0010  # 위치·크기 그대로, 앞으로 가져오지(활성화하지) 않음
+SW_HIDE, SW_SHOWNOACTIVATE = 0, 4
 
 
 def pid_of(h):
@@ -150,17 +159,44 @@ def pid_of(h):
     return pid.value
 
 
+def blender_minimized():
+    """이 시제품이 띄운 Blender의 보이는 창이 모두 최소화돼 있으면 True."""
+    wins = []
+    cb_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+    def cb(h, _):
+        if user32.IsWindowVisible(h) and pid_of(h) == blender.pid and user32.GetWindowTextLengthW(h):
+            wins.append(h)
+        return True
+
+    user32.EnumWindows(cb_type(cb), 0)
+    return bool(wins) and all(user32.IsIconic(h) for h in wins)
+
+
 def follow_blender():
-    """Blender나 이 창이 앞에 있을 때만 맨 위. 다른 프로그램이 앞이면 그 뒤로 간다."""
+    """Blender나 이 창이 앞이면 맨 위, 다른 프로그램이 앞이면 그 뒤로, Blender를 최소화하면 숨김."""
     fg = user32.GetForegroundWindow()
-    on_top = pid_of(fg) in (blender.pid, MY_PID)
-    if on_top != _owner["on_top"]:
-        _owner["on_top"] = on_top
-        root.attributes("-topmost", on_top)
-        if not on_top:
-            # 앞에 있는 프로그램 바로 뒤로(SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)
-            user32.SetWindowPos(hwnd(), fg, 0, 0, 0, 0, 0x0002 | 0x0001 | 0x0010)
-        print(f"[떠 있는 창] 맨 위: {on_top}", flush=True)
+    fg_pid = pid_of(fg)
+    if fg_pid in (blender.pid, MY_PID):
+        mode = "top"
+    elif blender_minimized():
+        mode = "hidden"
+    else:
+        mode = "behind"
+    if mode != _owner["mode"]:
+        h = hwnd()
+        if mode == "hidden":
+            user32.ShowWindow(h, SW_HIDE)
+        else:
+            if _owner["mode"] == "hidden":
+                user32.ShowWindow(h, SW_SHOWNOACTIVATE)
+            if mode == "top":
+                user32.SetWindowPos(h, HWND_TOPMOST, 0, 0, 0, 0, SWP_KEEP)
+            else:
+                user32.SetWindowPos(h, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_KEEP)
+                user32.SetWindowPos(h, fg, 0, 0, 0, 0, SWP_KEEP)  # 앞에 있는 프로그램 바로 뒤로
+        print(f"[떠 있는 창] {_owner['mode']} → {mode} (앞 프로그램 번호 {fg_pid}, 우리 Blender {blender.pid})", flush=True)
+        _owner["mode"] = mode
     root.after(100, follow_blender)
 
 
