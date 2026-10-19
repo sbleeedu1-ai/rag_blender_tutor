@@ -140,6 +140,30 @@ root.bind("<Escape>", back_to_blender)
 blender = subprocess.Popen([BLENDER, "--python", str(HERE / "tutor_overlay_addon.py")])
 
 
+MY_PID = os.getpid()
+_owner = {"on_top": None}
+
+
+def pid_of(h):
+    pid = ctypes.c_ulong()
+    user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+    return pid.value
+
+
+def follow_blender():
+    """Blender나 이 창이 앞에 있을 때만 맨 위. 다른 프로그램이 앞이면 그 뒤로 간다."""
+    fg = user32.GetForegroundWindow()
+    on_top = pid_of(fg) in (blender.pid, MY_PID)
+    if on_top != _owner["on_top"]:
+        _owner["on_top"] = on_top
+        root.attributes("-topmost", on_top)
+        if not on_top:
+            # 앞에 있는 프로그램 바로 뒤로(SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)
+            user32.SetWindowPos(hwnd(), fg, 0, 0, 0, 0, 0x0002 | 0x0001 | 0x0010)
+        print(f"[떠 있는 창] 맨 위: {on_top}", flush=True)
+    root.after(100, follow_blender)
+
+
 def poll():
     while True:
         try:
@@ -162,5 +186,6 @@ def poll():
 
 
 root.after(30, poll)
+root.after(100, follow_blender)
 root.mainloop()
 server.shutdown()
