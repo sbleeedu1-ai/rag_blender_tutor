@@ -148,3 +148,9 @@
 - 제안: Claude가 지도와 닫힌 티켓 14개를 명세 하나로 모음. 새로 정한 것은 시험 경계뿐: ① 답 엔진(주 경계, 평가 프로그램도 여기) ② 진행 관리(작업 상태 흐름 → 물음·진행 기록) ③ 연습 과정 파일 검사 ④ 자료 준비(HTML → 청크). 모두 API 키·Blender·화면 없이 돈다. 애드온 작업 상태 읽기는 Blender 화면 없이 도는 자체 시험으로 따로
 - 사용자 선택: 시험 경계 "제안대로 (Recommended)"
 - 결과: `.scratch/mvp-roundtrip/spec.md`(`Status: ready-for-agent`), 지도에 링크. 비용 0
+
+### [15] 2026-10-19 · 지도 마무리: 조사 브랜치 정리와 main 병합
+
+- 제안: 지도 Notes대로 명세가 완성됐으니 `research/*` 브랜치 4개를 지우자고 Claude가 제안. 브랜치에만 있는 조사 문서(검 단계 초안 등)를 잃을 위험이 있어 먼저 `archive/`로 옮기자고 함
+- 사용자 선택: "오늘은 여기까지 말한것들 다 해도 좋고 아예 main까지 합치자 / 그리고 handoff 에 그 티켓 명령어 넣어두고"
+- 결과: 조사 문서 4개를 `archive/research/`로 옮김. `wayfinder/mvp-map`을 main에 병합하고 푸시. 병합한 브랜치와 `research/*` 4개는 로컬·원격에서 지움. `HANDOFF.md` 새로 씀(다음 할 일: `/to-tickets .scratch/mvp-roundtrip/spec.md`). 비용 0
