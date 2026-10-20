@@ -299,7 +299,7 @@ def _check_against_manual(data: object, manual: Manual, report: Report) -> None:
 
 
 # 설명서 문장을 그대로 옮기지 않는다(CC BY-SA). 낱말이 이만큼 같은 차례로 이어지면 옮긴 것으로 본다.
-# 메뉴 경로·옵션 이름처럼 짧게 겹치는 것은 괜찮다. 검 파일은 6단어에서 메뉴 경로 하나가 겹치고 8단어에서는 겹치지 않는다.
+# 설정 이름처럼 짧게 겹치는 것은 괜찮다. 8은 '문장 한 토막'쯤으로 잡은 어림값이다(검·공통 파일은 3낱말 1곳만 겹침: Emulate 3 Button).
 COPY_WORDS = 8
 _WORD = re.compile(r"\w+")
 # 화면·설명서 글자를 일부러 그대로 적는 칸은 옮김 검사에서 뺀다.
