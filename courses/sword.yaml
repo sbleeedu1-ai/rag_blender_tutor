@@ -1,0 +1,265 @@
+# 검 연습 과정(AI 초안). 사용자가 Blender 5.2에서 따라 하며 고치는 검수는 티켓 32에서 한다.
+# 빠른 설정 창을 닫은 뒤의 기본 장면에서 시작해, 기본 정육면체를 칼날로 쓰고 glTF 파일로 내보내며 끝난다.
+# 글은 우리 말로 새로 쓰고, 설명서는 소제목 주소로만 가리킨다. 치수는 비율 위주의 참고값이다.
+이름표: sword
+이름: 단순한 검
+한 줄 설명: 기본 정육면체를 늘려 칼날을 만들고, 코등이·손잡이·끝장식을 붙여 색을 입힌 뒤 게임용 파일로 내보낸다.
+난이도: 쉬움
+마지막 결과: sword.glb
+비슷한 말: [칼, 장검, 단검, 대검, 검, 무기, sword, blade]
+먼저 할 것: _common.yaml
+구간:
+  - 이름: 칼날 만들기
+    단계:
+      - 이름표: blade-stretch
+        이름: 정육면체를 늘려 칼날 모양 잡기
+        목표 모양: 정육면체가 위아래로 길고, 옆으로 좁고, 앞뒤로 얇은 판이 되었다.
+        참고 치수: 폭은 길이의 7분의 1쯤, 두께는 폭의 3분의 1쯤. 가장 긴 쪽이 두 번째로 긴 쪽의 3배는 넘게.
+        쉬운 설명: >-
+          장면 가운데 있는 정육면체를 그대로 칼날의 재료로 쓴다.
+          정육면체를 고른 채 S를 누르고 X나 Y를 이어 누르면 그 방향으로만 크기가 바뀌어, 폭과 두께를 따로 줄일 수 있다.
+          숫자를 바로 쳐서 배수를 넣어도 되고, N으로 여는 옆 패널의 Dimensions 칸에서 길이를 직접 고쳐도 된다.
+        조작:
+          - 설명: 정육면체 고르기
+            메뉴: 없음
+            단축키: 왼쪽 버튼 클릭
+          - 설명: 크기 바꾸기(이어서 X·Y·Z를 누르면 그 방향으로만)
+            메뉴: Object > Transform > Scale
+            단축키: S
+          - 설명: 옆 패널에서 치수 직접 보기·고치기
+            메뉴: View > Sidebar
+            단축키: N
+        먼저 볼 소제목:
+          - scene_layout/object/editing/transform/scale.html#scale
+          - scene_layout/object/editing/transform/control/axis_locking.html#axis-locking
+          - scene_layout/object/properties/transforms.html#transform
+        끝난 조건:
+          - 크기 비율: 3
+
+      - 이름표: blade-tip
+        이름: 칼끝 뾰족하게 모으기
+        목표 모양: 칼날 맨 위가 한 점으로 모여 뾰족하고, 그 아래는 곧은 판 그대로다.
+        참고 치수: 뾰족해지는 부분은 칼날 길이의 5분의 1쯤.
+        쉬운 설명: >-
+          편집 모드로 들어가 칼날 위쪽 가까이에 가로 고리를 하나 더 넣어, 뾰족해질 부분과 곧은 부분을 나눈다.
+          맨 위의 꼭짓점 네 개를 모두 골라 가운데 한 점으로 모으면 칼끝이 된다.
+          뒤쪽 꼭짓점까지 함께 고르려면 X-ray를 켠 다음 상자로 둘러 고른다.
+        조작:
+          - 설명: 편집 모드로 들어가기
+            메뉴: Object Mode > Edit Mode
+            단축키: Tab
+          - 설명: 꼭짓점 고르기 방식으로 바꾸기
+            메뉴: 없음
+            단축키: "1"
+          - 설명: 가로 고리 넣고 위로 밀기
+            메뉴: Edge > Loop Cut and Slide
+            단축키: Ctrl + R
+          - 설명: 뒤쪽까지 비쳐 보이게 하기(X-ray)
+            메뉴: 없음
+            단축키: Alt + Z
+          - 설명: 맨 위 꼭짓점들을 상자로 둘러 고르기
+            메뉴: Select > Box Select
+            단축키: B
+          - 설명: 고른 꼭짓점을 가운데 한 점으로 모으기
+            메뉴: Mesh > Merge > At Center
+            단축키: M
+        먼저 볼 소제목:
+          - modeling/meshes/editing/edge/loopcut_slide.html#loop-cut-and-slide
+          - modeling/meshes/selecting/introduction.html#x-ray
+          - modeling/meshes/editing/mesh/merge.html#merge
+        끝난 조건:
+          - 모드: EDIT
+          - 방금 조작: mesh.merge
+
+  - 이름: 손잡이 쪽 부품 붙이기
+    단계:
+      - 이름표: guard-add
+        이름: 코등이 붙이기
+        목표 모양: 칼날 아래 끝에 칼날과 직각으로 가로놓인 납작한 막대가 있다.
+        참고 치수: 코등이 길이는 칼날 폭의 3-4배, 두께는 칼날 두께의 2배쯤.
+        쉬운 설명: >-
+          코등이는 칼날과 손잡이 사이를 막는 가로 막대다.
+          먼저 Tab으로 물체 모드로 돌아온 다음 새 정육면체를 더하고, 크기를 줄여 납작한 막대로 만든다.
+          G 다음 Z를 누르면 위아래로만 움직이니, 칼날 아래 끝까지 내려 붙인다.
+        조작:
+          - 설명: 물체 모드로 돌아오기
+            메뉴: Edit Mode > Object Mode
+            단축키: Tab
+          - 설명: 새 정육면체 더하기
+            메뉴: Add > Mesh > Cube
+            단축키: Shift + A
+          - 설명: 크기 바꾸기(이어서 X·Y·Z로 방향 고정)
+            메뉴: Object > Transform > Scale
+            단축키: S
+          - 설명: 옮기기(이어서 Z를 누르면 위아래로만)
+            메뉴: Object > Transform > Move
+            단축키: G
+        먼저 볼 소제목:
+          - modeling/meshes/primitives.html#cube
+          - scene_layout/object/editing/transform/move.html#move
+          - scene_layout/object/editing/transform/control/axis_locking.html#axis-locking
+        끝난 조건:
+          - 물체 수 늘어남: 1
+
+      - 이름표: grip-add
+        이름: 손잡이 붙이기
+        목표 모양: 코등이 바로 아래에 둥근 막대 모양 손잡이가 세로로 이어져 있다.
+        참고 치수: 손잡이 길이는 칼날 길이의 4분의 1쯤, 굵기는 칼날 폭보다 조금 가늘게.
+        쉬운 설명: >-
+          손잡이는 원기둥으로 만든다.
+          원기둥을 더한 뒤 크기를 줄여 가늘고 길게 만들고, 코등이 아래로 내려 붙인다.
+          새 물체는 3D 커서 자리(처음에는 장면 가운데)에 생기므로, 칼날 속에 묻혀 보이지 않아도 놀라지 말고 옮기면 된다.
+        조작:
+          - 설명: 새 원기둥 더하기
+            메뉴: Add > Mesh > Cylinder
+            단축키: Shift + A
+          - 설명: 크기 바꾸기
+            메뉴: Object > Transform > Scale
+            단축키: S
+          - 설명: 옮기기
+            메뉴: Object > Transform > Move
+            단축키: G
+        먼저 볼 소제목:
+          - modeling/meshes/primitives.html#cylinder
+          - scene_layout/object/editing/transform/scale.html#scale
+        끝난 조건:
+          - 물체 수 늘어남: 1
+
+      - 이름표: pommel-add
+        이름: 끝장식 붙이기
+        목표 모양: 손잡이 맨 아래에 작은 공이 달려 있다.
+        참고 치수: 공 지름은 손잡이 굵기의 1.5-2배쯤.
+        쉬운 설명: >-
+          끝장식은 손잡이 끝을 마무리하는 작은 공이다.
+          UV 구를 더하고 작게 줄인 뒤 손잡이 아래 끝으로 옮긴다.
+          옆에서 볼 때(숫자패드 1이나 3) 위아래 위치를 맞추기 쉽다.
+        조작:
+          - 설명: 새 UV 구 더하기
+            메뉴: Add > Mesh > UV Sphere
+            단축키: Shift + A
+          - 설명: 크기 바꾸기
+            메뉴: Object > Transform > Scale
+            단축키: S
+          - 설명: 옮기기
+            메뉴: Object > Transform > Move
+            단축키: G
+        먼저 볼 소제목:
+          - modeling/meshes/primitives.html#uv-sphere
+          - scene_layout/object/editing/transform/move.html#move
+        끝난 조건:
+          - 물체 수 늘어남: 1
+
+  - 이름: 한 물체로 다듬기
+    단계:
+      - 이름표: join-parts
+        이름: 부품을 한 물체로 합치기
+        목표 모양: 칼날·코등이·손잡이·끝장식이 한 물체가 되어, 하나를 누르면 모두 함께 골라진다.
+        쉬운 설명: >-
+          지금은 부품 네 개가 따로따로라서 하나씩 움직인다.
+          A로 모두 고른 다음 Ctrl + J로 합치면 한 물체가 된다.
+          합친 뒤 클릭해 보아 검 전체가 함께 골라지면 된 것이다.
+        조작:
+          - 설명: 모두 고르기
+            메뉴: Select > All
+            단축키: A
+          - 설명: 고른 물체를 하나로 합치기
+            메뉴: Object > Join
+            단축키: Ctrl + J
+        먼저 볼 소제목:
+          - scene_layout/object/editing/join.html#join
+        끝난 조건:
+          - 방금 조작: object.join
+
+      - 이름표: apply-scale
+        이름: 크기 확정하기
+        목표 모양: 겉모습은 그대로인데, 옆 패널의 Scale 칸이 세 방향 모두 1이다.
+        쉬운 설명: >-
+          늘리고 줄인 배율이 물체에 숫자로 남아 있으면, 다음 단계의 모서리 다듬기가 방향마다 고르지 않게 나올 수 있다.
+          Ctrl + A에서 Scale을 고르면 지금 모양은 그대로 두고 배율만 1로 되돌린다.
+          N 옆 패널에서 Scale이 1, 1, 1인지 확인한다.
+        조작:
+          - 설명: 배율을 모양에 굳히기
+            메뉴: Object > Apply > Scale
+            단축키: Ctrl + A
+        먼저 볼 소제목:
+          - scene_layout/object/editing/apply.html#transforms
+        끝난 조건:
+          - 방금 조작: object.transform_apply
+          - 배율: [1, 1, 1]
+
+      - 이름표: bevel-edges
+        이름: 모서리 둥글게 다듬기
+        목표 모양: 모서리가 칼처럼 날카롭게 각진 대신 살짝 깎여 빛이 부드럽게 맺힌다.
+        참고 치수: 깎는 폭은 칼날 두께의 3분의 1 이하로 작게.
+        쉬운 설명: >-
+          모디파이어는 원래 모양을 건드리지 않고 그 위에 효과를 얹는 장치다.
+          속성 창의 모디파이어 탭(파란 렌치 모양)에서 Bevel을 더하면 모든 모서리가 조금씩 깎인다.
+          Amount 값을 작게 줄여 칼날이 뭉툭해지지 않게 한다.
+        조작:
+          - 설명: Bevel 모디파이어 더하기
+            메뉴: Properties > Modifiers > Add Modifier > Generate > Bevel
+            단축키: 없음
+          - 설명: 깎는 폭 줄이기
+            메뉴: Properties > Modifiers > Bevel > Amount
+            단축키: 없음
+        먼저 볼 소제목:
+          - modeling/modifiers/introduction.html#interface
+          - modeling/modifiers/generate/bevel.html#bevel-modifier
+        끝난 조건:
+          - 모디파이어: BEVEL
+
+  - 이름: 색 입히고 내보내기
+    단계:
+      - 이름표: color-parts
+        이름: 칼날과 손잡이에 다른 색 입히기
+        목표 모양: 칼날·코등이·끝장식은 쇠처럼 회색이고, 손잡이만 갈색이다.
+        쉬운 설명: >-
+          한 물체에 여러 색을 주려면 재질 칸을 두 개 만들고, 면마다 어느 칸을 쓸지 정한다.
+          재질 탭에서 첫 재질을 만들어 회색으로 하고, 칸을 하나 더해 갈색 재질을 만든다.
+          편집 모드에서 손잡이에 마우스를 올리고 L을 눌러 손잡이만 고른 다음, 갈색 칸을 고른 채 Assign을 누른다.
+        조작:
+          - 설명: 첫 재질 만들기
+            메뉴: Properties > Material > New
+            단축키: 없음
+          - 설명: 재질 칸 하나 더하기
+            메뉴: Properties > Material > Material Slots > Add Material Slot
+            단축키: 없음
+          - 설명: 색 고르기
+            메뉴: Properties > Material > Surface > Base Color
+            단축키: 없음
+          - 설명: 마우스 아래 이어진 부분만 고르기(편집 모드)
+            메뉴: Select > Select Linked > Linked
+            단축키: L
+          - 설명: 고른 면에 지금 재질 칸 쓰기
+            메뉴: Properties > Material > Assign
+            단축키: 없음
+        먼저 볼 소제목:
+          - render/materials/assignment.html#material-slots
+          - render/materials/assignment.html#edit-mode
+          - modeling/meshes/selecting/linked.html#linked
+        끝난 조건:
+          - 재질 슬롯 수: 2
+
+      - 이름표: export-gltf
+        이름: glTF 파일로 내보내기
+        목표 모양: 저장한 폴더에 sword.glb 파일 하나가 생겼다.
+        쉬운 설명: >-
+          glTF는 게임 엔진이 널리 읽는 3D 파일 형식이고, .glb는 그것을 파일 하나로 묶은 것이다.
+          Tab으로 물체 모드로 돌아와 File 메뉴에서 glTF 2.0으로 내보내고, 형식은 glTF Binary(.glb)로 둔다.
+          모서리 다듬기가 파일에도 들어가도록 Mesh 쪽의 Apply Modifiers가 켜져 있는지 보고, 이름을 sword.glb로 저장한다.
+        조작:
+          - 설명: 물체 모드로 돌아오기
+            메뉴: Edit Mode > Object Mode
+            단축키: Tab
+          - 설명: glTF로 내보내기 창 열기
+            메뉴: File > Export > glTF 2.0 (.glb/.gltf)
+            단축키: 없음
+          - 설명: 모디파이어를 적용해 내보내기 켜짐 확인
+            메뉴: Data > Mesh > Apply Modifiers
+            단축키: 없음
+        먼저 볼 소제목:
+          - addons/scene_gltf2.html#export
+          - addons/scene_gltf2.html#gltf-binary-glb
+          - addons/scene_gltf2.html#data-mesh
+        끝난 조건:
+          - 방금 조작: export_scene.gltf
