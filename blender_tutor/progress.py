@@ -23,6 +23,15 @@ class Step:
 
 
 @dataclass(frozen=True)
+class Course:
+    """연습 과정 하나: 이름표, 화면에 보이는 이름, 공통 준비부터 파일 순서대로 늘어놓은 단계."""
+
+    label: str
+    name: str
+    steps: tuple[Step, ...]
+
+
+@dataclass(frozen=True)
 class Ask:
     """창 안에 띄울 "다음 단계로 갈까요" 물음."""
 
@@ -54,12 +63,20 @@ def load_steps(course: Path) -> list[Step]:
     return steps
 
 
+def load_course(course: Path) -> Course:
+    """연습 과정 파일 하나를 읽는다. 단계는 load_steps와 같이 공통 준비부터."""
+    data = yaml.safe_load(course.read_text(encoding="utf-8"))
+    return Course(data["이름표"], data["이름"], tuple(load_steps(course)))
+
+
 class Progress:
     """한 연습 과정의 진행. 사건 함수마다 창이 할 일(물음 띄우기·거두기) 목록을 돌려준다."""
 
-    def __init__(self, steps: list[Step]):
+    def __init__(self, steps: list[Step], start: int = 0, finished: tuple[str, ...] = ()):
+        """이어 할 때는 시작할 단계 번호(0부터, 단계 수와 같으면 마친 상태)와 끝낸 단계 이름표를 받는다."""
         self._steps = steps
-        self._index = 0
+        self._index = start
+        self._finished = list(finished)  # 사용자가 [네]나 '다음 단계' 버튼으로 끝낸 단계 이름표. 건너뛴 단계는 넣지 않는다
         self._asking = False  # 물음을 띄워 두고 답을 기다리는 중
         self._declined: set[str] = set()  # 물음을 거절한 단계 이름표. 이 단계들은 다시 묻지 않는다
         self._latest: WorkState | None = None  # 마지막으로 받은 작업 상태
@@ -69,6 +86,11 @@ class Progress:
     def step(self) -> Step | None:
         """지금 단계. 연습 과정을 마쳤으면 None."""
         return self._steps[self._index] if self._index < len(self._steps) else None
+
+    @property
+    def finished(self) -> tuple[str, ...]:
+        """끝낸 단계 이름표(끝낸 차례대로). 뒤로 가도 줄지 않는다."""
+        return tuple(self._finished)
 
     def on_state(self, state: WorkState) -> list[Command]:
         """작업 상태가 도착했을 때."""
@@ -99,6 +121,7 @@ class Progress:
             return []
         self._asking = False
         if yes:
+            self._finish()
             self._go_to(self._index + 1)
         else:
             self._declined.add(self.step.label)
@@ -106,6 +129,7 @@ class Progress:
 
     def next_step(self) -> list[Command]:
         """'다음 단계' 버튼. 끝난 조건과 상관없이 언제나 넘어간다(마지막 단계에서는 연습 과정을 마침)."""
+        self._finish()
         return self._go_to(min(self._index + 1, len(self._steps)))
 
     def skip_to(self, label: str) -> list[Command]:
@@ -115,6 +139,11 @@ class Progress:
     def back(self) -> list[Command]:
         """앞 단계로 가기. 첫 단계에서는 그대로 머문다."""
         return self._go_to(max(self._index - 1, 0))
+
+    def _finish(self) -> None:
+        """지금 단계를 끝낸 단계에 넣는다."""
+        if self.step is not None and self.step.label not in self._finished:
+            self._finished.append(self.step.label)
 
     def _go_to(self, index: int) -> list[Command]:
         """지금 단계를 바꾸고, 그 순간의 장면 물체 수를 단계 시작 때 수로 기억한다. 떠 있던 물음은 거둔다."""
