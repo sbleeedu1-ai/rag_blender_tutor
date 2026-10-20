@@ -4,15 +4,16 @@
 
 ## 다음 할 일
 
-1. **티켓 18 PR 병합(사용자 확인 뒤)**: 티켓 18 작업이 브랜치 `tickets/18-progress-record`의 PR에 있다. CI "test"를 통과하고 사용자가 병합하라고 하면 병합 커밋으로 main에 합치고, 브랜치를 로컬·원격에서 지운다.
-2. 그다음 바로 시작할 수 있는 티켓: 19(자료 준비, 설명서 HTML을 청크로), 25(애드온), 34(홀드아웃 봉인). 27(도우미 창에 연습 과정 연결)은 26이 끝나야 한다.
+1. **티켓 19 PR 병합(사용자 확인 뒤)**: 브랜치 `tickets/19-manual-chunks`의 PR. CI "test"를 통과하고 사용자가 병합하라고 하면 병합 커밋으로 main에 합치고, 브랜치를 로컬·원격에서 지운다.
+2. 사용자 답에 따라: "모드·메뉴·단축키" 상자 위치(아래 "사용자가 정해야 할 것"), 검토에서 나온 코드 모양 정리.
+3. 그다음 시작할 수 있는 티켓: 19 병합 뒤 20(메뉴 이름 한국어-영어 짝)·21(답 엔진 첫 왕복)이 풀린다. 25(애드온), 34(홀드아웃 봉인)는 바로 가능.
 
 ## 지금 상태
 
-- 티켓 18을 끝냈다(HISTORY [30]).
-  - `blender_tutor/progress_record.py`(`ProgressManager`): 연습 과정 고르기·바꾸기 확인, 파일 열림·저장 사건, 파일마다 진행 기록 JSON, 이어 하기 물음.
-  - `blender_tutor/progress.py`의 `Progress`: 끝낸 단계, 중간 단계부터 시작, `close()`를 더함. `Course`, `load_course`도 더함.
-- 테스트: `.venv\Scripts\python -m pytest` 100개 통과. 연습 과정 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` 문제 0개.
+- 티켓 19를 끝냈다(HISTORY [32]).
+  - `blender_tutor/manual_chunks.py`: `chunk_page`(쪽 하나), `chunk_manual`(묶음 전체), 실행 `.venv\Scripts\python -m blender_tutor.manual_chunks data/manual_en_5.2/html/blender_manual_v520_en.html data/chunks/manual_chunks.jsonl`
+  - 전체 실행: 청크 8,995개(쪽 2,085개), 13초. 결과는 `data/chunks/`(커밋 안 함). 다른 PC에서는 다시 돌려야 한다.
+- 테스트: `.venv\Scripts\python -m pytest` 114개 통과. 새 의존성 `beautifulsoup4`가 있어 다른 PC에서는 `.venv\Scripts\python -m pip install -e ".[dev]"`를 다시 돌린다.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 모르면 실수할 것
@@ -40,7 +41,8 @@
 
 ## 사용자가 정해야 할 것
 
-- 티켓 18 PR 병합 여부.
+- 티켓 19 PR 병합 여부.
+- "모드·메뉴·단축키" 상자 위치: 명세는 "쪽 첫 청크"인데, 지금은 상자가 있던 소제목의 청크에 둔다(한 쪽에 도구가 여럿이면 상자도 여럿, 1,510개 중 1,047개가 쪽 첫 청크가 아님). Claude 권장: 지금대로.
 - 강사님 중간 확인 때 물어볼 것: GPT에게 연습 과정 정보를 주지 않는 조건이 괜찮은지.
 
 ## 추천 스킬
@@ -49,5 +51,5 @@
 
 ## 참고 문서
 
-- 명세 `.scratch/mvp-roundtrip/spec.md`("진행 관리"), 티켓 `.scratch/mvp-roundtrip/issues/18-진행-관리-진행-기록-저장과-이어-하기.md`
+- 명세 `.scratch/mvp-roundtrip/spec.md`("자료 준비"), 티켓 `.scratch/mvp-roundtrip/issues/19-자료-준비-설명서-HTML을-청크로.md`
 - 용어집 `CONTEXT.md`, 결정 `docs/adr/`, 경과 `HISTORY.md`
