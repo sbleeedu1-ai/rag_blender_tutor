@@ -56,7 +56,7 @@ COURSE = """\
         먼저 볼 소제목:
           - modeling/meshes/editing/mesh/merge.html#merge
         끝난 조건:
-          - 모드: EDIT
+          - 모드: EDIT_MESH
           - 방금 조작: mesh.merge
         자주 막히는 곳:
           - 물체 모드에서는 Merge 메뉴가 보이지 않는다.
@@ -98,13 +98,13 @@ def test_공통_준비와_단계_이름표가_겹치면_잡는다(tmp_path):
 
 
 def test_정해진_7가지_밖의_끝난_조건_종류를_잡는다(tmp_path):
-    course = COURSE.replace("          - 모드: EDIT\n", "          - 꼭짓점 수: 8\n")
+    course = COURSE.replace("          - 모드: EDIT_MESH\n", "          - 꼭짓점 수: 8\n")
     assert kinds(write_folder(tmp_path, course=course)) == ["condition-kind"]
 
 
 def test_7가지_끝난_조건_종류는_모두_받아들인다(tmp_path):
     conditions = """\
-          - 모드: EDIT
+          - 모드: EDIT_MESH
           - 방금 조작: mesh.merge
           - 물체 수 늘어남: 1
           - 모디파이어: SOLIDIFY
@@ -112,12 +112,12 @@ def test_7가지_끝난_조건_종류는_모두_받아들인다(tmp_path):
           - 배율: [1, 1, 1]
           - 크기 비율: 3
 """
-    course = COURSE.replace("          - 모드: EDIT\n          - 방금 조작: mesh.merge\n", conditions)
+    course = COURSE.replace("          - 모드: EDIT_MESH\n          - 방금 조작: mesh.merge\n", conditions)
     assert kinds(write_folder(tmp_path, course=course)) == []
 
 
 def test_끝난_조건이_종류_값_한_줄이_아니면_잡는다(tmp_path):
-    course = COURSE.replace("          - 모드: EDIT\n", "          - 모드: EDIT\n            배율: [1, 1, 1]\n")
+    course = COURSE.replace("          - 모드: EDIT_MESH\n", "          - 모드: EDIT_MESH\n            배율: [1, 1, 1]\n")
     assert kinds(write_folder(tmp_path, course=course)) == ["condition-kind"]
 
 
@@ -177,7 +177,7 @@ def test_조작_목록이_비어_있으면_잡는다(tmp_path):
 
 @pytest.mark.parametrize("value", ["no", "on", ""])
 def test_끝난_조건_값의_YAML_함정과_빈_값을_잡는다(tmp_path, value):
-    course = COURSE.replace("          - 모드: EDIT\n", f"          - 모드: {value}\n")
+    course = COURSE.replace("          - 모드: EDIT_MESH\n", f"          - 모드: {value}\n")
     assert kinds(write_folder(tmp_path, course=course)) == ["yaml-trap" if value else "missing"]
 
 
@@ -221,3 +221,28 @@ def test_저장소의_연습_과정_파일은_검사를_통과한다():
     assert (COURSES / "_common.yaml").is_file()
     assert (COURSES / "sword.yaml").is_file()
     assert check_folder(COURSES) == []
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        "모드: EDIT",  # Blender가 보내는 모드 이름은 EDIT_MESH
+        "모드: edit_mesh",
+        "방금 조작: MESH_OT_merge",  # 조작 이름은 mesh.merge 꼴
+        "방금 조작: Merge",
+        "물체 수 늘어남: 0",
+        "물체 수 늘어남: 1.5",
+        "물체 수 늘어남: 하나",
+        "모디파이어: bevel",  # 모디파이어 종류 이름은 BEVEL 꼴
+        "재질 슬롯 수: 0",
+        "재질 슬롯 수: '2'",
+        "배율: [1, 1]",
+        "배율: 1",
+        "배율: [1, 1, 큼]",
+        "크기 비율: 0.5",  # 1보다 작으면 언제나 맞아 쓸모가 없다
+        "크기 비율: 3배",
+    ],
+)
+def test_끝난_조건_값의_꼴이_틀리면_잡는다(tmp_path, condition):
+    course = COURSE.replace("          - 모드: EDIT_MESH\n", f"          - {condition}\n")
+    assert kinds(write_folder(tmp_path, course=course)) == ["condition-value"]

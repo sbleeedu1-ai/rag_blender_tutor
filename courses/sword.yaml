@@ -69,7 +69,7 @@
           - modeling/meshes/selecting/introduction.html#x-ray
           - modeling/meshes/editing/mesh/merge.html#merge
         끝난 조건:
-          - 모드: EDIT
+          - 모드: EDIT_MESH
           - 방금 조작: mesh.merge
 
   - 이름: 손잡이 쪽 부품 붙이기
@@ -266,5 +266,4 @@
           - addons/scene_gltf2.html#export
           - addons/scene_gltf2.html#gltf-binary-glb
           - addons/scene_gltf2.html#data-mesh
-        끝난 조건:
-          - 방금 조작: export_scene.gltf
+        # 끝난 조건 없음: glTF 내보내기는 Blender 5.2.2의 "방금 실행한 조작" 기록에 남지 않는다(2026-10-20 직접 조작해 확인). "다음 단계" 버튼으로 마친다.
