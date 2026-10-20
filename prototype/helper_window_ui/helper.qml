@@ -153,13 +153,14 @@ Window {
                     visible: row.kind !== "sources"
                     width: parent.width
                     wrapMode: Text.Wrap
-                    text: row.body
+                    text: row.kind === "answer" ? row.body.replace(/([.!?])\s+/g, "$1\n") : row.body
                     font.family: win.fontName
                     font.pixelSize: row.kind === "answer" ? 19 : row.kind === "thinking" ? 15 : 14
                     font.bold: row.kind === "answer"
                     color: row.kind === "answer" ? "white" : Qt.rgba(235 / 255, 235 / 255, 245 / 255, row.kind === "thinking" ? 0.45 : 0.55)
                     SequentialAnimation on opacity {
                         running: row.kind === "thinking"
+                        onRunningChanged: if (!running) label.opacity = 1  // 반쯤 흐린 채 굳지 않게
                         loops: Animation.Infinite
                         NumberAnimation { to: 0.4; duration: 600 }
                         NumberAnimation { to: 1; duration: 600 }

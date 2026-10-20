@@ -1,6 +1,8 @@
 # 시제품(버릴 코드): 두 판(위젯 / QML)이 함께 쓰는 가짜 답, 트레이 아이콘, 창 자리
 import itertools
 import os
+import re
+import sys
 import time
 
 from PySide6.QtCore import QPoint, QRect, Qt, QTimer
@@ -8,6 +10,9 @@ from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 START = time.perf_counter()
+
+# Windows에서 출력이 파이프로 갈 때 CP949가 되어 한글이 깨지는 것을 막음
+sys.stdout.reconfigure(encoding="utf-8")
 
 WIDTH, HEIGHT = 420, 560
 FONT = "Malgun Gothic"
@@ -43,6 +48,11 @@ FAKE_ANSWERS = [
 _answers = itertools.cycle(FAKE_ANSWERS)
 
 FIRST_QUESTION = "배열 모디파이어 어디 있어요?"
+
+
+def by_sentence(text):
+    """문장 끝(. ! ? 뒤에 빈칸)마다 줄을 바꿈. 5.2 같은 숫자는 그대로."""
+    return re.sub(r"([.!?])\s+", r"\1\n", text)
 
 
 def next_answer():

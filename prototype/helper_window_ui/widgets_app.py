@@ -212,7 +212,7 @@ class Helper(QWidget):
             self.answer.style().polish(self.answer)
             common.log(V, f"첫 글자 {1000 * (time.perf_counter() - self.t_send):.0f}ms")
         self.shown += 2
-        self.answer.setText(self.ans["text"][: self.shown])
+        self.answer.setText(common.by_sentence(self.ans["text"][: self.shown]))
         if self.shown >= len(self.ans["text"]):
             self.timer.stop()
             self._sources(self.ans["sources"])
