@@ -4,13 +4,12 @@
 
 ## 다음 할 일
 
-1. **티켓 20 PR 병합(사용자 확인 뒤)**: 브랜치 `tickets/20-menu-names`의 PR. CI "test"를 통과하고 사용자가 병합하라고 하면 병합 커밋으로 main에 합치고, 브랜치를 로컬·원격에서 지운다.
-2. 그다음 시작할 수 있는 티켓: 21(답 엔진 첫 왕복). 21 뒤 22(검색어)·23(메뉴 이름 한국어 표기)가 풀린다. 25(애드온), 34(홀드아웃 봉인)는 바로 가능.
+1. 시작할 수 있는 티켓: 21(답 엔진 첫 왕복). 21 뒤 22(검색어)·23(메뉴 이름 한국어 표기)가 풀린다. 25(애드온), 34(홀드아웃 봉인)는 바로 가능.
 
 ## 지금 상태
 
-- 티켓 20을 끝냈다(HISTORY [34]).
-  - `blender_tutor/menu_names.py`: 설명서의 블렌더 표기(메뉴 경로·버튼·옵션 이름, ko.po에 있는 쪽 제목·소제목)를 ko.po와 짝지은 사전. 실행 `.venv\Scripts\python -m blender_tutor.menu_names data/manual_en_5.2/html/blender_manual_v520_en.html data/ui_ko_5.2/ko.po data/ui_ko_5.2/fr.po data/menu_names`
+- 티켓 20을 끝내고 main에 합쳤다(PR #9, HISTORY [34]).
+  - `blender_tutor/menu_names.py`: 설명서에 나오는 Blender 용어를 사용자가 화면에서 보는 한국어와 맞추려고, Blender 공식 한국어 번역(ko.po)과 대조해 만든 사전. 용어는 메뉴 경로·버튼·옵션 이름과, ko.po에 있는 쪽 제목·소제목에서 뽑는다. 실행 `.venv\Scripts\python -m blender_tutor.menu_names data/manual_en_5.2/html/blender_manual_v520_en.html data/ui_ko_5.2/ko.po data/ui_ko_5.2/fr.po data/menu_names`
   - 청크에 `ui_names` 칸이 생겨 청크 파일을 다시 만들었다(8,997개 그대로).
   - 결과: 7,697개 → 번역 없음 2,182 / 하나 5,224 / 여러 개 291, 제목에서만 1,055. 검수 목록 `data/menu_names/review.md`. 다른 PC에서는 ko.po·fr.po를 Blender 저장소 `blender-v5.2-release`의 `locale/po/`에서 받아 `data/ui_ko_5.2/`에 두고 다시 돌린다.
 - 테스트: `.venv\Scripts\python -m pytest` 130개 통과.
@@ -46,7 +45,6 @@
 
 ## 사용자가 정해야 할 것
 
-- 티켓 20 PR 병합 여부.
 - 메뉴 이름 검수(여러 개 291, 제목에서만 1,055): 초보자 범위 분류(티켓 30) 뒤 범위 안 것만. 고른 짝 저장 형식은 티켓 23.
 - 강사님 중간 확인 때 물어볼 것: GPT에게 연습 과정 정보를 주지 않는 조건이 괜찮은지.
 
