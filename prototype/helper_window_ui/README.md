@@ -19,6 +19,8 @@ python -m venv .venv
 .venv\Scripts\python prototype\helper_window_ui\run.py qml      # QML 판만
 ```
 
+bash(Git Bash, Claude Code의 `!` 명령)에서는 `\` 대신 `/`를 쓴다: `.venv/Scripts/python prototype/helper_window_ui/run.py`
+
 창 왼쪽 위에 "시제품 · 위젯" / "시제품 · QML"이 적혀 있다. 터미널에 보이기·보냄·첫 글자·답 끝 시간(ms)이 찍힌다. 끝내기: 트레이 아이콘 오른쪽 클릭 > 끝내기(판마다 아이콘이 하나씩).
 
 ## 눈으로 볼 것
