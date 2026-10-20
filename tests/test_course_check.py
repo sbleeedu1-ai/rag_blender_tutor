@@ -3,13 +3,14 @@
 일부러 틀린 작은 YAML을 임시 폴더에 써 넣고, 검사가 돌려준 문제의 종류만 본다.
 """
 
+import json
 from pathlib import Path
 
 import pytest
 
 from unittest.mock import ANY
 
-from blender_tutor.course_check import Problem, check_folder
+from blender_tutor.course_check import Problem, check_folder, load_manual
 
 # 검사를 통과하는 가장 작은 공통 준비 파일과 연습 과정 파일.
 # 테스트마다 한 군데만 바꿔서 틀리게 만든다.
@@ -247,3 +248,102 @@ def test_저장소의_연습_과정_파일은_검사를_통과한다():
 def test_끝난_조건_값의_꼴이_틀리면_잡는다(tmp_path, condition):
     course = COURSE.replace("          - 모드: EDIT_MESH\n", f"          - {condition}\n")
     assert kinds(write_folder(tmp_path, course=course)) == ["condition-value"]
+
+
+# --- data/가 있을 때만 하는 검사(티켓 24) ---
+# 아래 자료는 테스트용으로 지어낸 것이다(설명서 원문 아님). 실제 data/와 같은 파일 자리에 둔다.
+
+MANUAL_BODY = "Merge combines the selected vertices into one single vertex placed at their center point."
+
+
+def write_data(tmp_path: Path, chunks: list[dict] | None = None, ko: str = "", fr: str = "") -> Path:
+    """가짜 data/ 폴더: 청크 파일, ko.po, fr.po."""
+    data = tmp_path / "data"
+    (data / "chunks").mkdir(parents=True)
+    (data / "ui_ko_5.2").mkdir()
+    if chunks is None:
+        chunks = [
+            {"page_path": "editors/3dview/navigate/navigation", "anchor": "orbit", "url": "https://x/orbit", "body": "Orbit."},
+            {"page_path": "modeling/meshes/editing/mesh/merge", "anchor": "merge", "url": "https://x/merge", "body": MANUAL_BODY},
+        ]  # fmt: skip
+    lines = "".join(json.dumps(chunk) + "\n" for chunk in chunks)
+    (data / "chunks" / "manual_chunks.jsonl").write_text(lines, encoding="utf-8")
+    (data / "ui_ko_5.2" / "ko.po").write_text(ko or KO_PO, encoding="utf-8")
+    (data / "ui_ko_5.2" / "fr.po").write_text(fr or FR_PO, encoding="utf-8")
+    return data
+
+
+def po(*entries: tuple[str, str, str]) -> str:
+    return "".join(f'msgctxt "{context}"\nmsgid "{english}"\nmsgstr "{translated}"\n\n' for context, english, translated in entries)
+
+
+KO_PO = po(("*", "View", "보기"), ("*", "Navigation", "내비게이션"), ("*", "Orbit", "궤도"), ("*", "Mesh", "메쉬"), ("*", "Merge", "병합"))
+# At Center는 한국어 번역이 없어 ko.po에 없고, 번역률 100%인 fr.po에만 있다(화면에는 영어로 보인다).
+FR_PO = po(("Operator", "At Center", "Au centre"))
+
+
+def data_kinds(folder: Path, data: Path) -> list[str]:
+    return [p.kind for p in check_folder(folder, load_manual(data))]
+
+
+def test_자료가_있어도_올바른_파일은_문제가_없다(tmp_path):
+    assert data_kinds(write_folder(tmp_path), write_data(tmp_path)) == []
+
+
+def test_먼저_볼_소제목_주소가_청크에_없으면_잡는다(tmp_path):
+    course = COURSE.replace("merge.html#merge", "merge.html#merge-by-distance")
+    assert data_kinds(write_folder(tmp_path, course=course), write_data(tmp_path)) == ["address-missing"]
+
+
+def test_메뉴_경로의_한_단이_번역_사전에_없으면_잡는다(tmp_path):
+    # 설명서 소제목 이름 "Zoom In/Out"은 화면 메뉴 글자가 아니다(화면에는 Zoom In, Zoom Out이 따로 있다).
+    common = COMMON.replace("View > Navigation > Orbit", "View > Navigation > Zoom In/Out")
+    assert data_kinds(write_folder(tmp_path, common=common), write_data(tmp_path)) == ["menu-unknown"]
+
+
+def test_한국어_번역이_없어도_fr_po에_있는_화면_글자는_받아들인다(tmp_path):
+    # COURSE의 Mesh > Merge > At Center에서 At Center는 FR_PO에만 있다.
+    assert "At Center" not in KO_PO
+    assert data_kinds(write_folder(tmp_path), write_data(tmp_path)) == []
+
+
+def test_메뉴가_없음이면_메뉴_경로를_보지_않는다(tmp_path):
+    course = COURSE.replace("메뉴: Mesh > Merge > At Center", "메뉴: 없음")
+    assert data_kinds(write_folder(tmp_path, course=course), write_data(tmp_path)) == []
+
+
+def test_설명서의_말줄임표는_화면의_점_세_개와_같게_본다(tmp_path):
+    common = COMMON.replace("View > Navigation > Orbit", "View > Navigation…")
+    data = write_data(tmp_path, ko=KO_PO + po(("*", "Navigation...", "내비게이션...")))
+    assert data_kinds(write_folder(tmp_path, common=common), data) == []
+
+
+def test_설명서와_8단어_이상_똑같이_겹치면_잡는다(tmp_path):
+    # 대소문자·문장부호가 달라도 같은 낱말이 같은 차례로 이어지면 옮긴 것으로 본다.
+    copied = "편집 모드에서 Combines the selected vertices, into one single VERTEX 한다."
+    course = COURSE.replace("편집 모드에서 끝 모서리를 골라 한 점으로 모은다.", copied)
+    problems = check_folder(write_folder(tmp_path, course=course), load_manual(write_data(tmp_path)))
+    assert [(p.kind, p.where) for p in problems] == [("copied", "구간[1].단계[1].쉬운 설명")]
+    assert "https://x/merge" in problems[0].message  # 어느 청크와 겹쳤는지 링크를 보여 준다
+
+
+def test_설명서와_7단어까지_겹치는_것은_받아들인다(tmp_path):
+    course = COURSE.replace("물체 모드에서는 Merge 메뉴가 보이지 않는다.", "combines the selected vertices into one single 로 모은다.")
+    assert data_kinds(write_folder(tmp_path, course=course), write_data(tmp_path)) == []
+
+
+def test_자료_파일이_하나라도_없으면_자료_검사를_건너뛴다(tmp_path):
+    data = write_data(tmp_path)
+    (data / "ui_ko_5.2" / "fr.po").unlink()
+    assert load_manual(data) is None
+    assert load_manual(tmp_path / "없는 폴더") is None
+
+
+DATA = Path(__file__).resolve().parent.parent / "data"
+
+
+def test_저장소의_연습_과정_파일은_실제_자료로도_검사를_통과한다():
+    manual = load_manual(DATA)
+    if manual is None:
+        pytest.skip("data/에 청크·ko.po·fr.po가 없음(커밋하지 않는 자료)")
+    assert check_folder(COURSES, manual) == []
