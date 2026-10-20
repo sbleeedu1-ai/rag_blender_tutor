@@ -9,6 +9,7 @@ description = "Blender 첫걸음 도우미: Blender 5.2 설명서를 근거로 �
 requires-python = ">=3.12"
 dependencies = [
     "PyYAML>=6.0",
+    "beautifulsoup4>=4.12",
 ]
 
 [project.optional-dependencies]
