@@ -5,16 +5,34 @@ import re
 import sys
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import yaml
+
+
+class Kind(StrEnum):
+    """문제 종류. 웹의 404처럼 정해 둔 이름만 쓴다(오타를 내면 바로 오류가 난다)."""
+
+    MISSING = "missing"  # 꼭 있어야 하는 칸이 없거나 값이 비어 있음
+    UNKNOWN = "unknown"  # 모르는 칸 이름
+    TYPE = "type"  # 값의 모양이 틀림(글이어야 할 곳에 목록 등)
+    COUNT = "count"  # 개수가 정해진 범위 밖
+    LABEL_FORMAT = "label-format"  # 이름표가 영어 소문자·숫자·하이픈이 아님
+    ADDRESS_FORMAT = "address-format"  # 설명서 소제목 주소가 '경로.html#앵커' 꼴이 아님
+    DUPLICATE_LABEL = "duplicate-label"  # 이름표 겹침
+    CONDITION_KIND = "condition-kind"  # 정해진 7가지 밖의 끝난 조건 종류
+    COMMON_REF = "common-ref"  # 공통 준비 파일을 잘못 가리킴
+    YAML_TRAP = "yaml-trap"  # YAML 함정(따옴표 없는 no 등, 같은 칸 두 번)
+    YAML_SYNTAX = "yaml-syntax"  # YAML 문법 오류
+    FILE_NAME = "file-name"  # 확장자가 .yaml이 아님
 
 
 @dataclass(frozen=True)
 class Problem:
     """검사에서 찾은 문제 하나."""
 
-    kind: str  # 문제 종류(테스트가 보는 값)
+    kind: Kind  # 문제 종류(테스트가 보는 값)
     file: str  # 파일 이름
     where: str  # 파일 안 위치(예: 구간[1].단계[2].이름)
     message: str  # 사람이 읽을 설명
@@ -40,33 +58,33 @@ class _DuplicateKey(Exception):
         self.key, self.line = key, line
 
 
-Report = Callable[[str, str, str], None]  # (종류, 위치, 설명)
+Report = Callable[[Kind, str, str], None]  # (종류, 위치, 설명)
 Checker = Callable[[object, str, Report], None]
 
 
 def _check_fields(data: object, fields: dict[str, tuple[bool, Checker]], where: str, report: Report) -> None:
     """칸 묶음 하나(YAML 매핑)를 칸 정의표와 맞춰 본다."""
     if not isinstance(data, dict):
-        report("type", where, "칸 이름: 값 꼴이어야 합니다.")
+        report(Kind.TYPE, where, "칸 이름: 값 꼴이어야 합니다.")
         return
     for name, (required, checker) in fields.items():
         if name in data:
             checker(data[name], f"{where}.{name}" if where else name, report)
         elif required:
-            report("missing", where or "맨 위", f"꼭 있어야 하는 '{name}' 칸이 없습니다.")
+            report(Kind.MISSING, where or "맨 위", f"꼭 있어야 하는 '{name}' 칸이 없습니다.")
     for name in data:
         if name not in fields:
-            report("unknown", where or "맨 위", f"'{name}'은(는) 모르는 칸 이름입니다. 쓸 수 있는 칸: {', '.join(fields)}")
+            report(Kind.UNKNOWN, where or "맨 위", f"'{name}'은(는) 모르는 칸 이름입니다. 쓸 수 있는 칸: {', '.join(fields)}")
 
 
 def _text(value: object, where: str, report: Report) -> None:
     if value is None or value == "":
-        report("missing", where, "값이 비어 있습니다.")
+        report(Kind.MISSING, where, "값이 비어 있습니다.")
     elif isinstance(value, (bool, int, float, datetime.date)):
         # YAML 1.1 함정: 따옴표 없는 no/on은 참/거짓, 1.10은 숫자 1.1, 22:30은 60진수 1350으로 읽힌다.
-        report("yaml-trap", where, f"글이어야 하는데 YAML이 {value!r}(으)로 읽었습니다. 값을 따옴표로 감싸세요.")
+        report(Kind.YAML_TRAP, where, f"글이어야 하는데 YAML이 {value!r}(으)로 읽었습니다. 값을 따옴표로 감싸세요.")
     elif not isinstance(value, str):
-        report("type", where, "글 한 줄이어야 합니다.")
+        report(Kind.TYPE, where, "글 한 줄이어야 합니다.")
 
 
 # 이름표는 진행 기록에 그대로 적히므로 바뀌지 않는 영어 소문자·숫자·하이픈만 쓴다(예: blade-tip).
@@ -76,7 +94,7 @@ LABEL = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 def _label(value: object, where: str, report: Report) -> None:
     _text(value, where, report)
     if isinstance(value, str) and value and not LABEL.fullmatch(value):
-        report("label-format", where, f"이름표 '{value}': 영어 소문자·숫자·하이픈만 씁니다(예: blade-tip).")
+        report(Kind.LABEL_FORMAT, where, f"이름표 '{value}': 영어 소문자·숫자·하이픈만 씁니다(예: blade-tip).")
 
 
 def _texts(least: int = 1, most: int | None = None) -> Checker:
@@ -84,11 +102,11 @@ def _texts(least: int = 1, most: int | None = None) -> Checker:
 
     def check(value: object, where: str, report: Report) -> None:
         if not isinstance(value, list):
-            report("type", where, "글 목록이어야 합니다.")
+            report(Kind.TYPE, where, "글 목록이어야 합니다.")
             return
         if len(value) < least or (most is not None and len(value) > most):
             limit = f"{least}-{most}개" if most is not None else f"{least}개 이상"
-            report("count", where, f"{limit}여야 하는데 {len(value)}개입니다.")
+            report(Kind.COUNT, where, f"{limit}여야 하는데 {len(value)}개입니다.")
         for i, item in enumerate(value, start=1):
             _text(item, f"{where}[{i}]", report)
 
@@ -104,7 +122,7 @@ def _addresses(value: object, where: str, report: Report) -> None:
     for i, item in enumerate(value if isinstance(value, list) else [], start=1):
         if isinstance(item, str) and item and not ADDRESS.fullmatch(item):
             report(
-                "address-format",
+                Kind.ADDRESS_FORMAT,
                 f"{where}[{i}]",
                 f"'{item}': 설명서 소제목 주소는 '경로.html#앵커' 꼴로 적습니다(앞에 / 나 https:// 없이).",
             )
@@ -115,10 +133,10 @@ def _list_of(fields: dict[str, tuple[bool, Checker]]) -> Checker:
 
     def check(value: object, where: str, report: Report) -> None:
         if not isinstance(value, list):
-            report("type", where, "목록이어야 합니다.")
+            report(Kind.TYPE, where, "목록이어야 합니다.")
             return
         if not value:
-            report("count", where, "한 개 이상 있어야 합니다.")
+            report(Kind.COUNT, where, "한 개 이상 있어야 합니다.")
         for i, item in enumerate(value, start=1):
             _check_fields(item, fields, f"{where}[{i}]", report)
 
@@ -131,25 +149,25 @@ CONDITION_KINDS = ("모드", "방금 조작", "물체 수 늘어남", "모디파
 
 def _conditions(value: object, where: str, report: Report) -> None:
     if not isinstance(value, list):
-        report("type", where, "목록이어야 합니다.")
+        report(Kind.TYPE, where, "목록이어야 합니다.")
         return
     for i, item in enumerate(value, start=1):
         if not (isinstance(item, dict) and len(item) == 1):
-            report("condition-kind", f"{where}[{i}]", "끝난 조건은 한 줄에 '종류: 값' 하나씩 적습니다.")
+            report(Kind.CONDITION_KIND, f"{where}[{i}]", "끝난 조건은 한 줄에 '종류: 값' 하나씩 적습니다.")
             continue
         condition, condition_value = next(iter(item.items()))
         if condition not in CONDITION_KINDS:
             report(
-                "condition-kind",
+                Kind.CONDITION_KIND,
                 f"{where}[{i}]",
                 f"'{condition}'은(는) 정해진 끝난 조건 종류가 아닙니다. 쓸 수 있는 종류: {', '.join(CONDITION_KINDS)}",
             )
         elif condition_value is None or condition_value == "":
-            report("missing", f"{where}[{i}].{condition}", "값이 비어 있습니다.")
+            report(Kind.MISSING, f"{where}[{i}].{condition}", "값이 비어 있습니다.")
         elif isinstance(condition_value, bool):
             # 숫자(재질 슬롯 수: 2, 배율: [1, 1, 1])는 맞는 값이지만, 참/거짓은 따옴표 없는 no/on 같은 함정이다.
             report(
-                "yaml-trap",
+                Kind.YAML_TRAP,
                 f"{where}[{i}].{condition}",
                 f"YAML이 {condition_value!r}(으)로 읽었습니다. 값을 따옴표로 감싸세요.",
             )
@@ -222,21 +240,21 @@ def check_folder(folder: Path) -> list[Problem]:
     problems: list[Problem] = []
     loaded: dict[str, object] = {}
     for path in sorted(folder.glob("*.yml")):
-        problems.append(Problem("file-name", path.name, "", "확장자를 .yaml로 바꾸세요. .yml 파일은 읽지 않습니다."))
+        problems.append(Problem(Kind.FILE_NAME, path.name, "", "확장자를 .yaml로 바꾸세요. .yml 파일은 읽지 않습니다."))
     for path in sorted(folder.glob("*.yaml")):
 
-        def report(kind: str, where: str, message: str) -> None:
+        def report(kind: Kind, where: str, message: str) -> None:
             problems.append(Problem(kind, path.name, where, message))
 
         try:
             data = yaml.load(path.read_text(encoding="utf-8"), Loader=_NoDuplicateKeyLoader)
         except _DuplicateKey as e:
-            report("yaml-trap", f"{e.line}번째 줄", f"'{e.key}' 칸이 한 묶음 안에 두 번 있습니다.")
+            report(Kind.YAML_TRAP, f"{e.line}번째 줄", f"'{e.key}' 칸이 한 묶음 안에 두 번 있습니다.")
             loaded[path.name] = None  # 다른 파일이 이 파일을 가리키는 것은 맞으니 이름은 남긴다
             continue
         except yaml.YAMLError as e:
             mark = getattr(e, "problem_mark", None)
-            report("yaml-syntax", f"{mark.line + 1}번째 줄" if mark else "", f"YAML 문법 오류: {e}")
+            report(Kind.YAML_SYNTAX, f"{mark.line + 1}번째 줄" if mark else "", f"YAML 문법 오류: {e}")
             loaded[path.name] = None
             continue
         loaded[path.name] = data
@@ -250,7 +268,7 @@ def check_folder(folder: Path) -> list[Problem]:
             continue
         if label in top_labels:
             problems.append(
-                Problem("duplicate-label", name, "이름표", f"이름표 '{label}'이(가) {top_labels[label]}와(과) 겹칩니다.")
+                Problem(Kind.DUPLICATE_LABEL, name, "이름표", f"이름표 '{label}'이(가) {top_labels[label]}와(과) 겹칩니다.")
             )
         else:
             top_labels[label] = name
@@ -263,7 +281,7 @@ def check_folder(folder: Path) -> list[Problem]:
         elif not _is_common(common) or common not in loaded:
             problems.append(
                 Problem(
-                    "common-ref",
+                    Kind.COMMON_REF,
                     name,
                     "먼저 할 것",
                     f"'{common}'은(는) 같은 폴더의 공통 준비 파일(이름이 _로 시작하는 .yaml)이 아닙니다.",
@@ -276,7 +294,7 @@ def check_folder(folder: Path) -> list[Problem]:
                 first_file, first_where = seen[label]
                 problems.append(
                     Problem(
-                        "duplicate-label",
+                        Kind.DUPLICATE_LABEL,
                         name,
                         where,
                         f"단계 이름표 '{label}'이(가) {first_file or name} {first_where}와(과) 겹칩니다.",
