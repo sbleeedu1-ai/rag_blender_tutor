@@ -1,7 +1,7 @@
 """자료 준비: 메뉴 이름 한국어-영어 짝(티켓 20).
 
 작은 가짜 ko.po(직접 쓴 것, Blender 번역 원문 아님)와 손으로 만든 청크를 넣고,
-화면 이름마다 번역 없음·하나·여러 개를 가르는지, 한국어로 영어를 찾는지 본다.
+블렌더 표기마다 번역 없음·하나·여러 개를 가르는지, 한국어로 영어를 찾는지 본다.
 """
 
 from blender_tutor.manual_chunks import Chunk
@@ -162,7 +162,7 @@ def test_쪽_제목_소제목은_ko_po에_있을_때만_담고_뒤의_Modifier_�
     assert names.english_for("배열") == ("Array",)
     assert names.english_for("배열 모디파이어") == ("Array Modifier",)
     assert names.get("Options").translations == (Translation("옵션", ("*",)),)
-    assert names.get("How the Wand Waves") is None  # 사전에 없는 제목은 화면 이름이 아니라고 보고 버린다
+    assert names.get("How the Wand Waves") is None  # 사전에 없는 제목은 블렌더 표기가 아니라고 보고 버린다
     # 어디서 뽑았는지 적는다(제목에서만 뽑은 것은 따로 검수)
     assert [names.get(e).sources for e in ("Add", "Array", "Options")] == [
         (Source.UI,),

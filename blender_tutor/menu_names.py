@@ -1,4 +1,4 @@
-"""자료 준비: 설명서에 나오는 화면 이름(메뉴 경로·버튼 이름·옵션 이름)을 Blender 화면 번역 사전 ko.po와 짝짓는다.
+"""자료 준비: 설명서에 나오는 블렌더 표기(메뉴 경로·버튼 이름·옵션 이름)를 Blender 화면 번역 사전 ko.po와 짝짓는다.
 
 규칙은 .scratch/mvp-roundtrip/spec.md의 "자료 준비"와 티켓 12·20을 따른다.
 ko.po는 번역된 문구만 담는다(티켓 12). 그래서 "번역 없음"은 어느 문맥(msgctxt)에도 번역이 없다는 뜻이다.
@@ -16,15 +16,15 @@ from blender_tutor.manual_chunks import Chunk, chunk_manual
 
 DEFAULT_CONTEXT = "*"  # 문맥 없는 일반 문구. Blender Python도 이렇게 적는다(bpy.app.translations.contexts.default)
 _PATH_SEP = "‣"  # 설명서 메뉴 경로의 구분 글자(Add ‣ Mesh)
-_TITLE_TAIL = re.compile(r" (Modifier|Node|Tool|Constraint)$")  # 쪽 제목 "Array Modifier"의 화면 이름은 "Array"
+_TITLE_TAIL = re.compile(r" (Modifier|Node|Tool|Constraint)$")  # 쪽 제목 "Array Modifier"의 블렌더 표기는 "Array"
 
 
 class Source(StrEnum):
-    """화면 이름을 설명서 어디서 뽑았나."""
+    """블렌더 표기를 설명서 어디서 뽑았나."""
 
     UI = "화면 표시"  # 메뉴 경로(Add ‣ Mesh)·버튼 이름 표시
     OPTION = "옵션"  # 옵션 이름
-    TITLE = "제목"  # 쪽 제목·소제목(ko.po에 있는 것만). 화면 이름이 아닌 흔한 낱말도 섞여 따로 검수한다
+    TITLE = "제목"  # 쪽 제목·소제목(ko.po에 있는 것만). 블렌더 표기가 아닌 흔한 낱말도 섞여 따로 검수한다
 
 
 class Status(StrEnum):
@@ -45,7 +45,7 @@ class Translation:
 
 @dataclass(frozen=True)
 class MenuName:
-    """설명서에 나오는 화면 이름 하나(메뉴 경로의 한 단, 버튼 이름, 옵션 이름, ko.po에 있는 제목)."""
+    """설명서에 나오는 블렌더 표기 하나(메뉴 경로의 한 단, 버튼 이름, 옵션 이름, ko.po에 있는 제목)."""
 
     english: str  # 설명서에 적힌 그대로
     translations: tuple[Translation, ...]  # 서로 다른 한국어만, 사전에 나온 차례로
@@ -77,7 +77,7 @@ class MenuNames:
         return self._by_english.get(_english_key(english))
 
     def english_for(self, korean: str) -> tuple[str, ...]:
-        """한국어 화면 이름에 맞는 영어 이름들(질문 속 한국어 메뉴 이름으로 영어 설명서를 찾을 때, 티켓 22)."""
+        """한국어 블렌더 표기에 맞는 영어 이름들(질문 속 한국어 메뉴 이름으로 영어 설명서를 찾을 때, 티켓 22)."""
         return tuple(self._by_korean.get(_korean_key(korean), ()))
 
     def to_review(self) -> list[MenuName]:
@@ -85,7 +85,7 @@ class MenuNames:
         return _by_count(name for name in self if name.status == Status.MANY)
 
     def title_only(self) -> list[MenuName]:
-        """제목에서만 뽑은 이름을 많이 나온 차례로. 화면 이름이 아닌 흔한 낱말이 섞였는지 검수한다."""
+        """제목에서만 뽑은 이름을 많이 나온 차례로. 블렌더 표기가 아닌 흔한 낱말이 섞였는지 검수한다."""
         return _by_count(name for name in self if name.sources == (Source.TITLE,))
 
     def save(self, path: Path) -> None:
@@ -115,7 +115,7 @@ _Catalog = dict[str, dict[str, list[str]]]  # ko.po: 영어 → 한국어 → �
 
 
 def build_menu_names(chunks: Iterable[Chunk], po_text: str) -> MenuNames:
-    """청크들의 화면 이름을 ko.po 글과 짝지어 사전을 만든다."""
+    """청크들의 블렌더 표기를 ko.po 글과 짝지어 사전을 만든다."""
     catalog: _Catalog = {}
     for context, english, korean in read_po(po_text):
         catalog.setdefault(_english_key(english), {}).setdefault(korean, []).append(context)
@@ -185,9 +185,9 @@ def _unquote(text: str) -> str:
 
 
 def _screen_names(chunk: Chunk, catalog: _Catalog) -> list[tuple[str, Source]]:
-    """청크의 화면 이름과 출처. 메뉴 경로는 한 단씩 나누고, 버튼 이름·옵션 이름은 그대로.
+    """청크의 블렌더 표기와 출처. 메뉴 경로는 한 단씩 나누고, 버튼 이름·옵션 이름은 그대로.
 
-    쪽 제목·소제목은 ko.po에 있을 때만 화면 이름으로 본다. 모디파이어·노드 이름(Array 등)은
+    쪽 제목·소제목은 ko.po에 있을 때만 블렌더 표기로 본다. 모디파이어·노드 이름(Array 등)은
     설명서가 메뉴 경로로 적지 않고 쪽 제목("Array Modifier")으로만 적기 때문이다(티켓 20).
     """
     names = [(part.strip(), Source.UI) for name in chunk.ui_names for part in name.split(_PATH_SEP)]
@@ -224,7 +224,7 @@ def _review_markdown(review: list[MenuName], title_only: list[MenuName]) -> str:
         "",
         f"## 2. 제목에서만 뽑은 이름 ({len(title_only)}개)",
         "",
-        "쪽 제목·소제목 가운데 ko.po에 있는 것. 'Options'처럼 화면 이름이 아닌 낱말이 섞였는지 본다.",
+        "쪽 제목·소제목 가운데 ko.po에 있는 것. 'Options'처럼 블렌더 표기가 아닌 낱말이 섞였는지 본다.",
         "",
         *_review_table(title_only),
     ]
@@ -261,7 +261,7 @@ def main(argv: list[str]) -> int:
     counts = {status: 0 for status in Status}
     for name in names:
         counts[name.status] += 1
-    print(f"화면 이름 {sum(counts.values())}개 → {out}")
+    print(f"블렌더 표기 {sum(counts.values())}개 → {out}")
     print("  " + ", ".join(f"{status} {count}" for status, count in counts.items()))
     print(f"  검수 목록 → {out / 'review.md'}: 여러 개 {len(review)}개, 제목에서만 뽑은 이름 {len(title_only)}개")
     return 0
