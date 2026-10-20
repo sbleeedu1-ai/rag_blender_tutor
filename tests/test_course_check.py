@@ -7,13 +7,17 @@ from pathlib import Path
 
 import pytest
 
-from blender_tutor.course_check import check_folder
+from unittest.mock import ANY
+
+from blender_tutor.course_check import Problem, check_folder
 
 # 검사를 통과하는 가장 작은 공통 준비 파일과 연습 과정 파일.
 # 테스트마다 한 군데만 바꿔서 틀리게 만든다.
 COMMON = """\
 이름표: common
 이름: 공통 준비
+한 줄 설명: 화면을 돌려 보고 화면 언어를 확인한다.
+난이도: 없음
 구간:
   - 이름: 화면 익히기
     단계:
@@ -187,6 +191,27 @@ def test_yaml이_아닌_확장자의_파일을_알린다(tmp_path):
     write_folder(tmp_path)
     (tmp_path / "axe.yml").write_text(COURSE.replace("sword", "axe"), encoding="utf-8")
     assert kinds(tmp_path) == ["file-name"]
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "modeling/meshes/editing/mesh/merge.html",
+        "modeling/meshes/editing/mesh/merge#merge",
+        "/modeling/meshes/editing/mesh/merge.html#merge",
+        "https://docs.blender.org/manual/en/5.2/modeling/meshes/editing/mesh/merge.html#merge",
+    ],
+)
+def test_먼저_볼_소제목이_경로_html_앵커_꼴이_아니면_잡는다(tmp_path, address):
+    course = COURSE.replace("          - modeling/meshes/editing/mesh/merge.html#merge", f"          - {address}")
+    assert kinds(write_folder(tmp_path, course=course)) == ["address-format"]
+
+
+def test_공통_준비_파일의_YAML이_깨지면_그_파일만_알린다(tmp_path):
+    common = COMMON.replace("이름: 화면 익히기", "이름: [화면 익히기")
+    assert check_folder(write_folder(tmp_path, common=common)) == [
+        Problem("yaml-syntax", "_common.yaml", ANY, ANY)
+    ]
 
 
 COURSES = Path(__file__).resolve().parent.parent / "courses"

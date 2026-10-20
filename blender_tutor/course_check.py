@@ -95,6 +95,21 @@ def _texts(least: int = 1, most: int | None = None) -> Checker:
     return check
 
 
+# 설명서 소제목 주소: 5.2 설명서 안의 상대 경로 + 앵커(예: modeling/meshes/editing/mesh/merge.html#merge).
+ADDRESS = re.compile(r"[a-z0-9_-]+(/[a-z0-9_.-]+)*\.html#[a-z0-9_-]+")
+
+
+def _addresses(value: object, where: str, report: Report) -> None:
+    _texts(1, 3)(value, where, report)
+    for i, item in enumerate(value if isinstance(value, list) else [], start=1):
+        if isinstance(item, str) and item and not ADDRESS.fullmatch(item):
+            report(
+                "address-format",
+                f"{where}[{i}]",
+                f"'{item}': 설명서 소제목 주소는 '경로.html#앵커' 꼴로 적습니다(앞에 / 나 https:// 없이).",
+            )
+
+
 def _list_of(fields: dict[str, tuple[bool, Checker]]) -> Checker:
     """칸 묶음의 목록(구간 목록, 단계 목록 등)을 검사하는 함수를 만든다."""
 
@@ -153,7 +168,7 @@ STEP = {
     "참고 치수": (False, _text),
     "쉬운 설명": (True, _text),
     "조작": (True, _list_of(OPERATION)),
-    "먼저 볼 소제목": (True, _texts(1, 3)),
+    "먼저 볼 소제목": (True, _addresses),
     "끝난 조건": (False, _conditions),
     "자주 막히는 곳": (False, _texts()),
 }
@@ -163,10 +178,13 @@ SECTION = {
     "단계": (True, _list_of(STEP)),
 }
 
-# 공통 준비 파일(이름이 _로 시작)은 다른 연습 과정이 가리키기만 하므로 맨 위 칸이 적다.
+# 공통 준비 파일(이름이 _로 시작)은 다른 연습 과정이 가리키기만 하므로
+# 마지막 결과·비슷한 말·먼저 할 것이 없다. 난이도는 "없음"으로 적는다.
 COMMON = {
     "이름표": (True, _label),
     "이름": (True, _text),
+    "한 줄 설명": (True, _text),
+    "난이도": (True, _text),
     "구간": (True, _list_of(SECTION)),
 }
 
