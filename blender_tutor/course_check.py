@@ -20,7 +20,7 @@ class Problem:
     message: str  # 사람이 읽을 설명
 
 
-class _Loader(yaml.SafeLoader):
+class _NoDuplicateKeyLoader(yaml.SafeLoader):
     """같은 칸 이름이 한 묶음에 두 번 나오면 멈추는 읽기 도구(PyYAML은 기본으로 뒤엣것만 조용히 남긴다)."""
 
     def construct_mapping(self, node, deep=False):
@@ -122,12 +122,21 @@ def _conditions(value: object, where: str, report: Report) -> None:
         if not (isinstance(item, dict) and len(item) == 1):
             report("condition-kind", f"{where}[{i}]", "끝난 조건은 한 줄에 '종류: 값' 하나씩 적습니다.")
             continue
-        kind = next(iter(item))
-        if kind not in CONDITION_KINDS:
+        condition, condition_value = next(iter(item.items()))
+        if condition not in CONDITION_KINDS:
             report(
                 "condition-kind",
                 f"{where}[{i}]",
-                f"'{kind}'은(는) 정해진 끝난 조건 종류가 아닙니다. 쓸 수 있는 종류: {', '.join(CONDITION_KINDS)}",
+                f"'{condition}'은(는) 정해진 끝난 조건 종류가 아닙니다. 쓸 수 있는 종류: {', '.join(CONDITION_KINDS)}",
+            )
+        elif condition_value is None or condition_value == "":
+            report("missing", f"{where}[{i}].{condition}", "값이 비어 있습니다.")
+        elif isinstance(condition_value, bool):
+            # 숫자(재질 슬롯 수: 2, 배율: [1, 1, 1])는 맞는 값이지만, 참/거짓은 따옴표 없는 no/on 같은 함정이다.
+            report(
+                "yaml-trap",
+                f"{where}[{i}].{condition}",
+                f"YAML이 {condition_value!r}(으)로 읽었습니다. 값을 따옴표로 감싸세요.",
             )
 
 
@@ -185,17 +194,24 @@ def _step_labels(data: object) -> list[tuple[str, str]]:
     return labels
 
 
+def _is_common(file_name: str) -> bool:
+    """공통 준비 파일은 이름이 _로 시작한다(예: _common.yaml)."""
+    return file_name.startswith("_")
+
+
 def check_folder(folder: Path) -> list[Problem]:
     """폴더 안 연습 과정 파일을 모두 검사해 문제 목록을 돌려준다."""
     problems: list[Problem] = []
     loaded: dict[str, object] = {}
+    for path in sorted(folder.glob("*.yml")):
+        problems.append(Problem("file-name", path.name, "", "확장자를 .yaml로 바꾸세요. .yml 파일은 읽지 않습니다."))
     for path in sorted(folder.glob("*.yaml")):
 
         def report(kind: str, where: str, message: str) -> None:
             problems.append(Problem(kind, path.name, where, message))
 
         try:
-            data = yaml.load(path.read_text(encoding="utf-8"), Loader=_Loader)
+            data = yaml.load(path.read_text(encoding="utf-8"), Loader=_NoDuplicateKeyLoader)
         except _DuplicateKey as e:
             report("yaml-trap", f"{e.line}번째 줄", f"'{e.key}' 칸이 한 묶음 안에 두 번 있습니다.")
             loaded[path.name] = None  # 다른 파일이 이 파일을 가리키는 것은 맞으니 이름은 남긴다
@@ -206,14 +222,27 @@ def check_folder(folder: Path) -> list[Problem]:
             loaded[path.name] = None
             continue
         loaded[path.name] = data
-        _check_fields(data, COMMON if path.name.startswith("_") else COURSE, "", report)
+        _check_fields(data, COMMON if _is_common(path.name) else COURSE, "", report)
+
+    # 진행 기록은 연습 과정도 이름표로 적으므로, 파일끼리 맨 위 이름표가 겹치면 안 된다.
+    top_labels: dict[str, str] = {}
+    for name, data in loaded.items():
+        label = data.get("이름표") if isinstance(data, dict) else None
+        if not isinstance(label, str):
+            continue
+        if label in top_labels:
+            problems.append(
+                Problem("duplicate-label", name, "이름표", f"이름표 '{label}'이(가) {top_labels[label]}와(과) 겹칩니다.")
+            )
+        else:
+            top_labels[label] = name
 
     # 진행 기록은 단계를 이름표로 적으므로, 한 연습 과정(가리키는 공통 준비 포함) 안에서 이름표가 겹치면 안 된다.
     for name, data in loaded.items():
-        common = data.get("먼저 할 것") if isinstance(data, dict) and not name.startswith("_") else None
+        common = data.get("먼저 할 것") if isinstance(data, dict) and not _is_common(name) else None
         if not isinstance(common, str):
             common = None
-        elif not common.startswith("_") or common not in loaded:
+        elif not _is_common(common) or common not in loaded:
             problems.append(
                 Problem(
                     "common-ref",
@@ -244,6 +273,9 @@ def main(argv: list[str]) -> int:
     """`python -m blender_tutor.course_check courses`: 문제를 한 줄씩 보여 주고, 있으면 1로 끝난다."""
     sys.stdout.reconfigure(encoding="utf-8")  # Windows 터미널에서 한글이 깨지지 않게
     folder = Path(argv[0]) if argv else Path("courses")
+    if not any(folder.glob("*.yaml")):
+        print(f"{folder}: 연습 과정 파일(.yaml)이 없습니다. 폴더 경로를 확인하세요.")
+        return 1
     problems = check_folder(folder)
     for p in problems:
         print(f"{p.file} {p.where}: [{p.kind}] {p.message}")

@@ -171,6 +171,24 @@ def test_조작_목록이_비어_있으면_잡는다(tmp_path):
     assert kinds(write_folder(tmp_path, course=course)) == ["count"]
 
 
+@pytest.mark.parametrize("value", ["no", "on", ""])
+def test_끝난_조건_값의_YAML_함정과_빈_값을_잡는다(tmp_path, value):
+    course = COURSE.replace("          - 모드: EDIT\n", f"          - 모드: {value}\n")
+    assert kinds(write_folder(tmp_path, course=course)) == ["yaml-trap" if value else "missing"]
+
+
+def test_연습_과정끼리_맨_위_이름표가_겹치면_잡는다(tmp_path):
+    write_folder(tmp_path)
+    (tmp_path / "shield.yaml").write_text(COURSE, encoding="utf-8")
+    assert kinds(tmp_path) == ["duplicate-label"]
+
+
+def test_yaml이_아닌_확장자의_파일을_알린다(tmp_path):
+    write_folder(tmp_path)
+    (tmp_path / "axe.yml").write_text(COURSE.replace("sword", "axe"), encoding="utf-8")
+    assert kinds(tmp_path) == ["file-name"]
+
+
 COURSES = Path(__file__).resolve().parent.parent / "courses"
 
 
