@@ -13,9 +13,26 @@
   - 소제목 주소가 청크에 있는지, 메뉴 경로의 각 단이 ko.po·fr.po의 화면 글자인지, 설명서와 8낱말 이상 똑같은 글이 없는지 본다. `.venv\Scripts\python -m blender_tutor.course_check courses`도 `data/`가 있으면 함께 본다.
   - 이 검사가 `_common.yaml`의 `Zoom In/Out`을 잡아 확대 Zoom In / 축소 Zoom Out 두 조작으로 나눴다(사용자 선택).
   - 한계(메뉴 차례는 안 봄, 제목뿐인 소제목 앵커는 "없음"으로 걸릴 수 있음)는 티켓 24 Comments.
-- 티켓 20(메뉴 이름 사전 `blender_tutor/menu_names.py`)은 main에 합쳤다(PR #9, HISTORY [34]). 다른 PC에서는 ko.po·fr.po를 Blender 저장소 `blender-v5.2-release`의 `locale/po/`에서 받아 `data/ui_ko_5.2/`에 둔다.
+- 티켓 20(메뉴 이름 사전 `blender_tutor/menu_names.py`)은 main에 합쳤다(PR #9, HISTORY [34]). 다른 PC에서 data/를 만드는 법은 아래 "다른 PC에서 data/ 다시 만들기".
 - 테스트: `.venv\Scripts\python -m pytest` 140개 통과(`data/`가 없으면 1개 건너뜀).
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
+
+## 다른 PC에서 data/ 다시 만들기
+
+`data/`는 커밋하지 않는다. 다른 PC에서 실제 자료 검사·테스트를 돌리려면, 구글 드라이브에 둔 두 가지만 가져와 나머지를 만든다(2026-10-20 빈 폴더에서 해 보니 지금 것과 똑같이 나옴, 약 2분).
+
+1. `git pull` 뒤 (처음이면) `python -m venv .venv`, `.venv\Scripts\python -m pip install -e ".[dev]"`
+2. 드라이브에서 가져와 이 자리에 둔다
+   - `data\manual_en_5.2\blender_manual_html.zip` (설명서)
+   - `data\ui_ko_5.2\ko.po`, `data\ui_ko_5.2\fr.po` (Blender 화면 번역)
+3. 프로젝트 폴더에서 차례로 실행
+   - 설명서 풀기: `.venv\Scripts\python -m zipfile -e data\manual_en_5.2\blender_manual_html.zip data\manual_en_5.2\html`
+   - 청크 만들기: `.venv\Scripts\python -m blender_tutor.manual_chunks data\manual_en_5.2\html\blender_manual_v520_en.html data\chunks\manual_chunks.jsonl`
+   - 메뉴 이름 사전: `.venv\Scripts\python -m blender_tutor.menu_names data\manual_en_5.2\html\blender_manual_v520_en.html data\ui_ko_5.2\ko.po data\ui_ko_5.2\fr.po data\menu_names`
+4. 확인: `.venv\Scripts\python -m blender_tutor.course_check courses` → "문제 0개"(건너뛴다는 줄이 없어야 함), `.venv\Scripts\python -m pytest` → 건너뜀 없이 모두 통과
+
+- 프로젝트 폴더 경로가 길면(예: 바탕화면 깊은 곳) 설명서 풀기가 Windows 경로 길이 제한(260자)에 걸려 멈춘다. `C:\sample\rag_blender_tutor`처럼 짧은 곳에 둔다.
+- `data\강사님의 기준.txt`는 다시 만들 수 없으니 드라이브에도 따로 둔다.
 
 ## 모르면 실수할 것
 
