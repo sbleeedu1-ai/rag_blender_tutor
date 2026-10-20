@@ -246,3 +246,29 @@ def test_묶음_전체를_돌리되_기여자용_contribute_쪽과_색인_쪽은
     chunks = chunk_manual(tmp_path)
 
     assert [(c.page_path, c.page_title) for c in chunks] == [("modeling/wands/wand_tool", "Wand Tool")]
+
+
+def test_옵션_하나가_400단어를_넘으면_그_옵션_안의_문단_끝에서_나눈다():
+    big = "<dl><dt>Operation</dt><dd>" + "".join(f"<p>{words(180, w)}</p>" for w in "abc") + "</dd></dl>"
+    html = page(headed("wand-tool", 1, "Wand Tool", big))
+
+    chunks = chunk_page(html, "modeling/wands/wand_tool")
+
+    assert [(c.body, c.options) for c in chunks] == [
+        (f"Operation\n\n{words(180, 'a')}\n\n{words(180, 'b')}", ("Operation",)),
+        (words(180, "c"), ("Operation",)),
+    ]
+
+
+def test_한_청크에_든_모드_메뉴_단축키_상자는_모두_메타데이터에_남는다():
+    def refbox(mode: str) -> str:
+        return (
+            '<div class="refbox admonition"><p class="admonition-title">Reference</p><dl class="field-list simple">'
+            f"<dt>Mode<span>:</span></dt><dd><p>{mode}</p></dd></dl></div>"
+        )
+
+    html = page(headed("wand-tool", 1, "Wand Tool", refbox("Edit Mode") + "<p>Two tools.</p>" + refbox("Object Mode")))
+
+    [chunk] = chunk_page(html, "modeling/wands/wand_tool")
+
+    assert chunk.reference == (("Mode", "Edit Mode"), ("Mode", "Object Mode"))

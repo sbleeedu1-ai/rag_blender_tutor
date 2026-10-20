@@ -21,8 +21,10 @@ _HEADING = re.compile(r"^h[1-6]$")
 _BLOCK = {"p", "div", "dl", "dt", "dd", "ul", "ol", "li", "table", "tr", "pre", "figure", "blockquote", "caption"}
 _PATH_ALT = re.compile(r"[\\/]|\.(png|jpe?g|gif|webp|svg)$", re.IGNORECASE)  # 파일 경로뿐인 alt
 # 그림·영상 자리에 넣는 보이지 않는 표식. 글을 나눈 뒤 어느 조각에 어떤 주소가 들었는지 찾는 데 쓰고 지운다
-_MEDIA_MARK = re.compile("(\\d+)")
-_SHORTCUT = re.compile("(\\s*[-+]\\s*)*")  # 옵션 이름 속 단축키 자리(키 하나 = )
+_MARK_OPEN, _MARK_CLOSE = "\ue000", "\ue001"  # 유니코드 사용자 영역 글자라 설명서 글에는 나오지 않는다
+_MEDIA_MARK = re.compile(_MARK_OPEN + r"(\d+)" + _MARK_CLOSE)
+_KEY_MARK = "\ue002"  # 옵션 이름에서 단축키 키 하나를 잠시 바꿔 두는 글자
+_SHORTCUT = re.compile(_KEY_MARK + r"(\s*[-+]\s*" + _KEY_MARK + ")*")
 # 검색에서 빼는 폴더: 기여자용 쪽(티켓 06), Sphinx가 만든 원문·그림·꾸밈 파일
 _SKIP_FOLDERS = {"contribute", "_sources", "_images", "_static"}
 _SKIP_PAGES = {"genindex", "search", "404"}  # 색인·검색·없는 쪽 안내(설명 글이 아님)
@@ -166,11 +168,11 @@ def _chunk(
         page.title,
         headings,
         "\n\n".join(unit.text for unit in units),
-        tuple(unit.option for unit in units if unit.option),
+        tuple(dict.fromkeys(unit.option for unit in units if unit.option)),  # 긴 옵션을 나눈 덩이는 이름이 같다
         _urls(units, media, "그림"),
         _urls(units, media, "영상"),
         examples,
-        next((unit.reference for unit in units if unit.reference), ()),
+        tuple(item for unit in units for item in unit.reference),  # 상자가 여럿이면 차례로 이어 둔다
     )
 
 
@@ -210,10 +212,10 @@ def _units(nodes) -> list[_Unit]:
 
 
 def _blocks(raw: str, option: str | None = None) -> list[_Unit]:
-    """빈 줄로 나뉜 글을 덩이로. 옵션 하나는 문단이 여럿이어도 한 덩이로 둔다."""
+    """빈 줄로 나뉜 글을 덩이로. 옵션 하나는 문단이 여럿이어도 한 덩이로 두되, MAX_WORDS를 넘으면 문단마다 나눈다."""
     blocks = [" ".join(block.split()) for block in re.split(r"\n\s*\n", raw)]
     blocks = [block for block in blocks if block]
-    if option is not None:
+    if option is not None and len(_MEDIA_MARK.sub("", " ".join(blocks)).split()) <= MAX_WORDS:
         blocks = ["\n\n".join(blocks)]
     units = []
     for block in blocks:
@@ -264,7 +266,7 @@ def _option_name(dt: Tag) -> str:
     """옵션 이름에서 뒤에 붙은 단축키(Shift-A 등, 키를 잇는 -·+까지)를 뗀다."""
     name = copy.copy(dt)
     for kbd in name.find_all("kbd"):
-        kbd.replace_with(NavigableString(""))
+        kbd.replace_with(NavigableString(_KEY_MARK))
     text = _SHORTCUT.sub("", _render(name))
     return " ".join(text.split())
 
@@ -298,7 +300,7 @@ def _mark_media(section: Tag, page_url: str) -> list[_Media]:
     media: list[_Media] = []
 
     def mark(holder: Tag, item: _Media, label: str) -> None:
-        holder.replace_with(NavigableString(f"\n\n{label}{len(media)}\n\n"))
+        holder.replace_with(NavigableString(f"\n\n{label}{_MARK_OPEN}{len(media)}{_MARK_CLOSE}\n\n"))
         media.append(item)
 
     # 단계마다 내용을 새로 찾는다: 앞 단계에서 떼어 낸 그림 상자 속 img를 다시 잡지 않도록
@@ -348,6 +350,9 @@ def _title(section: Tag) -> str:
 
 def main(argv: list[str]) -> int:
     """사용법: python -m blender_tutor.manual_chunks <설명서 HTML 폴더> <청크 JSONL 파일>
+
+    예: python -m blender_tutor.manual_chunks data/manual_en_5.2/html/blender_manual_v520_en.html data/chunks/manual_chunks.jsonl
+    (설명서 HTML 폴더는 zip을 푼 폴더로, 이름이 .html로 끝나지만 폴더다)
 
     청크를 한 줄에 하나씩 JSON으로 쓰고 개수를 알린다. 결과는 data/에 두고 커밋하지 않는다.
     """
