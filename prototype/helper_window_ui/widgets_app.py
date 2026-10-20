@@ -104,7 +104,7 @@ class Helper(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         path = QPainterPath()
         path.addRoundedRect(self.rect().adjusted(1, 1, -1, -1), 22, 22)
-        p.fillPath(path, QColor(22, 22, 28, 214))
+        p.fillPath(path, QColor(22, 22, 28, 235))
         p.setPen(QPen(QColor(255, 255, 255, 22), 1))
         p.drawPath(path)
 

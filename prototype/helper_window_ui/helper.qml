@@ -72,7 +72,7 @@ Window {
         id: panel
         anchors.fill: parent
         radius: 22
-        color: Qt.rgba(22 / 255, 22 / 255, 28 / 255, 0.84)
+        color: Qt.rgba(22 / 255, 22 / 255, 28 / 255, 0.92)
         border.color: Qt.rgba(1, 1, 1, 0.09)
         border.width: 1
 
