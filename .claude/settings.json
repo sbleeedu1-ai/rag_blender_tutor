@@ -1,16 +1,12 @@
 {
   "permissions": {
     "ask": [
-      "Bash(git push *)",
-      "Bash(gh pr create *)",
       "Bash(gh pr merge *)",
       "Bash(git reset --hard *)",
       "Bash(git clean *)",
       "Bash(git branch -D *)",
       "Bash(rm *)",
       "Bash(rmdir *)",
-      "PowerShell(git push *)",
-      "PowerShell(gh pr create *)",
       "PowerShell(gh pr merge *)",
       "PowerShell(git branch -D *)",
       "PowerShell(Remove-Item *)"
