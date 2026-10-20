@@ -1,27 +1,16 @@
 """진행 관리: 작업 상태와 사용자 응답을 사건으로 받아, 띄울 물음·거둘 물음과 지금 단계를 돌려준다.
 
-도우미 창과 떼어 둔 모듈이다(시험 경계 ②). 창을 그리거나 앞으로 끌어오는 일은 하지 않고,
-돌려준 물음을 창이 자기 안에만 띄운다.
+도우미 창과 떼어 둔 모듈이다(시험 경계 ②: .scratch/mvp-roundtrip/spec.md의 Testing Decisions 참고).
+창을 그리거나 앞으로 끌어오는 일은 하지 않고, 돌려준 물음을 창이 자기 안에만 띄운다.
+끝난 조건의 판정 규칙은 conditions.py에 있다.
 """
 
-import math
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
-
-@dataclass(frozen=True)
-class WorkState:
-    """애드온이 보낸 작업 상태 가운데 끝난 조건 판정에 쓰는 칸."""
-
-    mode: str  # Blender context.mode 값(예: OBJECT, EDIT_MESH)
-    recent_operators: tuple[str, ...]  # 방금 실행한 조작 3개, 'mesh.merge' 꼴
-    scene_object_count: int  # 장면 물체 수
-    modifiers: tuple[str, ...]  # 활성 물체의 모디파이어 종류(예: BEVEL)
-    material_slot_count: int  # 활성 물체의 재질 슬롯 수
-    scale: tuple[float, float, float]  # 활성 물체 배율
-    dimensions: tuple[float, float, float]  # 활성 물체 크기
+from blender_tutor.conditions import CONDITIONS, WorkState
 
 
 @dataclass(frozen=True)
@@ -65,28 +54,6 @@ def load_steps(course: Path) -> list[Step]:
     return steps
 
 
-def _is_met(kind: str, value: object, state: WorkState, start_count: int) -> bool:
-    """끝난 조건 하나가 맞는지 본다(AI 없이 정해 둔 규칙으로). start_count는 단계 시작 때 장면 물체 수."""
-    if kind == "모드":
-        return state.mode == value
-    if kind == "방금 조작":
-        return value in state.recent_operators
-    if kind == "물체 수 늘어남":
-        return state.scene_object_count >= start_count + value
-    if kind == "모디파이어":
-        return value in state.modifiers
-    if kind == "재질 슬롯 수":
-        return state.material_slot_count == value
-    if kind == "배율":
-        # Blender가 계산한 소수라 0.9999999처럼 아주 작은 차이는 같다고 본다.
-        return all(math.isclose(have, want, rel_tol=1e-3, abs_tol=1e-3) for have, want in zip(state.scale, value))
-    if kind == "크기 비율":
-        # 치수는 절대 숫자가 아니라 비율로만 본다: 가장 긴 축 ≥ 두 번째로 긴 축 × n.
-        longest, second, _ = sorted(state.dimensions, reverse=True)
-        return longest > 0 and longest >= second * value
-    raise ValueError(f"모르는 끝난 조건 종류: {kind}")
-
-
 class Progress:
     """한 연습 과정의 진행. 사건 함수마다 창이 할 일(물음 띄우기·거두기) 목록을 돌려준다."""
 
@@ -112,7 +79,7 @@ class Progress:
         if step is None:
             return []
         met = bool(step.conditions) and all(
-            _is_met(kind, value, state, self._start_count) for kind, value in step.conditions
+            CONDITIONS[kind].is_met(value, state, self._start_count) for kind, value in step.conditions
         )
         if met and not self._asking and step.label not in self._declined:
             self._asking = True

@@ -1,15 +1,14 @@
-"""진행 관리(시험 경계 ②).
+"""진행 관리(시험 경계 ②: .scratch/mvp-roundtrip/spec.md의 Testing Decisions 참고).
 
 작업 상태와 사용자 응답을 차례로 넣고, 진행 관리가 돌려준 물음(띄울 것·거둘 것)과 지금 단계만 본다.
 """
 
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
-from pathlib import Path
-
-from blender_tutor.course_check import CONDITION_KINDS
+from blender_tutor.conditions import CONDITIONS
 from blender_tutor.progress import Ask, Progress, Step, Withdraw, WorkState, load_steps
 
 COURSES = Path(__file__).resolve().parent.parent / "courses"
@@ -154,7 +153,7 @@ def test_마친_뒤에도_뒤로_가면_마지막_단계로_돌아온다():
     ("condition", "met", "not_met"),
     [
         (("모디파이어", "BEVEL"), {"modifiers": ("MIRROR", "BEVEL")}, {"modifiers": ("MIRROR",)}),
-        (("재질 슬롯 수", 2), {"material_slot_count": 2}, {"material_slot_count": 3}),
+        (("재질 슬롯 수", 2), {"material_slot_count": 3}, {"material_slot_count": 1}),  # 2개 이상
         # 배율은 Blender가 계산한 소수라 아주 작은 차이는 같다고 본다.
         (("배율", [1, 1, 1]), {"scale": (1.0, 0.9999999, 1.0)}, {"scale": (1.0, 1.0, 0.5)}),
         # 크기 비율: 가장 긴 축이 두 번째로 긴 축의 n배 이상(축 순서는 상관없다).
@@ -209,9 +208,9 @@ def test_연습_과정_파일에서_공통_준비_단계부터_차례로_읽는�
 def test_검사가_받아들이는_끝난_조건_종류는_모두_판정할_수_있다():
     values = {"모드": "OBJECT", "방금 조작": "object.join", "물체 수 늘어남": 1, "모디파이어": "BEVEL",
               "재질 슬롯 수": 2, "배율": [1, 1, 1], "크기 비율": 3}  # fmt: skip
-    assert set(values) == set(CONDITION_KINDS)
+    assert set(values) == set(CONDITIONS)
     for kind, value in values.items():
-        Progress([Step("any", "아무 단계", ((kind, value),))]).on_state(IDLE)  # 모르는 종류면 ValueError
+        Progress([Step("any", "아무 단계", ((kind, value),))]).on_state(IDLE)  # 판정 규칙이 값과 작업 상태로 오류 없이 돈다
 
 
 def test_저장소의_검_연습_과정을_읽어_첫_단계부터_시작한다():

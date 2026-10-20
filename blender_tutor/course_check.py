@@ -10,6 +10,8 @@ from pathlib import Path
 
 import yaml
 
+from blender_tutor.conditions import CONDITIONS
+
 
 class Kind(StrEnum):
     """문제 종류. 웹의 404처럼 정해 둔 이름만 쓴다(오타를 내면 바로 오류가 난다)."""
@@ -144,43 +146,6 @@ def _list_of(fields: dict[str, tuple[bool, Checker]]) -> Checker:
     return check
 
 
-# 끝난 조건 검사 종류(명세에서 정한 7가지). 새 종류는 진행 관리(progress.py)에 판정을 더할 때 여기와 아래 값 꼴 표에도 더한다.
-CONDITION_KINDS = ("모드", "방금 조작", "물체 수 늘어남", "모디파이어", "재질 슬롯 수", "배율", "크기 비율")
-
-
-# Blender 5.2 context.mode 값 목록(2026-10-20 설치본에서 뽑음). 애드온이 보내는 '모드' 칸과 같은 이름이다.
-MODES = (
-    "OBJECT", "EDIT_MESH", "EDIT_CURVE", "EDIT_CURVES", "EDIT_SURFACE", "EDIT_TEXT", "EDIT_ARMATURE",
-    "EDIT_METABALL", "EDIT_LATTICE", "EDIT_GREASE_PENCIL", "EDIT_POINTCLOUD", "POSE", "SCULPT",
-    "PAINT_WEIGHT", "PAINT_VERTEX", "PAINT_TEXTURE", "PARTICLE", "PAINT_GPENCIL", "EDIT_GPENCIL",
-    "SCULPT_GPENCIL", "WEIGHT_GPENCIL", "VERTEX_GPENCIL", "SCULPT_CURVES", "PAINT_GREASE_PENCIL",
-    "SCULPT_GREASE_PENCIL", "WEIGHT_GREASE_PENCIL", "VERTEX_GREASE_PENCIL",
-)  # fmt: skip
-
-OPERATOR = re.compile(r"[a-z0-9_]+\.[a-z0-9_]+")  # Blender 조작 이름(예: mesh.merge)
-MODIFIER = re.compile(r"[A-Z][A-Z0-9_]*")  # 모디파이어 종류 이름(예: BEVEL)
-
-
-def _number(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
-
-
-def _positive_int(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
-
-
-# 끝난 조건 종류마다 값이 맞는 꼴인지 보는 함수와, 틀렸을 때 보여 줄 설명.
-CONDITION_VALUES: dict[str, tuple[Callable[[object], bool], str]] = {
-    "모드": (lambda v: v in MODES, "Blender 모드 이름입니다(예: OBJECT, EDIT_MESH)."),
-    "방금 조작": (lambda v: isinstance(v, str) and bool(OPERATOR.fullmatch(v)), "Blender 조작 이름입니다(예: mesh.merge)."),
-    "물체 수 늘어남": (_positive_int, "1 이상의 정수입니다(단계 시작 때보다 몇 개 늘었나)."),
-    "모디파이어": (lambda v: isinstance(v, str) and bool(MODIFIER.fullmatch(v)), "모디파이어 종류 이름입니다(예: BEVEL)."),
-    "재질 슬롯 수": (_positive_int, "1 이상의 정수입니다."),
-    "배율": (lambda v: isinstance(v, list) and len(v) == 3 and all(map(_number, v)), "숫자 셋입니다(예: [1, 1, 1])."),
-    "크기 비율": (lambda v: _number(v) and v >= 1, "1 이상의 숫자입니다(가장 긴 축이 두 번째 축의 몇 배 이상인가)."),
-}
-
-
 def _conditions(value: object, where: str, report: Report) -> None:
     if not isinstance(value, list):
         report(Kind.TYPE, where, "목록이어야 합니다.")
@@ -190,11 +155,12 @@ def _conditions(value: object, where: str, report: Report) -> None:
             report(Kind.CONDITION_KIND, f"{where}[{i}]", "끝난 조건은 한 줄에 '종류: 값' 하나씩 적습니다.")
             continue
         condition, condition_value = next(iter(item.items()))
-        if condition not in CONDITION_KINDS:
+        kind = CONDITIONS.get(condition)
+        if kind is None:
             report(
                 Kind.CONDITION_KIND,
                 f"{where}[{i}]",
-                f"'{condition}'은(는) 정해진 끝난 조건 종류가 아닙니다. 쓸 수 있는 종류: {', '.join(CONDITION_KINDS)}",
+                f"'{condition}'은(는) 정해진 끝난 조건 종류가 아닙니다. 쓸 수 있는 종류: {', '.join(CONDITIONS)}",
             )
         elif condition_value is None or condition_value == "":
             report(Kind.MISSING, f"{where}[{i}].{condition}", "값이 비어 있습니다.")
@@ -205,12 +171,8 @@ def _conditions(value: object, where: str, report: Report) -> None:
                 f"{where}[{i}].{condition}",
                 f"YAML이 {condition_value!r}(으)로 읽었습니다. 값을 따옴표로 감싸세요.",
             )
-        elif not CONDITION_VALUES[condition][0](condition_value):
-            report(
-                Kind.CONDITION_VALUE,
-                f"{where}[{i}].{condition}",
-                f"{condition_value!r}: '{condition}' 값은 {CONDITION_VALUES[condition][1]}",
-            )
+        elif not kind.is_valid(condition_value):
+            report(Kind.CONDITION_VALUE, f"{where}[{i}].{condition}", f"{condition_value!r}: '{condition}' 값은 {kind.hint}")
 
 
 OPERATION = {
