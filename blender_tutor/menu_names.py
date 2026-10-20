@@ -174,8 +174,8 @@ def read_po(text: str) -> list[tuple[str, str, str]]:
             fields[current] = _unquote(match[2])
         elif line.startswith('"') and current:
             fields[current] += _unquote(line[1:-1])  # 앞 칸에 이어지는 줄
-        elif not line.startswith('"'):
-            current = None  # 빈 줄·주석·모르는 칸(msgid_plural 등). 뒤따르는 줄을 앞 칸에 붙이지 않는다
+        elif not line or line.startswith("#"):
+            current = None
     finish()
     return entries
 
