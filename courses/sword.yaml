@@ -33,6 +33,7 @@
           - scene_layout/object/editing/transform/scale.html#scale
           - scene_layout/object/editing/transform/control/axis_locking.html#axis-locking
           - scene_layout/object/properties/transforms.html#transform
+        # 옆 패널(N)에서 치수를 고치면 조작 기록이 남지 않아, 방금 조작과 묶지 않고 비율만 본다.
         끝난 조건:
           - 크기 비율: 3
 
@@ -45,8 +46,8 @@
           맨 위의 꼭짓점 네 개를 모두 골라 가운데 한 점으로 모으면 칼끝이 된다.
           뒤쪽 꼭짓점까지 함께 고르려면 X-ray를 켠 다음 상자로 둘러 고른다.
         조작:
-          - 설명: 편집 모드로 들어가기
-            메뉴: Object Mode > Edit Mode
+          - 설명: 편집 모드로 들어가기(헤더 왼쪽 모드 칸에서 골라도 됨)
+            메뉴: 없음
             단축키: Tab
           - 설명: 꼭짓점 고르기 방식으로 바꾸기
             메뉴: 없음
@@ -82,8 +83,8 @@
           먼저 Tab으로 물체 모드로 돌아온 다음 새 정육면체를 더하고, 크기를 줄여 납작한 막대로 만든다.
           G 다음 Z를 누르면 위아래로만 움직이니, 칼날 아래 끝까지 내려 붙인다.
         조작:
-          - 설명: 물체 모드로 돌아오기
-            메뉴: Edit Mode > Object Mode
+          - 설명: 물체 모드로 돌아오기(헤더 왼쪽 모드 칸에서 골라도 됨)
+            메뉴: 없음
             단축키: Tab
           - 설명: 새 정육면체 더하기
             메뉴: Add > Mesh > Cube
@@ -214,11 +215,11 @@
         이름: 칼날과 손잡이에 다른 색 입히기
         목표 모양: 칼날·코등이·끝장식은 쇠처럼 회색이고, 손잡이만 갈색이다.
         쉬운 설명: >-
-          한 물체에 여러 색을 주려면 재질 칸을 두 개 만들고, 면마다 어느 칸을 쓸지 정한다.
-          재질 탭에서 첫 재질을 만들어 회색으로 하고, 칸을 하나 더해 갈색 재질을 만든다.
-          편집 모드에서 손잡이에 마우스를 올리고 L을 눌러 손잡이만 고른 다음, 갈색 칸을 고른 채 Assign을 누른다.
+          한 물체에 여러 색을 주려면 재질 칸을 두 개 두고, 면마다 어느 칸을 쓸지 정한다.
+          재질 탭의 첫 칸(기본 정육면체에 처음부터 있던 재질, 없으면 New로 만듦)을 회색으로 하고, 칸을 하나 더해 New로 갈색 재질을 만든다.
+          편집 모드에서 손잡이 면 하나를 클릭하고 Ctrl + L로 손잡이 전체를 고른 다음, 갈색 칸을 고른 채 Assign을 누른다.
         조작:
-          - 설명: 첫 재질 만들기
+          - 설명: 첫 칸에 재질이 없으면 새로 만들기
             메뉴: Properties > Material > New
             단축키: 없음
           - 설명: 재질 칸 하나 더하기
@@ -227,9 +228,12 @@
           - 설명: 색 고르기
             메뉴: Properties > Material > Surface > Base Color
             단축키: 없음
-          - 설명: 마우스 아래 이어진 부분만 고르기(편집 모드)
+          - 설명: 편집 모드로 들어가기(헤더 왼쪽 모드 칸에서 골라도 됨)
+            메뉴: 없음
+            단축키: Tab
+          - 설명: 고른 면과 이어진 부분 전체 고르기
             메뉴: Select > Select Linked > Linked
-            단축키: L
+            단축키: Ctrl + L
           - 설명: 고른 면에 지금 재질 칸 쓰기
             메뉴: Properties > Material > Assign
             단축키: 없음
@@ -239,6 +243,7 @@
           - modeling/meshes/selecting/linked.html#linked
         끝난 조건:
           - 재질 슬롯 수: 2
+          - 방금 조작: object.material_slot_assign
 
       - 이름표: export-gltf
         이름: glTF 파일로 내보내기
@@ -246,15 +251,15 @@
         쉬운 설명: >-
           glTF는 게임 엔진이 널리 읽는 3D 파일 형식이고, .glb는 그것을 파일 하나로 묶은 것이다.
           Tab으로 물체 모드로 돌아와 File 메뉴에서 glTF 2.0으로 내보내고, 형식은 glTF Binary(.glb)로 둔다.
-          모서리 다듬기가 파일에도 들어가도록 Mesh 쪽의 Apply Modifiers가 켜져 있는지 보고, 이름을 sword.glb로 저장한다.
+          모서리 다듬기가 파일에도 들어가도록 Mesh 쪽의 Apply Modifiers를 켜고(꺼져 있으면), 이름을 sword.glb로 저장한다.
         조작:
-          - 설명: 물체 모드로 돌아오기
-            메뉴: Edit Mode > Object Mode
+          - 설명: 물체 모드로 돌아오기(헤더 왼쪽 모드 칸에서 골라도 됨)
+            메뉴: 없음
             단축키: Tab
           - 설명: glTF로 내보내기 창 열기
             메뉴: File > Export > glTF 2.0 (.glb/.gltf)
             단축키: 없음
-          - 설명: 모디파이어를 적용해 내보내기 켜짐 확인
+          - 설명: 모디파이어를 적용해 내보내기 켜기
             메뉴: Data > Mesh > Apply Modifiers
             단축키: 없음
         먼저 볼 소제목:
