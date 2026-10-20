@@ -4,8 +4,9 @@
 
 ## 프로젝트
 
-- 무엇: <한 줄 설명>
-- 실행: `<실행 명령>` · 테스트: `<테스트 명령>` (테스트는 API 키 없이 돌게 만들고 늘 통과 상태로 둔다)
+- 무엇: Blender 5.2를 처음 쓰는 사람이 3D 아이템을 만들 때, 공식 설명서를 근거로 다음 조작을 쉬운 한국어로 안내하는 도우미
+- 준비: `python -m venv .venv` 뒤 `.venv\Scripts\python -m pip install -e ".[dev]"`
+- 실행: 도우미 창은 아직 없음. 연습 과정 파일 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` · 테스트: `.venv\Scripts\python -m pytest` (테스트는 API 키 없이 돌게 만들고 늘 통과 상태로 둔다)
 
 ## 기록 (저장소가 기억이다)
 

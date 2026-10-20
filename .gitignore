@@ -15,3 +15,5 @@ docs/산출물/
 # 파이썬 가상 환경과 캐시
 .venv/
 __pycache__/
+*.egg-info/
+.pytest_cache/
