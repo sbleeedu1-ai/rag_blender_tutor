@@ -314,6 +314,54 @@ def test_한_청크에_든_모드_메뉴_단축키_상자는_모두_메타데이
     assert chunk.reference == (("Mode", "Edit Mode"), ("Mode", "Object Mode"))
 
 
+def menu(path: str) -> str:
+    return f'<span class="menuselection">{path}</span>'
+
+
+def label(name: str) -> str:
+    return f'<span class="guilabel">{name}</span>'
+
+
+def test_메뉴_경로와_버튼_이름은_글은_그대로_두고_화면_이름_메타데이터에_차례로_모은다():
+    refbox = (
+        '<div class="refbox admonition"><p class="admonition-title">Reference</p><dl class="field-list simple">'
+        f'<dt>Menu<span class="colon">:</span></dt><dd><p>{menu("Wand ‣ Wave")}</p></dd></dl></div>'
+    )
+    body = (
+        refbox
+        + f"<p>Open {menu('Add ‣ Wand')} in {label('Edit Mode')}, then {menu('Wand ‣ Wave')} again.</p>"
+        + f"<dl><dt>Speed {label('Cycles Only')}</dt><dd><p>How fast.</p></dd></dl>"
+    )
+    html = page(headed("wand-tool", 1, f"Wand {label('Tool')}", body))
+
+    [chunk] = chunk_page(html, "modeling/wands/wand_tool")
+
+    # 같은 이름은 한 번만, 처음 나온 차례로
+    assert chunk.ui_names == ("Wand ‣ Wave", "Add ‣ Wand", "Edit Mode", "Cycles Only")
+    assert chunk.body == (
+        "Reference\n\nMenu: Wand ‣ Wave\n\nOpen Add ‣ Wand in Edit Mode, then Wand ‣ Wave again.\n\n"
+        "Speed Cycles Only\n\nHow fast."
+    )
+    assert chunk.reference == (("Menu", "Wand ‣ Wave"),)
+    assert chunk.options == ("Speed Cycles Only",)
+    assert chunk.page_title == "Wand Tool"
+
+
+def test_긴_소제목을_나누면_화면_이름은_그_이름이_든_조각에만_둔다():
+    html = page(
+        headed(
+            "wand-tool",
+            1,
+            "Wand Tool",
+            f"<p>{words(300, 'a')} {menu('Add ‣ Wand')}</p><p>{words(300, 'b')} {label('Wave')}</p>",
+        )
+    )
+
+    chunks = chunk_page(html, "modeling/wands/wand_tool")
+
+    assert [c.ui_names for c in chunks] == [("Add ‣ Wand",), ("Wave",)]
+
+
 def test_코드_파일에_보이지_않는_표식_글자가_그대로_들어가지_않는다():
     # 표식 글자는 ""처럼 번호로 적는다. 글자 그대로 넣으면 화면에 안 보여 편집 중에 지워지기 쉽다
     source = Path(manual_chunks.__file__).read_text(encoding="utf-8")

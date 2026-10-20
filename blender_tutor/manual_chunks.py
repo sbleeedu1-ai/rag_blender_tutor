@@ -26,6 +26,10 @@ _MARK_OPEN, _MARK_CLOSE = "\ue000", "\ue001"  # 유니코드 사용자 영역 �
 _MEDIA_MARK = re.compile(_MARK_OPEN + r"(\d+)" + _MARK_CLOSE)
 _KEY_MARK = "\ue002"  # 옵션 이름에서 단축키 키 하나를 잠시 바꿔 두는 글자
 _SHORTCUT = re.compile(_KEY_MARK + r"(\s*[-+]\s*" + _KEY_MARK + ")*")
+# 메뉴 경로·버튼 이름 앞뒤에 두는 표식. 글을 나눈 뒤 어느 조각에 어떤 화면 이름이 들었는지 찾는 데 쓰고 지운다
+_UI_OPEN, _UI_CLOSE = "\ue003", "\ue004"
+_UI_MARK = re.compile(_UI_OPEN + "([^" + _UI_CLOSE + "]*)" + _UI_CLOSE)
+_UI_CLASSES = {"menuselection", "guilabel"}  # 설명서가 메뉴 경로(Add ‣ Mesh)와 버튼 이름에 붙이는 표시
 # 검색에서 빼는 폴더: 기여자용 쪽(티켓 06), Sphinx가 만든 원문·그림·꾸밈 파일
 _SKIP_FOLDERS = {"contribute", "_sources", "_images", "_static"}
 _SKIP_PAGES = {"genindex", "search", "404"}  # 색인·검색·없는 쪽 안내(설명 글이 아님)
@@ -65,6 +69,7 @@ class Chunk:
     videos: tuple[str, ...] = ()  # 글 속 영상 주소
     examples: tuple[Example, ...] = ()  # 뒤따르는 영상만·그림만 있는 소제목
     reference: tuple[tuple[str, str], ...] = ()  # "모드·메뉴·단축키" 상자(예: ("Mode", "Edit Mode")), 여럿이면 차례로
+    ui_names: tuple[str, ...] = ()  # 글 속 메뉴 경로(예: Add ‣ Mesh)·버튼 이름, 처음 나온 차례로 한 번씩(티켓 20)
 
     @property
     def url(self) -> str:
@@ -148,6 +153,7 @@ class _Unit:
     media: list[int] = field(default_factory=list)  # 이 덩이에 든 그림·영상 번호
     reference: tuple[tuple[str, str], ...] = ()  # "모드·메뉴·단축키" 상자면 그 칸들
     path: tuple[str, ...] = ()  # 긴 옵션을 나눈 덩이면 글에 이름이 빠진 옵션·범주 경로
+    ui_names: tuple[str, ...] = ()  # 이 덩이에 든 메뉴 경로·버튼 이름
 
     @property
     def words(self) -> int:
@@ -184,6 +190,7 @@ def _chunk(
         videos=_urls(units, media, MediaKind.VIDEO),
         examples=examples,
         reference=tuple(item for unit in units for item in unit.reference),
+        ui_names=tuple(dict.fromkeys(name for unit in units for name in unit.ui_names)),
     )
 
 
@@ -236,7 +243,13 @@ def _option_units(dt: Tag, option: str, path: tuple[str, ...]) -> list[_Unit]:
     # 이름(dt)은 첫 덩이 앞에 둔다. 첫 덩이 글에 이름이 있으니 경로는 바깥 것만
     header = _text_unit(_render(dt), option, path)
     first = units[0]
-    units[0] = replace(first, text=f"{header.text}\n\n{first.text}", media=header.media + first.media, path=path)
+    units[0] = replace(
+        first,
+        text=f"{header.text}\n\n{first.text}",
+        media=header.media + first.media,
+        path=path,
+        ui_names=header.ui_names + first.ui_names,
+    )
     return units
 
 
@@ -274,9 +287,10 @@ def _squashed_blocks(raw: str) -> list[str]:
 
 
 def _take_marks(text: str, option: str | None, path: tuple[str, ...]) -> _Unit:
-    """글에서 그림·영상 표식을 떼어 번호는 덩이에 적는다."""
+    """글에서 그림·영상 표식과 화면 이름 표식을 떼어 번호·이름은 덩이에 적는다."""
     media = [int(n) for n in _MEDIA_MARK.findall(text)]
-    return _Unit(_MEDIA_MARK.sub("", text).strip(), option, media, path=path)
+    ui_names = tuple(_UI_MARK.findall(text))
+    return _Unit(_plain(_MEDIA_MARK.sub("", text)).strip(), option, media, path=path, ui_names=ui_names)
 
 
 def _pack(units: list[_Unit]) -> list[list[_Unit]]:
@@ -314,14 +328,15 @@ def _fill(units: list[_Unit], limit: int) -> list[list[_Unit]]:
 
 def _reference_unit(box: Tag) -> _Unit:
     """"모드·메뉴·단축키" 상자를 'Mode: Edit Mode' 꼴 줄로 쓴 한 덩이로."""
-    items = []
+    items = []  # 화면 이름 표식이 든 채로. 글의 표식은 _take_marks가 떼고, 메타데이터 칸에는 뗀 것을 둔다
     for dt in box.find_all("dt"):
         key = _squash(_render(dt)).rstrip(":").strip()
         value = _squash("".join(_render(dd) for dd in _following_dds(dt)))
         items.append((key, value))
     title = box.find(class_="admonition-title")
     lines = ([_squash(_render(title))] if title else []) + [f"{key}: {value}" for key, value in items]
-    return replace(_take_marks("\n\n".join(lines), None, ()), reference=tuple(items))
+    reference = tuple((_plain(key), _plain(value)) for key, value in items)
+    return replace(_take_marks("\n\n".join(lines), None, ()), reference=reference)
 
 
 def _following_dds(dt: Tag) -> list[Tag]:
@@ -338,7 +353,7 @@ def _option_name(dt: Tag) -> str:
     name = copy.copy(dt)
     for kbd in name.find_all("kbd"):
         kbd.replace_with(NavigableString(_KEY_MARK))
-    return _squash(_SHORTCUT.sub("", _render(name)))
+    return _plain(_squash(_SHORTCUT.sub("", _render(name))))
 
 
 def _is_option_list(node) -> bool:
@@ -363,6 +378,8 @@ def _render(node: Tag) -> str:
         cells = node.find_all(["td", "th"], recursive=False)
         return "\n\n" + " | ".join(_squash(_render(cell)) for cell in cells) + "\n\n"
     inner = "".join(_render(child) if isinstance(child, Tag) else _string(child) for child in node.children)
+    if node.name == "span" and _UI_CLASSES & set(node.get("class", [])):
+        return f"{_UI_OPEN}{_squash(inner)}{_UI_CLOSE}"
     if node.name in _BLOCK or _HEADING.match(node.name):
         return f"\n\n{inner}\n\n"
     return inner
@@ -375,6 +392,11 @@ def _string(node) -> str:
 def _squash(text: str) -> str:
     """줄바꿈·여러 빈칸을 빈칸 하나로."""
     return " ".join(text.split())
+
+
+def _plain(text: str) -> str:
+    """화면 이름 표식을 지운다(이름 글자는 남긴다)."""
+    return text.replace(_UI_OPEN, "").replace(_UI_CLOSE, "")
 
 
 def _mark_media(section: Tag, page_url: str) -> list[_Media]:
@@ -429,7 +451,7 @@ def _is_heading(node) -> bool:
 
 
 def _title(section: Tag) -> str:
-    return _squash(_render(section.find(_HEADING)))
+    return _plain(_squash(_render(section.find(_HEADING))))
 
 
 def main(argv: list[str]) -> int:
@@ -460,6 +482,7 @@ def main(argv: list[str]) -> int:
     print(f"  단어 수: 50 미만 {sum(n < 50 for n in sizes)}, 50-400 {sum(50 <= n <= 400 for n in sizes)}, 400 넘음 {sum(n > 400 for n in sizes)}")
     print(f"  영상·그림 예시를 붙인 청크: {sum(bool(chunk.examples) for chunk in chunks)}개")
     print(f"  모드·메뉴·단축키 상자가 있는 청크: {sum(bool(chunk.reference) for chunk in chunks)}개")
+    print(f"  메뉴 경로·버튼 이름이 있는 청크: {sum(bool(chunk.ui_names) for chunk in chunks)}개")
     return 0
 
 
