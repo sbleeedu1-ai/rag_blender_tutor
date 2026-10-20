@@ -219,4 +219,5 @@ COURSES = Path(__file__).resolve().parent.parent / "courses"
 
 def test_저장소의_연습_과정_파일은_검사를_통과한다():
     assert (COURSES / "_common.yaml").is_file()
+    assert (COURSES / "sword.yaml").is_file()
     assert check_folder(COURSES) == []
