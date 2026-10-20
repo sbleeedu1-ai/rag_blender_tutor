@@ -4,6 +4,9 @@
 나온 청크의 경계·경로·앵커·위계 메타데이터·그림 표시를 본다. 설명서 원문은 쓰지 않는다.
 """
 
+from pathlib import Path
+
+from blender_tutor import manual_chunks
 from blender_tutor.manual_chunks import Example, chunk_manual, chunk_page
 
 BASE = "https://docs.blender.org/manual/en/5.2/"
@@ -134,12 +137,23 @@ def test_400단어가_넘는_소제목은_옵션_경계에서_나누고_같은_�
 
     chunks = chunk_page(html, "modeling/wands/wand_tool")
 
+    # 182 + 181 + 181단어: [182 | 362]가 [363 | 181]보다 고르다
     assert [(c.anchor, c.headings, c.options) for c in chunks] == [
-        ("options", ("Options",), ("Alpha", "Beta")),
-        ("options", ("Options",), ("Gamma",)),
+        ("options", ("Options",), ("Alpha",)),
+        ("options", ("Options",), ("Beta", "Gamma")),
     ]
-    assert chunks[0].body == f"Alpha Shift-A\n\n{words(180, 'a')}\n\nBeta\n\n{words(180, 'b')}"
-    assert chunks[1].text == f"Wand Tool > Options\n\nGamma\n\n{words(180, 'c')}"
+    assert chunks[0].body == f"Alpha Shift-A\n\n{words(180, 'a')}"
+    assert chunks[1].text == f"Wand Tool > Options\n\nBeta\n\n{words(180, 'b')}\n\nGamma\n\n{words(180, 'c')}"
+
+
+def test_나눌_때는_고르게_나눠_아주_작은_꼬리_조각을_만들지_않는다():
+    paragraphs = f"<p>{words(200, 'a')}</p><p>{words(195, 'b')}</p><p>{words(15, 'c')}</p>"
+    html = page(headed("wand-tool", 1, "Wand Tool", paragraphs))
+
+    chunks = chunk_page(html, "modeling/wands/wand_tool")
+
+    # 앞에서 꽉 채우면 [395 | 15]가 되지만 고르게 나누면 [200 | 210]
+    assert [c.body for c in chunks] == [words(200, "a"), f"{words(195, 'b')}\n\n{words(15, 'c')}"]
 
 
 def test_옵션이_없는_긴_소제목은_문단_끝에서_나눈다():
@@ -248,16 +262,42 @@ def test_묶음_전체를_돌리되_기여자용_contribute_쪽과_색인_쪽은
     assert [(c.page_path, c.page_title) for c in chunks] == [("modeling/wands/wand_tool", "Wand Tool")]
 
 
-def test_옵션_하나가_400단어를_넘으면_그_옵션_안의_문단_끝에서_나눈다():
+def test_옵션_하나가_400단어를_넘으면_그_옵션_안의_문단_끝에서_나누고_뒤_조각에_옵션_이름을_붙인다():
     big = "<dl><dt>Operation</dt><dd>" + "".join(f"<p>{words(180, w)}</p>" for w in "abc") + "</dd></dl>"
     html = page(headed("wand-tool", 1, "Wand Tool", big))
 
     chunks = chunk_page(html, "modeling/wands/wand_tool")
 
-    assert [(c.body, c.options) for c in chunks] == [
-        (f"Operation\n\n{words(180, 'a')}\n\n{words(180, 'b')}", ("Operation",)),
-        (words(180, "c"), ("Operation",)),
+    assert [(c.text, c.options) for c in chunks] == [
+        (f"Wand Tool\n\nOperation\n\n{words(180, 'a')}", ("Operation",)),
+        (f"Wand Tool > Operation\n\n{words(180, 'b')}\n\n{words(180, 'c')}", ("Operation",)),
     ]
+
+
+def value(name: str, desc: str) -> str:
+    """값 목록(field-list)의 한 줄: 값 이름 + 설명."""
+    return f'<dt>{name}<span class="colon">:</span></dt><dd><p>{desc}</p></dd>'
+
+
+def test_긴_옵션은_범주와_값_경계에서_나누고_값_이름과_설명은_떼지_않는다():
+    # Math 노드의 Operation처럼: 옵션 > 범주(Functions, Trigonometric) > 값 이름 + 설명
+    functions = "".join(value(name, words(50, "f")) for name in ("Add", "Subtract", "Multiply"))
+    trig_names = ("Sine", "Cosine", "Tangent", "Arcsine", "Arccosine", "Arctangent", "Hsine", "Hcosine", "Htangent")
+    trigonometric = "".join(value(name, words(50, "t")) for name in trig_names)
+    operation = (
+        "<dl><dt>Operation</dt><dd><p>The operator to use:</p><dl class='simple'>"
+        f'<dt>Functions</dt><dd><dl class="field-list simple">{functions}</dl></dd>'
+        f'<dt>Trigonometric</dt><dd><dl class="field-list simple">{trigonometric}</dl></dd>'
+        "</dl></dd></dl>"
+    )
+    html = page(headed("wand-tool", 1, "Wand Tool", headed("properties", 2, "Properties", operation)))
+
+    chunks = chunk_page(html, "modeling/wands/wand_tool")
+
+    assert len(chunks) == 2
+    assert chunks[0].text.startswith("Wand Tool > Properties\n\nOperation\n\nThe operator to use:\n\nFunctions\n\nAdd:")
+    assert chunks[1].text.startswith(f"Wand Tool > Properties > Operation > Trigonometric\n\nArcsine:\n\n{words(50, 't')}")
+    assert [c.options for c in chunks] == [("Operation",), ("Operation",)]
 
 
 def test_한_청크에_든_모드_메뉴_단축키_상자는_모두_메타데이터에_남는다():
@@ -272,3 +312,10 @@ def test_한_청크에_든_모드_메뉴_단축키_상자는_모두_메타데이
     [chunk] = chunk_page(html, "modeling/wands/wand_tool")
 
     assert chunk.reference == (("Mode", "Edit Mode"), ("Mode", "Object Mode"))
+
+
+def test_코드_파일에_보이지_않는_표식_글자가_그대로_들어가지_않는다():
+    # 표식 글자는 ""처럼 번호로 적는다. 글자 그대로 넣으면 화면에 안 보여 편집 중에 지워지기 쉽다
+    source = Path(manual_chunks.__file__).read_text(encoding="utf-8")
+
+    assert [ch for ch in source if 0xE000 <= ord(ch) <= 0xF8FF] == []

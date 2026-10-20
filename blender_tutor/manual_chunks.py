@@ -1,6 +1,6 @@
 """자료 준비: 설명서 HTML 묶음을 소제목 단위 청크로 자른다(한 번 돌리는 프로그램, 비용 없음).
 
-규칙은 .scratch/mvp-roundtrip/spec.md의 "자료 준비"와 티켓 06·07의 Answer를 따른다.
+규칙은 .scratch/mvp-roundtrip/spec.md의 "자료 준비"와 티켓 06·07·19를 따른다.
 """
 
 import copy
@@ -8,13 +8,14 @@ import json
 import re
 import sys
 from dataclasses import asdict, dataclass, field, replace
+from enum import StrEnum
 from pathlib import Path
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, Comment, NavigableString, Tag
 
 BASE_URL = "https://docs.blender.org/manual/en/5.2/"  # 근거 링크는 /en/5.2/<경로>.html#<앵커>로 고정(티켓 02)
-MAX_WORDS = 400  # 소제목 글이 이보다 길면 옵션 경계(없으면 문단 끝)에서 나눈다(티켓 06)
+MAX_WORDS = 400  # 소제목 글이 이보다 길면 옵션 경계(없으면 문단 끝)에서 고르게 나눈다(티켓 06·19)
 
 _HEADING = re.compile(r"^h[1-6]$")
 # 앞뒤로 빈 줄을 두는 태그(나머지는 글 속에 이어 붙는다: em, kbd, a, span 등)
@@ -30,11 +31,18 @@ _SKIP_FOLDERS = {"contribute", "_sources", "_images", "_static"}
 _SKIP_PAGES = {"genindex", "search", "404"}  # 색인·검색·없는 쪽 안내(설명 글이 아님)
 
 
+class MediaKind(StrEnum):
+    """그림·영상 종류. 정해 둔 이름만 쓴다(오타를 내면 바로 오류가 난다)."""
+
+    IMAGE = "그림"
+    VIDEO = "영상"
+
+
 @dataclass(frozen=True)
 class Example:
     """영상만·그림만 있는 소제목. 청크로 만들지 않고 같은 쪽 바로 앞 청크에 붙인다(티켓 07)."""
 
-    kind: str  # "영상" 또는 "그림"
+    kind: MediaKind
     heading: str  # 그 소제목 제목
     url: str  # 그 소제목 링크
     media: tuple[str, ...]  # 영상·그림 주소
@@ -51,11 +59,12 @@ class Chunk:
     page_title: str  # 쪽 제목
     headings: tuple[str, ...]  # 쪽 제목 아래 소제목 경로. 쪽 첫머리 글이면 빈 묶음
     body: str  # 본문 글
+    option_path: tuple[str, ...] = ()  # 긴 옵션을 나눈 뒤 조각이면 그 옵션·범주 경로(예: Operation > Trigonometric)
     options: tuple[str, ...] = ()  # 이 청크에 든 옵션 이름(정의 목록의 항목 이름, 단축키 글자는 뗌)
     images: tuple[str, ...] = ()  # 글 속 그림 주소
     videos: tuple[str, ...] = ()  # 글 속 영상 주소
     examples: tuple[Example, ...] = ()  # 뒤따르는 영상만·그림만 있는 소제목
-    reference: tuple[tuple[str, str], ...] = ()  # "모드·메뉴·단축키" 상자(예: ("Mode", "Edit Mode"))
+    reference: tuple[tuple[str, str], ...] = ()  # "모드·메뉴·단축키" 상자(예: ("Mode", "Edit Mode")), 여럿이면 차례로
 
     @property
     def url(self) -> str:
@@ -63,8 +72,8 @@ class Chunk:
 
     @property
     def text(self) -> str:
-        """검색·답변에 쓰는 글: 맨 앞에 '쪽 제목 > 소제목' 경로를 붙인다."""
-        return " > ".join((self.page_title, *self.headings)) + "\n\n" + self.body
+        """검색·답변에 쓰는 글: 맨 앞에 '쪽 제목 > 소제목 (> 옵션 > 범주)' 경로를 붙인다."""
+        return " > ".join((self.page_title, *self.headings, *self.option_path)) + "\n\n" + self.body
 
 
 def chunk_manual(root: Path) -> list[Chunk]:
@@ -126,18 +135,19 @@ class _Page:
 
 @dataclass(frozen=True)
 class _Media:
-    kind: str  # "그림" 또는 "영상"
+    kind: MediaKind
     urls: tuple[str, ...]
 
 
 @dataclass
 class _Unit:
-    """나눌 때 쪼개지 않는 글 한 덩이: 문단 하나 또는 옵션 하나."""
+    """나눌 때 쪼개지 않는 글 한 덩이: 문단 하나, 옵션 하나, 값 이름 + 설명 한 쌍 등."""
 
     text: str
-    option: str | None = None
+    option: str | None = None  # 이 덩이가 속한 옵션 이름
     media: list[int] = field(default_factory=list)  # 이 덩이에 든 그림·영상 번호
     reference: tuple[tuple[str, str], ...] = ()  # "모드·메뉴·단축키" 상자면 그 칸들
+    path: tuple[str, ...] = ()  # 긴 옵션을 나눈 덩이면 글에 이름이 빠진 옵션·범주 경로
 
     @property
     def words(self) -> int:
@@ -161,25 +171,30 @@ def _chunk(
     examples: tuple[Example, ...],
 ) -> Chunk:
     return Chunk(
-        page.path,
-        section["id"],
-        page.field,
-        page.group,
-        page.title,
-        headings,
-        "\n\n".join(unit.text for unit in units),
-        tuple(dict.fromkeys(unit.option for unit in units if unit.option)),  # 긴 옵션을 나눈 덩이는 이름이 같다
-        _urls(units, media, "그림"),
-        _urls(units, media, "영상"),
-        examples,
-        tuple(item for unit in units for item in unit.reference),  # 상자가 여럿이면 차례로 이어 둔다
+        page_path=page.path,
+        anchor=section["id"],
+        field=page.field,
+        group=page.group,
+        page_title=page.title,
+        headings=headings,
+        body="\n\n".join(unit.text for unit in units),
+        option_path=units[0].path,
+        options=tuple(dict.fromkeys(unit.option for unit in units if unit.option)),  # 긴 옵션을 나눈 덩이는 이름이 같다
+        images=_urls(units, media, MediaKind.IMAGE),
+        videos=_urls(units, media, MediaKind.VIDEO),
+        examples=examples,
+        reference=tuple(item for unit in units for item in unit.reference),
     )
 
 
 def _example(section: Tag, headings: tuple[str, ...], page: _Page, media: list[_Media]) -> Example:
-    kind = "영상" if any(item.kind == "영상" for item in media) else "그림"
-    title = headings[-1] if headings else page.title
-    return Example(kind, title, f"{page.url}#{section['id']}", tuple(url for item in media for url in item.urls))
+    kind = MediaKind.VIDEO if any(item.kind == MediaKind.VIDEO for item in media) else MediaKind.IMAGE
+    return Example(
+        kind=kind,
+        heading=headings[-1] if headings else page.title,
+        url=f"{page.url}#{section['id']}",
+        media=tuple(url for item in media for url in item.urls),
+    )
 
 
 def _units(nodes) -> list[_Unit]:
@@ -188,13 +203,45 @@ def _units(nodes) -> list[_Unit]:
     for node in nodes:
         if isinstance(node, Tag) and "refbox" in node.get("class", []):
             units.append(_reference_unit(node))
-        elif isinstance(node, Tag) and node.name == "dl" and "field-list" not in node.get("class", []):
+        elif _is_option_list(node):
             for dt in node.find_all("dt", recursive=False):
-                parts = [dt, *_following_dds(dt)]
-                units += _blocks("\n\n".join(_render(part) for part in parts), _option_name(dt))
+                units += _option_units(dt, _option_name(dt), ())
         else:
-            units += _blocks(_render(node) if isinstance(node, Tag) else _string(node))
-    # 글 없이 표식만 남은 덩이(영상 자리 등)는 앞 덩이에 주소만 넘긴다
+            units += _paragraph_units(_render(node) if isinstance(node, Tag) else _string(node))
+    return _drop_empty(units)
+
+
+def _option_units(dt: Tag, option: str, path: tuple[str, ...]) -> list[_Unit]:
+    """옵션(또는 그 안의 범주) 하나를 덩이로. MAX_WORDS 안이면 한 덩이로 두고,
+    넘으면 안쪽 범주 → 값(이름 + 설명 한 쌍) → 문단 경계에서 나눈다(티켓 19, 예: Math 노드의 Operation).
+    """
+    dds = _following_dds(dt)
+    whole = _text_unit("".join(_render(tag) for tag in (dt, *dds)), option, path)
+    if whole.words <= MAX_WORDS:
+        return [whole]
+    inner = (*path, _option_name(dt))  # 안쪽 덩이에는 이 이름이 글에 없으니 경로로 붙인다
+    units: list[_Unit] = []
+    for child in (child for dd in dds for child in dd.children):
+        if _is_option_list(child):
+            for sub in child.find_all("dt", recursive=False):
+                units += _option_units(sub, option, inner)
+        elif _is_value_list(child):
+            for sub in child.find_all("dt", recursive=False):
+                units.append(_text_unit("".join(_render(tag) for tag in (sub, *_following_dds(sub))), option, inner))
+        else:
+            units += _paragraph_units(_render(child) if isinstance(child, Tag) else _string(child), option, inner)
+    units = _drop_empty(units)
+    if not units:
+        return [whole]  # 안쪽에서 나눌 글을 못 찾으면 통째로 둔다
+    # 이름(dt)은 첫 덩이 앞에 둔다. 첫 덩이 글에 이름이 있으니 경로는 바깥 것만
+    header = _text_unit(_render(dt), option, path)
+    first = units[0]
+    units[0] = replace(first, text=f"{header.text}\n\n{first.text}", media=header.media + first.media, path=path)
+    return units
+
+
+def _drop_empty(units: list[_Unit]) -> list[_Unit]:
+    """글 없이 표식만 남은 덩이(영상 자리 등)는 빼고, 그 그림·영상 번호는 이웃 덩이로 넘긴다."""
     kept: list[_Unit] = []
     orphan: list[int] = []
     for unit in units:
@@ -211,30 +258,55 @@ def _units(nodes) -> list[_Unit]:
     return kept
 
 
-def _blocks(raw: str, option: str | None = None) -> list[_Unit]:
-    """빈 줄로 나뉜 글을 덩이로. 옵션 하나는 문단이 여럿이어도 한 덩이로 두되, MAX_WORDS를 넘으면 문단마다 나눈다."""
-    blocks = [" ".join(block.split()) for block in re.split(r"\n\s*\n", raw)]
-    blocks = [block for block in blocks if block]
-    if option is not None and len(_MEDIA_MARK.sub("", " ".join(blocks)).split()) <= MAX_WORDS:
-        blocks = ["\n\n".join(blocks)]
-    units = []
-    for block in blocks:
-        media = [int(n) for n in _MEDIA_MARK.findall(block)]
-        units.append(_Unit(_MEDIA_MARK.sub("", block).strip(), option, media))
-    return units
+def _paragraph_units(raw: str, option: str | None = None, path: tuple[str, ...] = ()) -> list[_Unit]:
+    """빈 줄로 나뉜 글을 문단마다 한 덩이로."""
+    return [_take_marks(block, option, path) for block in _squashed_blocks(raw)]
+
+
+def _text_unit(raw: str, option: str | None = None, path: tuple[str, ...] = ()) -> _Unit:
+    """문단이 여럿이어도 통째로 한 덩이로."""
+    return _take_marks("\n\n".join(_squashed_blocks(raw)), option, path)
+
+
+def _squashed_blocks(raw: str) -> list[str]:
+    blocks = (_squash(block) for block in re.split(r"\n\s*\n", raw))
+    return [block for block in blocks if block]
+
+
+def _take_marks(text: str, option: str | None, path: tuple[str, ...]) -> _Unit:
+    """글에서 그림·영상 표식을 떼어 번호는 덩이에 적는다."""
+    media = [int(n) for n in _MEDIA_MARK.findall(text)]
+    return _Unit(_MEDIA_MARK.sub("", text).strip(), option, media, path=path)
 
 
 def _pack(units: list[_Unit]) -> list[list[_Unit]]:
-    """덩이를 앞에서부터 MAX_WORDS까지 채워 청크로 묶는다. 한 덩이가 넘치면 그 덩이만 따로 둔다."""
+    """덩이를 청크로 묶는다. MAX_WORDS 안에 들도록 가장 적은 수로 나누되, 조각 크기는 고르게.
+
+    앞에서부터 꽉 채우면 꼬리가 아주 작아질 수 있어(400 + 10), 같은 조각 수가 나오는 가장 작은 한도를 찾아
+    그 한도로 다시 채운다(205 + 205 쯤). 한 덩이가 한도를 넘으면 그 덩이만 따로 둔다.
+    """
+    count = len(_fill(units, MAX_WORDS))
+    low, high = 1, MAX_WORDS
+    while low < high:
+        middle = (low + high) // 2
+        if len(_fill(units, middle)) <= count:
+            high = middle
+        else:
+            low = middle + 1
+    return _fill(units, low)
+
+
+def _fill(units: list[_Unit], limit: int) -> list[list[_Unit]]:
+    """앞에서부터 limit 단어까지 채워 묶는다."""
     pieces: list[list[_Unit]] = []
     current: list[_Unit] = []
-    count = 0
+    total = 0
     for unit in units:
-        if current and count + unit.words > MAX_WORDS:
+        if current and total + unit.words > limit:
             pieces.append(current)
-            current, count = [], 0
+            current, total = [], 0
         current.append(unit)
-        count += unit.words
+        total += unit.words
     if current:
         pieces.append(current)
     return pieces
@@ -244,13 +316,12 @@ def _reference_unit(box: Tag) -> _Unit:
     """"모드·메뉴·단축키" 상자를 'Mode: Edit Mode' 꼴 줄로 쓴 한 덩이로."""
     items = []
     for dt in box.find_all("dt"):
-        key = " ".join(_render(dt).split()).rstrip(":").strip()
-        value = " ".join("".join(_render(dd) for dd in _following_dds(dt)).split())
+        key = _squash(_render(dt)).rstrip(":").strip()
+        value = _squash("".join(_render(dd) for dd in _following_dds(dt)))
         items.append((key, value))
     title = box.find(class_="admonition-title")
-    lines = ([" ".join(_render(title).split())] if title else []) + [f"{key}: {value}" for key, value in items]
-    raw = "\n\n".join(lines)
-    return _Unit(_MEDIA_MARK.sub("", raw), media=[int(n) for n in _MEDIA_MARK.findall(raw)], reference=tuple(items))
+    lines = ([_squash(_render(title))] if title else []) + [f"{key}: {value}" for key, value in items]
+    return replace(_take_marks("\n\n".join(lines), None, ()), reference=tuple(items))
 
 
 def _following_dds(dt: Tag) -> list[Tag]:
@@ -267,11 +338,20 @@ def _option_name(dt: Tag) -> str:
     name = copy.copy(dt)
     for kbd in name.find_all("kbd"):
         kbd.replace_with(NavigableString(_KEY_MARK))
-    text = _SHORTCUT.sub("", _render(name))
-    return " ".join(text.split())
+    return _squash(_SHORTCUT.sub("", _render(name)))
 
 
-def _urls(units: list[_Unit], media: list[_Media], kind: str) -> tuple[str, ...]:
+def _is_option_list(node) -> bool:
+    """옵션 목록: 정의 목록(dl) 가운데 값 목록이 아닌 것."""
+    return isinstance(node, Tag) and node.name == "dl" and "field-list" not in node.get("class", [])
+
+
+def _is_value_list(node) -> bool:
+    """값 목록: 'Vertices: 설명'처럼 값 이름과 설명이 짝인 목록(field-list)."""
+    return isinstance(node, Tag) and node.name == "dl" and "field-list" in node.get("class", [])
+
+
+def _urls(units: list[_Unit], media: list[_Media], kind: MediaKind) -> tuple[str, ...]:
     return tuple(url for unit in units for n in unit.media if media[n].kind == kind for url in media[n].urls)
 
 
@@ -281,7 +361,7 @@ def _render(node: Tag) -> str:
         return ""
     if node.name == "tr":
         cells = node.find_all(["td", "th"], recursive=False)
-        return "\n\n" + " | ".join(" ".join(_render(cell).split()) for cell in cells) + "\n\n"
+        return "\n\n" + " | ".join(_squash(_render(cell)) for cell in cells) + "\n\n"
     inner = "".join(_render(child) if isinstance(child, Tag) else _string(child) for child in node.children)
     if node.name in _BLOCK or _HEADING.match(node.name):
         return f"\n\n{inner}\n\n"
@@ -290,6 +370,11 @@ def _render(node: Tag) -> str:
 
 def _string(node) -> str:
     return "" if isinstance(node, Comment) else str(node)
+
+
+def _squash(text: str) -> str:
+    """줄바꿈·여러 빈칸을 빈칸 하나로."""
+    return " ".join(text.split())
 
 
 def _mark_media(section: Tag, page_url: str) -> list[_Media]:
@@ -304,13 +389,13 @@ def _mark_media(section: Tag, page_url: str) -> list[_Media]:
         media.append(item)
 
     # 단계마다 내용을 새로 찾는다: 앞 단계에서 떼어 낸 그림 상자 속 img를 다시 잡지 않도록
-    for frame in _find(section, "iframe"):
-        mark(frame, _Media("영상", (frame["src"],)), "")
-    for holder in _find(section, "figure"):
+    for frame in _find_in_content(section, "iframe"):
+        mark(frame, _Media(MediaKind.VIDEO, (frame["src"],)), "")
+    for holder in _find_in_content(section, "figure"):
         urls = tuple(urljoin(page_url, img["src"]) for img in holder.find_all("img"))
-        mark(holder, _Media("그림", urls), _figure_label(holder.find("figcaption"), holder.find("img")))
-    for img in _find(section, "img"):
-        mark(img, _Media("그림", (urljoin(page_url, img["src"]),)), _figure_label(None, img))
+        mark(holder, _Media(MediaKind.IMAGE, urls), _figure_label(holder.find("figcaption"), holder.find("img")))
+    for img in _find_in_content(section, "img"):
+        mark(img, _Media(MediaKind.IMAGE, (urljoin(page_url, img["src"]),)), _figure_label(None, img))
     return media
 
 
@@ -319,7 +404,7 @@ def _content(section: Tag) -> list:
     return [child for child in section.children if not _is_section(child) and not _is_heading(child)]
 
 
-def _find(section: Tag, name: str) -> list[Tag]:
+def _find_in_content(section: Tag, name: str) -> list[Tag]:
     """소제목 내용 안의 name 태그(아래 소제목 속 것은 빼고)."""
     tags = [node for node in _content(section) if isinstance(node, Tag)]
     return [found for tag in tags for found in ([tag] if tag.name == name else []) + tag.find_all(name)]
@@ -328,7 +413,7 @@ def _find(section: Tag, name: str) -> list[Tag]:
 def _figure_label(caption: Tag | None, img: Tag | None) -> str:
     """캡션이 있으면 [그림: 캡션], 캡션이 없고 alt가 설명 글이면 [그림: alt], 둘 다 없으면 [그림]."""
     if caption is not None:
-        label = " ".join(_render(caption).split())
+        label = _squash(_render(caption))
     else:
         alt = (img.get("alt") or "").strip() if img is not None else ""
         label = "" if _PATH_ALT.search(alt) else alt
@@ -344,8 +429,7 @@ def _is_heading(node) -> bool:
 
 
 def _title(section: Tag) -> str:
-    heading = section.find(_HEADING)
-    return " ".join(_render(heading).split())
+    return _squash(_render(section.find(_HEADING)))
 
 
 def main(argv: list[str]) -> int:
@@ -354,7 +438,7 @@ def main(argv: list[str]) -> int:
     예: python -m blender_tutor.manual_chunks data/manual_en_5.2/html/blender_manual_v520_en.html data/chunks/manual_chunks.jsonl
     (설명서 HTML 폴더는 zip을 푼 폴더로, 이름이 .html로 끝나지만 폴더다)
 
-    청크를 한 줄에 하나씩 JSON으로 쓰고 개수를 알린다. 결과는 data/에 두고 커밋하지 않는다.
+    청크를 한 줄에 하나씩 JSON으로 쓰고 개수를 알린다(중간 점검용). 결과는 data/에 두고 커밋하지 않는다.
     """
     if len(argv) != 2:
         print(main.__doc__)
@@ -367,8 +451,12 @@ def main(argv: list[str]) -> int:
             row = {**asdict(chunk), "url": chunk.url, "text": chunk.text}
             file.write(json.dumps(row, ensure_ascii=False) + "\n")
     sizes = [len(chunk.body.split()) for chunk in chunks]
+    pieces = {}  # 나눈 소제목(쪽 경로, 앵커) → 조각 단어 수들
+    for chunk, size in zip(chunks, sizes):
+        pieces.setdefault((chunk.page_path, chunk.anchor), []).append(size)
+    split = [sizes for sizes in pieces.values() if len(sizes) > 1]
     print(f"청크 {len(chunks)}개 (쪽 {len({chunk.page_path for chunk in chunks})}개) → {out}")
-    print(f"  나눈 소제목에서 나온 청크: {len(chunks) - len({(c.page_path, c.anchor) for c in chunks})}개 더")
+    print(f"  나눈 소제목 {len(split)}개 → 조각 {sum(map(len, split))}개, 가장 작은 조각 {min(map(min, split), default=0)}단어")
     print(f"  단어 수: 50 미만 {sum(n < 50 for n in sizes)}, 50-400 {sum(50 <= n <= 400 for n in sizes)}, 400 넘음 {sum(n > 400 for n in sizes)}")
     print(f"  영상·그림 예시를 붙인 청크: {sum(bool(chunk.examples) for chunk in chunks)}개")
     print(f"  모드·메뉴·단축키 상자가 있는 청크: {sum(bool(chunk.reference) for chunk in chunks)}개")
