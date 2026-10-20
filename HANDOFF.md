@@ -12,7 +12,7 @@
 - 티켓 18을 끝냈다(HISTORY [30]).
   - `blender_tutor/progress_record.py`(`ProgressManager`): 연습 과정 고르기·바꾸기 확인, 파일 열림·저장 사건, 파일마다 진행 기록 JSON, 이어 하기 물음.
   - `blender_tutor/progress.py`의 `Progress`: 끝낸 단계, 중간 단계부터 시작, `close()`를 더함. `Course`, `load_course`도 더함.
-- 테스트: `.venv\Scripts\python -m pytest` 99개 통과. 연습 과정 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` 문제 0개.
+- 테스트: `.venv\Scripts\python -m pytest` 100개 통과. 연습 과정 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` 문제 0개.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 모르면 실수할 것
