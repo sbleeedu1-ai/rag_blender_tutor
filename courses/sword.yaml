@@ -266,4 +266,7 @@
           - addons/scene_gltf2.html#export
           - addons/scene_gltf2.html#gltf-binary-glb
           - addons/scene_gltf2.html#data-mesh
-        # 끝난 조건 없음: glTF 내보내기는 Blender 5.2.2의 "방금 실행한 조작" 기록에 남지 않는다(2026-10-20 직접 조작해 확인). "다음 단계" 버튼으로 마친다.
+        # glTF 내보내기는 Blender의 조작 기록에 남지 않아, 애드온이 glTF 내보내기 끝 알림(glTF2_post_export_callback)을 받아
+        # "방금 실행한 조작"에 export_scene.gltf를 직접 넣는다(티켓 25). 안 잡히면 이 조건을 빼고 버튼으로만 마친다.
+        끝난 조건:
+          - 방금 조작: export_scene.gltf
