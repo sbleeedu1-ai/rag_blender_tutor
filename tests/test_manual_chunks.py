@@ -4,7 +4,7 @@
 나온 청크의 경계·경로·앵커·위계 메타데이터·그림 표시를 본다. 설명서 원문은 쓰지 않는다.
 """
 
-from blender_tutor.manual_chunks import chunk_page
+from blender_tutor.manual_chunks import Example, chunk_manual, chunk_page
 
 BASE = "https://docs.blender.org/manual/en/5.2/"
 
@@ -99,3 +99,150 @@ def test_글_속_영상은_그_청크_메타데이터에_영상_주소로_둔다
 
     assert chunk.body == "Watch this."
     assert chunk.videos == ("https://video.blender.org/videos/embed/abc",)
+
+
+def option(name: str, desc: str) -> str:
+    return f"<dt>{name}</dt><dd><p>{desc}</p></dd>"
+
+
+def test_글자_꾸밈_앞뒤에_빈칸을_넣지_않고_표는_칸을_세로줄로_나눈다():
+    table = '<table class="docutils"><tbody><tr><td><p>Left</p></td><td><p>Right</p></td></tr></tbody></table>'
+    html = page(
+        headed(
+            "wand-tool",
+            1,
+            "Wand Tool",
+            "<p>Press <kbd>Shift</kbd>-<kbd>W</kbd> to use the <em>Wand</em>.</p>"
+            '<p><span class="menuselection">Object ‣ Wand</span>.</p>' + table,
+        )
+    )
+
+    [chunk] = chunk_page(html, "modeling/wands/wand_tool")
+
+    assert chunk.body == "Press Shift-W to use the Wand.\n\nObject ‣ Wand.\n\nLeft | Right"
+
+
+def test_400단어가_넘는_소제목은_옵션_경계에서_나누고_같은_경로_앵커를_쓴다():
+    options = (
+        "<dl>"
+        + option("Alpha <kbd>Shift</kbd>-<kbd>A</kbd>", words(180, "a"))
+        + option("Beta", words(180, "b"))
+        + option("Gamma", words(180, "c"))
+        + "</dl>"
+    )
+    html = page(headed("wand-tool", 1, "Wand Tool", headed("options", 2, "Options", options)))
+
+    chunks = chunk_page(html, "modeling/wands/wand_tool")
+
+    assert [(c.anchor, c.headings, c.options) for c in chunks] == [
+        ("options", ("Options",), ("Alpha", "Beta")),
+        ("options", ("Options",), ("Gamma",)),
+    ]
+    assert chunks[0].body == f"Alpha Shift-A\n\n{words(180, 'a')}\n\nBeta\n\n{words(180, 'b')}"
+    assert chunks[1].text == f"Wand Tool > Options\n\nGamma\n\n{words(180, 'c')}"
+
+
+def test_옵션이_없는_긴_소제목은_문단_끝에서_나눈다():
+    paragraphs = "".join(f"<p>{words(180, w)}</p>" for w in "abc")
+    html = page(headed("wand-tool", 1, "Wand Tool", paragraphs))
+
+    chunks = chunk_page(html, "modeling/wands/wand_tool")
+
+    assert [c.body for c in chunks] == [f"{words(180, 'a')}\n\n{words(180, 'b')}", words(180, "c")]
+    assert all(c.anchor == "wand-tool" and c.options == () for c in chunks)
+
+
+def test_값_목록은_옵션으로_세지_않는다():
+    values = '<dl class="field-list simple"><dt>Fast<span class="colon">:</span></dt><dd><p>Quick.</p></dd></dl>'
+    html = page(headed("wand-tool", 1, "Wand Tool", "<dl>" + option("Speed", "How fast." + values) + "</dl>"))
+
+    [chunk] = chunk_page(html, "modeling/wands/wand_tool")
+
+    assert chunk.options == ("Speed",)
+
+
+TOCTREE = '<div class="toctree-wrapper compound"><ul><li class="toctree-l1"><a href="a.html">Child Page</a></li></ul></div>'
+
+
+def test_아래_소제목만_묶는_제목뿐인_소제목은_경로에만_남는다():
+    html = page(
+        headed(
+            "wand-tool",
+            1,
+            "Wand Tool",
+            '<span id="index-0"></span>' + headed("tools", 2, "Tools", headed("spark", 3, "Spark", "<p>Sparks fly.</p>")),
+        )
+    )
+
+    [chunk] = chunk_page(html, "modeling/wands/wand_tool")
+
+    assert (chunk.anchor, chunk.text) == ("spark", "Wand Tool > Tools > Spark\n\nSparks fly.")
+
+
+def test_목차만_있는_소제목과_쪽은_버린다():
+    toc_page = page(headed("wands", 1, "Wands", TOCTREE))
+    toc_section = page(headed("wand-tool", 1, "Wand Tool", "<p>Intro.</p>" + headed("pages", 2, "Pages", TOCTREE)))
+
+    assert chunk_page(toc_page, "modeling/wands/index") == []
+    assert [c.anchor for c in chunk_page(toc_section, "modeling/wands/wand_tool")] == ["wand-tool"]
+
+
+def test_영상만_그림만_있는_소제목은_같은_쪽_바로_앞_청크에_예시로_붙인다():
+    video = '<div class="video"><iframe src="https://video.blender.org/videos/embed/abc"></iframe></div>'
+    html = page(
+        headed(
+            "wand-tool",
+            1,
+            "Wand Tool",
+            "<p>Intro.</p>"
+            + headed("usage", 2, "Usage", "<p>Hold it.</p>")
+            + headed("demo", 2, "Demo", video)
+            + headed("gallery", 2, "Gallery", figure("../../_images/wand_gallery.png"))
+            + headed("result", 2, "Result", figure("../../_images/wand_result.png", caption="Many wands."))
+            + headed("tips", 2, "Tips", "<p>Wave slowly.</p>"),
+        )
+    )
+
+    chunks = chunk_page(html, "modeling/wands/wand_tool")
+
+    # 캡션은 찾을 수 있는 글이라 캡션 있는 그림만 있는 소제목은 청크로 둔다(티켓 06의 '그림만'은 0단어 소제목)
+    assert [(c.anchor, c.body) for c in chunks] == [
+        ("wand-tool", "Intro."),
+        ("usage", "Hold it."),
+        ("result", "[그림: Many wands.]"),
+        ("tips", "Wave slowly."),
+    ]
+    assert chunks[1].examples == (
+        Example("영상", "Demo", BASE + "modeling/wands/wand_tool.html#demo", ("https://video.blender.org/videos/embed/abc",)),
+        Example("그림", "Gallery", BASE + "modeling/wands/wand_tool.html#gallery", (BASE + "_images/wand_gallery.png",)),
+    )
+    assert [c.examples for c in chunks if c.anchor != "usage"] == [(), (), ()]
+
+
+def test_모드_메뉴_단축키_상자는_본문과_메타데이터에_둔다():
+    refbox = (
+        '<div class="refbox admonition"><p class="admonition-title">Reference</p><dl class="field-list simple">'
+        '<dt class="field-odd">Mode<span class="colon">:</span></dt><dd class="field-odd"><p>Edit Mode</p></dd>'
+        '<dt class="field-even">Menu<span class="colon">:</span></dt>'
+        '<dd class="field-even"><p><span class="menuselection">Wand ‣ Wave</span></p></dd>'
+        '<dt class="field-odd">Shortcut<span class="colon">:</span></dt>'
+        '<dd class="field-odd"><p><kbd>Ctrl</kbd>-<kbd>W</kbd></p></dd></dl></div>'
+    )
+    html = page(headed("wand-tool", 1, "Wand Tool", refbox + "<p>The wand tool waves.</p>"))
+
+    [chunk] = chunk_page(html, "modeling/wands/wand_tool")
+
+    assert chunk.reference == (("Mode", "Edit Mode"), ("Menu", "Wand ‣ Wave"), ("Shortcut", "Ctrl-W"))
+    assert chunk.body == "Reference\n\nMode: Edit Mode\n\nMenu: Wand ‣ Wave\n\nShortcut: Ctrl-W\n\nThe wand tool waves."
+
+
+def test_묶음_전체를_돌리되_기여자용_contribute_쪽과_색인_쪽은_뺀다(tmp_path):
+    pages = [("modeling/wands/wand_tool.html", "Wand Tool"), ("contribute/manual/guide.html", "Guide"), ("genindex.html", "Index")]
+    for path, title in pages:
+        file = tmp_path / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(page(headed("top", 1, title, "<p>Body.</p>")), encoding="utf-8")
+
+    chunks = chunk_manual(tmp_path)
+
+    assert [(c.page_path, c.page_title) for c in chunks] == [("modeling/wands/wand_tool", "Wand Tool")]
