@@ -10,6 +10,8 @@ from pathlib import Path
 
 import yaml
 
+from blender_tutor.conditions import CONDITIONS
+
 
 class Kind(StrEnum):
     """문제 종류. 웹의 404처럼 정해 둔 이름만 쓴다(오타를 내면 바로 오류가 난다)."""
@@ -22,6 +24,7 @@ class Kind(StrEnum):
     ADDRESS_FORMAT = "address-format"  # 설명서 소제목 주소가 '경로.html#앵커' 꼴이 아님
     DUPLICATE_LABEL = "duplicate-label"  # 이름표 겹침
     CONDITION_KIND = "condition-kind"  # 정해진 7가지 밖의 끝난 조건 종류
+    CONDITION_VALUE = "condition-value"  # 끝난 조건 값의 꼴이 그 종류에 맞지 않음
     COMMON_REF = "common-ref"  # 공통 준비 파일을 잘못 가리킴
     YAML_TRAP = "yaml-trap"  # YAML 함정(따옴표 없는 no 등, 같은 칸 두 번)
     YAML_SYNTAX = "yaml-syntax"  # YAML 문법 오류
@@ -143,10 +146,6 @@ def _list_of(fields: dict[str, tuple[bool, Checker]]) -> Checker:
     return check
 
 
-# 끝난 조건 검사 종류(명세에서 정한 7가지). 새 종류는 진행 관리 코드에 판정을 더할 때 여기에도 더한다.
-CONDITION_KINDS = ("모드", "방금 조작", "물체 수 늘어남", "모디파이어", "재질 슬롯 수", "배율", "크기 비율")
-
-
 def _conditions(value: object, where: str, report: Report) -> None:
     if not isinstance(value, list):
         report(Kind.TYPE, where, "목록이어야 합니다.")
@@ -156,11 +155,12 @@ def _conditions(value: object, where: str, report: Report) -> None:
             report(Kind.CONDITION_KIND, f"{where}[{i}]", "끝난 조건은 한 줄에 '종류: 값' 하나씩 적습니다.")
             continue
         condition, condition_value = next(iter(item.items()))
-        if condition not in CONDITION_KINDS:
+        kind = CONDITIONS.get(condition)
+        if kind is None:
             report(
                 Kind.CONDITION_KIND,
                 f"{where}[{i}]",
-                f"'{condition}'은(는) 정해진 끝난 조건 종류가 아닙니다. 쓸 수 있는 종류: {', '.join(CONDITION_KINDS)}",
+                f"'{condition}'은(는) 정해진 끝난 조건 종류가 아닙니다. 쓸 수 있는 종류: {', '.join(CONDITIONS)}",
             )
         elif condition_value is None or condition_value == "":
             report(Kind.MISSING, f"{where}[{i}].{condition}", "값이 비어 있습니다.")
@@ -171,6 +171,8 @@ def _conditions(value: object, where: str, report: Report) -> None:
                 f"{where}[{i}].{condition}",
                 f"YAML이 {condition_value!r}(으)로 읽었습니다. 값을 따옴표로 감싸세요.",
             )
+        elif not kind.is_valid(condition_value):
+            report(Kind.CONDITION_VALUE, f"{where}[{i}].{condition}", f"{condition_value!r}: '{condition}' 값은 {kind.hint}")
 
 
 OPERATION = {

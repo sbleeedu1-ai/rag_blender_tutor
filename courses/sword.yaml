@@ -69,7 +69,7 @@
           - modeling/meshes/selecting/introduction.html#x-ray
           - modeling/meshes/editing/mesh/merge.html#merge
         끝난 조건:
-          - 모드: EDIT
+          - 모드: EDIT_MESH
           - 방금 조작: mesh.merge
 
   - 이름: 손잡이 쪽 부품 붙이기
@@ -266,5 +266,7 @@
           - addons/scene_gltf2.html#export
           - addons/scene_gltf2.html#gltf-binary-glb
           - addons/scene_gltf2.html#data-mesh
+        # glTF 내보내기는 Blender의 조작 기록에 남지 않아, 애드온이 glTF 내보내기 끝 알림(glTF2_post_export_callback)을 받아
+        # "방금 실행한 조작"에 export_scene.gltf를 직접 넣는다(티켓 25). 안 잡히면 이 조건을 빼고 버튼으로만 마친다.
         끝난 조건:
           - 방금 조작: export_scene.gltf
