@@ -5,19 +5,20 @@
 ## 다음 할 일
 
 1. **티켓 16: 검 연습 과정 파일 초안** `/implement .scratch/mvp-roundtrip/issues/16-검-연습-과정-파일-초안.md`
-   - 새 브랜치에서 한다(예: `tickets/16-sword-course`).
+   - 브랜치 `tickets/16-sword-course`를 이미 만들어 두었다(CI·보호 규칙 기록 커밋 하나가 있음). 여기서 이어 한다.
    - `courses/sword.yaml`을 쓰고 `.venv\Scripts\python -m blender_tutor.course_check courses`로 문제 0개를 만든다.
    - 칸 이름과 모양은 `courses/_common.yaml`과 `tests/test_course_check.py`의 `COURSE` 예시를 그대로 따른다(결정은 HISTORY [19]-[21]).
 2. 그다음 바로 시작할 수 있는 티켓: 17(진행 관리, 16과 함께 15만 기다림), 19(자료 준비), 34(홀드아웃 봉인).
 
 ## 지금 상태
 
-- 티켓 15를 끝냈다. PR #3을 main에 병합했고, 브랜치 `tickets/15-course-check`는 로컬과 원격에서 지웠다.
+- 티켓 15를 끝냈다(PR #3). GitHub CI를 켰다(PR #4). 병합한 브랜치는 로컬과 원격에서 지웠다.
 - 테스트: `.venv\Scripts\python -m pytest` 37개 통과(API 키·Blender·화면 없이).
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 모르면 실수할 것
 
+- **main은 보호되어 있다.** CI의 "test" 검사를 통과한 PR로만 합칠 수 있고 main에 바로 푸시할 수 없다(관리자도 같음). HANDOFF·HISTORY 같은 기록도 작업 브랜치에 커밋해 PR로 올린다. CI는 `data/`가 없어 그것이 필요한 테스트는 건너뛴다.
 - 다른 PC에서는 먼저 `python -m venv .venv` 다음 `.venv\Scripts\python -m pip install -e ".[dev]"`를 한다(`AGENTS.md`의 "준비").
 - 연습 과정 파일에서 조작은 설명·메뉴·단축키 셋 다 꼭 적는다. 없으면 `없음`이라고 적는다. 메뉴 경로·이름표·Blender 조작 이름은 영어로 적는다.
 - 따옴표 없는 `no`·`on`·`1.10`·`22:30`은 YAML이 글이 아닌 것으로 읽는다. 검사가 `yaml-trap`으로 잡으면 따옴표로 감싼다.

@@ -208,3 +208,9 @@
 
 - 사용자 선택: "ㅇㅇ 푸시 PR 그리고 문제 없다면 main 합치기 까지 하고 클리어 한 다음 16 가야지"
 - 결과: PR #3을 병합 커밋으로 main에 합침(충돌 없음, CI 없음, 로컬 테스트 37개 통과). `tickets/15-course-check`는 로컬·원격에서 지움. `HANDOFF.md`를 새로 씀(다음 할 일: 티켓 16). 비용 0
+
+### [23] 2026-10-20 · GitHub CI와 main 보호 규칙
+
+- 제안: 코드가 PR마다 쌓이기 시작했으니 Claude가 CI(PR마다 GitHub 서버에서 테스트)를 권함. 실제로 쓰는 곳이 Windows라 Windows로, 공개 저장소라 무료. `data/`가 필요한 테스트는 CI에서 늘 건너뛰고 Blender·화면 확인은 못 한다는 한계를 말함. main 보호 규칙은 급할 때도 막혀서 켜지 않기를 권함
+- 사용자 선택: "1-3 까지 다 하자 / 3번도 그게 맞는거 같음 어쨌든 그거도 통과 못 하면 문제가 있다는거니"
+- 결과: `.github/workflows/test.yml`(windows-latest, Python 3.12, `pip install -e ".[dev]"` → pytest), PR #4에서 CI `37 passed`(29초) 확인 뒤 병합. main 보호: "test" 검사 통과 필수, 관리자에게도 적용, 강제 푸시·삭제 막음, 리뷰 필수는 안 둠. 이제 main에 바로 푸시할 수 없고 기록(HANDOFF·HISTORY)도 PR로 올린다. 비용 0
