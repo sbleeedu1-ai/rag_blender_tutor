@@ -268,3 +268,19 @@ def test_저장소의_검_연습_과정으로_저장하고_이어_할_수_있다
     assert make(tmp_path, courses=(sword,)).on_file_opened(BLEND) == [
         AskResume(f"지난번 3단계({sword.steps[2].name})까지 했어요. 이어 할까요?")
     ]
+
+
+def test_blender_창마다_진행_관리를_따로_두면_오가도_기록이_섞이지_않는다(tmp_path):
+    # 도우미 창은 Blender 창 번호마다 진행 관리를 하나씩 둔다(티켓 27). 기록 폴더는 함께 쓴다.
+    window1, window2 = make(tmp_path), make(tmp_path)
+    window1.on_file_opened(BLEND)
+    window1.choose_course("sword")
+    window2.on_file_opened(OTHER)
+    window2.choose_course("shield")
+    window1.next_step()
+    window2.next_step()
+    window1.next_step()
+    assert (window1.course, window1.step.label) == (SWORD, "join")
+    assert (window2.course, window2.step.label) == (SHIELD, "rim")
+    assert make(tmp_path).on_file_opened(BLEND) == [AskResume("지난번 3단계(부품 합치기)까지 했어요. 이어 할까요?")]
+    assert make(tmp_path).on_file_opened(OTHER) == [AskResume("지난번 2단계(테두리 만들기)까지 했어요. 이어 할까요?")]
