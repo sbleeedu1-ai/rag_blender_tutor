@@ -228,6 +228,7 @@ def test_저장소의_연습_과정_파일은_검사를_통과한다():
     [
         "모드: EDIT",  # Blender가 보내는 모드 이름은 EDIT_MESH
         "모드: edit_mesh",
+        "모드: EDIT_GPENCIL",  # 5.2에서 실제로 나오지 않는 옛 이름
         "방금 조작: MESH_OT_merge",  # 조작 이름은 mesh.merge 꼴
         "방금 조작: Merge",
         "물체 수 늘어남: 0",
