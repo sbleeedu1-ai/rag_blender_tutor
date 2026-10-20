@@ -4,19 +4,22 @@
 
 ## 다음 할 일
 
-1. **티켓 18 PR 병합(사용자 확인 뒤)**: 티켓 18 작업이 브랜치 `tickets/18-progress-record`의 PR에 있다. CI "test"를 통과하고 사용자가 병합하라고 하면 병합 커밋으로 main에 합치고, 브랜치를 로컬·원격에서 지운다.
-2. 그다음 바로 시작할 수 있는 티켓: 19(자료 준비, 설명서 HTML을 청크로), 25(애드온), 34(홀드아웃 봉인). 27(도우미 창에 연습 과정 연결)은 26이 끝나야 한다.
+1. **티켓 19 PR 병합(사용자 확인 뒤)**: 브랜치 `tickets/19-manual-chunks`의 PR. CI "test"를 통과하고 사용자가 병합하라고 하면 병합 커밋으로 main에 합치고, 브랜치를 로컬·원격에서 지운다.
+2. 그다음 시작할 수 있는 티켓: 19 병합 뒤 20(메뉴 이름 한국어-영어 짝)·21(답 엔진 첫 왕복)이 풀린다. 25(애드온), 34(홀드아웃 봉인)는 바로 가능.
 
 ## 지금 상태
 
-- 티켓 18을 끝냈다(HISTORY [30]).
-  - `blender_tutor/progress_record.py`(`ProgressManager`): 연습 과정 고르기·바꾸기 확인, 파일 열림·저장 사건, 파일마다 진행 기록 JSON, 이어 하기 물음.
-  - `blender_tutor/progress.py`의 `Progress`: 끝낸 단계, 중간 단계부터 시작, `close()`를 더함. `Course`, `load_course`도 더함.
-- 테스트: `.venv\Scripts\python -m pytest` 100개 통과. 연습 과정 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` 문제 0개.
+- 티켓 19를 끝냈다(HISTORY [32], [33]).
+  - `blender_tutor/manual_chunks.py`: `chunk_page`(쪽 하나), `chunk_manual`(묶음 전체), 실행 `.venv\Scripts\python -m blender_tutor.manual_chunks data/manual_en_5.2/html/blender_manual_v520_en.html data/chunks/manual_chunks.jsonl`
+  - 전체 실행: 청크 8,997개(쪽 2,085개, 400단어 넘음 0), 13초. 결과는 `data/chunks/`(커밋 안 함). 다른 PC에서는 다시 돌려야 한다.
+- 테스트: `.venv\Scripts\python -m pytest` 117개 통과. 새 의존성 `beautifulsoup4`가 있어 다른 PC에서는 `.venv\Scripts\python -m pip install -e ".[dev]"`를 다시 돌린다.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 모르면 실수할 것
 
+- **설명은 실제 예로.** 사용자는 처리 규칙을 실제 설명서 웹 페이지(링크)와 우리 결과(청크 글·메타데이터)를 나란히 볼 때 잘 이해했다. 웹 화면(왼쪽 목록·페이지 제목·On this page)과 용어(분야·묶음·쪽·소제목·옵션)를 맞대어 설명한다(HISTORY [33]).
+- **청크 단위는 소제목이다.** 옵션은 청크 단위가 아니라 메타데이터 칸이자 긴 소제목을 나눌 경계다(티켓 06, HISTORY [33]).
+- **파일 쓰기 도구가 `\ue000` 같은 표기를 실제 보이지 않는 글자로 바꿔 넣을 수 있다.** `tests/test_manual_chunks.py`의 지킴 테스트가 잡는다. 걸리면 글자 번호로 찾아 바꾼다.
 - **진행 기록은 파일 단위다.** 진행 관리는 Blender 창 번호마다 하나씩 둔다(티켓 27 완료 조건, HISTORY [31]).
   - 다른 파일을 열면 지금 진행을 비운다. 앞 파일의 진행은 그 파일 기록에 남아 있다.
   - 기록을 쓰는 때는 사용자가 확인한 변화가 있을 때뿐이다: [네], 다음 단계·건너뛰기·뒤로, 연습 과정 고르기·바꾸기.
@@ -40,7 +43,7 @@
 
 ## 사용자가 정해야 할 것
 
-- 티켓 18 PR 병합 여부.
+- 티켓 19 PR 병합 여부.
 - 강사님 중간 확인 때 물어볼 것: GPT에게 연습 과정 정보를 주지 않는 조건이 괜찮은지.
 
 ## 추천 스킬
@@ -49,5 +52,5 @@
 
 ## 참고 문서
 
-- 명세 `.scratch/mvp-roundtrip/spec.md`("진행 관리"), 티켓 `.scratch/mvp-roundtrip/issues/18-진행-관리-진행-기록-저장과-이어-하기.md`
+- 명세 `.scratch/mvp-roundtrip/spec.md`("자료 준비"), 티켓 `.scratch/mvp-roundtrip/issues/19-자료-준비-설명서-HTML을-청크로.md`
 - 용어집 `CONTEXT.md`, 결정 `docs/adr/`, 경과 `HISTORY.md`
