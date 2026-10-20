@@ -184,3 +184,31 @@ def test_띄어쓰기만_다른_번역이_둘이어도_영어는_한_번만_돌�
     names = build_menu_names([chunk("first", ("Wave",))], po)
 
     assert names.english_for("웨이브 모드") == ("Wave",)
+
+
+# 번역률 100%인 다른 언어 사전(fr.po 꼴). Blender가 쓰는 (문맥, 영어) 전체 목록으로 쓴다
+FULL_PO = '''
+msgctxt "Operator"
+msgid "At Center"
+msgstr "Au centre"
+
+msgctxt "Mesh"
+msgid "At Center"
+msgstr "Au centre"
+
+msgctxt "Operator"
+msgid "Add"
+msgstr "Ajouter"
+'''
+
+
+def test_한국어_번역이_빠진_문맥이_있으면_영어_그대로를_후보로_더해_검수에_넘긴다():
+    po = PO + '\nmsgctxt "Operator"\nmsgid "At Center"\nmsgstr "센터에서"\n'
+
+    names = build_menu_names([chunk("first", ("Add ‣ At Center",))], po, FULL_PO)
+
+    at_center = names.get("At Center")
+    assert at_center.status == Status.MANY
+    assert at_center.translations == (Translation("센터에서", ("Operator",)), Translation("At Center", ("Mesh",)))
+    assert names.get("Add").status == Status.ONE  # 쓰는 문맥 모두에 번역이 있으면 그대로
+    assert [name.english for name in names.to_review()] == ["At Center"]

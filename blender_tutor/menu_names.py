@@ -114,11 +114,20 @@ def _by_count(names: Iterable[MenuName]) -> list[MenuName]:
 _Catalog = dict[str, dict[str, list[str]]]  # ko.po: 영어 → 한국어 → 문맥들
 
 
-def build_menu_names(chunks: Iterable[Chunk], po_text: str) -> MenuNames:
-    """청크들의 블렌더 표기를 ko.po 글과 짝지어 사전을 만든다."""
+def build_menu_names(chunks: Iterable[Chunk], po_text: str, full_po_text: str = "") -> MenuNames:
+    """청크들의 블렌더 표기를 ko.po 글과 짝지어 사전을 만든다.
+
+    full_po_text는 번역률 100%인 다른 언어 사전(fr.po) 글이다. Blender가 쓰는 (문맥, 영어) 전체 목록으로 써서,
+    한국어 번역이 빠진 문맥은 '영어 그대로'를 후보로 더한다. At Center는 Operator 문맥에만 "센터에서"가 있고
+    병합 메뉴가 쓰는 Mesh 문맥에는 번역이 없어 화면에 영어로 보이기 때문이다(티켓 12·20).
+    """
     catalog: _Catalog = {}
     for context, english, korean in read_po(po_text):
         catalog.setdefault(_english_key(english), {}).setdefault(korean, []).append(context)
+    for context, english, _ in read_po(full_po_text):
+        translations = catalog.get(_english_key(english))
+        if translations and all(context not in contexts for contexts in translations.values()):
+            translations.setdefault(english, []).append(context)
     seen: dict[str, _Seen] = {}
     for chunk in chunks:
         in_chunk: dict[str, set[Source]] = {}  # 한 청크에 같은 이름이 여러 번 나와도 한 번으로 센다
@@ -241,18 +250,19 @@ def _review_table(names: list[MenuName]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    """사용법: python -m blender_tutor.menu_names <설명서 HTML 폴더> <ko.po> <출력 폴더>
+    """사용법: python -m blender_tutor.menu_names <설명서 HTML 폴더> <ko.po> <fr.po> <출력 폴더>
 
-    예: python -m blender_tutor.menu_names data/manual_en_5.2/html/blender_manual_v520_en.html data/ui_ko_5.2/ko.po data/menu_names
-    ko.po는 Blender 저장소 blender-v5.2-release 브랜치의 locale/po/ko.po(티켓 12).
+    예: python -m blender_tutor.menu_names data/manual_en_5.2/html/blender_manual_v520_en.html data/ui_ko_5.2/ko.po data/ui_ko_5.2/fr.po data/menu_names
+    ko.po·fr.po는 Blender 저장소 blender-v5.2-release 브랜치의 locale/po/에 있다(티켓 12).
+    fr.po(번역률 100%)는 Blender가 쓰는 문맥 전체를 알려고 쓴다.
 
     출력 폴더에 사전 menu_names.json과 검수 목록 review.md를 쓴다. 결과는 data/에 두고 커밋하지 않는다.
     """
-    if len(argv) != 3:
+    if len(argv) != 4:
         print(main.__doc__)
         return 2
-    root, po, out = Path(argv[0]), Path(argv[1]), Path(argv[2])
-    names = build_menu_names(chunk_manual(root), po.read_text(encoding="utf-8"))
+    root, po, full_po, out = Path(argv[0]), Path(argv[1]), Path(argv[2]), Path(argv[3])
+    names = build_menu_names(chunk_manual(root), po.read_text(encoding="utf-8"), full_po.read_text(encoding="utf-8"))
     out.mkdir(parents=True, exist_ok=True)
     names.save(out / "menu_names.json")
     review = names.to_review()
