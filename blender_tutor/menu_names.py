@@ -37,12 +37,16 @@ class Status(StrEnum):
 
 @dataclass(frozen=True)
 class Translation:
+    """한국어 화면 글자 하나와 그 글자가 나오는 문맥들."""
+
     korean: str
     contexts: tuple[str, ...]  # 이 번역이 나오는 문맥들
 
 
 @dataclass(frozen=True)
 class MenuName:
+    """설명서에 나오는 화면 이름 하나(메뉴 경로의 한 단, 버튼 이름, 옵션 이름, ko.po에 있는 제목)."""
+
     english: str  # 설명서에 적힌 그대로
     translations: tuple[Translation, ...]  # 서로 다른 한국어만, 사전에 나온 차례로
     chunks: int  # 이 이름이 나온 청크 수
@@ -61,10 +65,10 @@ class MenuNames:
 
     def __init__(self, names: Iterable[MenuName]):
         self._by_english = {_english_key(name.english): name for name in names}
-        self._by_korean: dict[str, list[str]] = {}
+        self._by_korean: dict[str, dict[str, None]] = {}  # 차례를 지키며 겹친 영어는 한 번만
         for name in self._by_english.values():
             for translation in name.translations:
-                self._by_korean.setdefault(_korean_key(translation.korean), []).append(name.english)
+                self._by_korean.setdefault(_korean_key(translation.korean), {})[name.english] = None
 
     def __iter__(self):
         return iter(self._by_english.values())
@@ -78,8 +82,11 @@ class MenuNames:
 
     def to_review(self) -> list[MenuName]:
         """번역이 여러 개인 이름을 많이 나온 차례로. 화면과 맞춰 하나로 고정하는 일은 사용자 검수 뒤에 한다."""
-        many = [name for name in self._by_english.values() if name.status == Status.MANY]
-        return sorted(many, key=lambda name: -name.chunks)
+        return _by_count(name for name in self if name.status == Status.MANY)
+
+    def title_only(self) -> list[MenuName]:
+        """제목에서만 뽑은 이름을 많이 나온 차례로. 화면 이름이 아닌 흔한 낱말이 섞였는지 검수한다."""
+        return _by_count(name for name in self if name.sources == (Source.TITLE,))
 
     def save(self, path: Path) -> None:
         rows = [asdict(name) for name in self._by_english.values()]
@@ -100,9 +107,16 @@ class MenuNames:
         )
 
 
+def _by_count(names: Iterable[MenuName]) -> list[MenuName]:
+    return sorted(names, key=lambda name: -name.chunks)
+
+
+_Catalog = dict[str, dict[str, list[str]]]  # ko.po: 영어 → 한국어 → 문맥들
+
+
 def build_menu_names(chunks: Iterable[Chunk], po_text: str) -> MenuNames:
     """청크들의 화면 이름을 ko.po 글과 짝지어 사전을 만든다."""
-    catalog: dict[str, dict[str, list[str]]] = {}  # 영어 → 한국어 → 문맥들
+    catalog: _Catalog = {}
     for context, english, korean in read_po(po_text):
         catalog.setdefault(_english_key(english), {}).setdefault(korean, []).append(context)
     seen: dict[str, _Seen] = {}
@@ -131,8 +145,10 @@ def build_menu_names(chunks: Iterable[Chunk], po_text: str) -> MenuNames:
 
 @dataclass
 class _Seen:
+    """사전을 만드는 동안 이름 하나에 대해 모으는 것."""
+
     english: str  # 처음 나온 모양 그대로
-    example: str
+    example: str  # 처음 나온 청크 링크
     chunks: int = 0
     sources: set[Source] = field(default_factory=set)
 
@@ -158,8 +174,8 @@ def read_po(text: str) -> list[tuple[str, str, str]]:
             fields[current] = _unquote(match[2])
         elif line.startswith('"') and current:
             fields[current] += _unquote(line[1:-1])  # 앞 칸에 이어지는 줄
-        elif not line or line.startswith("#"):
-            current = None
+        elif not line.startswith('"'):
+            current = None  # 빈 줄·주석·모르는 칸(msgid_plural 등). 뒤따르는 줄을 앞 칸에 붙이지 않는다
     finish()
     return entries
 
@@ -168,7 +184,7 @@ def _unquote(text: str) -> str:
     return re.sub(r"\\(.)", lambda m: {"n": "\n", "t": "\t"}.get(m[1], m[1]), text)
 
 
-def _screen_names(chunk: Chunk, catalog: dict) -> list[tuple[str, Source]]:
+def _screen_names(chunk: Chunk, catalog: _Catalog) -> list[tuple[str, Source]]:
     """청크의 화면 이름과 출처. 메뉴 경로는 한 단씩 나누고, 버튼 이름·옵션 이름은 그대로.
 
     쪽 제목·소제목은 ko.po에 있을 때만 화면 이름으로 본다. 모디파이어·노드 이름(Array 등)은
@@ -240,7 +256,7 @@ def main(argv: list[str]) -> int:
     out.mkdir(parents=True, exist_ok=True)
     names.save(out / "menu_names.json")
     review = names.to_review()
-    title_only = sorted((name for name in names if name.sources == (Source.TITLE,)), key=lambda name: -name.chunks)
+    title_only = names.title_only()
     (out / "review.md").write_text(_review_markdown(review, title_only), encoding="utf-8")
     counts = {status: 0 for status in Status}
     for name in names:

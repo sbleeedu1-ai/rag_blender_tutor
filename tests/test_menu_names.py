@@ -176,3 +176,20 @@ def test_옵션_이름은_출처를_옵션으로_적는다():
 
     assert names.get("Mesh").sources == (Source.UI, Source.OPTION)
     assert names.get("Apply").sources == (Source.OPTION,)
+
+
+def test_띄어쓰기만_다른_번역이_둘이어도_영어는_한_번만_돌려준다():
+    po = 'msgid "Wave"\nmsgstr "웨이브 모드"\n\nmsgctxt "Operator"\nmsgid "Wave"\nmsgstr "웨이브모드"\n'
+
+    names = build_menu_names([chunk("first", ("Wave",))], po)
+
+    assert names.english_for("웨이브 모드") == ("Wave",)
+
+
+def test_ko_po의_모르는_칸은_앞_칸에_이어_붙이지_않는다():
+    # 모르는 칸(msgid_plural) 뒤 이어지는 줄이 msgid에 붙으면 "Wave" + "s"가 엉뚱한 영어 "Waves"가 된다
+    po = 'msgid "Wave"\nmsgid_plural "Wave"\n"s"\nmsgstr "웨이브"\n'
+
+    names = build_menu_names([chunk("first", ("Waves",))], po)
+
+    assert names.get("Waves").status == Status.NONE
