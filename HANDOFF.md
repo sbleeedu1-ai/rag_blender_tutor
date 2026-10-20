@@ -4,20 +4,23 @@
 
 ## 다음 할 일
 
-1. **티켓 19 PR 병합(사용자 확인 뒤)**: 브랜치 `tickets/19-manual-chunks`의 PR. CI "test"를 통과하고 사용자가 병합하라고 하면 병합 커밋으로 main에 합치고, 브랜치를 로컬·원격에서 지운다.
-2. 그다음 시작할 수 있는 티켓: 19 병합 뒤 20(메뉴 이름 한국어-영어 짝)·21(답 엔진 첫 왕복)이 풀린다. 25(애드온), 34(홀드아웃 봉인)는 바로 가능.
+1. **티켓 20 PR 병합(사용자 확인 뒤)**: 브랜치 `tickets/20-menu-names`의 PR. CI "test"를 통과하고 사용자가 병합하라고 하면 병합 커밋으로 main에 합치고, 브랜치를 로컬·원격에서 지운다.
+2. 그다음 시작할 수 있는 티켓: 21(답 엔진 첫 왕복). 21 뒤 22(검색어)·23(메뉴 이름 한국어 표기)가 풀린다. 25(애드온), 34(홀드아웃 봉인)는 바로 가능.
 
 ## 지금 상태
 
-- 티켓 19를 끝냈다(HISTORY [32], [33]).
-  - `blender_tutor/manual_chunks.py`: `chunk_page`(쪽 하나), `chunk_manual`(묶음 전체), 실행 `.venv\Scripts\python -m blender_tutor.manual_chunks data/manual_en_5.2/html/blender_manual_v520_en.html data/chunks/manual_chunks.jsonl`
-  - 전체 실행: 청크 8,997개(쪽 2,085개, 400단어 넘음 0), 13초. 결과는 `data/chunks/`(커밋 안 함). 다른 PC에서는 다시 돌려야 한다.
-- 테스트: `.venv\Scripts\python -m pytest` 117개 통과. 새 의존성 `beautifulsoup4`가 있어 다른 PC에서는 `.venv\Scripts\python -m pip install -e ".[dev]"`를 다시 돌린다.
+- 티켓 20을 끝냈다(HISTORY [34]).
+  - `blender_tutor/menu_names.py`: 설명서의 블렌더 표기(메뉴 경로·버튼·옵션 이름, ko.po에 있는 쪽 제목·소제목)를 ko.po와 짝지은 사전. 실행 `.venv\Scripts\python -m blender_tutor.menu_names data/manual_en_5.2/html/blender_manual_v520_en.html data/ui_ko_5.2/ko.po data/ui_ko_5.2/fr.po data/menu_names`
+  - 청크에 `ui_names` 칸이 생겨 청크 파일을 다시 만들었다(8,997개 그대로).
+  - 결과: 7,697개 → 번역 없음 2,182 / 하나 5,224 / 여러 개 291, 제목에서만 1,055. 검수 목록 `data/menu_names/review.md`. 다른 PC에서는 ko.po·fr.po를 Blender 저장소 `blender-v5.2-release`의 `locale/po/`에서 받아 `data/ui_ko_5.2/`에 두고 다시 돌린다.
+- 테스트: `.venv\Scripts\python -m pytest` 130개 통과.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 모르면 실수할 것
 
 - **설명은 실제 예로.** 사용자는 처리 규칙을 실제 설명서 웹 페이지(링크)와 우리 결과(청크 글·메타데이터)를 나란히 볼 때 잘 이해했다. 웹 화면(왼쪽 목록·페이지 제목·On this page)과 용어(분야·묶음·쪽·소제목·옵션)를 맞대어 설명한다(HISTORY [33]).
+- **ko.po는 같은 영어도 문맥(msgctxt, 꼬리표)마다 따로 번역한다.** 어느 메뉴가 어느 문맥을 쓰는지는 Blender 코드에만 있다. 번역이 빠진 문맥은 fr.po(번역률 100%)와 대조해 찾는다(At Center: Operator "센터에서", 병합 메뉴의 Mesh는 번역 없음 → 화면은 영어). HISTORY [34]
+- **용어 "블렌더 표기"**: Blender 화면에 보이는 메뉴·버튼·옵션 이름. "화면 이름"은 쓰지 않는다(사용자가 어색하다고 함).
 - **청크 단위는 소제목이다.** 옵션은 청크 단위가 아니라 메타데이터 칸이자 긴 소제목을 나눌 경계다(티켓 06, HISTORY [33]).
 - **파일 쓰기 도구가 `\ue000` 같은 표기를 실제 보이지 않는 글자로 바꿔 넣을 수 있다.** `tests/test_manual_chunks.py`의 지킴 테스트가 잡는다. 걸리면 글자 번호로 찾아 바꾼다.
 - **진행 기록은 파일 단위다.** 진행 관리는 Blender 창 번호마다 하나씩 둔다(티켓 27 완료 조건, HISTORY [31]).
@@ -43,7 +46,8 @@
 
 ## 사용자가 정해야 할 것
 
-- 티켓 19 PR 병합 여부.
+- 티켓 20 PR 병합 여부.
+- 메뉴 이름 검수(여러 개 291, 제목에서만 1,055): 초보자 범위 분류(티켓 30) 뒤 범위 안 것만. 고른 짝 저장 형식은 티켓 23.
 - 강사님 중간 확인 때 물어볼 것: GPT에게 연습 과정 정보를 주지 않는 조건이 괜찮은지.
 
 ## 추천 스킬
@@ -52,5 +56,5 @@
 
 ## 참고 문서
 
-- 명세 `.scratch/mvp-roundtrip/spec.md`("자료 준비"), 티켓 `.scratch/mvp-roundtrip/issues/19-자료-준비-설명서-HTML을-청크로.md`
+- 명세 `.scratch/mvp-roundtrip/spec.md`("자료 준비"), 티켓 `.scratch/mvp-roundtrip/issues/20-자료-준비-메뉴-이름-한국어-영어-짝.md`, 조사 `git show 734adb5:".scratch/mvp-roundtrip/research/12-화면-한국어-번역-조사.md"`
 - 용어집 `CONTEXT.md`, 결정 `docs/adr/`, 경과 `HISTORY.md`
