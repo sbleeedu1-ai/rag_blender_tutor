@@ -82,9 +82,13 @@ class Done:
 
 @dataclass(frozen=True)
 class Failure:
-    """오류·시간 초과 표시. 이것이 오면 답은 거기서 끝나고 근거는 없다."""
+    """오류·시간 초과 표시. 이것이 오면 답은 거기서 끝나고 근거는 없다.
+
+    검색이 끝난 뒤 실패했으면 검색 결과를 함께 준다(평가에서 시간 초과 문항의 검색 적중도 세려고).
+    """
 
     message: str
+    results: tuple[Chunk, ...] = ()
 
 
 Event = Piece | Done | Failure
@@ -110,33 +114,45 @@ class AnswerEngine:
 
     def answer(self, question: str, state: dict, recent: Sequence[tuple[str, str]]) -> Iterator[Event]:
         """질문에 답한다. state는 애드온이 보낸 작업 상태 JSON, recent는 최근 대화 (질문, 답) 쌍 목록."""
+        # 바깥 서비스(임베딩·답변 모델)를 부르는 두 곳만 오류 표시로 바꾼다.
+        # 검색·글 만들기 같은 우리 코드의 오류는 그대로 올려 보내 버그가 "잠시 뒤 다시"에 숨지 않게 한다
         try:
             vector = self._embedder.embed(question, self._settings.timeout)
-            results = self._search(question, vector)
-            for text in self._model.stream(_messages(question, state, recent, results), self._settings.timeout):
-                yield Piece(text)
-        except TimeoutError:
-            yield Failure(TIMEOUT_MESSAGE)
+            if not np.any(vector):  # 모두 0이면 뜻 점수가 다 같아 청크 저장 순서가 그대로 순위가 된다. 잘못된 응답으로 본다
+                raise ValueError("임베딩이 모두 0인 벡터를 돌려줌")
+        except Exception as error:
+            yield _failure(error, [])
             return
-        except Exception:
-            yield Failure(ERROR_MESSAGE)
+        results = self._search(question, vector)
+        messages = _messages(question, state, recent, results)
+        try:
+            for text in self._model.stream(messages, self._settings.timeout):
+                yield Piece(text)
+        except Exception as error:
+            yield _failure(error, results)
             return
         yield Done(_sources(results), tuple(results))
 
     def _search(self, query: str, vector: Sequence[float]) -> list[Chunk]:
         """뜻 검색과 낱말 검색 순위를 RRF로 합쳐 상위 top_k개를 고른다."""
-        meaning = self._vectors @ _normalized(np.asarray(vector, dtype=np.float32))
-        rankings = [np.argsort(-meaning, kind="stable")[:RRF_DEPTH]]
+        meaning_scores = self._vectors @ _normalized(np.asarray(vector, dtype=np.float32))
+        rankings = [np.argsort(-meaning_scores, kind="stable")[:RRF_DEPTH]]
         if self._settings.use_bm25:
-            words = self._bm25.get_scores(_words(query))
-            order = np.argsort(-words, kind="stable")[:RRF_DEPTH]
-            rankings.append(order[words[order] > 0])  # 겹치는 낱말이 없는 청크는 순위에 넣지 않는다
-        scores: dict[int, float] = {}
+            word_scores = self._bm25.get_scores(_words(query))
+            order = np.argsort(-word_scores, kind="stable")[:RRF_DEPTH]
+            rankings.append(order[word_scores[order] > 0])  # 낱말 점수가 0인(겹치는 낱말이 없는) 청크는 순위에 넣지 않는다
+        rrf_scores: dict[int, float] = {}
         for ranking in rankings:
             for rank, index in enumerate(ranking, start=1):
-                scores[int(index)] = scores.get(int(index), 0.0) + 1 / (RRF_K + rank)
-        best = sorted(scores, key=lambda index: (-scores[index], index))[: self._settings.top_k]
+                rrf_scores[int(index)] = rrf_scores.get(int(index), 0.0) + 1 / (RRF_K + rank)
+        best = sorted(rrf_scores, key=lambda index: (-rrf_scores[index], index))[: self._settings.top_k]
         return [self._chunks[index] for index in best]
+
+
+def _failure(error: Exception, results: list[Chunk]) -> Failure:
+    """바깥 서비스 오류를 짧은 오류 표시로. 시간 초과면 그 문구로."""
+    message = TIMEOUT_MESSAGE if isinstance(error, TimeoutError) else ERROR_MESSAGE
+    return Failure(message, tuple(results))
 
 
 def _messages(question: str, state: dict, recent: Sequence[tuple[str, str]], results: list[Chunk]) -> list[dict[str, str]]:

@@ -1,19 +1,20 @@
 # 인수인계
 
-마지막 갱신: 2026-10-20 · Claude · DESKTOP-J9LV5HK(강의실 PC)
+마지막 갱신: 2026-10-21 · Claude · DESKTOP-J9LV5HK(강의실 PC)
 
 ## 다음 할 일
 
-1. 시작할 수 있는 티켓: 21(답 엔진 첫 왕복). 21 뒤 22(검색어)·23(메뉴 이름 한국어 표기)가 풀린다. 25(애드온), 34(홀드아웃 봉인)는 바로 가능.
+1. 티켓 21 PR이 CI를 통과하면 사용자 확인 뒤 main에 병합하고 브랜치 `tickets/21-answer-engine`을 로컬·원격 모두 지운다.
+2. 시작할 수 있는 티켓: 22(검색어 만들기와 덧붙이기)·23(메뉴 이름 한국어 표기)·29(평가 프로그램)가 21로 풀렸다. 25(애드온), 34(홀드아웃 봉인, 사람), 30(유료 초보자 범위 분류)도 바로 가능.
 
 ## 지금 상태
 
-- 연습 과정 파일이 실제 설명서·Blender 화면과 맞는지 보려고, 티켓 24에서 `data/`가 있을 때만 하는 검사를 더하고 main에 합쳤다(PR #11, HISTORY [36]).
-  - 소제목 주소가 청크에 있는지, 메뉴 경로의 각 단이 ko.po·fr.po의 화면 글자인지, 설명서와 8낱말 이상 똑같은 글이 없는지 본다. `.venv\Scripts\python -m blender_tutor.course_check courses`도 `data/`가 있으면 함께 본다.
-  - 이 검사가 `_common.yaml`의 `Zoom In/Out`을 잡아 확대 Zoom In / 축소 Zoom Out 두 조작으로 나눴다(사용자 선택).
-  - 한계(메뉴 차례는 안 봄, 제목뿐인 소제목 앵커는 "없음"으로 걸릴 수 있음)는 티켓 24 Comments.
-- 티켓 20(메뉴 이름 사전 `blender_tutor/menu_names.py`)은 main에 합쳤다(PR #9, HISTORY [34]). 다른 PC에서 data/를 만드는 법은 아래 "다른 PC에서 data/ 다시 만들기".
-- 테스트: `.venv\Scripts\python -m pytest` 140개 통과(`data/`가 없으면 1개 건너뜀).
+- 답 엔진을 Blender·창 없이 시험하기 위해, 티켓 21에서 `blender_tutor/answer_engine.py`를 만들었다(브랜치 `tickets/21-answer-engine`, HISTORY [37]).
+  - 질문 → 임베딩 1번 → 뜻 검색 + 낱말 검색(BM25)을 RRF로 합친 상위 6개 → 답변 모델 1번 → 답 조각 흐름 + 끝에 근거 목록(경로·주소·그림/영상)과 검색 결과.
+  - 응답 없음 10초면 시간 초과 표시. 오류 표시는 임베딩·답변 모델 두 곳만, 우리 코드 버그는 그대로 올라간다. 실패해도 검색 결과는 실린다(평가용).
+  - 아직 가짜 모델만 끼운다. 실제 OpenAI 연결은 유료 티켓 31(임베딩)·33(답변)에서.
+  - 넘긴 것: 경로 규칙 한곳으로(22), 작업 상태 12칸 모양(25), 창의 오류 받기(26), 번역을 BM25에도 넣을지(31), 실제 10초 확인(31·33). 각 티켓 Comments.
+- 테스트: `.venv\Scripts\python -m pytest` 164개 통과(`data/`가 없으면 1개 건너뜀).
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 다른 PC에서 data/ 다시 만들기
@@ -34,6 +35,9 @@
 - `data\강사님의 기준.txt`는 다시 만들 수 없으니 드라이브에도 따로 둔다.
 
 ## 모르면 실수할 것
+
+- **부품이 늘었다(numpy, rank-bm25).** 다른 PC에서 `git pull` 뒤 `.venv\Scripts\python -m pip install -e ".[dev]"`를 다시 돌려야 답 엔진 테스트가 돈다.
+- **BM25는 한국어 질문에 거의 일하지 않는다.** 영어 설명서와 겹치는 낱말이 없어서다. 22번에서 영어 메뉴·단계·조작 이름이 검색어에 붙어야 몫이 생긴다. 켬/끔(`Settings.use_bm25`)은 개발 평가에서 견준다.
 
 - **ko.po는 같은 영어도 문맥(msgctxt, 꼬리표)마다 따로 번역한다.** 어느 메뉴가 어느 문맥을 쓰는지는 Blender 코드에만 있다. 번역이 빠진 문맥은 fr.po(번역률 100%)와 대조해 찾는다(At Center: Operator "센터에서", 병합 메뉴의 Mesh는 번역 없음 → 화면은 영어). HISTORY [34]
 - **용어 "블렌더 표기"**: Blender 화면에 보이는 메뉴·버튼·옵션 이름. "화면 이름"은 쓰지 않는다(사용자가 어색하다고 함).
@@ -71,5 +75,5 @@
 
 ## 참고 문서
 
-- 명세 `.scratch/mvp-roundtrip/spec.md`("자료 준비"), 티켓 `.scratch/mvp-roundtrip/issues/20-자료-준비-메뉴-이름-한국어-영어-짝.md`, 조사 `git show 734adb5:".scratch/mvp-roundtrip/research/12-화면-한국어-번역-조사.md"`
+- 명세 `.scratch/mvp-roundtrip/spec.md`("답 엔진", "자료 준비"), 티켓 `.scratch/mvp-roundtrip/issues/21-답-엔진-첫-왕복.md`·`22-답-엔진-검색어-만들기와-덧붙이기.md`, 조사 `git show 734adb5:".scratch/mvp-roundtrip/research/12-화면-한국어-번역-조사.md"`
 - 용어집 `CONTEXT.md`, 결정 `docs/adr/`, 경과 `HISTORY.md`
