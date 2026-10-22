@@ -584,18 +584,19 @@ def test_표시가_조각_사이에_갈려_와도_바꾼다():
     assert shown(("먼저 [", "[Ad", "d > Me", "sh]", "]를 누르세요.",)) == "먼저 추가(Add) > 메시(Mesh)를 누르세요."
 
 
-def test_표시가_아닌_대괄호와_닫히지_않은_표시는_글_그대로():
+def test_표시가_아닌_대괄호는_글_그대로이고_닫히지_않은_표시는_기호만_뗀다():
     assert shown(("배열 [1, 2]처럼 [", "숫자를 넣어요.",)) == "배열 [1, 2]처럼 [숫자를 넣어요."
-    assert shown(("[[Add 끝",)) == "[[Add 끝"  # 답이 끝날 때까지 닫히지 않음
+    assert shown(("[[Add 끝",)) == "Add 끝"  # 답이 끝날 때까지 닫히지 않으면 표시 기호만 뗀다
+    assert shown(("[[[Add]] 메뉴",)) == "[추가(Add) 메뉴"  # 대괄호가 하나 더 붙어도 표시는 찾는다
     long = "[[" + "가" * 100 + " 그리고 [[Mesh]]"  # 닫히지 않은 표시에 뒤 글이 붙들리지 않는다
-    assert shown((long,)) == "[[" + "가" * 100 + " 그리고 메시(Mesh)"
+    assert shown((long,)) == "가" * 100 + " 그리고 메시(Mesh)"
 
 
 def test_표시가_닫히기_전에_답이_끊겨도_받은_글을_내고_오류_표시():
     names = MenuNames(SCREEN_NAMES)
     model = FakeModel(("[[Add >",), error=ConnectionError("끊김"))
     events = list(AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), model, menu_names=names).answer("추가", KOREAN_SCREEN, []))
-    assert events[0] == Piece("[[Add >") and isinstance(events[1], Failure)
+    assert events[0] == Piece("Add >") and isinstance(events[1], Failure)
 
 
 def test_답변_모델에게_메뉴_이름을_영어로_표시해_쓰라고_지시한다():

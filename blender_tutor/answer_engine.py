@@ -27,7 +27,7 @@ SHORT_WORDS = 50  # 찾은 청크 본문이 이보다 짧으면 형제 소제목
 MARK_OPEN, MARK_CLOSE = "[[", "]]"  # 답변 모델이 메뉴 이름을 감싸는 표시. 엔진이 화면 언어에 맞게 바꾼다(티켓 23)
 MARK_LIMIT = 80  # 표시가 열린 뒤 이만큼(글자) 닫히지 않으면 표시가 아닌 글로 보고 그대로 낸다
 
-TIMEOUT_MESSAGE ="답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
+TIMEOUT_MESSAGE = "답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
 ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물어봐 주세요."
 
 INSTRUCTIONS = """너는 Blender 5.2를 처음 쓰는 사람을 돕는 도우미다.
@@ -36,7 +36,7 @@ INSTRUCTIONS = """너는 Blender 5.2를 처음 쓰는 사람을 돕는 도우미
 - 설명서 내용에 답이 없으면 지어내지 말고 "설명서에 없어요"라고 말한 뒤 가장 가까운 내용을 권한다.
 - 그림은 캡션 글만 쓴다. [그림] 자리가 중요해 보이면 "설명서 그림을 함께 보세요"라고 안내한다.
 - '작업 상태'는 사용자의 Blender 화면에서 지금 읽은 값이다. 사용자가 설명하지 않아도 이것을 보고 답한다.
-- Blender 화면의 메뉴·버튼·옵션 이름은 설명서의 영어 그대로 [[ ]]로 감싼다. 메뉴 경로는 통째로 감싸고 단 사이를 >로 가른다(예: [[Add > Mesh]]). 한국어로 옮기지 않는다(프로그램이 사용자 화면 언어에 맞춰 바꾼다)."""
+- Blender 화면의 메뉴·버튼·옵션 이름은 설명서의 영어 그대로 [[ ]]로 감싼다. 메뉴 경로는 통째로 감싸고 단 사이를 >로 가른다(예: [[Add > Mesh]]). 모디파이어·노드 이름은 뒤의 Modifier·Node를 빼고 감싼다(예: [[Array]] 모디파이어). 한국어로 옮기지 않는다(프로그램이 사용자 화면 언어에 맞춰 바꾼다)."""
 
 SIMILAR_NOTE = (
     "사용자가 연습 과정을 진행하지 않고 있다. 아래는 질문과 가까운 연습 과정이다(가까운 차례). "
@@ -294,12 +294,13 @@ class _MenuMarks:
         held, shown = self._held + text, []
         while (start := held.find(MARK_OPEN)) >= 0:
             inner = start + len(MARK_OPEN)
-            end, again = held.find(MARK_CLOSE, inner), held.find(MARK_OPEN, inner)
-            if 0 <= again and (end < 0 or again < end):  # 닫히기 전에 새 표시가 열리면 앞의 것은 표시가 아닌 글
-                shown.append(held[:again])
+            end, again = held.find(MARK_CLOSE, inner), held.find(MARK_OPEN, start + 1)
+            if 0 <= again and (end < 0 or again < end):
+                # 닫히기 전에 새 표시가 열리면 앞의 것은 짝이 없는 표시. [[[처럼 겹치면 앞 [ 하나만 글이다
+                shown.append(held[:start] + (held[start:again] if again < inner else held[inner:again]))
                 held = held[again:]
             elif (end < 0 and len(held) - inner > MARK_LIMIT) or end - inner > MARK_LIMIT:
-                shown.append(held[:inner])  # 닫히지 않는(너무 긴) 표시에 답이 멈춰 보이지 않게 글 그대로 낸다
+                shown.append(held[:start])  # 닫히지 않는(너무 긴) 표시에 답이 멈춰 보이지 않게 기호만 떼고 낸다
                 held = held[inner:]
             elif end < 0:
                 break  # 닫힐 때까지 모은다
@@ -312,9 +313,9 @@ class _MenuMarks:
         return "".join(shown) + held[:start]
 
     def finish(self) -> str:
-        """답이 끝났을 때 남은 글(닫히지 않은 표시는 글 그대로)."""
+        """답이 끝났거나 끊겼을 때 남은 글. 닫히지 않은 표시는 기호만 뗀다(사용자에게 [[가 보이지 않게)."""
         held, self._held = self._held, ""
-        return held
+        return held.replace(MARK_OPEN, "", 1)
 
     def _screen(self, path: str) -> str:
         parts = [part.strip() for part in re.split(r"[>‣]", path)]
