@@ -40,6 +40,18 @@ def place(screen: Screen, own_pid: int, put_away: bool) -> Place:
     return Place.BEHIND
 
 
+def needs_move(where: Place, front_window: int, last: tuple[Place, int] | None) -> bool:
+    """창을 다시 옮겨야 하나. last는 지난번에 옮긴 (자리, 그때 앞 창 번호).
+
+    '그 뒤로'는 앞 창이 바뀌면 다시 한다. Alt+Tab 고르기 화면(늘 맨 위인 창) 뒤로 간 뒤 다른 프로그램이 앞이 돼도
+    자리가 같다고 건너뛰면 창이 맨 위에 남는다(2026-10-22 사용자 확인).
+    """
+    if where == Place.KEEP or last is None:
+        return where != Place.KEEP
+    last_place, last_front = last
+    return where != last_place or (where == Place.BEHIND and front_window != last_front)
+
+
 class FrontBlender:
     """마지막으로 앞에 있던 Blender 창. 질문은 이 Blender의 작업 상태로 보내고 Esc도 여기로 돌아간다."""
 

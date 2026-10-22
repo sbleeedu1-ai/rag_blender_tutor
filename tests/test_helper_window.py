@@ -13,7 +13,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel
 
 from blender_tutor.answer_engine import Done, Failure, Piece, Source
-from blender_tutor.helper_window import HelperWindow
+from blender_tutor.helper_window import HelperWindow, resize_edges
 
 BEVEL = Source("Bevel Modifier > Options", "https://docs.blender.org/manual/en/5.2/modeling/modifiers/generate/bevel.html#options", True, True, ("https://example.org/bevel.mp4",))
 ARRAY = Source("Array Modifier", "https://docs.blender.org/manual/en/5.2/modeling/modifiers/generate/array.html#array-modifier", False, False, ())
@@ -104,3 +104,13 @@ def test_Esc는_Blender로_돌아가라고_알린다(window):
     window.escape.connect(lambda: escaped.append(True))
     QTest.keyClick(window.input, Qt.Key_Escape)
     assert escaped == [True]
+
+
+def test_모서리_근처를_끌면_대각선으로_늘린다():
+    # 둥근 모서리(반지름 22)의 투명한 곳은 Windows가 클릭을 아래 창으로 넘기므로, 모서리 구역을 가장자리를 따라 넓게 잡는다
+    size = (420, 560)
+    assert resize_edges(2, 20, *size) == Qt.LeftEdge | Qt.TopEdge
+    assert resize_edges(20, 2, *size) == Qt.LeftEdge | Qt.TopEdge
+    assert resize_edges(417, 550, *size) == Qt.RightEdge | Qt.BottomEdge
+    assert resize_edges(2, 300, *size) == Qt.LeftEdge  # 가운데는 가로만
+    assert not resize_edges(200, 300, *size)  # 안쪽은 늘리지 않음

@@ -21,6 +21,7 @@ WIDTH, HEIGHT = 420, 560  # 처음 크기(시제품 위젯 판에서 사용자�
 MIN_WIDTH, MIN_HEIGHT = 300, 220  # 줄여도 입력칸과 최근 답 몇 줄은 보이는 크기
 MARGIN = 24  # 화면 오른쪽 아래 모서리에서 띄우는 거리
 EDGE = 8  # 가장자리에서 이 폭 안을 끌면 크기 조절
+CORNER = 24  # 모서리에서 이만큼 안쪽 네모를 끌면 대각선 조절(둥근 모서리의 투명한 곳은 클릭이 아래 창으로 가서 넓게 잡음)
 MOVE_BAND = 40  # 맨 위 이 높이 안을 끌면 창 옮기기
 PANEL_ALPHA = 235  # 판 진하기(0-255, 사용자 결정 HISTORY [18])
 BLUR_PANEL_ALPHA = 170  # 진짜 흐림을 켰을 때는 뒤가 흐려 보이므로 판을 덜 진하게
@@ -197,16 +198,7 @@ class HelperWindow(QWidget):
 
     # ---- 테두리 없는 창의 크기 조절(가장자리)과 옮기기(맨 위 띠): Windows 기본 동작을 부른다
     def _edges(self, pos: QPoint) -> Qt.Edges:
-        edges = Qt.Edges()
-        if pos.x() < EDGE:
-            edges |= Qt.LeftEdge
-        if pos.x() > self.width() - EDGE:
-            edges |= Qt.RightEdge
-        if pos.y() < EDGE:
-            edges |= Qt.TopEdge
-        if pos.y() > self.height() - EDGE:
-            edges |= Qt.BottomEdge
-        return edges
+        return resize_edges(pos.x(), pos.y(), self.width(), self.height())
 
     def mouseMoveEvent(self, event) -> None:
         edges = self._edges(event.position().toPoint())
@@ -229,6 +221,24 @@ class HelperWindow(QWidget):
             self.windowHandle().startSystemResize(edges)
         elif pos.y() < MOVE_BAND:
             self.windowHandle().startSystemMove()
+
+
+def resize_edges(x: int, y: int, width: int, height: int) -> Qt.Edges:
+    """창 안 (x, y)를 끌면 늘릴 가장자리. 모서리 네모(CORNER) 안이면 두 가장자리(대각선), 가장자리 띠(EDGE) 안이면 하나."""
+    horizontal = Qt.LeftEdge if x < CORNER else Qt.RightEdge if x > width - CORNER else None
+    vertical = Qt.TopEdge if y < CORNER else Qt.BottomEdge if y > height - CORNER else None
+    if horizontal and vertical:
+        return horizontal | vertical
+    edges = Qt.Edge(0)
+    if x < EDGE:
+        edges |= Qt.LeftEdge
+    elif x > width - EDGE:
+        edges |= Qt.RightEdge
+    if y < EDGE:
+        edges |= Qt.TopEdge
+    elif y > height - EDGE:
+        edges |= Qt.BottomEdge
+    return edges
 
 
 def _home() -> QRect:

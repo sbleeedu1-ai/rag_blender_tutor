@@ -14,9 +14,11 @@ user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 user32.IsWindow.argtypes = user32.IsWindowVisible.argtypes = user32.IsIconic.argtypes = [wintypes.HWND]
 user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_uint]
 user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
 
 HWND_TOPMOST, HWND_NOTOPMOST = -1, -2
 SWP_KEEP = 0x0001 | 0x0002 | 0x0010  # 크기·자리 그대로, 활성화하지 않음(SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE)
+GWL_EXSTYLE, WS_EX_TOPMOST = -20, 0x0008
 # 작업 표시줄·트레이(숨김 영역 ^ 포함)의 창 종류 이름
 TASKBAR_CLASSES = {"Shell_TrayWnd", "Shell_SecondaryTrayWnd", "NotifyIconOverflowWindow", "TopLevelWindowForOverflowXamlIsland"}
 
@@ -42,9 +44,13 @@ def put_on_top(hwnd: int) -> None:
 
 
 def put_behind(hwnd: int, front: int) -> None:
-    """맨 위를 풀고 front 창 바로 뒤로."""
+    """맨 위를 풀고 front 창 바로 뒤로.
+
+    front가 늘 맨 위인 창(Alt+Tab 고르기 화면 등)이면 맨 위만 푼다. 그런 창 바로 뒤에 놓으면 Windows가 도로 맨 위 창으로 만든다.
+    """
     user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_KEEP)
-    user32.SetWindowPos(hwnd, front, 0, 0, 0, 0, SWP_KEEP)
+    if not user32.GetWindowLongW(front, GWL_EXSTYLE) & WS_EX_TOPMOST:
+        user32.SetWindowPos(hwnd, front, 0, 0, 0, 0, SWP_KEEP)
 
 
 def bring_forward(hwnd: int) -> bool:

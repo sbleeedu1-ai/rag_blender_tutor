@@ -27,7 +27,7 @@ from blender_tutor.helper_window import FONT, HelperWindow, Tray
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
 from blender_tutor.install_addon import PROJECT
 from blender_tutor.stand_in import build_engine
-from blender_tutor.window_rules import FrontBlender, Place, Screen, place
+from blender_tutor.window_rules import FrontBlender, Place, Screen, needs_move, place
 
 FOLLOW_EVERY_MS = 100  # Blender를 따라 창 자리를 다시 보는 간격
 NO_DATA = "설명서 자료(data/)가 없어 답할 수 없어요. HANDOFF.md의 'data/ 다시 만들기'를 봐 주세요."
@@ -53,7 +53,7 @@ class Helper:
         self._front = FrontBlender()
         self._conversation = Conversation()
         self._own_pid = os.getpid()
-        self._place: Place | None = None
+        self._moved: tuple[Place, int] | None = None  # 지난번에 옮긴 (자리, 그때 앞 창 번호)
         self.window = HelperWindow(blur)
         self._tray = Tray(self._tray_show, app.quit)
         self.window.asked.connect(self._ask)
@@ -118,7 +118,7 @@ class Helper:
         winapi.put_on_top(hwnd)
         if not winapi.bring_forward(hwnd):
             log.info("Windows가 앞으로 가져오기를 막음(입력칸 초점 없음)")
-        self._place = Place.TOP
+        self._moved = (Place.TOP, hwnd)
 
     def _tray_show(self) -> None:
         """트레이 보이기: 보이는 Blender가 있으면 F10과 똑같이, 모두 최소화면 막는다(안내는 아이콘 글)."""
@@ -140,7 +140,7 @@ class Helper:
         self._tray.blender_shown(shown)
         screen = Screen(front_pid, taskbar, frozenset(blenders.values()), shown)
         where = place(screen, self._own_pid, self.window.put_away)
-        if where == self._place or where == Place.KEEP:
+        if not needs_move(where, front_hwnd, self._moved):
             return
         hwnd = int(self.window.winId())
         if where == Place.HIDDEN:
@@ -151,7 +151,7 @@ class Helper:
                 winapi.put_on_top(hwnd)
             else:
                 winapi.put_behind(hwnd, front_hwnd)
-        self._place = where
+        self._moved = (where, front_hwnd)
 
 
 def main() -> int:

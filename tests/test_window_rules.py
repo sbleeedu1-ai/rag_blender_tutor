@@ -3,7 +3,7 @@
 Windows를 직접 만지지 않는 판단만 본다. 실제로 창이 그렇게 움직이는지는 강의실 PC 눈 확인으로 본다.
 """
 
-from blender_tutor.window_rules import FrontBlender, Place, Screen, by_sentence, place
+from blender_tutor.window_rules import FrontBlender, Place, Screen, by_sentence, needs_move, place
 
 ME = 900  # 도우미 프로그램의 프로세스 번호
 BLENDER_A, BLENDER_B, BROWSER = 111, 222, 333
@@ -74,3 +74,19 @@ def test_답은_문장_끝마다_줄을_바꾸고_숫자_속_점은_그대로_�
 
 def test_번호_목록의_점에서는_줄을_바꾸지_않는다():
     assert by_sentence("순서: 1. Tab 누르기 2. 고르기") == "순서: 1. Tab 누르기 2. 고르기"
+
+
+def test_같은_자리라도_앞_프로그램이_바뀌면_다시_그_뒤로_보낸다():
+    # Alt+Tab: 고르기 화면(늘 맨 위인 창) 뒤로 갔다가 VS Code가 앞이 돼도 '그 뒤로'는 같아 아무것도 안 하던 버그
+    last = None
+    assert needs_move(Place.BEHIND, 50, last)
+    last = (Place.BEHIND, 50)
+    assert not needs_move(Place.BEHIND, 50, last)
+    assert needs_move(Place.BEHIND, 60, last)  # 다른 프로그램이 앞이 됨
+    assert not needs_move(Place.KEEP, 0, last)  # 그대로는 언제나 그대로
+
+
+def test_맨_위와_숨김은_앞_프로그램이_바뀌어도_다시_하지_않는다():
+    assert not needs_move(Place.TOP, 60, (Place.TOP, 50))  # Blender 둘 사이를 오감
+    assert not needs_move(Place.HIDDEN, 60, (Place.HIDDEN, 50))
+    assert needs_move(Place.TOP, 50, (Place.BEHIND, 50))
