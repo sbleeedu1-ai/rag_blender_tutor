@@ -4,6 +4,8 @@
 질문을 넣고 나온 답 조각·근거 목록·검색 결과·오류 표시와, 모델이 받은 것만 본다.
 """
 
+from dataclasses import replace
+
 import pytest
 
 from blender_tutor.answer_engine import AnswerEngine, Done, Failure, Piece, Settings, Source
@@ -11,6 +13,7 @@ from blender_tutor.manual_chunks import Chunk, Example, MediaKind
 from blender_tutor.menu_names import MenuName, MenuNames, Translation
 from blender_tutor.menu_names import Source as MenuSource
 from blender_tutor.progress import Course, Step
+from blender_tutor.work_state import ActiveObject, WorkState
 
 # 지어낸 청크 6개. 벡터는 세 칸(베벨, 배열, 내보내기)이고 테스트가 가짜 임베딩으로 질문 벡터를 정한다.
 BEVEL = Chunk(
@@ -46,7 +49,10 @@ VECTORS = [[1.0, 0.0, 0.0], [0.9, 0.1, 0.0], [0.1, 1.0, 0.0], [0.0, 0.1, 1.0], [
 # 질문 벡터: 세 칸 가운데 한쪽으로 기운 것
 TOWARD_BEVEL, TOWARD_ARRAY, EVERYWHERE = [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 1.0]
 
-STATE = {"mode": "OBJECT", "active_object": {"name": "Cube", "type": "MESH", "modifiers": []}}
+STATE = WorkState(
+    "OBJECT", ActiveObject("Cube", "MESH", (), (1.0, 1.0, 1.0), (2.0, 2.0, 2.0), 0), ("Cube",),
+    "en_US", False, "", 3, "5.2.2", {}, (),
+)
 TIMEOUT_MESSAGE = "답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
 ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물어봐 주세요."
 
@@ -199,7 +205,7 @@ def test_검색어에_직전_질문_단계_이름_먼저_볼_소제목_경로_�
     # "그다음은요?"만으로는 무엇을 찾을지 모른다. 임베딩 호출을 늘리지 않고 아는 것을 검색어에 붙인다
     embedder = FakeEmbedder()
     step = Step("bevel-edges", "모서리 둥글게 깎기", manual=("modeling/modifiers/generate/bevel.html#options",))
-    state = {**STATE, "recent_operators": ["object.modifier_add", "object.select_all"]}
+    state = replace(STATE, recent_operators=("object.modifier_add", "object.select_all"))
     ask("그다음은요?", embedder=embedder, recent=[("베벨은 어디 있어요?", "Modifiers 탭에서 더해요.")], state=state, step=step)
     assert embedder.calls == [
         ["그다음은요?\n베벨은 어디 있어요?\n모서리 둥글게 깎기\nBevel Modifier > Options\nobject.modifier_add object.select_all"]
@@ -525,7 +531,7 @@ def test_임베딩이_모두_0인_벡터를_주면_잘못된_응답으로_보고
 
 # 메뉴 이름 표기(티켓 23). 답변 모델은 메뉴 이름을 [[영어]]로 표시해 쓰고, 엔진이 화면 언어에 맞게 바꾼다
 
-KOREAN_SCREEN = {**STATE, "language": "ko_KR", "translate_interface": True}
+KOREAN_SCREEN = replace(STATE, language="ko_KR", translate_interface=True)
 
 
 def _many(english: str, *candidates: tuple[str, str]) -> MenuName:
@@ -556,9 +562,9 @@ def test_한국어_화면에_번역이_켜져_있으면_메뉴_이름을_한국�
 @pytest.mark.parametrize(
     "state",
     [
-        {**STATE, "language": "en_US", "translate_interface": True},  # 영어 화면
-        {**STATE, "language": "ko_KR", "translate_interface": False},  # 한국어로 골랐지만 인터페이스 번역 꺼짐
-        STATE,  # 화면 언어를 모름
+        replace(STATE, language="en_US", translate_interface=True),  # 영어 화면
+        replace(STATE, language="ko_KR", translate_interface=False),  # 한국어로 골랐지만 인터페이스 번역 꺼짐
+        replace(STATE, language="", translate_interface=True),  # 화면 언어를 모름
     ],
 )
 def test_영어_화면이거나_번역이_꺼져_있으면_메뉴_이름은_영어만(state):

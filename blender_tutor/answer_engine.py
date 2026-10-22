@@ -18,6 +18,7 @@ from rank_bm25 import BM25Okapi
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
 from blender_tutor.menu_names import MenuNames
 from blender_tutor.progress import Course, Step
+from blender_tutor.work_state import WorkState
 
 RRF_K = 60  # RRF 합치기 상수. 순위 r인 청크는 1 / (RRF_K + r)점을 받는다(널리 쓰는 값)
 RRF_DEPTH = 50  # 뜻 검색·낱말 검색 각각 상위 몇 개까지 합치기에 넣나
@@ -145,7 +146,7 @@ class AnswerEngine:
         self._settings = settings
 
     def answer(
-        self, question: str, state: dict, recent: Sequence[tuple[str, str]], step: Step | None = None
+        self, question: str, state: WorkState, recent: Sequence[tuple[str, str]], step: Step | None = None
     ) -> Iterator[Event]:
         """질문에 답한다. state는 애드온이 보낸 작업 상태 JSON, recent는 최근 대화 (질문, 답) 쌍 목록,
         step은 진행 중인 연습 과정의 지금 단계(연습 과정을 진행하지 않으면 None)."""
@@ -239,7 +240,7 @@ class AnswerEngine:
             return []
         return [chunk for address in step.manual for chunk in self._by_address.get(address, [])]
 
-    def _query(self, question: str, state: dict, recent: Sequence[tuple[str, str]], step: Step | None) -> str:
+    def _query(self, question: str, state: WorkState, recent: Sequence[tuple[str, str]], step: Step | None) -> str:
         """검색어: 질문 + 직전 질문 + 지금 단계 이름과 먼저 볼 소제목 경로 + 방금 실행한 조작(추가 호출 없이 아는 것만).
 
         "그다음은요?"처럼 앞말에 기대는 질문도 무엇을 찾는지 알 수 있게 하고, 영어 설명서와 겹치는 낱말을 늘려
@@ -252,9 +253,8 @@ class AnswerEngine:
         if step:
             lines.append(step.name)
             lines += dict.fromkeys(chunk.path for chunk in self._preview(step))  # 나눈 조각은 경로가 같아 한 번만
-        operators = state.get("recent_operators") or []
-        if operators:
-            lines.append(" ".join(operators))
+        if state.recent_operators:
+            lines.append(" ".join(state.recent_operators))
         return "\n".join(lines)
 
     def _search(self, query: str, vector: Sequence[float]) -> list[Chunk]:
@@ -273,9 +273,9 @@ class AnswerEngine:
         return [self._chunks[index] for index in best]
 
 
-def _translated(state: dict) -> bool:
-    """한국어 화면에 인터페이스 번역이 켜져 있나. 칸 이름은 시제품(티켓 01)을 따른다. 작업 상태 모양은 티켓 25에서 정한다."""
-    return str(state.get("language", "")).startswith("ko") and state.get("translate_interface") is True
+def _translated(state: WorkState) -> bool:
+    """한국어 화면에 인터페이스 번역이 켜져 있나."""
+    return state.language.startswith("ko") and state.translate_interface
 
 
 class _MenuMarks:
@@ -332,7 +332,7 @@ def _failure(error: Exception, results: list[Chunk]) -> Failure:
 
 def _messages(
     question: str,
-    state: dict,
+    state: WorkState,
     recent: Sequence[tuple[str, str]],
     groups: list[list[Chunk]],
     similar: list[Course],
@@ -354,7 +354,7 @@ def _messages(
     if step and step.guide:
         content += f"# 지금 단계\n\n{step.guide}\n\n"
     content += (
-        f"# 작업 상태\n\n{json.dumps(state, ensure_ascii=False, indent=2)}\n\n"
+        f"# 작업 상태\n\n{json.dumps(state.to_json(), ensure_ascii=False, indent=2)}\n\n"
         f"# 질문\n\n{question}"
     )
     return messages + [{"role": "user", "content": content}]

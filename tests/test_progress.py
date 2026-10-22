@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 
 from blender_tutor.conditions import CONDITIONS
-from blender_tutor.progress import Ask, Progress, Step, Withdraw, WorkState, load_steps
+from blender_tutor.progress import Ask, Progress, Step, Withdraw, load_steps
+from blender_tutor.work_state import ActiveObject, WorkState
 
 COURSES = Path(__file__).resolve().parent.parent / "courses"
 
@@ -21,14 +22,22 @@ JOIN_PARTS = Step("join-parts", "부품 합치기", (("방금 조작", "object.j
 # 아무 조건도 맞지 않는 작업 상태. 테스트마다 몇 칸만 바꿔 쓴다.
 IDLE = WorkState(
     mode="OBJECT",
-    recent_operators=(),
+    active_object=ActiveObject("Cube", "MESH", (), (1.0, 1.0, 1.0), (2.0, 2.0, 2.0), 1),
+    selected_objects=("Cube",),
+    language="en_US",
+    translate_interface=False,
+    file_path="",
     scene_object_count=3,
-    modifiers=(),
-    material_slot_count=1,
-    scale=(1.0, 1.0, 1.0),
-    dimensions=(2.0, 2.0, 2.0),
+    blender_version="5.2.2",
+    edit_selected={},
+    recent_operators=(),
 )
 MERGED = replace(IDLE, mode="EDIT_MESH", recent_operators=("mesh.select_all", "mesh.merge"))
+
+
+def with_object(**changes) -> WorkState:
+    """IDLE에서 활성 물체 칸 몇 개만 바꾼 작업 상태."""
+    return replace(IDLE, active_object=replace(IDLE.active_object, **changes))
 
 
 def test_끝난_조건이_맞으면_다음_단계로_갈지_묻는다():
@@ -160,11 +169,18 @@ def test_마친_뒤에도_뒤로_가면_마지막_단계로_돌아온다():
         (("크기 비율", 3), {"dimensions": (0.3, 0.1, 0.9)}, {"dimensions": (0.4, 0.1, 0.9)}),
     ],
 )
-def test_끝난_조건_종류마다_맞고_틀림을_가른다(condition, met, not_met):
+def test_활성_물체_조건_종류마다_맞고_틀림을_가른다(condition, met, not_met):
     step = Step("any", "아무 단계", (condition,))
     progress = Progress([step, GUARD_ADD])
-    assert progress.on_state(replace(IDLE, **not_met)) == []
-    assert [type(c) for c in progress.on_state(replace(IDLE, **met))] == [Ask]
+    assert progress.on_state(with_object(**not_met)) == []
+    assert [type(c) for c in progress.on_state(with_object(**met))] == [Ask]
+
+
+@pytest.mark.parametrize("condition", [("모디파이어", "BEVEL"), ("재질 슬롯 수", 1), ("배율", [1, 1, 1]), ("크기 비율", 1)])
+def test_활성_물체가_없으면_활성_물체_조건은_맞지_않는다(condition):
+    progress = Progress([Step("any", "아무 단계", (condition,)), GUARD_ADD])
+    assert progress.on_state(replace(IDLE, active_object=None)) == []
+    assert [type(c) for c in progress.on_state(with_object(modifiers=("BEVEL",)))] == [Ask]
 
 
 def test_적힌_끝난_조건이_모두_맞아야_묻는다():

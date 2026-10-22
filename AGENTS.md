@@ -6,7 +6,7 @@
 
 - 무엇: Blender 5.2를 처음 쓰는 사람이 3D 아이템을 만들 때, 공식 설명서를 근거로 다음 조작을 쉬운 한국어로 안내하는 도우미
 - 준비: `python -m venv .venv` 뒤 `.venv\Scripts\python -m pip install -e ".[dev]"`
-- 실행: 도우미 창은 아직 없음. 연습 과정 파일 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` · 테스트: `.venv\Scripts\python -m pytest` (테스트는 API 키 없이 돌게 만들고 늘 통과 상태로 둔다)
+- 실행: 도우미 창은 아직 없음. 애드온 설치 `.venv\Scripts\python -m blender_tutor.install_addon`(뒤에 Blender 환경 설정에서 애드온 켜기) · 애드온 자체 시험(Blender를 화면 없이 띄움, 기본 테스트 밖) `.venv\Scripts\python addon\selftest.py` · 연습 과정 파일 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` · 테스트: `.venv\Scripts\python -m pytest` (테스트는 API 키 없이 돌게 만들고 늘 통과 상태로 둔다)
 
 ## 기록 (저장소가 기억이다)
 
@@ -15,10 +15,11 @@
 | `HANDOFF.md` | 지금 상태 한 쪽: 하던 일, 브랜치, 테스트 결과, 막힌 것, 다음 할 일 | 멈추거나 PC·도구를 바꿀 때마다 (`handoff` 스킬) |
 | `HISTORY.md` | `### [번호] 날짜 · 제목` → 누가 제안했나, 사용자가 고른 것(말 그대로 인용), 결과·숫자. 지난 항목은 고치지 않고 새 번호로 | 결정·변경·실험 결과가 생길 때마다 |
 | `docs/adr/` | 되돌리기 어려운 결정 하나에 파일 하나(`0001-제목.md`): 확정한 것, 이유, 검토한 대안. 다시 뒤집지 않기 위한 문서 | 되돌리기 어렵고, 이유 없이는 의아하고, 실제로 대안을 견준 결정이 생길 때 |
+| `STRUCTURE.md` | 지금 프로그램의 구조: 프로그램·파일이 하는 일, 주고받는 모양, 한 번의 흐름 예. 사용자가 켜 두고 판단할 때 본다 | 프로그램·파일·주고받는 모양이 바뀌는 티켓마다 같은 PR에서 |
 
 용어집 `CONTEXT.md`는 프로젝트 용어가 정해질 때 만든다(구현·메모는 넣지 않는다).
 
-문서는 이 세 개와 README로 시작한다. 새 문서를 만들기 전에 이 셋 중 하나에 넣을 수 없는지 먼저 본다.
+문서는 이 네 개와 README로 시작한다. 새 문서를 만들기 전에 이 넷 중 하나에 넣을 수 없는지 먼저 본다.
 
 ## 지킬 것
 
