@@ -4,8 +4,12 @@
 블렌더 표기마다 번역 없음·하나·여러 개를 가르는지, 한국어로 영어를 찾는지 본다.
 """
 
+from pathlib import Path
+
+import pytest
+
 from blender_tutor.manual_chunks import Chunk
-from blender_tutor.menu_names import MenuNames, Source, Status, Translation, build_menu_names
+from blender_tutor.menu_names import MenuName, MenuNames, Source, Status, Translation, build_menu_names
 
 PO = r'''
 msgid ""
@@ -212,3 +216,43 @@ def test_한국어_번역이_빠진_문맥이_있으면_영어_그대로를_후�
     assert at_center.translations == (Translation("센터에서", ("Operator",)), Translation("At Center", ("Mesh",)))
     assert names.get("Add").status == Status.ONE  # 쓰는 문맥 모두에 번역이 있으면 그대로
     assert [name.english for name in names.to_review()] == ["At Center"]
+
+
+# 여러 번역의 고정한 짝(티켓 23): 영어 이름 → 화면이 쓰는 문맥. 저장소의 menu_choices.json에 커밋한다
+
+REPO = Path(__file__).resolve().parents[1]
+CHOICE_NAMES = [
+    MenuName("Apply", (Translation("적용", ("*", "Operator")), Translation("신청하기", ("WindowManager",))), 1, ""),
+    MenuName("Mesh", (Translation("메시", ("*",)),), 1, ""),
+]
+
+
+def test_고정한_짝의_문맥으로_화면_한국어를_고른다():
+    assert MenuNames(CHOICE_NAMES, {"Apply": "WindowManager"}).korean("Apply") == "신청하기"
+    assert MenuNames(CHOICE_NAMES).korean("Apply") is None  # 고정 전은 영어 그대로
+
+
+@pytest.mark.parametrize(
+    "choices",
+    [
+        {"Aply": "Operator"},  # 사전에 없는 이름(오타)
+        {"Apply": "Mesh"},  # 그 이름에 없는 문맥
+        {"Mesh": "*"},  # 번역이 하나라 고를 것이 없음
+    ],
+)
+def test_잘못된_고정_짝은_바로_알린다(choices):
+    with pytest.raises(ValueError):
+        MenuNames(CHOICE_NAMES, choices)
+
+
+def test_고정_짝_파일을_읽는다(tmp_path):
+    path = tmp_path / "menu_choices.json"
+    path.write_text('{"Apply": "WindowManager"}', encoding="utf-8")
+    assert MenuNames.load_choices(path) == {"Apply": "WindowManager"}
+
+
+def test_저장소의_고정_짝은_실제_사전과_맞는다():
+    dictionary = REPO / "data" / "menu_names" / "menu_names.json"
+    if not dictionary.exists():
+        pytest.skip("data/에 메뉴 이름 사전이 없음(커밋하지 않는 자료)")
+    MenuNames.load(dictionary, MenuNames.load_choices(REPO / "menu_choices.json"))  # 틀리면 ValueError

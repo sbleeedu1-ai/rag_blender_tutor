@@ -521,3 +521,85 @@ def test_임베딩이_모두_0인_벡터를_주면_잘못된_응답으로_보고
     model = FakeModel()
     assert ask(embedder=FakeEmbedder([0.0, 0.0, 0.0]), model=model) == [Failure(ERROR_MESSAGE)]
     assert model.calls == []
+
+
+# 메뉴 이름 표기(티켓 23). 답변 모델은 메뉴 이름을 [[영어]]로 표시해 쓰고, 엔진이 화면 언어에 맞게 바꾼다
+
+KOREAN_SCREEN = {**STATE, "language": "ko_KR", "translate_interface": True}
+
+
+def _many(english: str, *candidates: tuple[str, str]) -> MenuName:
+    """번역이 여러 개인 이름. candidates는 (한국어, 문맥) 쌍. 한국어가 영어와 같으면 그 문맥은 번역 없음"""
+    return MenuName(english, tuple(Translation(korean, (context,)) for korean, context in candidates), 1, "", (MenuSource.UI,))
+
+
+# 지어낸 표기 사전. Array는 실제 사전처럼 쪽 제목에서만 뽑은 이름
+SCREEN_NAMES = [
+    _name("Add", "추가"), _name("Mesh", "메시"), _name("Array", "배열", MenuSource.TITLE),
+    _many("Edit Mode", ("에디트 모드", "*"), ("편집 모드", "Operator")),
+    _many("At Center", ("센터에서", "Operator"), ("At Center", "Mesh")),
+    _many("Apply", ("적용", "*"), ("신청하기", "WindowManager")),
+]  # fmt: skip
+
+
+def shown(pieces, state=KOREAN_SCREEN, choices=None) -> str:
+    """가짜 모델이 pieces를 낼 때 사용자가 보는 답 글(조각을 이어 붙인 것)."""
+    names = MenuNames(SCREEN_NAMES, choices or {})
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
+    return "".join(event.text for event in engine.answer("메시 추가", state, []) if isinstance(event, Piece))
+
+
+def test_한국어_화면에_번역이_켜져_있으면_메뉴_이름을_한국어_괄호_영어로():
+    assert shown(("[[Add > Mesh]]를 누르세요.",)) == "추가(Add) > 메시(Mesh)를 누르세요."
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        {**STATE, "language": "en_US", "translate_interface": True},  # 영어 화면
+        {**STATE, "language": "ko_KR", "translate_interface": False},  # 한국어로 골랐지만 인터페이스 번역 꺼짐
+        STATE,  # 화면 언어를 모름
+    ],
+)
+def test_영어_화면이거나_번역이_꺼져_있으면_메뉴_이름은_영어만(state):
+    assert shown(("[[Add > Mesh]]를 누르세요.",), state) == "Add > Mesh를 누르세요."
+
+
+@pytest.mark.parametrize(
+    "pieces, choices, expected",
+    [
+        (("[[Snap Base]]를 켜세요.",), {}, "Snap Base를 켜세요."),  # 사전에 없음
+        (("[[Array]] 모디파이어",), {}, "배열(Array) 모디파이어"),  # 쪽 제목에서만 뽑은 이름도 하나면 그대로
+        (("[[Edit Mode]]로",), {}, "Edit Mode로"),  # 여러 개인데 아직 고정 전: 틀린 한국어를 보이지 않는다
+        (("[[Edit Mode]]로",), {"Edit Mode": "Operator"}, "편집 모드(Edit Mode)로"),  # 고정한 짝
+        # 병합 메뉴의 At Center는 Mesh 문맥이라 번역이 없다. 그 문맥을 고르면 화면처럼 영어 그대로
+        (("[[Mesh > Merge > At Center]]",), {"At Center": "Mesh"}, "메시(Mesh) > Merge > At Center"),
+    ],
+)
+def test_번역이_없거나_고정_전이면_영어_그대로이고_여러_번역은_고정한_짝을_쓴다(pieces, choices, expected):
+    assert shown(pieces, choices=choices) == expected
+
+
+def test_표시가_조각_사이에_갈려_와도_바꾼다():
+    assert shown(("먼저 [", "[Ad", "d > Me", "sh]", "]를 누르세요.",)) == "먼저 추가(Add) > 메시(Mesh)를 누르세요."
+
+
+def test_표시가_아닌_대괄호는_글_그대로이고_닫히지_않은_표시는_기호만_뗀다():
+    assert shown(("배열 [1, 2]처럼 [", "숫자를 넣어요.",)) == "배열 [1, 2]처럼 [숫자를 넣어요."
+    assert shown(("[[Add 끝",)) == "Add 끝"  # 답이 끝날 때까지 닫히지 않으면 표시 기호만 뗀다
+    assert shown(("[[[Add]] 메뉴",)) == "[추가(Add) 메뉴"  # 대괄호가 하나 더 붙어도 표시는 찾는다
+    long = "[[" + "가" * 100 + " 그리고 [[Mesh]]"  # 닫히지 않은 표시에 뒤 글이 붙들리지 않는다
+    assert shown((long,)) == "가" * 100 + " 그리고 메시(Mesh)"
+
+
+def test_표시가_닫히기_전에_답이_끊겨도_받은_글을_내고_오류_표시():
+    names = MenuNames(SCREEN_NAMES)
+    model = FakeModel(("[[Add >",), error=ConnectionError("끊김"))
+    events = list(AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), model, menu_names=names).answer("추가", KOREAN_SCREEN, []))
+    assert events[0] == Piece("Add >") and isinstance(events[1], Failure)
+
+
+def test_답변_모델에게_메뉴_이름을_영어로_표시해_쓰라고_지시한다():
+    model = FakeModel()
+    ask(model=model)
+    assert "[[Add > Mesh]]" in model.calls[0][0]["content"]
