@@ -9,6 +9,7 @@ import json
 import re
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
+from itertools import islice
 from typing import Protocol
 
 import numpy as np
@@ -156,9 +157,10 @@ class AnswerEngine:
             return
         results = self._search(query, vector)
         # 먼저 볼 소제목은 검색 상위를 대신하지 않고 그 위에 덧붙인다. 검색에도 걸렸으면 한 번만
-        sent = list(dict.fromkeys(self._preview(step) + results))
+        preview = self._preview(step)
+        sent = list(dict.fromkeys(preview + results))
         similar = self._similar_courses(vector) if step is None else []
-        messages = _messages(question, state, recent, self._widened(sent), similar, step)
+        messages = _messages(question, state, recent, self._widened(sent, preview), similar, step)
         try:
             for text in self._model.stream(messages, self._settings.timeout):
                 yield Piece(text)
@@ -167,30 +169,48 @@ class AnswerEngine:
             return
         yield Done(_sources(sent), tuple(results))
 
-    def _widened(self, sent: list[Chunk]) -> list[list[Chunk]]:
-        """넘길 청크마다 함께 읽을 묶음. 작게 찾고 크게 읽기: SHORT_WORDS 미만이면 같은 부모의 형제 소제목을
-        가까운 것부터 MAX_WORDS 안에서 붙인다(설명서 차례로). 이미 넘긴 청크는 다시 넣지 않는다."""
+    def _widened(self, sent: list[Chunk], preview: list[Chunk]) -> list[list[Chunk]]:
+        """넘길 청크마다 함께 읽을 묶음. 작게 찾고 크게 읽기: 찾은 청크가 SHORT_WORDS 미만이면
+        아래 소제목(손자 포함)을 설명서 차례로, 아래 소제목이 없으면 같은 부모의 형제 소제목을 가까운 것부터
+        MAX_WORDS 안에서 붙인다(묶음 안은 설명서 차례). 이미 넘긴 청크는 다시 넣지 않는다.
+
+        먼저 볼 소제목은 미리 골라 둔 것이라 짧아도 붙이지 않는다(짧은 검색 결과를 보완하려는 일이라서).
+        """
         groups, used = [], set()
         for chunk in sent:
             if chunk in used:
                 continue
             group = [chunk]
-            if chunk.words < SHORT_WORDS and chunk.parent:
-                here = self._position[chunk]
-                family = self._families[chunk.parent]
-                siblings = [i for i in family if self._chunks[i].headings != chunk.headings]
+            if chunk.words < SHORT_WORDS and chunk not in preview:
                 total = chunk.words
-                for index in sorted(siblings, key=lambda i: abs(i - here)):
-                    sibling = self._chunks[index]
-                    if total + sibling.words > MAX_WORDS:
+                for extra in self._descendants(chunk) or self._siblings(chunk):
+                    if total + extra.words > MAX_WORDS:
                         break
-                    if sibling not in used and sibling not in sent:
-                        group.append(sibling)
-                        total += sibling.words
+                    if extra not in used and extra not in sent:
+                        group.append(extra)
+                        total += extra.words
                 group.sort(key=self._position.__getitem__)
             groups.append(group)
             used.update(group)
         return groups
+
+    def _descendants(self, chunk: Chunk) -> list[Chunk]:
+        """chunk 아래 소제목 청크들(손자 포함, 설명서 차례). 설명서 차례로 저장되어 있어 바로 뒤에 이어 있다."""
+        depth, found = len(chunk.headings), []
+        for later in islice(self._chunks, self._position[chunk] + 1, None):
+            if later.page_path != chunk.page_path or later.headings[:depth] != chunk.headings:
+                break
+            if len(later.headings) > depth:  # 같은 소제목을 나눈 뒤 조각은 자식이 아니다
+                found.append(later)
+        return found
+
+    def _siblings(self, chunk: Chunk) -> list[Chunk]:
+        """같은 부모 아래 다른 소제목 청크들, 찾은 청크와 가까운 것부터."""
+        if not chunk.parent:
+            return []
+        here = self._position[chunk]
+        family = [i for i in self._families[chunk.parent] if self._chunks[i].headings != chunk.headings]
+        return [self._chunks[i] for i in sorted(family, key=lambda i: abs(i - here))]
 
     def _similar_courses(self, vector: Sequence[float]) -> list[Course]:
         """검색에 쓴 질문 벡터를 그대로 다시 써서(추가 호출 없음) 가까운 연습 과정 SIMILAR_COURSES개."""

@@ -294,15 +294,17 @@ OVERVIEW = _tool("overview", ("Overview",), 30)
 KNIFE = _tool("knife", ("Tools", "Knife"), 10)
 BISECT = _tool("bisect", ("Tools", "Bisect"), 100)
 LOOP = _tool("loop", ("Tools", "Loop"), 200)
+LOOP_EDGE = _tool("loop-edge", ("Tools", "Loop", "Edge"), 5)  # LOOP의 자식(Tools의 손자)
 FILL = _tool("fill", ("Tools", "Fill"), 150)
-TOOLS = [OVERVIEW, KNIFE, BISECT, LOOP, FILL]
-TOOL_VECTORS = [[0.0, 1.0], [1.0, 0.0], [0.5, 0.5], [0.4, 0.6], [0.3, 0.7]]
+TOOLS_INTRO = _tool("tools", ("Tools",), 20)  # 아래에 소제목이 있는 짧은 소개
+TOOLS = [OVERVIEW, TOOLS_INTRO, KNIFE, BISECT, LOOP, LOOP_EDGE, FILL]
+TOOL_VECTORS = [[0.0, 1.0], [1.0, -1.0], [1.0, 0.0], [0.5, 0.5], [0.4, 0.6], [0.2, 0.8], [0.3, 0.7]]
 
 
-def ask_tools(vector) -> tuple[list, FakeModel]:
+def ask_tools(vector, step=None) -> tuple[list, FakeModel]:
     model = FakeModel()
     engine = AnswerEngine(TOOLS, TOOL_VECTORS, FakeEmbedder(vector), model, Settings(top_k=1, use_bm25=False))
-    return list(engine.answer("칼", STATE, [])), model
+    return list(engine.answer("칼", STATE, [], step)), model
 
 
 def test_50단어_미만_청크는_형제_소제목을_약_400단어까지_함께_넘기고_링크는_찾은_소제목():
@@ -311,6 +313,7 @@ def test_50단어_미만_청크는_형제_소제목을_약_400단어까지_함�
     # 가까운 형제부터: BISECT(+100) → LOOP(+200) = 310단어. FILL(+150)을 더하면 460이라 넣지 않는다
     assert KNIFE.text in sent and BISECT.text in sent and LOOP.text in sent
     assert FILL.text not in sent and OVERVIEW.text not in sent  # 부모가 다른 소제목은 형제가 아니다
+    assert LOOP_EDGE.text not in sent and TOOLS_INTRO.text not in sent  # 형제의 자식·부모도 형제가 아니다
     assert sent.index(KNIFE.text) < sent.index(BISECT.text) < sent.index(LOOP.text)  # 설명서 차례대로
     assert found(events) == [KNIFE]
     assert [source.url for source in events[-1].sources] == [KNIFE.url]
@@ -320,6 +323,27 @@ def test_50단어_넘는_청크는_형제를_붙이지_않는다():
     events, model = ask_tools([0.5, 0.5])  # BISECT(100단어)만 찾는다
     sent = model.calls[0][-1]["content"]
     assert BISECT.text in sent and all(chunk.text not in sent for chunk in (OVERVIEW, KNIFE, LOOP, FILL))
+
+
+def test_50단어_미만이고_아래_소제목이_있으면_형제_대신_자식을_약_400단어까지_넘긴다():
+    # 짧은 소개 소제목의 진짜 내용은 아래 소제목에 있다(예: VR Scene Inspection > Location Scouting)
+    events, model = ask_tools([1.0, -1.0])  # TOOLS_INTRO(20단어)만 찾는다
+    sent = model.calls[0][-1]["content"]
+    # 설명서 차례대로 손자까지: KNIFE(+10) → BISECT(+100) → LOOP(+200) → LOOP_EDGE(+5) = 335단어. FILL(+150)은 485라 넣지 않는다
+    children = [KNIFE, BISECT, LOOP, LOOP_EDGE]
+    assert [sent.index(chunk.text) for chunk in [TOOLS_INTRO, *children]] == sorted(
+        sent.index(chunk.text) for chunk in [TOOLS_INTRO, *children]
+    )
+    assert FILL.text not in sent and OVERVIEW.text not in sent  # 형제(OVERVIEW)는 붙이지 않는다
+    assert [source.url for source in events[-1].sources] == [TOOLS_INTRO.url]
+
+
+def test_먼저_볼_소제목은_짧아도_형제를_붙이지_않는다():
+    # 먼저 볼 소제목은 미리 골라 둔 것이라, 짧은 검색 결과를 보완하는 형제 붙이기 대상이 아니다
+    step = Step("knife", "칼로 자르기", manual=(KNIFE.address,))
+    _, model = ask_tools([0.0, 1.0], step)  # 검색은 OVERVIEW, 먼저 볼 소제목은 KNIFE(10단어)
+    sent = model.calls[0][-1]["content"]
+    assert KNIFE.text in sent and all(chunk.text not in sent for chunk in (BISECT, LOOP, FILL))
 
 
 # 지어낸 연습 과정 넷과 그 벡터(실제로는 이름 + 한 줄 설명 + 비슷한 말을 미리 임베딩한 것, 티켓 31)
