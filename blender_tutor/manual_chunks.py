@@ -76,9 +76,35 @@ class Chunk:
         return f"{BASE_URL}{self.page_path}.html#{self.anchor}"
 
     @property
+    def address(self) -> str:
+        """연습 과정 파일이 소제목을 가리키는 꼴(경로.html#앵커)."""
+        return f"{self.page_path}.html#{self.anchor}"
+
+    @property
+    def path(self) -> str:
+        """근거 목록에 보이는 '쪽 제목 > 소제목' 경로. 긴 소제목을 나눈 조각도 모두 같다."""
+        return " > ".join((self.page_title, *self.headings))
+
+    @property
+    def has_image(self) -> bool:
+        """그림 있음: 글 속 그림이나 뒤따르는 그림 예시."""
+        return bool(self.images) or any(example.kind == MediaKind.IMAGE for example in self.examples)
+
+    @property
+    def video_links(self) -> tuple[str, ...]:
+        """영상 링크: 글 속 영상, 그다음 뒤따르는 영상 예시의 영상."""
+        examples = [media for example in self.examples if example.kind == MediaKind.VIDEO for media in example.media]
+        return (*self.videos, *examples)
+
+    @property
+    def words(self) -> int:
+        """본문 낱말 수(나눌 때와 같은 셈: 띄어쓰기로 자른 수)."""
+        return len(self.body.split())
+
+    @property
     def text(self) -> str:
         """검색·답변에 쓰는 글: 맨 앞에 '쪽 제목 > 소제목 (> 옵션 > 범주)' 경로를 붙인다."""
-        return " > ".join((self.page_title, *self.headings, *self.option_path)) + "\n\n" + self.body
+        return " > ".join((self.path, *self.option_path)) + "\n\n" + self.body
 
 
 def chunk_manual(root: Path) -> list[Chunk]:

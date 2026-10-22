@@ -69,6 +69,7 @@ class MenuNames:
         for name in self._by_english.values():
             for translation in name.translations:
                 self._by_korean.setdefault(_korean_key(translation.korean), {})[name.english] = None
+        self._in_questions = _question_index(self._by_english.values())  # english_in이 쓰는 표
 
     def __iter__(self):
         return iter(self._by_english.values())
@@ -79,6 +80,42 @@ class MenuNames:
     def english_for(self, korean: str) -> tuple[str, ...]:
         """한국어 블렌더 표기에 맞는 영어 이름들(질문 속 한국어 메뉴 이름으로 영어 설명서를 찾을 때, 티켓 22)."""
         return tuple(self._by_korean.get(_korean_key(korean), ()))
+
+    def english_in(self, text: str) -> tuple[str, ...]:
+        """글(사용자 질문) 속 한국어 블렌더 표기를 찾아 영어 이름들을 나온 차례로 돌려준다(티켓 22).
+
+        띄어쓰기는 무시하고 왼쪽부터, 자리마다 가장 긴 이름 하나를 고른다(중심을 찾으면 그 안의 심은 보지 않는다).
+        한 글자 이름(면·폭 등)은 낱말 시작이나 앞 이름 바로 뒤에서만 인정한다(하려면의 면을 거르려고).
+        '기'로 끝나는 이름은 '기'를 뗀 꼴로도 찾는다(합치기 → 합치려면).
+        제목에서만 뽑은 이름은 검수 전이라 쓰지 않는다(티켓 30 뒤 검수).
+
+        검색어 보조일 뿐이라 예외를 더 두지 않는다. 알려진 한계(지어낸 질문으로 확인, 티켓 22 Comments):
+        - 모양이 바뀐 동사 꼴(합쳤는데·숨긴)은 못 찾는다
+        - 화면과 다른 낱말(꼭짓점 ↔ 화면 '버텍스')은 못 찾는다
+        - 엉뚱한 것이 붙기도 한다(바꾸고 → Replace, 실수 → Float, 되돌리려면 → Dolly)
+        """
+        index = self._in_questions
+        longest = max(map(len, index), default=0)
+        letters, word_starts = [], set()
+        for i, letter in enumerate(text):
+            if letter.isspace():
+                continue
+            if i == 0 or text[i - 1].isspace():
+                word_starts.add(len(letters))
+            letters.append(letter)
+        squashed = "".join(letters)
+        found: dict[str, None] = {}
+        start, last_end = 0, 0
+        while start < len(squashed):
+            for size in range(min(longest, len(squashed) - start), 0, -1):
+                piece = squashed[start : start + size]
+                if piece in index and (size > 1 or start in word_starts or start == last_end):
+                    found.update(dict.fromkeys(index[piece]))
+                    start = last_end = start + size
+                    break
+            else:
+                start += 1
+        return tuple(found)
 
     def to_review(self) -> list[MenuName]:
         """번역이 여러 개인 이름을 많이 나온 차례로. 화면과 맞춰 하나로 고정하는 일은 사용자 검수 뒤에 한다."""
@@ -105,6 +142,21 @@ class MenuNames:
             )
             for row in rows
         )
+
+
+def _question_index(names: Iterable[MenuName]) -> dict[str, tuple[str, ...]]:
+    """질문 찾기용 표: 한국어(띄어쓰기 뺀 것, '기'를 뗀 꼴 포함) → 영어 이름들. 제목에서만 뽑은 이름은 뺀다."""
+    index: dict[str, dict[str, None]] = {}
+    for name in names:
+        if name.sources == (Source.TITLE,):
+            continue
+        for translation in name.translations:
+            index.setdefault(_korean_key(translation.korean), {})[name.english] = None
+    stems: dict[str, dict[str, None]] = {}
+    for korean, english in index.items():
+        if korean.endswith("기") and len(korean) >= 3 and korean[:-1] not in index:
+            stems.setdefault(korean[:-1], {}).update(english)
+    return {korean: tuple(english) for korean, english in {**stems, **index}.items()}
 
 
 def _by_count(names: Iterable[MenuName]) -> list[MenuName]:

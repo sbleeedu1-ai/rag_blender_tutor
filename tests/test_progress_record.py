@@ -261,6 +261,7 @@ def test_다_마친_파일을_열면_다른_연습_과정을_권한다(tmp_path)
 def test_저장소의_검_연습_과정으로_저장하고_이어_할_수_있다(tmp_path):
     sword = load_course(COURSES / "sword.yaml")
     assert (sword.label, sword.name) == ("sword", "단순한 검")
+    assert sword.summary.startswith("기본 정육면체를 늘려 칼날을 만들고")  # 비슷한 연습 과정 권하기에 쓰는 한 줄 설명
     manager = ProgressManager([sword], tmp_path)
     manager.choose_course("sword")
     manager.on_file_saved(BLEND)

@@ -198,11 +198,55 @@ def test_연습_과정_파일에서_공통_준비_단계부터_차례로_읽는�
 """,
         encoding="utf-8",
     )
-    assert load_steps(tmp_path / "sword.yaml") == [
-        Step("view-navigate", "화면 돌려 보기"),
-        Step("blade-tip", "칼끝 모으기", (("모드", "EDIT_MESH"), ("방금 조작", "mesh.merge"))),
-        Step("export-gltf", "내보내기"),
+    assert [(s.label, s.name, s.conditions) for s in load_steps(tmp_path / "sword.yaml")] == [
+        ("view-navigate", "화면 돌려 보기", ()),
+        ("blade-tip", "칼끝 모으기", (("모드", "EDIT_MESH"), ("방금 조작", "mesh.merge"))),
+        ("export-gltf", "내보내기", ()),
     ]
+
+
+def test_단계마다_먼저_볼_소제목과_답변_모델에_넘길_단계_내용을_읽는다(tmp_path):
+    (tmp_path / "sword.yaml").write_text(
+        """\
+구간:
+  - 단계:
+      - 이름표: blade-tip
+        이름: 칼끝 모으기
+        목표 모양: 칼날 맨 위가 한 점으로 모였다.
+        참고 치수: 칼날 길이의 5분의 1쯤.
+        쉬운 설명: 맨 위 꼭짓점 넷을 골라 가운데로 모은다.
+        조작:
+          - 설명: 편집 모드로 들어가기
+            메뉴: 없음
+            단축키: Tab
+          - 설명: 가운데로 모으기
+            메뉴: Mesh > Merge > At Center
+            단축키: M
+        먼저 볼 소제목:
+          - modeling/meshes/editing/mesh/merge.html#merge
+        끝난 조건:
+          - 모드: EDIT_MESH
+        자주 막히는 곳:
+          - 뒤쪽 꼭짓점이 안 골라지면 X-ray를 켠다.
+      - 이름표: export-gltf
+        이름: 내보내기
+""",
+        encoding="utf-8",
+    )
+    tip, export = load_steps(tmp_path / "sword.yaml")
+    assert tip.manual == ("modeling/meshes/editing/mesh/merge.html#merge",)
+    assert tip.guide == (
+        "이름: 칼끝 모으기\n"
+        "목표 모양: 칼날 맨 위가 한 점으로 모였다.\n"
+        "참고 치수: 칼날 길이의 5분의 1쯤.\n"
+        "쉬운 설명: 맨 위 꼭짓점 넷을 골라 가운데로 모은다.\n"
+        "조작:\n"
+        "- 편집 모드로 들어가기 (메뉴: 없음, 단축키: Tab)\n"
+        "- 가운데로 모으기 (메뉴: Mesh > Merge > At Center, 단축키: M)\n"
+        "자주 막히는 곳:\n"
+        "- 뒤쪽 꼭짓점이 안 골라지면 X-ray를 켠다."
+    )
+    assert export.guide == "이름: 내보내기"  # 다른 단계 내용은 섞이지 않는다
 
 
 def test_검사가_받아들이는_끝난_조건_종류는_모두_판정할_수_있다():
