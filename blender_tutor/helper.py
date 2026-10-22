@@ -23,16 +23,15 @@ from PySide6.QtWidgets import QApplication
 from blender_tutor import winapi
 from blender_tutor.answer_engine import Failure
 from blender_tutor.conversation import PROGRAM_ERROR, Conversation
-from blender_tutor.helper_window import FONT, HelperWindow, tray_icon
+from blender_tutor.helper_window import FONT, HelperWindow, Tray
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
-from blender_tutor.stand_in import PROJECT, build_engine
+from blender_tutor.install_addon import PROJECT
+from blender_tutor.stand_in import build_engine
 from blender_tutor.window_rules import FrontBlender, Place, Screen, place
 
 FOLLOW_EVERY_MS = 100  # Blender를 따라 창 자리를 다시 보는 간격
 NO_DATA = "설명서 자료(data/)가 없어 답할 수 없어요. HANDOFF.md의 'data/ 다시 만들기'를 봐 주세요."
 NO_STATE = "Blender 작업 상태를 아직 받지 못했어요. Blender에서 F10을 눌러 주세요."
-OPEN_BLENDER_FIRST = "Blender를 먼저 열어 주세요"
-TITLE = "Blender 첫걸음 도우미"
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +40,7 @@ class _Bridge(QObject):
     """다른 스레드(받는 쪽·답 만들기·엔진 준비)에서 화면 스레드로 넘기는 신호. Qt가 화면 스레드에서 차례로 부른다."""
 
     summoned = Signal(int)  # F10을 누른 Blender 창 번호
-    event = Signal(object)  # 답 사건(Piece·Done·Failure)
+    answer_event = Signal(object)  # 답 사건(Piece·Done·Failure)
     no_blender = Signal()  # 켜진 Blender가 없어 끝낼 때
 
 
@@ -56,13 +55,11 @@ class Helper:
         self._own_pid = os.getpid()
         self._place: Place | None = None
         self.window = HelperWindow(blur)
-        self._tray = tray_icon(app, self._tray_show, app.quit)
-        self._tray.setToolTip(TITLE)
-        self._tray.show()
+        self._tray = Tray(self._tray_show, app.quit)
         self.window.asked.connect(self._ask)
         self.window.escape.connect(self._back_to_blender)
         bridge.summoned.connect(self._summon)
-        bridge.event.connect(self.window.show_event)
+        bridge.answer_event.connect(self.window.show_answer_event)
         if blur:
             self.window.winId()  # 창 번호를 먼저 만들어 둔다
             if not winapi.blur_behind(int(self.window.winId())):
@@ -95,14 +92,15 @@ class Helper:
 
     # ---- 질문
     def _ask(self, question: str) -> None:
-        state = self._receiver.latest(self._front.window(self._receiver.blenders()) or 0)
+        window = self._front.window(self._receiver.blenders())
+        state = None if window is None else self._receiver.latest(window)
         if state is None:
-            self.window.show_event(Failure(NO_STATE))
+            self.window.show_answer_event(Failure(NO_STATE))
             return
 
         def work() -> None:  # 답을 기다리는 동안 창과 Blender가 멈추지 않게 따로 돈다
             for event in self._conversation.ask(question, state):
-                self._bridge.event.emit(event)
+                self._bridge.answer_event.emit(event)
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -139,8 +137,7 @@ class Helper:
         front_hwnd, front_pid, taskbar = winapi.foreground()
         self._front.saw_foreground(front_pid, blenders)
         shown = winapi.any_shown(blenders)
-        self._tray.setToolTip(TITLE if shown else OPEN_BLENDER_FIRST)
-        self._tray.show_action.setEnabled(shown)
+        self._tray.blender_shown(shown)
         screen = Screen(front_pid, taskbar, frozenset(blenders.values()), shown)
         where = place(screen, self._own_pid, self.window.put_away)
         if where == self._place or where == Place.KEEP:

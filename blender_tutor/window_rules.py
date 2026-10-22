@@ -29,14 +29,14 @@ class Screen:
 
 def place(screen: Screen, own_pid: int, put_away: bool) -> Place:
     """창을 둘 자리. put_away는 사용자가 X로 직접 내렸는가(F10·트레이로 부를 때까지 내린 채 둔다)."""
-    if put_away:
+    # 최소화를 앞 창보다 먼저 본다: 작업 표시줄 단추로 Blender를 내리면 앞이 작업 표시줄로 남거나 도우미 창이 대신 앞이 된다
+    if put_away or not screen.blender_visible:
         return Place.HIDDEN
     if screen.foreground_pid == own_pid or screen.foreground_pid in screen.blender_pids:
         return Place.TOP
-    if screen.foreground_is_taskbar:
+    # 앞 창 없음(0, 초점이 넘어가는 사이)도 그대로 둔다. 0 '뒤로' 보내면 Windows는 맨 앞으로 올린다
+    if screen.foreground_is_taskbar or not screen.foreground_pid:
         return Place.KEEP
-    if not screen.blender_visible:
-        return Place.HIDDEN
     return Place.BEHIND
 
 
@@ -63,7 +63,8 @@ class FrontBlender:
         return next(iter(blenders), None)
 
 
-_SENTENCE_END = re.compile(r"([.!?])[ \t]+")  # 문장 끝 글자 뒤 빈칸. 5.2처럼 뒤에 빈칸이 없으면 그대로
+# 문장 끝 글자 뒤 빈칸. 5.2처럼 뒤에 빈칸이 없거나 "1. "처럼 숫자 바로 뒤 점(번호 목록)이면 그대로
+_SENTENCE_END = re.compile(r"((?<![0-9])\.|[!?])[ \t]+")
 
 
 def by_sentence(text: str) -> str:

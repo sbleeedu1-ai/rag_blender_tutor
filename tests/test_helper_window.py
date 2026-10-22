@@ -61,14 +61,14 @@ def test_빈_질문과_답을_기다리는_동안의_질문은_보내지_않는�
 def test_답_조각을_이어_붙이고_문장마다_줄을_바꾼다(window):
     type_and_enter(window, "가")
     for text in ("Tab을 눌", "러요. Blender 5.", "2에서도 같아요."):
-        window.show_event(Piece(text))
+        window.show_answer_event(Piece(text))
     assert texts(window, "answer") == ["Tab을 눌러요.\nBlender 5.2에서도 같아요."]
 
 
 def test_근거는_끝에_한꺼번에_링크와_그림_영상_표시로_붙고_다시_보낼_수_있다(window):
     type_and_enter(window, "가")
-    window.show_event(Piece("답이에요."))
-    window.show_event(Done((BEVEL, ARRAY), ()))
+    window.show_answer_event(Piece("답이에요."))
+    window.show_answer_event(Done((BEVEL, ARRAY), ()))
     [bevel, array] = texts(window, "source")
     assert f"href='{BEVEL.url}'" in bevel and "Bevel Modifier &gt; Options" in bevel and "그림 있음 · 영상 있음" in bevel
     assert f"href='{ARRAY.url}'" in array and "있음" not in array
@@ -79,7 +79,7 @@ def test_근거는_끝에_한꺼번에_링크와_그림_영상_표시로_붙고_
 
 def test_오류는_짧은_문구로_보이고_다시_보낼_수_있다(window):
     type_and_enter(window, "가")
-    window.show_event(Failure("답이 너무 늦어져 멈췄어요."))
+    window.show_answer_event(Failure("답이 너무 늦어져 멈췄어요."))
     assert texts(window, "failure") == ["답이 너무 늦어져 멈췄어요."]
     type_and_enter(window, "나")
     assert window.asked_questions == ["가", "나"]
@@ -87,7 +87,7 @@ def test_오류는_짧은_문구로_보이고_다시_보낼_수_있다(window):
 
 def test_질문과_답은_서식_없이_글_그대로_보인다(window):
     type_and_enter(window, "<b>굵게</b>")
-    window.show_event(Piece("<i>기울임</i>"))
+    window.show_answer_event(Piece("<i>기울임</i>"))
     labels = window.findChildren(QLabel, "question") + window.findChildren(QLabel, "answer")
     assert all(label.textFormat() == Qt.PlainText for label in labels)
 

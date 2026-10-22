@@ -30,7 +30,17 @@ def test_Blender가_모두_최소화되면_숨긴다():
 def test_작업_표시줄이나_트레이가_앞이면_그대로_둔다():
     # 트레이를 누르는 순간 앞 프로그램이 탐색기가 되어 창이 내려갔다 올라오는 깜빡임을 막는다
     assert place(screen(BROWSER, taskbar=True), ME, put_away=False) == Place.KEEP
-    assert place(screen(BROWSER, taskbar=True, visible=False), ME, put_away=False) == Place.KEEP
+
+
+def test_Blender가_모두_최소화되면_앞이_작업_표시줄이나_도우미여도_숨긴다():
+    # 작업 표시줄 단추로 Blender를 내리면 앞이 작업 표시줄로 남거나, Windows가 도우미 창을 대신 앞으로 둔다
+    assert place(screen(BROWSER, taskbar=True, visible=False), ME, put_away=False) == Place.HIDDEN
+    assert place(screen(ME, visible=False), ME, put_away=False) == Place.HIDDEN
+
+
+def test_앞_창이_없는_순간에는_그대로_둔다():
+    # 초점이 넘어가는 사이 Windows가 앞 창 없음(0)을 돌려준다. 0 '뒤로' 보내면 오히려 맨 앞으로 올라온다
+    assert place(screen(0), ME, put_away=False) == Place.KEEP
 
 
 def test_사용자가_직접_내리면_Blender가_앞이어도_숨긴_채():
@@ -60,3 +70,7 @@ def test_마지막_Blender가_닫히면_남은_Blender로_보낸다():
 def test_답은_문장_끝마다_줄을_바꾸고_숫자_속_점은_그대로_둔다():
     assert by_sentence("Blender 5.2에서는 Tab을 눌러요. 그다음 Ctrl+B! 됐나요? 네") == "Blender 5.2에서는 Tab을 눌러요.\n그다음 Ctrl+B!\n됐나요?\n네"
     assert by_sentence("끝.") == "끝."
+
+
+def test_번호_목록의_점에서는_줄을_바꾸지_않는다():
+    assert by_sentence("순서: 1. Tab 누르기 2. 고르기") == "순서: 1. Tab 누르기 2. 고르기"

@@ -12,10 +12,10 @@ from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
 from blender_tutor.answer_engine import AnswerEngine, AnswerModel
+from blender_tutor.install_addon import PROJECT
 from blender_tutor.manual_chunks import load_chunks
 from blender_tutor.menu_names import MenuNames
 
-PROJECT = Path(__file__).resolve().parent.parent
 DIMENSIONS = 512  # 낱말을 나눠 담을 칸 수
 
 STAND_IN_ANSWER = (

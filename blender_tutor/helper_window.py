@@ -49,7 +49,7 @@ QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::su
 
 
 class HelperWindow(QWidget):
-    """도우미 창. Enter로 보낸 질문은 asked로 알리고, 답 사건은 show_event로 받아 그린다(화면 스레드에서)."""
+    """도우미 창. Enter로 보낸 질문은 asked로 알리고, 답 사건은 show_answer_event로 받아 그린다(화면 스레드에서)."""
 
     asked = Signal(str)  # Enter로 보낸 질문
     escape = Signal()  # Esc: Blender로 돌아가기
@@ -133,7 +133,7 @@ class HelperWindow(QWidget):
         self._answer_text = ""
         self.asked.emit(question)
 
-    def show_event(self, event: Event) -> None:
+    def show_answer_event(self, event: Event) -> None:
         """답 사건 하나를 그린다: 조각은 이어 붙이고, 끝이면 근거 카드, 오류면 짧은 문구."""
         if isinstance(event, Piece):
             if not self._answer_text:  # 첫 조각: "생각 중…"을 답 글씨로 바꾼다
@@ -261,17 +261,26 @@ def _sources_card(sources: tuple[Source, ...]) -> QFrame:
     return card
 
 
-def tray_icon(parent, on_show, on_quit) -> QSystemTrayIcon:
+class Tray:
     """트레이 아이콘: 왼쪽 클릭 = 보이기(숨기지 않음), 오른쪽 메뉴 = 보이기 / 끝내기."""
-    tray = QSystemTrayIcon(_icon(), parent)
-    menu = QMenu()
-    show_action = menu.addAction("보이기", on_show)
-    menu.addAction("끝내기", on_quit)
-    tray.setContextMenu(menu)
-    tray.activated.connect(lambda reason: on_show() if reason == QSystemTrayIcon.Trigger else None)
-    tray.show_action = show_action  # helper가 Blender가 모두 숨었을 때 막는다
-    tray.menu = menu  # 메뉴가 지워지지 않게 붙잡아 둔다
-    return tray
+
+    TITLE = "Blender 첫걸음 도우미"
+    OPEN_BLENDER_FIRST = "Blender를 먼저 열어 주세요"
+
+    def __init__(self, on_show, on_quit):
+        self._icon = QSystemTrayIcon(_icon())
+        self._menu = QMenu()  # 붙잡아 두어야 메뉴가 지워지지 않는다
+        self._show = self._menu.addAction("보이기", on_show)
+        self._menu.addAction("끝내기", on_quit)
+        self._icon.setContextMenu(self._menu)
+        self._icon.activated.connect(lambda reason: on_show() if reason == QSystemTrayIcon.Trigger else None)
+        self._icon.setToolTip(self.TITLE)
+        self._icon.show()
+
+    def blender_shown(self, shown: bool) -> None:
+        """보이는 Blender가 없으면 메뉴의 보이기를 막고 아이콘 글로 알린다(왼쪽 클릭은 helper가 막음)."""
+        self._icon.setToolTip(self.TITLE if shown else self.OPEN_BLENDER_FIRST)
+        self._show.setEnabled(shown)
 
 
 def _icon() -> QIcon:
