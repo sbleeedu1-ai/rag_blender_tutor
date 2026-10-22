@@ -21,6 +21,8 @@ class Step:
     label: str  # 이름표(예: blade-tip)
     name: str  # 화면에 보이는 이름
     conditions: tuple[tuple[str, object], ...] = ()  # 끝난 조건 (종류, 값) 목록. 비면 버튼으로만 넘어간다
+    manual: tuple[str, ...] = ()  # 먼저 볼 설명서 소제목 주소(경로.html#앵커). 답 엔진이 검색어와 검색 결과 위에 붙인다
+    guide: str = ""  # 답변 모델에 넘길 이 단계 내용 글(연습 과정 파일 전체가 아니라 이 단계만)
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,7 @@ class Course:
     label: str
     name: str
     steps: tuple[Step, ...]
+    summary: str = ""  # 한 줄 설명. 답 엔진이 비슷한 연습 과정을 권할 때 이름과 함께 넘긴다
 
 
 @dataclass(frozen=True)
@@ -61,7 +64,7 @@ def load_steps(course: Path) -> list[Step]:
 def load_course(course: Path) -> Course:
     """연습 과정 파일 하나를 읽는다. 단계는 load_steps와 같이 공통 준비부터."""
     data = yaml.safe_load(course.read_text(encoding="utf-8"))
-    return Course(data["이름표"], data["이름"], tuple(_steps_of(data, course.parent)))
+    return Course(data["이름표"], data["이름"], tuple(_steps_of(data, course.parent)), data.get("한 줄 설명", ""))
 
 
 def _steps_of(data: dict, folder: Path) -> list[Step]:
@@ -70,8 +73,21 @@ def _steps_of(data: dict, folder: Path) -> list[Step]:
     for section in data["구간"]:
         for step in section["단계"]:
             conditions = tuple(next(iter(c.items())) for c in step.get("끝난 조건", []))
-            steps.append(Step(step["이름표"], step["이름"], conditions))
+            manual = tuple(step.get("먼저 볼 소제목", []))
+            steps.append(Step(step["이름표"], step["이름"], conditions, manual, _guide(step)))
     return steps
+
+
+def _guide(step: dict) -> str:
+    """답변 모델에 넘길 단계 내용 글. 사람이 읽는 칸만(이름표·먼저 볼 소제목·끝난 조건은 뺀다)."""
+    lines = [f"{key}: {step[key]}" for key in ("이름", "목표 모양", "참고 치수", "쉬운 설명") if key in step]
+    if step.get("조작"):
+        lines.append("조작:")
+        lines += [f"- {o['설명']} (메뉴: {o['메뉴']}, 단축키: {o['단축키']})" for o in step["조작"]]
+    if step.get("자주 막히는 곳"):
+        lines.append("자주 막히는 곳:")
+        lines += [f"- {tip}" for tip in step["자주 막히는 곳"]]
+    return "\n".join(lines)
 
 
 class Progress:

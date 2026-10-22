@@ -8,6 +8,9 @@ import pytest
 
 from blender_tutor.answer_engine import AnswerEngine, Done, Failure, Piece, Settings, Source
 from blender_tutor.manual_chunks import Chunk, Example, MediaKind
+from blender_tutor.menu_names import MenuName, MenuNames, Translation
+from blender_tutor.menu_names import Source as MenuSource
+from blender_tutor.progress import Course, Step
 
 # 지어낸 청크 6개. 벡터는 세 칸(베벨, 배열, 내보내기)이고 테스트가 가짜 임베딩으로 질문 벡터를 정한다.
 BEVEL = Chunk(
@@ -49,20 +52,21 @@ ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물�
 
 
 class FakeEmbedder:
-    """어떤 질문이든 정해 둔 벡터 하나를 돌려준다. 받은 글과 시간 한도를 적어 둔다."""
+    """받은 글마다 정해 둔 벡터를 돌려준다(by_text에 있으면 그것, 없으면 vector). 부를 때마다 받은 글 목록과 시간 한도를 적어 둔다."""
 
-    def __init__(self, vector=TOWARD_BEVEL, error: Exception | None = None):
+    def __init__(self, vector=TOWARD_BEVEL, error: Exception | None = None, by_text: dict | None = None):
         self.vector = vector
         self.error = error
-        self.calls: list[str] = []
+        self.by_text = by_text or {}
+        self.calls: list[list[str]] = []
         self.timeouts: list[float] = []
 
-    def embed(self, text: str, timeout: float) -> list[float]:
-        self.calls.append(text)
+    def embed(self, texts: list[str], timeout: float) -> list[list[float]]:
+        self.calls.append(list(texts))
         self.timeouts.append(timeout)
         if self.error:
             raise self.error
-        return self.vector
+        return [self.by_text.get(text, self.vector) for text in texts]
 
 
 class FakeModel:
@@ -82,10 +86,10 @@ class FakeModel:
             raise self.error
 
 
-def ask(question="베벨", *, embedder=None, model=None, settings=Settings(), recent=()) -> list:
-    """답 엔진을 새로 만들어 질문 하나를 묻고, 나온 것을 모두 모은다."""
+def ask(question="베벨", *, embedder=None, model=None, settings=Settings(), recent=(), state=STATE, step=None) -> list:
+    """답 엔진을 새로 만들어 질문 하나를 묻고, 나온 것을 모두 모은다. step이 없으면 연습 과정을 진행하지 않는 때."""
     engine = AnswerEngine(CHUNKS, VECTORS, embedder or FakeEmbedder(), model or FakeModel(), settings)
-    return list(engine.answer(question, STATE, list(recent)))
+    return list(engine.answer(question, state, list(recent), step))
 
 
 def found(events) -> list[Chunk]:
@@ -188,7 +192,239 @@ def test_낱말_검색을_끄면_뜻_검색_순서만_쓴다():
     assert found(ask("save file", settings=Settings(top_k=2, use_bm25=False))) == [BEVEL, BEVEL_MORE]
 
 
+# 검색어 만들기
+
+
+def test_검색어에_직전_질문_단계_이름_먼저_볼_소제목_경로_방금_조작이_붙는다():
+    # "그다음은요?"만으로는 무엇을 찾을지 모른다. 임베딩 호출을 늘리지 않고 아는 것을 검색어에 붙인다
+    embedder = FakeEmbedder()
+    step = Step("bevel-edges", "모서리 둥글게 깎기", manual=("modeling/modifiers/generate/bevel.html#options",))
+    state = {**STATE, "recent_operators": ["object.modifier_add", "object.select_all"]}
+    ask("그다음은요?", embedder=embedder, recent=[("베벨은 어디 있어요?", "Modifiers 탭에서 더해요.")], state=state, step=step)
+    assert embedder.calls == [
+        ["그다음은요?\n베벨은 어디 있어요?\n모서리 둥글게 깎기\nBevel Modifier > Options\nobject.modifier_add object.select_all"]
+    ]
+
+
+def test_붙일_것이_없으면_검색어는_질문_그대로():
+    embedder = FakeEmbedder()
+    ask("베벨", embedder=embedder)
+    assert embedder.calls == [["베벨"]]
+
+
+def _name(english: str, korean: str, source: MenuSource = MenuSource.UI) -> MenuName:
+    return MenuName(english, (Translation(korean, ("*",)),), 1, "", (source,))
+
+
+# 지어낸 작은 메뉴 이름 사전. 실제 사전에도 한 글자 이름(면·심·폭 등)과 제목에서만 뽑은 이름(에서 → At)이 있다
+MENU_NAMES = MenuNames([
+    _name("Edit Mode", "편집 모드"), _name("Merge", "병합"), _name("Center", "중심"), _name("Seam", "심"),
+    _name("Facing", "면"), _name("Width", "폭"), _name("Bevel", "베벨"), _name("Join", "합치기"),
+    _name("Size", "크기"), _name("Dimensions", "크기"), _name("At", "에서", MenuSource.TITLE),
+])  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "question, english",
+    [
+        # 낱말 안의 더 짧은 이름(중심의 심)은 보지 않고, 한 글자 이름은 낱말 시작에서만(하려면의 면은 아님)
+        ("편집 모드에서 꼭짓점을 중심에 병합하려면", "Edit Mode Center Merge"),
+        ("편집모드에서꼭짓점을병합하려면", "Edit Mode Merge"),  # 붙여 써도 찾는다
+        ("면을 고르려면", "Facing"),  # 낱말 시작의 한 글자 이름
+        ("베벨폭을 줄이려면", "Bevel Width"),  # 앞 이름 바로 뒤의 한 글자 이름
+        ("물체를 합치려면", "Join"),  # '기'로 끝나는 이름은 동사 꼴(합치려면)로도
+        ("크기를 줄이려면", "Size Dimensions"),  # 한국어 하나에 영어가 여럿이면 모두
+        ("꼭짓점을 고르려면", ""),  # 없으면 붙이지 않는다
+    ],
+)
+def test_질문_속_한국어_메뉴_이름에_영어를_덧붙인다(question, english):
+    embedder = FakeEmbedder()
+    engine = AnswerEngine(CHUNKS, VECTORS, embedder, FakeModel(), menu_names=MENU_NAMES)
+    list(engine.answer(question, STATE, []))
+    assert embedder.calls == [[f"{question} {english}".strip()]]
+
+
+def test_제목에서만_뽑은_이름은_아직_쓰지_않는다():
+    # 검수 전(제목에서만 뽑은 1,055개)이라 흔한 낱말(에서 → At)이 섞인다. 검수는 초보자 범위 분류(티켓 30) 뒤
+    embedder = FakeEmbedder()
+    list(AnswerEngine(CHUNKS, VECTORS, embedder, FakeModel(), menu_names=MENU_NAMES).answer("여기에서", STATE, []))
+    assert embedder.calls == [["여기에서"]]
+
+
+def test_붙인_검색어로_낱말_검색도_한다():
+    # 질문은 한국어뿐이지만 단계에 걸린 소제목 경로("Saving > Save")의 낱말이 SAVE를 끌어올린다
+    step = Step("save-file", "파일 저장하기", manual=("files/blend/save.html#save",))
+    assert found(ask("어떻게 해요?", step=step, settings=Settings(top_k=2)))[0] == SAVE
+
+
 # 모델에 넘기는 것
+
+
+def test_먼저_볼_소제목을_검색_상위_위에_덧붙이고_검색_결과는_줄이지_않는다():
+    model = FakeModel()
+    step = Step("export", "내보내기", manual=("files/blend/save.html#save", "addons/import_export/scene_gltf2.html#export"))
+    # 낱말 검색을 끈다: 켜면 검색어에 붙은 소제목 경로로 검색 순위도 바뀐다(위 테스트). 여기서는 덧붙이기만 본다
+    events = ask(model=model, settings=Settings(top_k=2, use_bm25=False), step=step)
+    sent = model.calls[0][-1]["content"]
+    order = [sent.index(chunk.text) for chunk in (SAVE, EXPORT, BEVEL, BEVEL_MORE)]
+    assert order == sorted(order)  # 먼저 볼 소제목(단계 파일 차례)이 위, 그 아래 검색 상위 2개
+    assert found(events) == [BEVEL, BEVEL_MORE]  # 검색 결과(평가용)는 검색 순위 그대로
+    assert [source.path for source in events[-1].sources] == [
+        "Saving > Save", "glTF 2.0 > Export", "Bevel Modifier > Options",
+    ]
+
+
+def test_먼저_볼_소제목이_검색에도_걸리면_한_번만_넘긴다():
+    model = FakeModel()
+    step = Step("bevel", "베벨", manual=("modeling/modifiers/generate/bevel.html#options",))
+    events = ask(model=model, settings=Settings(top_k=3, use_bm25=False), step=step)
+    sent = model.calls[0][-1]["content"]
+    assert sent.count(BEVEL.text) == 1 and sent.count(BEVEL_MORE.text) == 1
+    assert found(events)[:2] == [BEVEL, BEVEL_MORE]
+    assert sent.index(BEVEL_MORE.text) < sent.index(found(events)[2].text)  # 나눈 조각도 함께 위로
+
+
+def _tool(anchor: str, headings: tuple[str, ...], words: int) -> Chunk:
+    """지어낸 '메시 도구' 쪽의 소제목 하나. 본문은 낱말 words개."""
+    body = " ".join([anchor] * words)
+    return Chunk("modeling/meshes/tools", anchor, "modeling", "modeling/meshes", "Mesh Tools", headings, body)
+
+
+# 같은 쪽에 Tools 아래 형제 소제목 넷과, 다른 부모(Overview)의 소제목 하나. 저장 차례가 곧 설명서 차례다
+OVERVIEW = _tool("overview", ("Overview",), 30)
+KNIFE = _tool("knife", ("Tools", "Knife"), 10)
+BISECT = _tool("bisect", ("Tools", "Bisect"), 100)
+LOOP = _tool("loop", ("Tools", "Loop"), 200)
+LOOP_EDGE = _tool("loop-edge", ("Tools", "Loop", "Edge"), 5)  # LOOP의 자식(Tools의 손자)
+FILL = _tool("fill", ("Tools", "Fill"), 150)
+TOOLS_INTRO = _tool("tools", ("Tools",), 20)  # 아래에 소제목이 있는 짧은 소개
+TOOLS = [OVERVIEW, TOOLS_INTRO, KNIFE, BISECT, LOOP, LOOP_EDGE, FILL]
+TOOL_VECTORS = [[0.0, 1.0], [1.0, -1.0], [1.0, 0.0], [0.5, 0.5], [0.4, 0.6], [0.2, 0.8], [0.3, 0.7]]
+
+
+def ask_tools(vector, step=None) -> tuple[list, FakeModel]:
+    model = FakeModel()
+    engine = AnswerEngine(TOOLS, TOOL_VECTORS, FakeEmbedder(vector), model, Settings(top_k=1, use_bm25=False))
+    return list(engine.answer("칼", STATE, [], step)), model
+
+
+def test_50단어_미만_청크는_형제_소제목을_약_400단어까지_함께_넘기고_링크는_찾은_소제목():
+    events, model = ask_tools([1.0, 0.0])  # KNIFE(10단어)만 찾는다
+    sent = model.calls[0][-1]["content"]
+    # 가까운 형제부터: BISECT(+100) → LOOP(+200) = 310단어. FILL(+150)을 더하면 460이라 넣지 않는다
+    assert KNIFE.text in sent and BISECT.text in sent and LOOP.text in sent
+    assert FILL.text not in sent and OVERVIEW.text not in sent  # 부모가 다른 소제목은 형제가 아니다
+    assert LOOP_EDGE.text not in sent and TOOLS_INTRO.text not in sent  # 형제의 자식·부모도 형제가 아니다
+    assert sent.index(KNIFE.text) < sent.index(BISECT.text) < sent.index(LOOP.text)  # 설명서 차례대로
+    assert found(events) == [KNIFE]
+    assert [source.url for source in events[-1].sources] == [KNIFE.url]
+
+
+def test_50단어_넘는_청크는_형제를_붙이지_않는다():
+    events, model = ask_tools([0.5, 0.5])  # BISECT(100단어)만 찾는다
+    sent = model.calls[0][-1]["content"]
+    assert BISECT.text in sent and all(chunk.text not in sent for chunk in (OVERVIEW, KNIFE, LOOP, FILL))
+
+
+def test_50단어_미만이고_아래_소제목이_있으면_형제_대신_자식을_약_400단어까지_넘긴다():
+    # 짧은 소개 소제목의 진짜 내용은 아래 소제목에 있다(예: VR Scene Inspection > Location Scouting)
+    events, model = ask_tools([1.0, -1.0])  # TOOLS_INTRO(20단어)만 찾는다
+    sent = model.calls[0][-1]["content"]
+    # 설명서 차례대로 손자까지: KNIFE(+10) → BISECT(+100) → LOOP(+200) → LOOP_EDGE(+5) = 335단어. FILL(+150)은 485라 넣지 않는다
+    children = [KNIFE, BISECT, LOOP, LOOP_EDGE]
+    assert [sent.index(chunk.text) for chunk in [TOOLS_INTRO, *children]] == sorted(
+        sent.index(chunk.text) for chunk in [TOOLS_INTRO, *children]
+    )
+    assert FILL.text not in sent and OVERVIEW.text not in sent  # 형제(OVERVIEW)는 붙이지 않는다
+    assert [source.url for source in events[-1].sources] == [TOOLS_INTRO.url]
+
+
+def test_먼저_볼_소제목은_짧아도_형제를_붙이지_않는다():
+    # 먼저 볼 소제목은 미리 골라 둔 것이라, 짧은 검색 결과를 보완하는 형제 붙이기 대상이 아니다
+    step = Step("knife", "칼로 자르기", manual=(KNIFE.address,))
+    _, model = ask_tools([0.0, 1.0], step)  # 검색은 OVERVIEW, 먼저 볼 소제목은 KNIFE(10단어)
+    sent = model.calls[0][-1]["content"]
+    assert KNIFE.text in sent and all(chunk.text not in sent for chunk in (BISECT, LOOP, FILL))
+
+
+# 지어낸 연습 과정 넷과 그 벡터(실제로는 이름 + 한 줄 설명 + 비슷한 말을 미리 임베딩한 것, 티켓 31)
+SWORD = Course("sword", "단순한 검", (), "정육면체를 늘려 칼날을 만든다.")
+SHIELD = Course("shield", "둥근 방패", (), "원판에 테두리를 두른다.")
+POTION = Course("potion", "물약 병", (), "구에서 병 모양을 뽑는다.")
+CHEST = Course("chest", "보물 상자", (), "상자에 뚜껑을 단다.")
+COURSES = [SWORD, SHIELD, POTION, CHEST]
+COURSE_VECTORS = [[1.0, 0.0, 0.0], [0.6, 0.4, 0.0], [0.0, 0.0, 1.0], [0.3, 0.7, 0.0]]
+
+
+def ask_with_courses(step=None, embedder=None, recent=()) -> str:
+    model = FakeModel()
+    engine = AnswerEngine(
+        CHUNKS, VECTORS, embedder or FakeEmbedder(TOWARD_BEVEL), model, courses=COURSES, course_vectors=COURSE_VECTORS
+    )
+    list(engine.answer("칼을 만들고 싶어요", STATE, list(recent), step))
+    return model.calls[0][-1]["content"]
+
+
+def test_비슷한_연습_과정은_덧붙인_검색어가_아니라_질문만으로_고르고_임베딩은_한_번에_부른다():
+    # 직전 질문(내보내기)이 붙은 검색어로 고르면 물약 병 쪽으로 끌린다. 질문만의 벡터를 같은 호출에서 함께 받는다
+    question, query = "칼을 만들고 싶어요", "칼을 만들고 싶어요\nglb로 내보내려면?"
+    embedder = FakeEmbedder([0.0, 0.0, 1.0], by_text={question: [1.0, 0.0, 0.0]})
+    sent = ask_with_courses(embedder=embedder, recent=[("glb로 내보내려면?", "File > Export에서 골라요.")])
+    assert embedder.calls == [[query, question]]  # 검색어 먼저, 질문만은 둘째. 호출은 한 번
+    assert sent.index("- 단순한 검") < sent.index("- 둥근 방패") and "물약 병" not in sent
+
+
+def test_덧붙인_것이_없어_검색어가_질문과_같으면_글을_하나만_보낸다():
+    embedder = FakeEmbedder(TOWARD_BEVEL)
+    ask_with_courses(embedder=embedder)
+    assert embedder.calls == [["칼을 만들고 싶어요"]]
+
+
+def test_임베딩이_글_수와_다른_개수의_벡터를_주면_잘못된_응답으로_보고_오류_표시():
+    class OneShort(FakeEmbedder):
+        def embed(self, texts, timeout):
+            return super().embed(texts, timeout)[:-1]
+
+    model = FakeModel()
+    assert ask(embedder=OneShort(), model=model) == [Failure(ERROR_MESSAGE)]
+    assert model.calls == []
+
+
+def test_연습_과정을_진행_중이면_질문만의_벡터를_받지_않는다():
+    embedder = FakeEmbedder(TOWARD_BEVEL)
+    ask_with_courses(Step("blade-tip", "칼끝 모으기"), embedder=embedder)
+    assert embedder.calls == [["칼을 만들고 싶어요\n칼끝 모으기"]]
+
+
+def test_연습_과정을_진행하지_않을_때만_비슷한_연습_과정_3개를_가까운_차례로_붙인다():
+    sent = ask_with_courses()
+    lines = ["- 단순한 검: 정육면체를 늘려 칼날을 만든다.", "- 둥근 방패: 원판에 테두리를 두른다.", "- 보물 상자: 상자에 뚜껑을 단다."]
+    assert "# 비슷한 연습 과정" in sent and [sent.index(line) for line in lines] == sorted(sent.index(line) for line in lines)
+    assert "물약 병" not in sent  # 넷째는 넣지 않는다
+    assert "가장 가까운 건" in sent  # 딱 맞는 게 없을 때 말할 꼴
+
+
+def test_연습_과정과_벡터_수가_다르면_만들_때_멈춘다():
+    with pytest.raises(ValueError):
+        AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(), courses=COURSES, course_vectors=COURSE_VECTORS[:3])
+
+
+def test_연습_과정을_진행_중이면_비슷한_연습_과정을_붙이지_않는다():
+    sent = ask_with_courses(Step("blade-tip", "칼끝 모으기"))
+    assert "# 비슷한 연습 과정" not in sent and "단순한 검" not in sent
+
+
+def test_지금_단계_내용을_모델에_넘긴다():
+    model = FakeModel()
+    step = Step("blade-tip", "칼끝 모으기", guide="이름: 칼끝 모으기\n쉬운 설명: 맨 위 꼭짓점을 한 점으로 모은다.")
+    ask(model=model, step=step)
+    assert "# 지금 단계\n\n이름: 칼끝 모으기\n쉬운 설명: 맨 위 꼭짓점을 한 점으로 모은다." in model.calls[0][-1]["content"]
+
+
+def test_연습_과정을_진행하지_않으면_단계_내용이_없다():
+    model = FakeModel()
+    ask(model=model)
+    assert "# 지금 단계" not in model.calls[0][-1]["content"]
 
 
 def test_질문_하나에_임베딩_한_번_답변_한_번만_부른다():
