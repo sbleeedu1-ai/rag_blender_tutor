@@ -7,7 +7,7 @@ ko.po는 번역된 문구만 담는다(티켓 12). 그래서 "번역 없음"은 
 import json
 import re
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -63,8 +63,16 @@ class MenuName:
 class MenuNames:
     """메뉴 이름 사전: 영어 이름 → 번역들, 한국어 이름 → 영어 이름들."""
 
-    def __init__(self, names: Iterable[MenuName]):
+    def __init__(self, names: Iterable[MenuName], choices: Mapping[str, str] = {}):
+        """choices는 번역이 여러 개인 이름에 고정한 짝: 영어 이름 → 화면이 쓰는 문맥(사용자 검수, 티켓 23)."""
         self._by_english = {_english_key(name.english): name for name in names}
+        self._choices = {_english_key(english): context for english, context in choices.items()}
+        for english, context in choices.items():  # 틀린 짝이 조용히 영어로 보이지 않게 바로 멈춘다(오타·사전 다시 만든 뒤 어긋남)
+            name = self.get(english)
+            if name is None or name.status != Status.MANY:
+                raise ValueError(f"고정 짝 {english!r}: 사전에 번역이 여러 개인 이름으로 없음")
+            if not any(context in t.contexts for t in name.translations):
+                raise ValueError(f"고정 짝 {english!r}: 문맥 {context!r}가 사전에 없음")
         self._by_korean: dict[str, dict[str, None]] = {}  # 차례를 지키며 겹친 영어는 한 번만
         for name in self._by_english.values():
             for translation in name.translations:
@@ -76,6 +84,20 @@ class MenuNames:
 
     def get(self, english: str) -> MenuName | None:
         return self._by_english.get(_english_key(english))
+
+    def korean(self, english: str) -> str | None:
+        """한국어 화면에 보이는 글자. 영어 그대로 보이면 None.
+
+        번역 없음·사전에 없음은 영어 그대로, 하나면 그 번역, 여러 개면 고정한 짝(고정 전이면 영어 그대로)이다.
+        """
+        name = self.get(english)
+        if name is None or name.status == Status.NONE:
+            return None
+        if name.status == Status.ONE:
+            return name.translations[0].korean
+        context = self._choices.get(_english_key(english))
+        korean = next((t.korean for t in name.translations if context in t.contexts), None)
+        return None if korean == name.english else korean  # 고른 문맥에 번역이 없으면 화면은 영어
 
     def english_for(self, korean: str) -> tuple[str, ...]:
         """한국어 블렌더 표기에 맞는 영어 이름들(질문 속 한국어 메뉴 이름으로 영어 설명서를 찾을 때, 티켓 22)."""
@@ -129,10 +151,15 @@ class MenuNames:
         rows = [asdict(name) for name in self._by_english.values()]
         path.write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
 
+    @staticmethod
+    def load_choices(path: Path) -> dict[str, str]:
+        """고정 짝 파일(영어 이름 → 문맥 JSON). 번역 글자가 없어 저장소에 커밋한다(menu_choices.json)."""
+        return json.loads(path.read_text(encoding="utf-8"))
+
     @classmethod
-    def load(cls, path: Path) -> "MenuNames":
+    def load(cls, path: Path, choices: Mapping[str, str] = {}) -> "MenuNames":
         rows = json.loads(path.read_text(encoding="utf-8"))
-        return cls(
+        names = [
             MenuName(
                 english=row["english"],
                 translations=tuple(Translation(t["korean"], tuple(t["contexts"])) for t in row["translations"]),
@@ -141,7 +168,8 @@ class MenuNames:
                 sources=tuple(Source(source) for source in row["sources"]),
             )
             for row in rows
-        )
+        ]
+        return cls(names, choices)
 
 
 def _question_index(names: Iterable[MenuName]) -> dict[str, tuple[str, ...]]:

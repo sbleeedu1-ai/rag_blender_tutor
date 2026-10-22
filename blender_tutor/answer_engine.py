@@ -24,7 +24,10 @@ RRF_DEPTH = 50  # 뜻 검색·낱말 검색 각각 상위 몇 개까지 합치�
 SIMILAR_COURSES = 3  # 연습 과정을 진행하지 않을 때 붙이는 비슷한 연습 과정 수
 SHORT_WORDS = 50  # 찾은 청크 본문이 이보다 짧으면 형제 소제목을 MAX_WORDS(청크 나누는 기준과 같은 값)까지 함께 넘긴다(명세 "검색")
 
-TIMEOUT_MESSAGE = "답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
+MARK_OPEN, MARK_CLOSE = "[[", "]]"  # 답변 모델이 메뉴 이름을 감싸는 표시. 엔진이 화면 언어에 맞게 바꾼다(티켓 23)
+MARK_LIMIT = 80  # 표시가 열린 뒤 이만큼(글자) 닫히지 않으면 표시가 아닌 글로 보고 그대로 낸다
+
+TIMEOUT_MESSAGE ="답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
 ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물어봐 주세요."
 
 INSTRUCTIONS = """너는 Blender 5.2를 처음 쓰는 사람을 돕는 도우미다.
@@ -32,7 +35,8 @@ INSTRUCTIONS = """너는 Blender 5.2를 처음 쓰는 사람을 돕는 도우미
 - Blender 5.2 기준으로 답한다. 아래 '설명서 내용'에 있는 것만 근거로 쓴다.
 - 설명서 내용에 답이 없으면 지어내지 말고 "설명서에 없어요"라고 말한 뒤 가장 가까운 내용을 권한다.
 - 그림은 캡션 글만 쓴다. [그림] 자리가 중요해 보이면 "설명서 그림을 함께 보세요"라고 안내한다.
-- '작업 상태'는 사용자의 Blender 화면에서 지금 읽은 값이다. 사용자가 설명하지 않아도 이것을 보고 답한다."""
+- '작업 상태'는 사용자의 Blender 화면에서 지금 읽은 값이다. 사용자가 설명하지 않아도 이것을 보고 답한다.
+- Blender 화면의 메뉴·버튼·옵션 이름은 설명서의 영어 그대로 [[ ]]로 감싼다. 메뉴 경로는 통째로 감싸고 단 사이를 >로 가른다(예: [[Add > Mesh]]). 한국어로 옮기지 않는다(프로그램이 사용자 화면 언어에 맞춰 바꾼다)."""
 
 SIMILAR_NOTE = (
     "사용자가 연습 과정을 진행하지 않고 있다. 아래는 질문과 가까운 연습 과정이다(가까운 차례). "
@@ -167,12 +171,18 @@ class AnswerEngine:
         sent = list(dict.fromkeys(preview + results))
         similar = self._similar_courses(vectors[-1]) if recommend else []
         messages = _messages(question, state, recent, self._widened(sent, preview), similar, step)
+        marks = _MenuMarks(self._menu_names if _translated(state) else None)
         try:
             for text in self._model.stream(messages, self._settings.timeout):
-                yield Piece(text)
+                if text := marks.feed(text):
+                    yield Piece(text)
         except Exception as error:
+            if text := marks.finish():
+                yield Piece(text)
             yield _failure(error, results)
             return
+        if text := marks.finish():
+            yield Piece(text)
         yield Done(_sources(sent), tuple(results))
 
     def _widened(self, sent: list[Chunk], preview: list[Chunk]) -> list[list[Chunk]]:
@@ -261,6 +271,56 @@ class AnswerEngine:
                 rrf_scores[int(index)] = rrf_scores.get(int(index), 0.0) + 1 / (RRF_K + rank)
         best = sorted(rrf_scores, key=lambda index: (-rrf_scores[index], index))[: self._settings.top_k]
         return [self._chunks[index] for index in best]
+
+
+def _translated(state: dict) -> bool:
+    """한국어 화면에 인터페이스 번역이 켜져 있나. 칸 이름은 시제품(티켓 01)을 따른다. 작업 상태 모양은 티켓 25에서 정한다."""
+    return str(state.get("language", "")).startswith("ko") and state.get("translate_interface") is True
+
+
+class _MenuMarks:
+    """답 글 속 [[Add > Mesh]] 표시를 화면 글로 바꾼다(티켓 23). 표시가 조각 사이에 갈려 와도 닫힐 때까지 모아 둔다.
+
+    names가 있으면(한국어 화면에 번역 켜짐) 단마다 "추가(Add)"처럼 한국어(영어), 영어로 보이는 단은 영어 그대로.
+    names가 없으면 표시만 떼고 영어 그대로.
+    """
+
+    def __init__(self, names: MenuNames | None):
+        self._names = names
+        self._held = ""  # 아직 내보내지 않은 글(열린 표시나, 표시의 시작일지 모르는 마지막 '[')
+
+    def feed(self, text: str) -> str:
+        """조각 하나를 받아 지금 내보낼 수 있는 글을 돌려준다."""
+        held, shown = self._held + text, []
+        while (start := held.find(MARK_OPEN)) >= 0:
+            inner = start + len(MARK_OPEN)
+            end, again = held.find(MARK_CLOSE, inner), held.find(MARK_OPEN, inner)
+            if 0 <= again and (end < 0 or again < end):  # 닫히기 전에 새 표시가 열리면 앞의 것은 표시가 아닌 글
+                shown.append(held[:again])
+                held = held[again:]
+            elif (end < 0 and len(held) - inner > MARK_LIMIT) or end - inner > MARK_LIMIT:
+                shown.append(held[:inner])  # 닫히지 않는(너무 긴) 표시에 답이 멈춰 보이지 않게 글 그대로 낸다
+                held = held[inner:]
+            elif end < 0:
+                break  # 닫힐 때까지 모은다
+            else:
+                shown += [held[:start], self._screen(held[inner:end])]
+                held = held[end + len(MARK_CLOSE) :]
+        else:
+            start = len(held) - 1 if held.endswith(MARK_OPEN[0]) else len(held)
+        self._held = held[start:]
+        return "".join(shown) + held[:start]
+
+    def finish(self) -> str:
+        """답이 끝났을 때 남은 글(닫히지 않은 표시는 글 그대로)."""
+        held, self._held = self._held, ""
+        return held
+
+    def _screen(self, path: str) -> str:
+        parts = [part.strip() for part in re.split(r"[>‣]", path)]
+        if self._names:
+            parts = [f"{korean}({part})" if (korean := self._names.korean(part)) else part for part in parts]
+        return " > ".join(parts)
 
 
 def _failure(error: Exception, results: list[Chunk]) -> Failure:
