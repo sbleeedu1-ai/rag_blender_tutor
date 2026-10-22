@@ -1,19 +1,29 @@
 # 인수인계
 
-마지막 갱신: 2026-10-22(티켓 25 뒤) · Claude · DESKTOP-J9LV5HK(강의실 PC)
+마지막 갱신: 2026-10-22(티켓 26 구현 뒤) · Claude · DESKTOP-J9LV5HK(강의실 PC)
 
 ## 다음 할 일
 
-0. 티켓 25 PR(브랜치 `tickets/25-addon-work-state`)의 main 병합 확인. 병합 뒤 브랜치를 로컬·원격 모두 지운다.
-1. 시작할 수 있는 티켓: 26(도우미 창, 25가 끝나 풀림)·29(평가 프로그램), 34(홀드아웃 봉인, 사람), 30(유료 초보자 범위 분류). 새 티켓 38(메뉴 이름 비슷한 말 표)은 needs-triage, 30 뒤.
+0. **티켓 26 사용자 눈 확인**(강의실 PC, 브랜치 `tickets/26-helper-window`). Blender를 껐다 켜고(설치는 이미 다시 돌림) 차례로 본다. 확인이 끝나면 티켓 26 마지막 칸을 채우고 PR → main 병합 확인.
+   1. Blender가 앞이면 오른쪽 아래에 도우미 창이 보이고, F10 → 바로 한글을 칠 수 있나(기록 파일의 "F10 받음 → 입력 가능 ms")
+   2. 빠르게 "안녕하세요 배열 모디파이어"를 쳐서 조합 글자가 칸 안에 보이고 빠지지 않나. Enter 한 번에 보내지나
+   3. 1.5초쯤 "생각 중…" 뒤 임시 답이 흘러나오고, 그동안 Blender 화면을 돌릴 수 있나. 근거 링크를 누르면 브라우저로 설명서가 열리나
+   4. Esc → Blender로 돌아가고 창은 그 위에 남나. 다른 프로그램을 누르면 그 뒤로, Blender를 작업 표시줄 단추로 최소화하면 숨고 다시 열면 나오나
+   5. X(마우스를 올리면 보임)로 내리면 Blender를 눌러도 숨은 채이고 F10·트레이 왼쪽 클릭으로 다시 나오나. 가장자리를 끌어 크기 조절, 작게 해도 입력칸이 보이나
+   6. 작업 표시줄·Alt+Tab에 없고 트레이(^ 안에 있으면 밖으로 꺼냄)만 있나. Blender를 모두 최소화하면 트레이 보이기가 막히고 아이콘 글이 "Blender를 먼저 열어 주세요"인가. 트레이 끝내기 뒤 F10을 누르면 다시 켜지나
+1. 시작할 수 있는 티켓: 27(창에 연습 과정 연결, 26 뒤)·28(시간 기록, 26 뒤)·29(평가 프로그램), 34(홀드아웃 봉인, 사람), 30(유료 초보자 범위 분류). 새 티켓 38(메뉴 이름 비슷한 말 표)은 needs-triage, 30 뒤.
 2. 티켓 29까지 끝나면 `/improve-codebase-architecture`로 답 엔진 나누기를 본다(HISTORY [43]).
 
 ## 지금 상태
 
 - **구조 한눈에: `STRUCTURE.md`**(사용자가 켜 두고 보는 문서, 2026-10-22 사용자 요청). 프로그램·파일·주고받는 모양이 바뀌면 같은 PR에서 고친다.
-- 애드온(티켓 25, HISTORY [44]): `addon/blender_tutor_addon/`가 작업 상태 12칸(`blender_tutor/work_state.py`의 `WorkState`)을 0.5초마다 읽어 바뀌면, F10이면 바로, 파일 열기·저장이면 사건과 함께 도우미 프로그램에 내 PC 안 HTTP(127.0.0.1:8766, 비밀 글자)로 보낸다. 받는 쪽 `blender_tutor/receiver.py`는 창 번호마다 최신 상태를 들고, 마지막 Blender가 닫히면 끝난다. 지금 받는 쪽은 창 없이 기록 파일(`%TEMP%\blender_tutor_receiver.log`)만 남긴다(창은 티켓 26).
+- 애드온(티켓 25, HISTORY [44]): `addon/blender_tutor_addon/`가 작업 상태 12칸(`blender_tutor/work_state.py`의 `WorkState`)을 0.5초마다 읽어 바뀌면, F10이면 바로, 파일 열기·저장이면 사건과 함께 도우미 프로그램에 내 PC 안 HTTP(127.0.0.1:8766, 비밀 글자)로 보낸다. 받는 쪽 `blender_tutor/receiver.py`는 창 번호마다 최신 상태를 들고, 마지막 Blender가 닫히면 끝난다.
   - 사용자가 2026-10-22 직접 확인: Blender를 켜면 도우미가 켜지고 닫으면 꺼짐, 메뉴로 한 glTF 내보내기가 `export_scene.gltf`로 잡힘.
   - 진행 관리·답 엔진은 이제 사전 대신 `WorkState`를 받는다(답 엔진의 임시 칸 이름 `language`·`translate_interface`는 그대로 확정).
+- 도우미 창(티켓 26, HISTORY [45]): 입구 `blender_tutor/helper.py`(애드온 `config.json` 명령이 `-m blender_tutor.helper`)가 받는 쪽·PySide6 위젯 창(`helper_window.py`)·답 엔진을 잇는다. 창 자리 판단은 `window_rules.py`(시험함), Windows 조작은 `winapi.py`(눈 확인), 최근 대화 3쌍은 `conversation.py`.
+  - **답은 아직 임시 엔진**(`stand_in.py`, 사용자 결정): 실제 `data/` 청크·검색 + 낱말 세기 임베딩 + 1.5초 쉬고 정해 둔 글을 흘리는 가짜 답변. 창 동작 확인용이라 답·근거의 질은 의미 없다. 티켓 31·33에서 갈아 끼운다.
+  - 기록 파일 `%TEMP%\blender_tutor_receiver.log`에 엔진 준비 시간, F10 → 입력 가능 ms, 엔진 버그 내용이 남는다.
+  - 남은 것: 사용자 눈 확인(위 "다음 할 일" 0). 그래서 티켓 Status는 `ready-for-human`.
 
 - 답 엔진(`blender_tutor/answer_engine.py`): 티켓 21에서 질문 → 임베딩 1번 → 뜻 + 낱말(BM25) 검색 RRF 상위 6개 → 답변 모델 1번 → 답 조각 + 근거 목록(HISTORY [37]).
   - 티켓 22에서 검색어와 넘기는 글을 보탰다(PR #13 main 병합, HISTORY [38]-[41]). 호출은 그대로 2번.
@@ -29,7 +39,7 @@
     - `[[[`처럼 대괄호가 겹칠 때의 처리는 지어낸 경계 사례라 지금대로 두고, 실제 모델 결과(티켓 33)를 보고 다시 본다
   - 아직 가짜 모델만 끼운다. 실제 OpenAI 연결은 유료 티켓 31(임베딩)·33(답변)에서.
   - 넘긴 것: 작업 상태 12칸 모양(25), 창의 오류 받기·엔진에 단계 넘기기(26·27), 번역을 BM25에도 넣을지·연습 과정 벡터(31), 검 파일 용어를 화면 글자로(32), 제목에서만 뽑은 이름 검수 뒤 더하기(30). 각 티켓 Comments.
-- 테스트: `.venv\Scripts\python -m pytest` 237개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 30초) 전체 통과.
+- 테스트: `.venv\Scripts\python -m pytest` 266개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 다른 PC에서 data/ 다시 만들기
@@ -55,7 +65,7 @@
 - **사용자에게 `!` 명령을 줄 때는 `/`로 쓴다**(`! .venv/Scripts/python ...`). `!`는 Git Bash라 `\`가 지워진다. 그리고 사용자가 이 창에 무엇이든 입력하면 진행 중인 작업이 끊긴다. 사용자 확인 작업은 Claude 작업과 순서를 나눈다.
 - **도우미 기록 파일에 한글이 깨져 보이면** 예전 판(UTF-8 설정 전) 줄이다. 2026-10-22 16시 뒤 줄은 UTF-8.
 
-- **부품이 늘었다(numpy, rank-bm25).** 다른 PC에서 `git pull` 뒤 `.venv\Scripts\python -m pip install -e ".[dev]"`를 다시 돌려야 답 엔진 테스트가 돈다.
+- **부품이 늘었다(numpy, rank-bm25, 티켓 26에서 PySide6-Essentials 약 219MB).** 다른 PC에서 `git pull` 뒤 `.venv\Scripts\python -m pip install -e ".[dev]"`를 다시 돌려야 테스트와 도우미 창이 돈다. 설치 명령(`install_addon`)도 다시 돌린다(애드온이 켜는 명령이 바뀜).
 - **BM25는 한국어 질문에 거의 일하지 않는다.** 영어 설명서와 겹치는 낱말이 없어서다. 그래서 티켓 22에서 영어 메뉴 이름·소제목 경로·조작 이름을 검색어에 붙였다. 실제 도움은 개발 평가에서 켬/끔(`Settings.use_bm25`)으로 견준다.
 - **`\n`이 든 글을 셸(heredoc)로 파일에 쓰면 실제 줄바꿈으로 바뀌어 문법 오류가 난다**(2026-10-22 두 번 겪음). 파이썬 코드의 `\n`은 Edit 도구로 넣는다.
 
