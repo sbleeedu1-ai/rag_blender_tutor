@@ -11,7 +11,8 @@ from pathlib import Path
 
 import yaml
 
-from blender_tutor.conditions import CONDITIONS, WorkState
+from blender_tutor.conditions import CONDITIONS
+from blender_tutor.work_state import WorkState
 
 
 @dataclass(frozen=True)

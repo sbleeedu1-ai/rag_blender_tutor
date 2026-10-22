@@ -9,15 +9,15 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from blender_tutor.conditions import WorkState
 from blender_tutor.progress import Ask, Course, Step, Withdraw, load_course
 from blender_tutor.progress_record import AskChangeCourse, AskResume, Notice, ProgressManager
+from blender_tutor.work_state import WorkState
 
 SWORD = Course("sword", "검", (Step("view", "화면 돌려 보기"), Step("blade-tip", "칼끝 모으기"), Step("join", "부품 합치기")))
 SHIELD = Course("shield", "방패", (Step("view", "화면 돌려 보기"), Step("rim", "테두리 만들기")))
 # 끝난 조건이 있어 "다음 단계로 갈까요"를 띄울 수 있는 연습 과정과 그 조건이 맞는 작업 상태.
 ASKING = Course("asking", "묻는 과정", (Step("blade-tip", "칼끝 모으기", (("방금 조작", "mesh.merge"),)), Step("join", "부품 합치기")))
-MERGED = WorkState("EDIT_MESH", ("mesh.merge",), 3, (), 1, (1.0, 1.0, 1.0), (2.0, 2.0, 2.0))
+MERGED = WorkState("EDIT_MESH", None, (), "en_US", False, "", 3, "5.2.2", {"VERT": 1}, ("mesh.merge",))
 BLEND = str(Path("C:/work/sword.blend"))
 OTHER = str(Path("C:/work/other.blend"))
 COURSES = Path(__file__).resolve().parent.parent / "courses"

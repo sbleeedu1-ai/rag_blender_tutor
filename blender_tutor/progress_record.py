@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from blender_tutor.conditions import WorkState
+from blender_tutor.work_state import WorkState
 from blender_tutor.progress import Command, Course, Progress, Step
 
 

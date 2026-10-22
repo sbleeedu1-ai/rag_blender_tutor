@@ -9,18 +9,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-
-@dataclass(frozen=True)
-class WorkState:
-    """애드온이 보낸 작업 상태 가운데 끝난 조건 판정에 쓰는 칸."""
-
-    mode: str  # Blender context.mode 값(예: OBJECT, EDIT_MESH)
-    recent_operators: tuple[str, ...]  # 방금 실행한 조작 3개, 'mesh.merge' 꼴
-    scene_object_count: int  # 장면 물체 수
-    modifiers: tuple[str, ...]  # 활성 물체의 모디파이어 종류(예: BEVEL)
-    material_slot_count: int  # 활성 물체의 재질 슬롯 수
-    scale: tuple[float, float, float]  # 활성 물체 배율
-    dimensions: tuple[float, float, float]  # 활성 물체 크기
+from blender_tutor.work_state import ActiveObject, WorkState
 
 
 @dataclass(frozen=True)
@@ -53,14 +42,19 @@ def _is_positive_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 1
 
 
-def _scale_is(value, state: WorkState, start_count: int) -> bool:
+def _of_active(rule: Callable[[object, ActiveObject], bool]) -> Callable[[object, WorkState, int], bool]:
+    """활성 물체를 보는 규칙. 활성 물체가 없으면 맞지 않는다."""
+    return lambda value, state, start_count: state.active_object is not None and rule(value, state.active_object)
+
+
+def _scale_is(value, active: ActiveObject) -> bool:
     # Blender가 계산한 소수라 0.9999999처럼 아주 작은 차이는 같다고 본다.
-    return all(math.isclose(have, want, rel_tol=1e-3, abs_tol=1e-3) for have, want in zip(state.scale, value))
+    return all(math.isclose(have, want, rel_tol=1e-3, abs_tol=1e-3) for have, want in zip(active.scale, value))
 
 
-def _size_ratio_is(value, state: WorkState, start_count: int) -> bool:
+def _size_ratio_is(value, active: ActiveObject) -> bool:
     # 치수는 절대 숫자가 아니라 비율로만 본다: 가장 긴 축 ≥ 두 번째로 긴 축 × n.
-    longest, second, _ = sorted(state.dimensions, reverse=True)
+    longest, second, _ = sorted(active.dimensions, reverse=True)
     return longest > 0 and longest >= second * value
 
 
@@ -84,22 +78,22 @@ CONDITIONS: dict[str, ConditionKind] = {
     "모디파이어": ConditionKind(
         lambda v: isinstance(v, str) and bool(MODIFIER.fullmatch(v)),
         "모디파이어 종류 이름입니다(예: BEVEL).",
-        lambda v, state, start_count: v in state.modifiers,
+        _of_active(lambda v, active: v in active.modifiers),
     ),
     "재질 슬롯 수": ConditionKind(
         _is_positive_int,
         "1 이상의 정수입니다.",
         # 칸을 더 만든 사용자도 놓치지 않게 '이상'으로 본다(잘못 물어도 손해는 거절 한 번).
-        lambda v, state, start_count: state.material_slot_count >= v,
+        _of_active(lambda v, active: active.material_slot_count >= v),
     ),
     "배율": ConditionKind(
         lambda v: isinstance(v, list) and len(v) == 3 and all(map(_is_number, v)),
         "숫자 셋입니다(예: [1, 1, 1]).",
-        _scale_is,
+        _of_active(_scale_is),
     ),
     "크기 비율": ConditionKind(
         lambda v: _is_number(v) and v >= 1,
         "1 이상의 숫자입니다(가장 긴 축이 두 번째 축의 몇 배 이상인가).",
-        _size_ratio_is,
+        _of_active(_size_ratio_is),
     ),
 }
