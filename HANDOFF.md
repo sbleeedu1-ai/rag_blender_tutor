@@ -1,13 +1,19 @@
 # 인수인계
 
-마지막 갱신: 2026-10-22(티켓 23 뒤, 답 엔진 나누기 시점) · Claude · DESKTOP-J9LV5HK(강의실 PC)
+마지막 갱신: 2026-10-22(티켓 25 뒤) · Claude · DESKTOP-J9LV5HK(강의실 PC)
 
 ## 다음 할 일
 
-1. 시작할 수 있는 티켓: 25(애드온)·29(평가 프로그램), 34(홀드아웃 봉인, 사람), 30(유료 초보자 범위 분류). 새 티켓 38(메뉴 이름 비슷한 말 표)은 needs-triage, 30 뒤. 티켓 23은 PR #14로, 24는 앞서 main에 병합됨.
+0. 티켓 25 PR(브랜치 `tickets/25-addon-work-state`)의 main 병합 확인. 병합 뒤 브랜치를 로컬·원격 모두 지운다.
+1. 시작할 수 있는 티켓: 26(도우미 창, 25가 끝나 풀림)·29(평가 프로그램), 34(홀드아웃 봉인, 사람), 30(유료 초보자 범위 분류). 새 티켓 38(메뉴 이름 비슷한 말 표)은 needs-triage, 30 뒤.
 2. 티켓 29까지 끝나면 `/improve-codebase-architecture`로 답 엔진 나누기를 본다(HISTORY [43]).
 
 ## 지금 상태
+
+- **구조 한눈에: `STRUCTURE.md`**(사용자가 켜 두고 보는 문서, 2026-10-22 사용자 요청). 프로그램·파일·주고받는 모양이 바뀌면 같은 PR에서 고친다.
+- 애드온(티켓 25, HISTORY [44]): `addon/blender_tutor_addon/`가 작업 상태 12칸(`blender_tutor/work_state.py`의 `WorkState`)을 0.5초마다 읽어 바뀌면, F10이면 바로, 파일 열기·저장이면 사건과 함께 도우미 프로그램에 내 PC 안 HTTP(127.0.0.1:8766, 비밀 글자)로 보낸다. 받는 쪽 `blender_tutor/receiver.py`는 창 번호마다 최신 상태를 들고, 마지막 Blender가 닫히면 끝난다. 지금 받는 쪽은 창 없이 기록 파일(`%TEMP%\blender_tutor_receiver.log`)만 남긴다(창은 티켓 26).
+  - 사용자가 2026-10-22 직접 확인: Blender를 켜면 도우미가 켜지고 닫으면 꺼짐, 메뉴로 한 glTF 내보내기가 `export_scene.gltf`로 잡힘.
+  - 진행 관리·답 엔진은 이제 사전 대신 `WorkState`를 받는다(답 엔진의 임시 칸 이름 `language`·`translate_interface`는 그대로 확정).
 
 - 답 엔진(`blender_tutor/answer_engine.py`): 티켓 21에서 질문 → 임베딩 1번 → 뜻 + 낱말(BM25) 검색 RRF 상위 6개 → 답변 모델 1번 → 답 조각 + 근거 목록(HISTORY [37]).
   - 티켓 22에서 검색어와 넘기는 글을 보탰다(PR #13 main 병합, HISTORY [38]-[41]). 호출은 그대로 2번.
@@ -23,7 +29,7 @@
     - `[[[`처럼 대괄호가 겹칠 때의 처리는 지어낸 경계 사례라 지금대로 두고, 실제 모델 결과(티켓 33)를 보고 다시 본다
   - 아직 가짜 모델만 끼운다. 실제 OpenAI 연결은 유료 티켓 31(임베딩)·33(답변)에서.
   - 넘긴 것: 작업 상태 12칸 모양(25), 창의 오류 받기·엔진에 단계 넘기기(26·27), 번역을 BM25에도 넣을지·연습 과정 벡터(31), 검 파일 용어를 화면 글자로(32), 제목에서만 뽑은 이름 검수 뒤 더하기(30). 각 티켓 Comments.
-- 테스트: `.venv\Scripts\python -m pytest` 210개 통과(`data/`가 없으면 1개 건너뜀).
+- 테스트: `.venv\Scripts\python -m pytest` 237개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 30초) 전체 통과.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 다른 PC에서 data/ 다시 만들기
@@ -44,6 +50,10 @@
 - `data\강사님의 기준.txt`는 다시 만들 수 없으니 드라이브에도 따로 둔다.
 
 ## 모르면 실수할 것
+
+- **애드온은 설치 명령으로 Blender 폴더에 복사된 것이 돈다.** 애드온 코드를 고치면 `.venv\Scripts\python -m blender_tutor.install_addon`을 다시 돌리고 Blender를 다시 켠다. 다른 PC에서는 처음 한 번 설치 + Blender 환경 설정 > 애드온에서 "Blender 첫걸음 도우미" 켜기.
+- **사용자에게 `!` 명령을 줄 때는 `/`로 쓴다**(`! .venv/Scripts/python ...`). `!`는 Git Bash라 `\`가 지워진다. 그리고 사용자가 이 창에 무엇이든 입력하면 진행 중인 작업이 끊긴다. 사용자 확인 작업은 Claude 작업과 순서를 나눈다.
+- **도우미 기록 파일에 한글이 깨져 보이면** 예전 판(UTF-8 설정 전) 줄이다. 2026-10-22 16시 뒤 줄은 UTF-8.
 
 - **부품이 늘었다(numpy, rank-bm25).** 다른 PC에서 `git pull` 뒤 `.venv\Scripts\python -m pip install -e ".[dev]"`를 다시 돌려야 답 엔진 테스트가 돈다.
 - **BM25는 한국어 질문에 거의 일하지 않는다.** 영어 설명서와 겹치는 낱말이 없어서다. 그래서 티켓 22에서 영어 메뉴 이름·소제목 경로·조작 이름을 검색어에 붙였다. 실제 도움은 개발 평가에서 켬/끔(`Settings.use_bm25`)으로 견준다.
