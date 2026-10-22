@@ -37,7 +37,7 @@ def install(addons_dir: Path, python: Path) -> Path:
     token = json.loads(config_path.read_text(encoding="utf-8"))["token"] if config_path.exists() else secrets.token_hex(32)
     shutil.copytree(SOURCE, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", "config.json"))
     config = {
-        "command": [str(python), "-m", "blender_tutor.receiver"],
+        "command": [str(python), "-m", "blender_tutor.helper"],
         "cwd": str(PROJECT),
         "port": PORT,
         "token": token,
@@ -55,6 +55,8 @@ def main() -> int:
     target = install(args.addons_dir or default_addons_dir(), pythonw if pythonw.exists() else Path(sys.executable))
     print(f"설치했습니다: {target}")
     print("Blender 5.2를 켜고 편집 > 환경 설정 > 애드온에서 'Blender 첫걸음 도우미'를 켜 주세요(처음 한 번만).")
+    # Windows 11은 새 트레이 아이콘을 숨김 영역(^)에 넣고, 꺼내는 일은 사용자만 할 수 있다(조사 문서)
+    print("도우미가 켜지면 작업 표시줄 오른쪽 ^ 안의 도우미 아이콘(파란 동그라미)을 ^ 밖으로 끌어 꺼내 두세요.")
     return 0
 
 
