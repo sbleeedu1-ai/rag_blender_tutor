@@ -87,6 +87,7 @@
 | 시험 | `tests/` | 기본 테스트(API 키·Blender 없이) | 각 티켓 |
 | 시험 | `addon/selftest.py` | Blender를 화면 없이 띄워 애드온을 확인(기본 테스트 밖) | 25 |
 | 저장소 | `menu_choices.json` | 번역이 여러 개인 메뉴 이름의 고정 짝(지금은 비어 있음) | 23 |
+| 프로젝트 설정 | `pyproject.toml` | 프로젝트 신분증 겸 설정(TOML 형식): 필요한 파이썬(3.12 이상), 부품 목록(PyYAML·beautifulsoup4·numpy·rank-bm25, 개발용 pytest), 설치할 폴더(`blender_tutor`), 테스트 설정. `pip install -e ".[dev]"`·pytest·GitHub 자동 테스트가 읽는다. 부품을 더하면 다른 PC에서 설치 명령을 다시 돌린다. `addon/`은 여기 없다(설치 명령이 Blender 폴더에 복사) | 15 |
 
 `data/`는 커밋하지 않는다(설명서 원문·번역). 다시 만드는 법은 `HANDOFF.md`.
 
