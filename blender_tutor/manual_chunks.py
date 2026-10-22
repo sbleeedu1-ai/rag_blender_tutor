@@ -86,6 +86,11 @@ class Chunk:
         return " > ".join((self.page_title, *self.headings))
 
     @property
+    def parent(self) -> tuple[str, tuple[str, ...]] | None:
+        """같은 부모를 가르는 열쇠(쪽, 바로 위 소제목까지의 경로). 쪽 첫머리 글이면 부모가 없다."""
+        return (self.page_path, self.headings[:-1]) if self.headings else None
+
+    @property
     def has_image(self) -> bool:
         """그림 있음: 글 속 그림이나 뒤따르는 그림 예시."""
         return bool(self.images) or any(example.kind == MediaKind.IMAGE for example in self.examples)

@@ -21,7 +21,7 @@ from blender_tutor.progress import Course, Step
 RRF_K = 60  # RRF 합치기 상수. 순위 r인 청크는 1 / (RRF_K + r)점을 받는다(널리 쓰는 값)
 RRF_DEPTH = 50  # 뜻 검색·낱말 검색 각각 상위 몇 개까지 합치기에 넣나
 SIMILAR_COURSES = 3  # 연습 과정을 진행하지 않을 때 붙이는 비슷한 연습 과정 수
-SHORT_WORDS = 50  # 찾은 청크 본문이 이보다 짧으면 형제 소제목을 MAX_WORDS(400)까지 함께 넘긴다(명세 "검색")
+SHORT_WORDS = 50  # 찾은 청크 본문이 이보다 짧으면 형제 소제목을 MAX_WORDS(청크 나누는 기준과 같은 값)까지 함께 넘긴다(명세 "검색")
 
 TIMEOUT_MESSAGE = "답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
 ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물어봐 주세요."
@@ -122,15 +122,17 @@ class AnswerEngine:
         self._chunks = list(chunks)
         self._menu_names = menu_names
         self._courses = list(courses)
+        if len(course_vectors) != len(self._courses):  # 엉뚱한 연습 과정을 권하지 않게 바로 멈춘다(설정 버그)
+            raise ValueError(f"연습 과정 {len(self._courses)}개, 벡터 {len(course_vectors)}개로 수가 다름")
         self._course_vectors = _normalized(np.asarray(course_vectors, dtype=np.float32)) if self._courses else None
         self._by_address: dict[str, list[Chunk]] = {}  # 먼저 볼 소제목 주소 → 그 소제목 청크들(나눈 조각 모두)
         self._position: dict[Chunk, int] = {}  # 청크 → 저장 차례(= 설명서 차례)
-        self._families: dict[tuple[str, tuple[str, ...]], list[int]] = {}  # (쪽, 부모 소제목 경로) → 자식 청크 차례들
+        self._families: dict[tuple[str, tuple[str, ...]], list[int]] = {}  # Chunk.parent → 자식 청크 차례들
         for index, chunk in enumerate(self._chunks):
             self._by_address.setdefault(chunk.address, []).append(chunk)
             self._position[chunk] = index
-            if chunk.headings:
-                self._families.setdefault((chunk.page_path, chunk.headings[:-1]), []).append(index)
+            if chunk.parent:
+                self._families.setdefault(chunk.parent, []).append(index)
         self._vectors = _normalized(np.asarray(vectors, dtype=np.float32))
         self._bm25 = BM25Okapi([_words(chunk.text) for chunk in self._chunks])
         self._embedder = embedder
@@ -173,9 +175,9 @@ class AnswerEngine:
             if chunk in used:
                 continue
             group = [chunk]
-            if chunk.words < SHORT_WORDS and chunk.headings:
+            if chunk.words < SHORT_WORDS and chunk.parent:
                 here = self._position[chunk]
-                family = self._families[(chunk.page_path, chunk.headings[:-1])]
+                family = self._families[chunk.parent]
                 siblings = [i for i in family if self._chunks[i].headings != chunk.headings]
                 total = chunk.words
                 for index in sorted(siblings, key=lambda i: abs(i - here)):

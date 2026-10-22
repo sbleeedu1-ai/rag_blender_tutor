@@ -346,6 +346,11 @@ def test_연습_과정을_진행하지_않을_때만_비슷한_연습_과정_3�
     assert "가장 가까운 건" in sent  # 딱 맞는 게 없을 때 말할 꼴
 
 
+def test_연습_과정과_벡터_수가_다르면_만들_때_멈춘다():
+    with pytest.raises(ValueError):
+        AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(), courses=COURSES, course_vectors=COURSE_VECTORS[:3])
+
+
 def test_연습_과정을_진행_중이면_비슷한_연습_과정을_붙이지_않는다():
     sent = ask_with_courses(Step("blade-tip", "칼끝 모으기"))
     assert "# 비슷한 연습 과정" not in sent and "단순한 검" not in sent
