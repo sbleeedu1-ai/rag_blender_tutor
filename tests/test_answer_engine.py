@@ -52,20 +52,21 @@ ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물�
 
 
 class FakeEmbedder:
-    """어떤 질문이든 정해 둔 벡터 하나를 돌려준다. 받은 글과 시간 한도를 적어 둔다."""
+    """받은 글마다 정해 둔 벡터를 돌려준다(by_text에 있으면 그것, 없으면 vector). 부를 때마다 받은 글 목록과 시간 한도를 적어 둔다."""
 
-    def __init__(self, vector=TOWARD_BEVEL, error: Exception | None = None):
+    def __init__(self, vector=TOWARD_BEVEL, error: Exception | None = None, by_text: dict | None = None):
         self.vector = vector
         self.error = error
-        self.calls: list[str] = []
+        self.by_text = by_text or {}
+        self.calls: list[list[str]] = []
         self.timeouts: list[float] = []
 
-    def embed(self, text: str, timeout: float) -> list[float]:
-        self.calls.append(text)
+    def embed(self, texts: list[str], timeout: float) -> list[list[float]]:
+        self.calls.append(list(texts))
         self.timeouts.append(timeout)
         if self.error:
             raise self.error
-        return self.vector
+        return [self.by_text.get(text, self.vector) for text in texts]
 
 
 class FakeModel:
@@ -201,14 +202,14 @@ def test_검색어에_직전_질문_단계_이름_먼저_볼_소제목_경로_�
     state = {**STATE, "recent_operators": ["object.modifier_add", "object.select_all"]}
     ask("그다음은요?", embedder=embedder, recent=[("베벨은 어디 있어요?", "Modifiers 탭에서 더해요.")], state=state, step=step)
     assert embedder.calls == [
-        "그다음은요?\n베벨은 어디 있어요?\n모서리 둥글게 깎기\nBevel Modifier > Options\nobject.modifier_add object.select_all"
+        ["그다음은요?\n베벨은 어디 있어요?\n모서리 둥글게 깎기\nBevel Modifier > Options\nobject.modifier_add object.select_all"]
     ]
 
 
 def test_붙일_것이_없으면_검색어는_질문_그대로():
     embedder = FakeEmbedder()
     ask("베벨", embedder=embedder)
-    assert embedder.calls == ["베벨"]
+    assert embedder.calls == [["베벨"]]
 
 
 def _name(english: str, korean: str, source: MenuSource = MenuSource.UI) -> MenuName:
@@ -240,14 +241,14 @@ def test_질문_속_한국어_메뉴_이름에_영어를_덧붙인다(question, 
     embedder = FakeEmbedder()
     engine = AnswerEngine(CHUNKS, VECTORS, embedder, FakeModel(), menu_names=MENU_NAMES)
     list(engine.answer(question, STATE, []))
-    assert embedder.calls == [f"{question} {english}".strip()]
+    assert embedder.calls == [[f"{question} {english}".strip()]]
 
 
 def test_제목에서만_뽑은_이름은_아직_쓰지_않는다():
     # 검수 전(제목에서만 뽑은 1,055개)이라 흔한 낱말(에서 → At)이 섞인다. 검수는 초보자 범위 분류(티켓 30) 뒤
     embedder = FakeEmbedder()
     list(AnswerEngine(CHUNKS, VECTORS, embedder, FakeModel(), menu_names=MENU_NAMES).answer("여기에서", STATE, []))
-    assert embedder.calls == ["여기에서"]
+    assert embedder.calls == [["여기에서"]]
 
 
 def test_붙인_검색어로_낱말_검색도_한다():
@@ -355,11 +356,44 @@ COURSES = [SWORD, SHIELD, POTION, CHEST]
 COURSE_VECTORS = [[1.0, 0.0, 0.0], [0.6, 0.4, 0.0], [0.0, 0.0, 1.0], [0.3, 0.7, 0.0]]
 
 
-def ask_with_courses(step=None) -> str:
+def ask_with_courses(step=None, embedder=None, recent=()) -> str:
     model = FakeModel()
-    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(TOWARD_BEVEL), model, courses=COURSES, course_vectors=COURSE_VECTORS)
-    list(engine.answer("칼을 만들고 싶어요", STATE, [], step))
+    engine = AnswerEngine(
+        CHUNKS, VECTORS, embedder or FakeEmbedder(TOWARD_BEVEL), model, courses=COURSES, course_vectors=COURSE_VECTORS
+    )
+    list(engine.answer("칼을 만들고 싶어요", STATE, list(recent), step))
     return model.calls[0][-1]["content"]
+
+
+def test_비슷한_연습_과정은_덧붙인_검색어가_아니라_질문만으로_고르고_임베딩은_한_번에_부른다():
+    # 직전 질문(내보내기)이 붙은 검색어로 고르면 물약 병 쪽으로 끌린다. 질문만의 벡터를 같은 호출에서 함께 받는다
+    question, query = "칼을 만들고 싶어요", "칼을 만들고 싶어요\nglb로 내보내려면?"
+    embedder = FakeEmbedder([0.0, 0.0, 1.0], by_text={question: [1.0, 0.0, 0.0]})
+    sent = ask_with_courses(embedder=embedder, recent=[("glb로 내보내려면?", "File > Export에서 골라요.")])
+    assert embedder.calls == [[query, question]]  # 검색어 먼저, 질문만은 둘째. 호출은 한 번
+    assert sent.index("- 단순한 검") < sent.index("- 둥근 방패") and "물약 병" not in sent
+
+
+def test_덧붙인_것이_없어_검색어가_질문과_같으면_글을_하나만_보낸다():
+    embedder = FakeEmbedder(TOWARD_BEVEL)
+    ask_with_courses(embedder=embedder)
+    assert embedder.calls == [["칼을 만들고 싶어요"]]
+
+
+def test_임베딩이_글_수와_다른_개수의_벡터를_주면_잘못된_응답으로_보고_오류_표시():
+    class OneShort(FakeEmbedder):
+        def embed(self, texts, timeout):
+            return super().embed(texts, timeout)[:-1]
+
+    model = FakeModel()
+    assert ask(embedder=OneShort(), model=model) == [Failure(ERROR_MESSAGE)]
+    assert model.calls == []
+
+
+def test_연습_과정을_진행_중이면_질문만의_벡터를_받지_않는다():
+    embedder = FakeEmbedder(TOWARD_BEVEL)
+    ask_with_courses(Step("blade-tip", "칼끝 모으기"), embedder=embedder)
+    assert embedder.calls == [["칼을 만들고 싶어요\n칼끝 모으기"]]
 
 
 def test_연습_과정을_진행하지_않을_때만_비슷한_연습_과정_3개를_가까운_차례로_붙인다():

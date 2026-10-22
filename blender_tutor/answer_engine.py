@@ -41,9 +41,9 @@ SIMILAR_NOTE = (
 
 
 class Embedder(Protocol):
-    """글 하나를 벡터로 바꾼다. timeout초 동안 응답이 없으면 TimeoutError를 낸다."""
+    """글 여러 개를 한 번의 호출로 벡터로 바꾼다(글 차례대로). timeout초 동안 응답이 없으면 TimeoutError를 낸다."""
 
-    def embed(self, text: str, timeout: float) -> Sequence[float]: ...
+    def embed(self, texts: Sequence[str], timeout: float) -> Sequence[Sequence[float]]: ...
 
 
 class AnswerModel(Protocol):
@@ -146,20 +146,26 @@ class AnswerEngine:
         """질문에 답한다. state는 애드온이 보낸 작업 상태 JSON, recent는 최근 대화 (질문, 답) 쌍 목록,
         step은 진행 중인 연습 과정의 지금 단계(연습 과정을 진행하지 않으면 None)."""
         query = self._query(question, state, recent, step)
+        # 비슷한 연습 과정은 덧붙인 검색어(직전 질문·조작에 끌림)가 아니라 질문만으로 고른다.
+        # 질문만의 벡터는 따로 부르지 않고 같은 호출에 글을 하나 더 실어 받는다(호출 2번 유지, 비용은 질문 길이만큼 늚)
+        recommend = step is None and bool(self._courses)
+        texts = [query, question] if recommend and question != query else [query]
         # 바깥 서비스(임베딩·답변 모델)를 부르는 두 곳만 오류 표시로 바꾼다.
         # 검색·글 만들기 같은 우리 코드의 오류는 그대로 올려 보내 버그가 "잠시 뒤 다시"에 숨지 않게 한다
         try:
-            vector = self._embedder.embed(query, self._settings.timeout)
-            if not np.any(vector):  # 모두 0이면 뜻 점수가 다 같아 청크 저장 순서가 그대로 순위가 된다. 잘못된 응답으로 본다
+            vectors = self._embedder.embed(texts, self._settings.timeout)
+            if len(vectors) != len(texts):
+                raise ValueError(f"임베딩이 글 {len(texts)}개에 벡터 {len(vectors)}개를 돌려줌")
+            if not all(np.any(vector) for vector in vectors):  # 모두 0이면 뜻 점수가 다 같아 저장 순서가 그대로 순위가 된다
                 raise ValueError("임베딩이 모두 0인 벡터를 돌려줌")
         except Exception as error:
             yield _failure(error, [])
             return
-        results = self._search(query, vector)
+        results = self._search(query, vectors[0])
         # 먼저 볼 소제목은 검색 상위를 대신하지 않고 그 위에 덧붙인다. 검색에도 걸렸으면 한 번만
         preview = self._preview(step)
         sent = list(dict.fromkeys(preview + results))
-        similar = self._similar_courses(vector) if step is None else []
+        similar = self._similar_courses(vectors[-1]) if recommend else []
         messages = _messages(question, state, recent, self._widened(sent, preview), similar, step)
         try:
             for text in self._model.stream(messages, self._settings.timeout):
@@ -213,9 +219,7 @@ class AnswerEngine:
         return [self._chunks[i] for i in sorted(family, key=lambda i: abs(i - here))]
 
     def _similar_courses(self, vector: Sequence[float]) -> list[Course]:
-        """검색에 쓴 질문 벡터를 그대로 다시 써서(추가 호출 없음) 가까운 연습 과정 SIMILAR_COURSES개."""
-        if not self._courses:
-            return []
+        """질문 벡터와 가까운 연습 과정 SIMILAR_COURSES개."""
         scores = self._course_vectors @ _normalized(np.asarray(vector, dtype=np.float32))
         return [self._courses[index] for index in np.argsort(-scores, kind="stable")[:SIMILAR_COURSES]]
 
