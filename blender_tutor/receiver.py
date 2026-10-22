@@ -13,6 +13,7 @@ import ctypes
 import json
 import logging
 import os
+import secrets
 import sys
 import threading
 import time
@@ -63,16 +64,26 @@ class Message:
         return cls(window, pid, WorkState.from_json(data["state"]), summon, event)
 
 
-def process_alive(pid: int) -> bool:
-    """그 프로세스가 아직 켜져 있나(Windows 전용. 맥을 붙일 때는 이 함수만 바꾼다)."""
+def process_started(pid: int) -> int | None:
+    """그 프로세스가 켜진 시각(Windows 시각 값). 꺼져 있으면 None(Windows 전용. 맥을 붙일 때는 이 함수만 바꾼다).
+
+    Windows는 꺼진 프로세스의 번호를 다른 프로그램에 다시 주므로, 번호만 보면 닫힌 Blender를 켜져 있다고 볼 수 있다.
+    켜진 시각까지 같아야 같은 프로그램으로 본다.
+    관리자로 켠 Blender처럼 열어 볼 수 없는 프로세스는 시각을 모르므로 0을 돌려준다(켜져 있다고 봄).
+    """
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.OpenProcess.restype = ctypes.c_void_p
     handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
     if not handle:
-        return ctypes.get_last_error() == 5  # 접근 거부(관리자로 켠 Blender 등)는 켜져 있다는 뜻
+        return 0 if ctypes.get_last_error() == 5 else None  # 5: 접근 거부(있기는 함)
     try:
         code = ctypes.c_ulong()
-        return bool(kernel32.GetExitCodeProcess(ctypes.c_void_p(handle), ctypes.byref(code))) and code.value == 259  # STILL_ACTIVE
+        if not kernel32.GetExitCodeProcess(ctypes.c_void_p(handle), ctypes.byref(code)) or code.value != 259:  # STILL_ACTIVE
+            return None
+        created, exited, kernel, user = (ctypes.c_ulonglong() for _ in range(4))
+        if not kernel32.GetProcessTimes(ctypes.c_void_p(handle), *map(ctypes.byref, (created, exited, kernel, user))):
+            return None
+        return created.value
     finally:
         kernel32.CloseHandle(ctypes.c_void_p(handle))
 
@@ -87,15 +98,16 @@ class Receiver:
         self,
         token: str,
         listener: Callable[[Message], None] = lambda message: None,
-        is_alive: Callable[[int], bool] = process_alive,
+        process_started: Callable[[int], object] = process_started,
         port: int = PORT,
     ):
         """port=0이면 비어 있는 번호를 아무거나 쓴다(테스트용). 번호를 이미 누가 쓰면 OSError."""
         self._token = token
         self._listener = listener
-        self._is_alive = is_alive
+        self._process_started = process_started
         self._lock = threading.Lock()
         self._latest: dict[int, tuple[int, WorkState]] = {}  # 창 번호 → (프로세스 번호, 최신 작업 상태)
+        self._started: dict[int, object] = {}  # 프로세스 번호 → 처음 받았을 때 그 프로세스가 켜진 시각
         self._heard = False  # Blender가 한 번이라도 보냈나
         self._server = HTTPServer(("127.0.0.1", port), self._handler())
         # 끌 때 기다리는 시간(기본 0.5초)을 줄인다
@@ -120,13 +132,17 @@ class Receiver:
         return entry[1] if entry else None
 
     def forget_closed(self) -> None:
-        """닫힌 Blender의 상태를 버린다."""
+        """닫힌 Blender의 상태를 버린다. 켜진 시각이 처음과 다르면(번호가 다른 프로그램에 다시 쓰임) 닫힌 것으로 본다."""
         with self._lock:
             entries = list(self._latest.items())
-        closed = [window for window, (pid, _) in entries if not self._is_alive(pid)]
+            started = dict(self._started)
+        closed_pids = {pid for _, (pid, _) in entries if started.get(pid) is None or self._process_started(pid) != started[pid]}
         with self._lock:
-            for window in closed:
-                self._latest.pop(window, None)
+            for window, (pid, _) in entries:
+                if pid in closed_pids:
+                    self._latest.pop(window, None)
+            for pid in closed_pids:
+                self._started.pop(pid, None)
 
     def run_until_no_blender(self, check_every: float = 1.0, grace: float = 30.0) -> None:
         """check_every초마다 닫힌 Blender를 버리고, 켜진 Blender가 하나도 없으면 돌아온다.
@@ -143,7 +159,10 @@ class Receiver:
                 return
 
     def _receive(self, message: Message) -> None:
+        started = None if message.pid in self._started else self._process_started(message.pid)
         with self._lock:
+            if started is not None:
+                self._started.setdefault(message.pid, started)
             self._latest[message.window] = (message.pid, message.state)
             self._heard = True
         self._listener(message)
@@ -166,7 +185,10 @@ class Receiver:
                 if self.path != "/state":
                     return self._reply(404, {"error": "없는 주소"})
                 try:
-                    body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                    length = int(self.headers.get("Content-Length", 0))
+                    if length < 0:  # 음수면 연결이 끊길 때까지 읽으려다 다른 Blender의 상태까지 붙잡는다
+                        raise ValueError("내용 길이가 음수")
+                    body = self.rfile.read(length)
                     message = Message.from_json(json.loads(body.decode("utf-8")))
                 except (ValueError, UnicodeDecodeError) as error:  # json 오류도 ValueError
                     log.warning("모양이 틀린 작업 상태: %s", error)
@@ -175,7 +197,8 @@ class Receiver:
                 self._reply(200, {})
 
             def _allowed(self) -> bool:
-                if self.headers.get(TOKEN_HEADER) == receiver._token:
+                # 맞든 틀리든 같은 시간이 걸리게 비교한다(앞 글자부터 맞혀 가는 시간 재기 공격 막기)
+                if secrets.compare_digest(self.headers.get(TOKEN_HEADER, "").encode(), receiver._token.encode()):
                     return True
                 self._reply(403, {"error": "비밀 글자가 틀림"})
                 return False

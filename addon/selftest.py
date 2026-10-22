@@ -27,6 +27,7 @@ if "bpy" not in sys.modules:  # 1) 보통 파이썬: 임시 폴더에 설치하�
 
     sys.path.insert(0, str(PROJECT))
     from blender_tutor.install_addon import ADDON_NAME, install
+    from blender_tutor.receiver import TOKEN_HEADER
 
     blender = os.environ.get("BLENDER", r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe")
     with tempfile.TemporaryDirectory() as scripts:
@@ -40,7 +41,7 @@ if "bpy" not in sys.modules:  # 1) 보통 파이썬: 임시 폴더에 설치하�
 
         # Blender가 닫혔으니 도우미 프로그램도 몇 초 안에 끝나야 한다
         def answering() -> bool:
-            request = urllib.request.Request(f"http://127.0.0.1:{TEST_PORT}/ping", headers={"X-Tutor-Token": config["token"]})
+            request = urllib.request.Request(f"http://127.0.0.1:{TEST_PORT}/ping", headers={TOKEN_HEADER: config["token"]})
             try:
                 urllib.request.urlopen(request, timeout=1).read()
                 return True
@@ -170,6 +171,12 @@ check("도우미 프로그램 켜기", real_sender.launch(), f"{time.perf_counte
 started = time.perf_counter()
 check("이미 켜져 있으면 그것을 씀", real_sender.launch() and time.perf_counter() - started < 1, f"{time.perf_counter() - started:.2f}초")
 check("보내기", real_sender._post(addon._payload(addon.read_state(bpy.context, []), summon=True)))
+# 비밀 글자가 다른 애드온(예: 다시 설치하기 전 것)은 켜진 도우미를 '다른 도우미'로 보고, 새로 켜지 않고 바로 알린다
+stranger = addon.Sender({**json.loads(addon.CONFIG.read_text(encoding="utf-8")), "token": "other-token"})
+started = time.perf_counter()
+check("다른 도우미가 자리를 쓰면 켜지 않고 알림", stranger.answer() == "other" and not stranger.launch() and addon._notice,
+      f"{time.perf_counter() - started:.2f}초")
+stranger.stop()
 
 addon_utils.disable(os.environ["TUTOR_ADDON"])
 print("Blender 안:", "통과" if ok else "실패")

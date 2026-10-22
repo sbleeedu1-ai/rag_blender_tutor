@@ -3,27 +3,7 @@
 import pytest
 
 from blender_tutor.work_state import ActiveObject, WorkState
-
-# 애드온이 편집 모드에서 보내는 JSON(손으로 쓴 예)
-EDITING = {
-    "mode": "EDIT_MESH",
-    "active_object": {
-        "name": "실린더",
-        "type": "MESH",
-        "modifiers": ["BEVEL"],
-        "scale": [1.0, 1.0, 2.0],
-        "dimensions": [2.0, 2.0, 4.0],
-        "material_slot_count": 1,
-    },
-    "selected_objects": ["실린더", "Cube"],
-    "language": "ko_KR",
-    "translate_interface": True,
-    "file_path": "C:/work/sword.blend",
-    "scene_object_count": 3,
-    "blender_version": "5.2.2",
-    "edit_selected": {"VERT": 4},
-    "recent_operators": ["mesh.select_all", "mesh.merge"],
-}
+from tests.examples import EDITING
 
 
 def test_애드온이_보낸_JSON을_읽는다():

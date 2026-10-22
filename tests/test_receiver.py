@@ -1,9 +1,10 @@
 """받는 쪽(도우미 프로그램이 애드온의 작업 상태를 받는 곳).
 
 애드온인 척 내 PC 안 HTTP로 보내고, 창 번호별 최신 상태·건네받은 알림·끝나는 때를 본다.
-"Blender가 아직 켜져 있나"는 가짜(살아 있는 프로세스 번호 집합)로 바꿔 끼운다.
+"Blender가 아직 켜져 있나"는 가짜(프로세스 번호 → 켜진 시각)로 바꿔 끼운다.
 """
 
+import http.client
 import json
 import threading
 import urllib.error
@@ -11,9 +12,9 @@ import urllib.request
 
 import pytest
 
-from blender_tutor.receiver import FileEvent, Message, Receiver
+from blender_tutor.receiver import TOKEN_HEADER, FileEvent, Message, Receiver
 from blender_tutor.work_state import WorkState
-from tests.test_work_state import EDITING
+from tests.examples import EDITING
 
 TOKEN = "test-token"
 OBJECT_MODE = {**EDITING, "mode": "OBJECT", "edit_selected": {}}
@@ -21,7 +22,7 @@ OBJECT_MODE = {**EDITING, "mode": "OBJECT", "edit_selected": {}}
 
 @pytest.fixture
 def alive():
-    return {100, 200}  # 켜져 있는 Blender 프로세스 번호
+    return {100: 1.0, 200: 2.0}  # 켜져 있는 Blender 프로세스 번호 → 켜진 시각
 
 
 @pytest.fixture
@@ -31,7 +32,7 @@ def received():
 
 @pytest.fixture
 def receiver(alive, received):
-    with Receiver(TOKEN, received.append, is_alive=lambda pid: pid in alive, port=0) as receiver:
+    with Receiver(TOKEN, received.append, process_started=alive.get, port=0) as receiver:
         yield receiver
 
 
@@ -42,7 +43,7 @@ def send(receiver, window, pid, state=EDITING, *, summon=False, event=None, toke
     request = urllib.request.Request(
         f"http://127.0.0.1:{receiver.port}{path}",
         data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json", "X-Tutor-Token": token},
+        headers={"Content-Type": "application/json", TOKEN_HEADER: token},
     )
     try:
         with urllib.request.urlopen(request, timeout=5) as response:
@@ -73,10 +74,17 @@ def test_받은_것을_부르기와_파일_사건과_함께_건넨다(receiver, 
 def test_닫힌_Blender의_상태는_버린다(receiver, alive):
     send(receiver, 1, 100)
     send(receiver, 2, 200)
-    alive.discard(100)
+    del alive[100]
     receiver.forget_closed()
     assert receiver.latest(1) is None
     assert receiver.latest(2) is not None
+
+
+def test_프로세스_번호가_다른_프로그램에_다시_쓰이면_닫힌_것으로_본다(receiver, alive):
+    send(receiver, 1, 100)
+    alive[100] = 9.0  # Blender가 닫히고 같은 번호를 받은 다른 프로그램(켜진 시각이 다름)
+    receiver.forget_closed()
+    assert receiver.latest(1) is None
 
 
 def test_마지막_Blender가_닫히면_끝난다(receiver, alive):
@@ -115,7 +123,16 @@ def test_모양이_틀린_것은_받지_않는다(receiver, received, body):
     assert receiver.latest(1) is None and received == []
 
 
+def test_내용_길이가_음수면_기다리지_않고_돌려보낸다(receiver):
+    connection = http.client.HTTPConnection("127.0.0.1", receiver.port, timeout=2)
+    connection.putrequest("POST", "/state")
+    connection.putheader(TOKEN_HEADER, TOKEN)
+    connection.putheader("Content-Length", "-1")
+    connection.endheaders()
+    assert connection.getresponse().status == 400  # 2초 안에 대답하지 않으면 TimeoutError로 실패
+
+
 def test_애드온이_이미_켜진_도우미인지_물어볼_수_있다(receiver):
-    request = urllib.request.Request(f"http://127.0.0.1:{receiver.port}/ping", headers={"X-Tutor-Token": TOKEN})
+    request = urllib.request.Request(f"http://127.0.0.1:{receiver.port}/ping", headers={TOKEN_HEADER: TOKEN})
     with urllib.request.urlopen(request, timeout=5) as response:
         assert json.loads(response.read()) == {"app": "blender_tutor"}
