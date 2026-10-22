@@ -39,20 +39,48 @@
 - **도우미 프로그램 안**에서는 받는 쪽·진행 관리·답 엔진·창이 그냥 함수 호출로 이어진다. 나중에 답 엔진을 다른 컴퓨터로 옮길 때는 창 ↔ 답 엔진 사이에 HTTP 한 겹만 넣는다(명세 "전체 구성").
 - 애드온은 읽고 보내기만 한다. 검색·답 만들기는 하지 않는다.
 
+### 도우미 프로그램 안: 누가 누구를 부르나
+
+```
+받는 쪽 (receiver)
+  애드온 봉투를 작업 상태 서식(work_state)에 옮겨 적는다
+  │
+  ▼
+도우미 창 (예정, 티켓 26·27) ── 둘 사이를 잇는 곳
+  │
+  ├─▶ 진행 관리 창구 (progress_record)   파일마다 진행 기록, 이어 하기, 연습 과정 고르기
+  │     └─▶ 담당자 (progress)            연습 과정 하나: 지금 단계, 묻기·거두기
+  │           └─▶ 판정표 (conditions)     끝난 조건 7종류가 맞았나
+  │
+  │     창이 진행 관리에서 "지금 단계"를 읽어
+  │     질문과 함께 답 엔진에 넘긴다
+  │
+  └─▶ 답 엔진 (answer_engine)
+        검색어 만들기 → 뜻·낱말 검색 → 모델에 넘길 글 → 메뉴 이름 한국어로 → 근거 목록
+        읽는 것: 청크 서식(manual_chunks의 Chunk) · 메뉴 이름 사전(menu_names의 MenuNames)
+```
+
+- **서식**(`work_state`의 `WorkState`, `manual_chunks`의 `Chunk`)은 처리하는 단계가 아니라 여러 곳이 함께 쓰는 양식이다. 서식이 한 파일 안에 있으면 다른 곳이 그 파일 전체에 기대게 되어 따로 둔다.
+- **진행 관리와 답 엔진은 서로를 모른다.** 둘을 잇는 일(지금 단계 건네주기, 작업 상태 나눠 주기)은 도우미 창이 한다.
+- `manual_chunks`·`menu_names`에는 자료를 **만드는** 부분(한 번 돌림)과 **읽는** 부분(답 엔진이 매번 씀)이 함께 있다.
+- `course_check`는 연습 과정을 더할 때 쓰고, 기본 테스트도 매번 실제 `courses/`를 이 검사로 돌린다.
+
 ## 2. 파일 지도
+
+부르는 차례대로 적었다(만든 티켓 순서가 아님).
 
 | 자리 | 파일 | 하는 일 | 만든 티켓 |
 |---|---|---|---|
 | Blender 안 | `addon/blender_tutor_addon/__init__.py` | 작업 상태 12칸 읽기, 바뀐 때만 보내기, F10, 파일 열기·저장 알림, glTF 내보내기 잡기, 도우미 프로그램 켜기 | 25 |
 | 도우미 | `blender_tutor/receiver.py` | 받는 쪽. Blender 창 번호마다 최신 작업 상태 하나, 닫힌 Blender 버림, 마지막 Blender가 닫히면 끝남 | 25 |
-| 도우미 | `blender_tutor/work_state.py` | 작업 상태 12칸의 모양(애드온 JSON ↔ `WorkState`). 진행 관리·답 엔진이 같은 모양을 씀 | 25 |
-| 도우미 | `blender_tutor/progress.py` | 한 연습 과정의 진행: 끝난 조건이 맞으면 묻고, 깨지면 거두고, 단계 옮기기 | 17 |
-| 도우미 | `blender_tutor/conditions.py` | 끝난 조건 7종류의 "값의 꼴"과 "맞는지 판정" | 17 |
-| 도우미 | `blender_tutor/progress_record.py` | 진행 관리 전체: 파일마다 진행 기록 저장·이어 하기, 연습 과정 고르기·바꾸기 | 18 |
-| 도우미 | `blender_tutor/answer_engine.py` | 답 엔진: 질문 + 작업 상태 → 설명서 검색 → 답 글 흐름 + 근거 목록 | 21-23 |
-| 도우미 | (없음) 도우미 창 | 질문 입력, 답 표시, Esc로 Blender 복귀 | 26 예정 |
-| 한 번 돌림 | `blender_tutor/manual_chunks.py` | 설명서 HTML → 소제목 단위 청크(`data/chunks/`) | 19 |
-| 한 번 돌림 | `blender_tutor/menu_names.py` | 설명서의 블렌더 표기 ↔ Blender 화면 한국어 번역 사전(`data/menu_names/`) | 20 |
+| 도우미(서식) | `blender_tutor/work_state.py` | 작업 상태 12칸의 서식(애드온 JSON ↔ `WorkState`). 받는 쪽·진행 관리·답 엔진이 함께 씀 | 25 |
+| 도우미 | (없음) 도우미 창 | 질문 입력, 답 표시, Esc로 Blender 복귀. 진행 관리와 답 엔진을 잇는다 | 26·27 예정 |
+| 도우미 | `blender_tutor/progress_record.py` | 진행 관리 창구: 파일마다 진행 기록 저장·이어 하기, 연습 과정 고르기·바꾸기 | 18 |
+| 도우미 | `blender_tutor/progress.py` | 담당자: 연습 과정 하나의 진행. 끝난 조건이 맞으면 묻고, 깨지면 거두고, 단계 옮기기 | 17 |
+| 도우미 | `blender_tutor/conditions.py` | 판정표: 끝난 조건 7종류의 "값의 꼴"과 "맞는지 판정" | 17 |
+| 도우미 | `blender_tutor/answer_engine.py` | 답 엔진: 질문 + 작업 상태 + 지금 단계 → 설명서 검색 → 답 글 흐름 + 근거 목록 | 21-23 |
+| 자료 만들기 + 읽기 | `blender_tutor/manual_chunks.py` | 만들기: 설명서 HTML → 소제목 단위 청크(`data/chunks/`, 한 번 돌림). 읽기: 청크 서식 `Chunk`(답 엔진이 씀) | 19 |
+| 자료 만들기 + 읽기 | `blender_tutor/menu_names.py` | 만들기: 설명서의 블렌더 표기 ↔ 화면 한국어 번역 사전(`data/menu_names/`, 한 번 돌림). 읽기: 사전 `MenuNames`(답 엔진이 씀) | 20 |
 | 만드는 사람 | `blender_tutor/course_check.py` | 연습 과정 파일 검사 | 15, 24 |
 | 만드는 사람 | `courses/*.yaml` | 연습 과정(검 `sword.yaml`, 공통 준비 `_common.yaml`) | 16 |
 | 설치 | `blender_tutor/install_addon.py` | 애드온을 Blender 애드온 폴더에 복사하고 `config.json`(도우미 켜는 법·비밀 글자)을 적음 | 25 |
