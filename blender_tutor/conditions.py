@@ -71,7 +71,9 @@ VIEW_CHANGES: dict[str, Callable[[View, View], bool]] = {
     "확대": lambda now, start: now.distance < start.distance and not _close((now.distance,), (start.distance,)) and _close(now.center, start.center),
     "축소": lambda now, start: now.distance > start.distance and not _close((now.distance,), (start.distance,)) and _close(now.center, start.center),
     "돌림": lambda now, start: not _close(now.rotation, start.rotation),
-    "옮김": lambda now, start: not _close(now.center, start.center) and _close((now.distance,), (start.distance,)),
+    # 옮김은 중심만 본다. 앞 조작(휠 여러 칸)이 판정 뒤에도 굴러 거리가 기준과 달라질 수 있어서다(2026-10-23 눈 확인).
+    # 그래서 Home도 옮김으로 맞지만, 공통 준비에서는 옮기기 다음이 Home이라 순서상 괜찮다.
+    "옮김": lambda now, start: not _close(now.center, start.center),
     "전체": lambda now, start: not _close(now.center, start.center) and not _close((now.distance,), (start.distance,)),
 }
 

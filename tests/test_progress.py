@@ -400,7 +400,6 @@ def test_화면_조작은_그_조작을_안내한_때보다_시점이_어떻게_
         ("확대", with_view(distance=19.0)),  # 거리가 늘면 축소
         ("확대", with_view(distance=10.0, center=(3.7, -3.0, 3.0))),  # 중심도 바뀌면 Home(장면 전체 담기)
         ("축소", with_view(distance=10.0)),
-        ("옮김", with_view(distance=16.3, center=(3.7, -3.0, 3.0))),  # 거리도 바뀌면 Home
         ("전체", with_view(center=(1.0, 0.0, 0.0))),  # 중심만 바뀌면 옮기기
         ("돌림", with_view(distance=18.4004)),  # 아주 작은 흔들림은 바뀐 것이 아니다
         ("돌림", replace(IDLE, view=None)),  # 3D 화면이 없어짐
@@ -524,3 +523,16 @@ def test_마지막_조작이_감지로_끝나고_끝난_조건이_맞으면_그�
     assert progress.on_state(STRETCHED) == [
         Ask("blade-stretch", "'칼날 모양 잡기' 단계를 끝낸 것 같아요. 다음 단계(부품 합치기)로 갈까요?")
     ]
+
+
+def test_앞_조작의_휠이_더_굴러_거리가_바뀐_뒤에도_옮기기를_알아챈다():
+    # 휠 여러 칸 중 첫 칸에서 축소가 판정되면, 나머지 칸이 굴러 거리가 기준과 달라진다(2026-10-23 사용자 눈 확인에서 찾음)
+    step = Step("view-navigate", "화면 익히기", operations=NAVIGATE.operations[2:4])  # 축소, 옮기기
+    progress = Progress([step], latest=ZOOMED_IN)
+    first_notch = replace(ZOOMED_IN, view=replace(ZOOMED_IN.view, distance=15.0))
+    progress.on_state(first_notch)
+    assert progress.operations_done == 1
+    rolled_on = replace(first_notch, view=replace(first_notch.view, distance=18.4))
+    progress.on_state(rolled_on)
+    progress.on_state(replace(rolled_on, view=replace(rolled_on.view, center=(1.0, 0.0, 0.0))))  # Shift + 가운데 끌기
+    assert progress.operations_done == 2
