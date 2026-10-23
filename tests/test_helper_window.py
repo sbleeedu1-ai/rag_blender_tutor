@@ -1,4 +1,4 @@
-"""도우미 창 위젯(티켓 26): 화면 없이(offscreen) 띄워 질문 보내기·답 흐름·근거·오류·X를 본다.
+"""도우미 창 위젯(티켓 26·27): 화면 없이(offscreen) 띄워 질문 보내기·답 흐름·근거·오류·X와 연습 과정 카드를 본다.
 
 모양·한글 입력·F10·Blender 따라가기는 강의실 PC 눈 확인으로 본다.
 """
@@ -10,13 +10,22 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")  # QApplication보다 먼�
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 
 from blender_tutor.answer_engine import Done, Failure, Piece, Source
-from blender_tutor.helper_window import HelperWindow, resize_edges
+from blender_tutor.course_desk import Line, LineKind, StepView
+from blender_tutor.helper_window import COURSES_UNREADABLE, PICK_HINT, HelperWindow, resize_edges
+from blender_tutor.progress import Course, Operation, Step
 
 BEVEL = Source("Bevel Modifier > Options", "https://docs.blender.org/manual/en/5.2/modeling/modifiers/generate/bevel.html#options", True, True, ("https://example.org/bevel.mp4",))
 ARRAY = Source("Array Modifier", "https://docs.blender.org/manual/en/5.2/modeling/modifiers/generate/array.html#array-modifier", False, False, ())
+
+
+TIP = Step("blade-tip", "칼끝 모으기", operations=(Operation("가운데로 모으기", "Mesh > Merge > At Center", "M", "M으로 모아 보세요."),))
+SWORD = Course("sword", "검", (Step("view", "화면 돌려 보기"), TIP, Step("join", "부품 합치기")))
+SHIELD = Course("shield", "방패", (Step("view", "화면 돌려 보기"),))
+COURSES = [SWORD, SHIELD]
+AT_TIP = StepView(SWORD, 2, TIP, None)
 
 
 @pytest.fixture(scope="module")
@@ -29,6 +38,13 @@ def window(app):
     window = HelperWindow()
     window.asked_questions = []
     window.asked.connect(window.asked_questions.append)
+    window.sent = []  # 연습 과정 카드에서 나간 신호
+    window.chose_course.connect(lambda label: window.sent.append(("고름", label)))
+    window.went_next.connect(lambda: window.sent.append(("다음",)))
+    window.went_back.connect(lambda: window.sent.append(("뒤로",)))
+    window.skipped_to.connect(lambda label: window.sent.append(("건너뜀", label)))
+    window.answered.connect(lambda yes: window.sent.append(("답", yes)))
+    window.operation_done.connect(lambda: window.sent.append(("했어요",)))
     window.show()
     yield window
     window.close()
@@ -114,3 +130,83 @@ def test_모서리_근처를_끌면_대각선으로_늘린다():
     assert resize_edges(417, 550, *size) == Qt.RightEdge | Qt.BottomEdge
     assert resize_edges(2, 300, *size) == Qt.LeftEdge  # 가운데는 가로만
     assert not resize_edges(200, 300, *size)  # 안쪽은 늘리지 않음
+
+
+def test_연습_과정을_고르지_않았으면_목록과_자유_질문_안내를_보이고_누르면_고른다(window):
+    window.show_progress(StepView(None, 0, None, None), COURSES)
+    buttons = [b for b in window.findChildren(QPushButton, "course") if b.isVisible()]
+    assert [b.text() for b in buttons] == ["검", "방패"]
+    assert "물어보세요" in " ".join(texts(window, "hint"))
+    buttons[1].click()
+    assert window.sent == [("고름", "shield")]
+
+
+def test_단계_카드는_n단계와_이름만_보이고_버튼으로_뒤로_다음_건너뛰기(window):
+    window.show_progress(AT_TIP, COURSES)
+    assert texts(window, "stepHeader") == ["검 · 2단계 / 3"]
+    assert texts(window, "stepName") == ["칼끝 모으기"]
+    buttons = window.back_button.parentWidget().layout()
+    order = [buttons.itemAt(i).widget() for i in range(buttons.count()) if buttons.itemAt(i).widget()]
+    assert order == [window.back_button, window.next_button, window.skip_button]  # 사용자가 정한 차례
+    window.back_button.click()
+    window.next_button.click()
+    skip = {action.text(): action for action in window.skip_button.menu().actions()}
+    assert list(skip) == ["1. 화면 돌려 보기", "2. 칼끝 모으기", "3. 부품 합치기"]
+    skip["3. 부품 합치기"].trigger()
+    assert window.sent == [("뒤로",), ("다음",), ("건너뜀", "join")]
+
+
+def test_다른_연습_과정으로_바꾸기는_카드의_메뉴에서_고른다(window):
+    window.show_progress(AT_TIP, COURSES)
+    change = {action.text(): action for action in window.change_button.menu().actions()}
+    change["방패"].trigger()
+    assert window.sent == [("고름", "shield")]
+
+
+def test_물음은_입력칸_위에_네_아니요로_띄우고_없으면_거둔다(window):
+    window.show_progress(StepView(SWORD, 2, TIP, "다음 단계로 갈까요?"), COURSES)
+    assert window.prompt.isVisible() and texts(window, "promptText") == ["다음 단계로 갈까요?"]
+    window.yes_button.click()
+    window.no_button.click()
+    assert window.sent == [("답", True), ("답", False)]
+    window.show_progress(AT_TIP, COURSES)
+    assert not window.prompt.isVisible()
+
+
+def test_연습_과정을_마치면_마쳤다고_보이고_뒤로_갈_수_있다(window):
+    window.show_progress(StepView(SWORD, 0, None, None), COURSES)
+    assert texts(window, "stepHeader") == ["검 · 다 마쳤어요"]
+    assert not window.next_button.isVisible()
+    window.back_button.click()
+    assert window.sent == [("뒤로",)]
+
+
+def test_blender가_없으면_카드를_누를_수_없다(window):
+    window.show_progress(None, COURSES)
+    assert not window.card.isEnabled()
+    window.show_progress(AT_TIP, COURSES)
+    assert window.card.isEnabled()
+
+
+def test_안내_말과_알림은_대화에_한_줄씩_붙는다(window):
+    window.show_line(Line(LineKind.GUIDE, "정육면체를 눌러 보시겠어요?"))
+    window.show_line(Line(LineKind.NOTICE, "이 파일에서 검 연습 과정을 다 마쳤어요."))
+    assert texts(window, "guide") == ["정육면체를 눌러 보시겠어요?"]
+    assert texts(window, "notice") == ["이 파일에서 검 연습 과정을 다 마쳤어요."]
+
+
+def test_안내하는_조작이_있으면_했어요_버튼을_보이고_누르면_알린다(window):
+    window.show_progress(StepView(SWORD, 2, TIP, None, done_button=True), COURSES)
+    assert window.done_button.isVisible()
+    window.done_button.click()
+    assert window.sent == [("했어요",)]
+    window.show_progress(AT_TIP, COURSES)
+    assert not window.done_button.isVisible()
+
+
+def test_연습_과정을_하나도_읽지_못했으면_고르기_카드에_그렇다고_보인다(window):
+    # 연습 과정 파일이 깨졌을 때(helper._courses가 빈 목록을 줌). 원래 연습 과정이 없는 프로그램처럼 보이지 않게
+    window.show_progress(StepView(None, 0, None, None), [])
+    assert texts(window, "hint") == [COURSES_UNREADABLE]
+    window.show_progress(StepView(None, 0, None, None), COURSES)
+    assert texts(window, "hint") == [PICK_HINT]

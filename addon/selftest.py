@@ -3,10 +3,10 @@
 실행(프로젝트 폴더): .venv\\Scripts\\python addon\\selftest.py
 Blender 위치가 다르면 환경 변수 BLENDER로 알려 준다.
 
-확인하는 것: 애드온 켜기(설치 명령으로 임시 폴더에 설치), 12칸 읽기와 WorkState 모양 맞음, 조작 이름 바꾸기,
+확인하는 것: 애드온 켜기(설치 명령으로 임시 폴더에 설치), 14칸 읽기와 WorkState 모양 맞음, 조작 이름 바꾸기,
 편집 모드 선택 방식·개수와 읽기 시간, 바뀐 때만 보내기, 파일 사건, glTF 내보내기 잡기, 화면 언어,
 도우미 프로그램 켜기(이미 켜져 있으면 그것을 씀)와 Blender가 닫히면 꺼지기.
-화면 없이는 F10·사람이 한 조작 기록·메뉴로 한 glTF 내보내기는 볼 수 없다(사용자가 눈으로 확인).
+화면 없이는 F10·사람이 한 조작 기록·메뉴로 한 glTF 내보내기·마우스로 움직인 시점은 볼 수 없다(사용자가 눈으로 확인).
 """
 
 import json
@@ -88,8 +88,16 @@ cube = bpy.data.objects["Cube"]
 cube.select_set(True)
 context.view_layer.objects.active = cube
 state = addon.read_state(context, [])
-check("물체 모드 12칸이 WorkState 모양과 맞음", WorkState.from_json(state).mode == "OBJECT", json.dumps(state, ensure_ascii=False))
+check("물체 모드 14칸이 WorkState 모양과 맞음", WorkState.from_json(state).mode == "OBJECT", json.dumps(state, ensure_ascii=False))
 check("활성 물체", state["active_object"]["name"] == "Cube" and state["active_object"]["type"] == "MESH")
+cube.location.z = -3.5
+check("진행 중인 조작 없음", state["running_operators"] == [], state["running_operators"])
+check("활성 물체 위치", addon.read_state(context, [])["active_object"]["location"] == [0.0, 0.0, -3.5])
+cube.location.z = 0.0
+# 화면 없이 띄워도 시작 파일의 3D 화면이 있어 시점을 읽는다. 값을 바꾸면 읽은 것도 바뀌어야 한다
+region = next(a for w in context.window_manager.windows for a in w.screen.areas if a.type == "VIEW_3D").spaces.active.region_3d
+region.view_distance = state["view"]["distance"] / 2
+check("3D 화면 시점 읽기", addon.read_state(context, [])["view"]["distance"] == region.view_distance, state["view"])
 check("장면 물체 수·버전", state["scene_object_count"] == 3 and state["blender_version"].startswith("5.2"), state["blender_version"])
 
 bpy.ops.object.mode_set(mode="EDIT")

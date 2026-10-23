@@ -25,8 +25,8 @@ class Kind(StrEnum):
     LABEL_FORMAT = "label-format"  # 이름표가 영어 소문자·숫자·하이픈이 아님
     ADDRESS_FORMAT = "address-format"  # 설명서 소제목 주소가 '경로.html#앵커' 꼴이 아님
     DUPLICATE_LABEL = "duplicate-label"  # 이름표 겹침
-    CONDITION_KIND = "condition-kind"  # 정해진 7가지 밖의 끝난 조건 종류
-    CONDITION_VALUE = "condition-value"  # 끝난 조건 값의 꼴이 그 종류에 맞지 않음
+    CONDITION_KIND = "condition-kind"  # 정해진 종류(conditions.CONDITIONS) 밖의 조건 종류(끝난 조건·감지)
+    CONDITION_VALUE = "condition-value"  # 조건 값의 꼴이 그 종류에 맞지 않음(끝난 조건·감지)
     COMMON_REF = "common-ref"  # 공통 준비 파일을 잘못 가리킴
     ADDRESS_MISSING = "address-missing"  # 설명서 소제목 주소가 청크에 없음(data/가 있을 때만)
     MENU_UNKNOWN = "menu-unknown"  # 메뉴 경로의 한 단이 번역 사전에 없음(data/가 있을 때만)
@@ -157,7 +157,7 @@ def _conditions(value: object, where: str, report: Report) -> None:
         return
     for i, item in enumerate(value, start=1):
         if not (isinstance(item, dict) and len(item) == 1):
-            report(Kind.CONDITION_KIND, f"{where}[{i}]", "끝난 조건은 한 줄에 '종류: 값' 하나씩 적습니다.")
+            report(Kind.CONDITION_KIND, f"{where}[{i}]", "조건은 한 줄에 '종류: 값' 하나씩 적습니다.")
             continue
         condition, condition_value = next(iter(item.items()))
         kind = CONDITIONS.get(condition)
@@ -165,7 +165,7 @@ def _conditions(value: object, where: str, report: Report) -> None:
             report(
                 Kind.CONDITION_KIND,
                 f"{where}[{i}]",
-                f"'{condition}'은(는) 정해진 끝난 조건 종류가 아닙니다. 쓸 수 있는 종류: {', '.join(CONDITIONS)}",
+                f"'{condition}'은(는) 정해진 조건 종류가 아닙니다. 쓸 수 있는 종류: {', '.join(CONDITIONS)}",
             )
         elif condition_value is None or condition_value == "":
             report(Kind.MISSING, f"{where}[{i}].{condition}", "값이 비어 있습니다.")
@@ -184,6 +184,8 @@ OPERATION = {
     "설명": (True, _text),
     "메뉴": (True, _text),
     "단축키": (True, _text),
+    "안내": (True, _text),  # 도우미가 대화에 띄울 안내 말(티켓 27)
+    "감지": (False, _conditions),  # 이 조작을 했다고 볼 조건. 끝난 조건과 같은 종류. 없으면 [했어요]로 넘어간다
 }
 
 STEP = {
@@ -299,11 +301,11 @@ def _check_against_manual(data: object, manual: Manual, report: Report) -> None:
 
 
 # 설명서 문장을 그대로 옮기지 않는다(CC BY-SA). 낱말이 이만큼 같은 차례로 이어지면 옮긴 것으로 본다.
-# 설정 이름처럼 짧게 겹치는 것은 괜찮다. 8은 '문장 한 토막'쯤으로 잡은 어림값이다(검·공통 파일은 3낱말 1곳만 겹침: Emulate 3 Button).
+# 설정 이름처럼 짧게 겹치는 것은 괜찮다. 8은 '문장 한 토막'쯤으로 잡은 어림값이다(검·공통 파일은 3낱말 2곳만 겹침, 4낱말 이상 0곳, 2026-10-23 조작 안내 말을 더한 뒤 잼).
 COPY_WORDS = 8
 _WORD = re.compile(r"\w+")
 # 화면·설명서 글자를 일부러 그대로 적는 칸은 옮김 검사에서 뺀다.
-_NOT_PROSE = {"이름표", "메뉴", "먼저 볼 소제목", "끝난 조건"}
+_NOT_PROSE = {"이름표", "메뉴", "먼저 볼 소제목", "끝난 조건", "감지"}
 
 
 def _prose(value: object, where: str):

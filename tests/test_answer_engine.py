@@ -13,7 +13,7 @@ from blender_tutor.manual_chunks import Chunk, Example, MediaKind
 from blender_tutor.menu_names import MenuName, MenuNames, Translation
 from blender_tutor.menu_names import Source as MenuSource
 from blender_tutor.progress import Course, Step
-from blender_tutor.work_state import ActiveObject, WorkState
+from blender_tutor.work_state import ActiveObject, View, WorkState
 
 # 지어낸 청크 6개. 벡터는 세 칸(베벨, 배열, 내보내기)이고 테스트가 가짜 임베딩으로 질문 벡터를 정한다.
 BEVEL = Chunk(
@@ -51,7 +51,7 @@ TOWARD_BEVEL, TOWARD_ARRAY, EVERYWHERE = [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0,
 
 STATE = WorkState(
     "OBJECT", ActiveObject("Cube", "MESH", (), (1.0, 1.0, 1.0), (2.0, 2.0, 2.0), 0), ("Cube",),
-    "en_US", False, "", 3, "5.2.2", {}, (),
+    "en_US", False, "", 3, "5.2.2", {}, (), view=View(18.4, (0.71, 0.44, 0.29, 0.46), (0.0, 0.0, 0.0)),
 )
 TIMEOUT_MESSAGE = "답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
 ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물어봐 주세요."
@@ -449,6 +449,7 @@ def test_모델에_검색_청크_글과_작업_상태와_질문을_넘긴다():
     assert BEVEL.text in sent and BEVEL_MORE.text in sent  # 검색 상위 2개는 넘기고
     assert all(chunk.text not in sent for chunk in (ARRAY, EXPORT, SELECT, SAVE))  # 나머지는 넘기지 않는다
     assert '"mode": "OBJECT"' in sent and '"name": "Cube"' in sent
+    assert '"view"' not in sent  # 시점 숫자는 화면 조작 감지에만 쓰고 모델에는 넘기지 않는다
     assert question in sent
 
 

@@ -30,6 +30,7 @@ COMMON = """\
           - 설명: 화면 돌리기
             메뉴: View > Navigation > Orbit
             단축키: 가운데 버튼 끌기
+            안내: 가운데 버튼을 누른 채 끌어 화면을 돌려 보세요.
         먼저 볼 소제목:
           - editors/3dview/navigate/navigation.html#orbit
 """
@@ -54,6 +55,9 @@ COURSE = """\
           - 설명: 고른 점을 가운데로 모으기
             메뉴: Mesh > Merge > At Center
             단축키: M
+            안내: 이제 M을 눌러 가운데로 모아 볼까요?
+            감지:
+              - 방금 조작: mesh.merge
         먼저 볼 소제목:
           - modeling/meshes/editing/mesh/merge.html#merge
         끝난 조건:
@@ -98,12 +102,12 @@ def test_공통_준비와_단계_이름표가_겹치면_잡는다(tmp_path):
     assert kinds(write_folder(tmp_path, course=course)) == ["duplicate-label"]
 
 
-def test_정해진_7가지_밖의_끝난_조건_종류를_잡는다(tmp_path):
+def test_정해진_종류_밖의_끝난_조건_종류를_잡는다(tmp_path):
     course = COURSE.replace("          - 모드: EDIT_MESH\n", "          - 꼭짓점 수: 8\n")
     assert kinds(write_folder(tmp_path, course=course)) == ["condition-kind"]
 
 
-def test_7가지_끝난_조건_종류는_모두_받아들인다(tmp_path):
+def test_정해진_끝난_조건_종류는_모두_받아들인다(tmp_path):
     conditions = """\
           - 모드: EDIT_MESH
           - 방금 조작: mesh.merge
@@ -112,6 +116,12 @@ def test_7가지_끝난_조건_종류는_모두_받아들인다(tmp_path):
           - 재질 슬롯 수: 2
           - 배율: [1, 1, 1]
           - 크기 비율: 3
+          - 배율 늘어남: Z
+          - 배율 줄어듦: [Y, Z]
+          - 위치 늘어남: X
+          - 위치 줄어듦: Z
+          - 배율 그대로: [X, Y]
+          - 화면: 확대
 """
     course = COURSE.replace("          - 모드: EDIT_MESH\n          - 방금 조작: mesh.merge\n", conditions)
     assert kinds(write_folder(tmp_path, course=course)) == []
@@ -347,3 +357,17 @@ def test_저장소의_연습_과정_파일은_실제_자료로도_검사를_통�
     if manual is None:
         pytest.skip("data/에 청크·ko.po·fr.po가 없음(커밋하지 않는 자료)")
     assert check_folder(COURSES, manual) == []
+
+
+def test_조작에_안내_말이_빠지면_잡는다(tmp_path):
+    course = COURSE.replace("            안내: 이제 M을 눌러 가운데로 모아 볼까요?\n", "")
+    assert kinds(write_folder(tmp_path, course=course)) == ["missing"]
+
+
+def test_감지는_빼도_되고_끝난_조건과_같은_종류만_받는다(tmp_path):
+    without = COURSE.replace("            감지:\n              - 방금 조작: mesh.merge\n", "")
+    assert kinds(write_folder(tmp_path, course=without)) == []
+    wrong_kind = COURSE.replace("              - 방금 조작: mesh.merge\n", "              - 꼭짓점 수: 8\n")
+    assert kinds(write_folder(tmp_path, course=wrong_kind)) == ["condition-kind"]
+    wrong_value = COURSE.replace("              - 방금 조작: mesh.merge\n", "              - 방금 조작: Merge At Center\n")
+    assert kinds(write_folder(tmp_path, course=wrong_value)) == ["condition-value"]
