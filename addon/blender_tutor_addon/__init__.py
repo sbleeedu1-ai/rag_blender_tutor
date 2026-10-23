@@ -1,6 +1,6 @@
 """Blender 첫걸음 도우미 애드온(명세 "애드온", ADR-0001, 티켓 25).
 
-작업 상태 12칸을 읽어 도우미 프로그램에 내 PC 안 HTTP로 보낸다. 검색·답 생성은 하지 않는다.
+작업 상태 13칸을 읽어 도우미 프로그램에 내 PC 안 HTTP로 보낸다. 검색·답 생성은 하지 않는다.
 - 0.5초마다 읽어 바뀌었을 때만 보내고, F10이면 바뀌지 않아도 보내며 도우미 창을 부른다.
 - 파일 열기·저장은 사건(opened·saved)으로 함께 보낸다(티켓 18).
 - Blender를 켤 때와 F10 때 도우미 프로그램이 없으면 켠다. 끄는 일은 도우미 프로그램이 한다(켜진 Blender가 없으면 끝남).
@@ -9,7 +9,7 @@
 blender_tutor/work_state.py와 같게 맞추고, 바꾸면 둘 다 고친다(addon/selftest.py가 맞는지 본다).
 설치: 프로젝트 폴더에서 `.venv\\Scripts\\python -m blender_tutor.install_addon`(옆에 config.json을 적어 줌).
 Windows에만 있는 부분: 이 파일의 _own_window(창 번호)·TUTOR_OT_summon(창 앞으로 부르기 허락)·Sender.launch(창 없이 켜기),
-blender_tutor/receiver.py의 process_alive, blender_tutor/install_addon.py의 설치 폴더·pythonw. 맥을 붙일 때는 이곳들을 바꾼다.
+blender_tutor/receiver.py의 process_started, blender_tutor/install_addon.py의 설치 폴더·pythonw, blender_tutor/paths.py의 진행 기록 폴더. 맥을 붙일 때는 이곳들을 바꾼다.
 """
 
 import ctypes
@@ -92,8 +92,21 @@ def _edit_selected(context) -> dict[str, int]:
     return {name: count for name, on, count in zip(("VERT", "EDGE", "FACE"), context.tool_settings.mesh_select_mode, counts) if on}
 
 
+def _view(context) -> dict | None:
+    """가장 큰 3D 화면의 시점(거리·각도·중심). 3D 화면이 없으면 None.
+
+    화면 돌리기·확대·옮기기는 조작 기록에 남지 않아(REGISTER 표시가 없음, 2026-10-23 설치본에서 확인) 이 값으로 알아챈다.
+    타이머에서는 context.area가 없어 열린 창의 화면을 모두 훑는다.
+    """
+    areas = [area for window in context.window_manager.windows for area in window.screen.areas if area.type == "VIEW_3D"]
+    if not areas:
+        return None
+    view = max(areas, key=lambda area: area.width * area.height).spaces.active.region_3d
+    return {"distance": view.view_distance, "rotation": list(view.view_rotation), "center": list(view.view_location)}
+
+
 def read_state(context, recent_operators) -> dict:
-    """작업 상태 12칸(blender_tutor/work_state.py의 WorkState와 같은 칸)."""
+    """작업 상태 13칸(blender_tutor/work_state.py의 WorkState와 같은 칸)."""
     active = context.active_object
     return {
         "mode": context.mode,
@@ -104,6 +117,7 @@ def read_state(context, recent_operators) -> dict:
             "scale": list(active.scale),
             "dimensions": list(active.dimensions),
             "material_slot_count": len(active.material_slots),
+            "location": list(active.location),
         },
         "selected_objects": [obj.name for obj in context.selected_objects],
         "language": bpy.app.translations.locale,  # 설정이 '자동'이어도 실제로 쓰는 언어(예: ko_KR)
@@ -113,6 +127,7 @@ def read_state(context, recent_operators) -> dict:
         "blender_version": bpy.app.version_string,
         "edit_selected": _edit_selected(context),
         "recent_operators": list(recent_operators),
+        "view": _view(context),
     }
 
 

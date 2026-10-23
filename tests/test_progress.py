@@ -1,6 +1,6 @@
 """진행 관리(시험 경계 ②: .scratch/mvp-roundtrip/spec.md의 Testing Decisions 참고).
 
-작업 상태와 사용자 응답을 차례로 넣고, 진행 관리가 돌려준 물음(띄울 것·거둘 것)과 지금 단계만 본다.
+작업 상태와 사용자 응답을 차례로 넣고, 진행 관리가 돌려준 물음(띄울 것·거둘 것)과 지금 단계·끝낸 조작 수만 본다.
 """
 
 from dataclasses import replace
@@ -10,7 +10,7 @@ import pytest
 
 from blender_tutor.conditions import CONDITIONS
 from blender_tutor.progress import Ask, Operation, Progress, Step, Withdraw, load_courses, load_steps
-from blender_tutor.work_state import ActiveObject, WorkState
+from blender_tutor.work_state import ActiveObject, View, WorkState
 
 COURSES = Path(__file__).resolve().parent.parent / "courses"
 
@@ -31,6 +31,7 @@ IDLE = WorkState(
     blender_version="5.2.2",
     edit_selected={},
     recent_operators=(),
+    view=View(18.4, (0.71, 0.44, 0.29, 0.46), (0.0, 0.0, 0.0)),
 )
 MERGED = replace(IDLE, mode="EDIT_MESH", recent_operators=("mesh.select_all", "mesh.merge"))
 
@@ -269,7 +270,8 @@ def test_단계마다_먼저_볼_소제목과_답변_모델에_넘길_단계_내
 
 def test_검사가_받아들이는_끝난_조건_종류는_모두_판정할_수_있다():
     values = {"모드": "OBJECT", "방금 조작": "object.join", "물체 수 늘어남": 1, "모디파이어": "BEVEL",
-              "재질 슬롯 수": 2, "배율": [1, 1, 1], "크기 비율": 3}  # fmt: skip
+              "재질 슬롯 수": 2, "배율": [1, 1, 1], "크기 비율": 3, "화면": "확대",
+              "배율 늘어남": "Z", "배율 줄어듦": ["X", "Y"], "위치 늘어남": "X", "위치 줄어듦": "Z"}  # fmt: skip
     assert set(values) == set(CONDITIONS)
     for kind, value in values.items():
         Progress([Step("any", "아무 단계", ((kind, value),))]).on_state(IDLE)  # 판정 규칙이 값과 작업 상태로 오류 없이 돈다
@@ -298,26 +300,26 @@ RESIZED = replace(IDLE, recent_operators=("transform.resize",))
 
 def test_조작은_첫_조작부터_차례로_안내하고_했어요를_누르면_다음_조작으로_간다():
     progress = Progress([STRETCH, JOIN_PARTS])
-    assert progress.walk == 0
-    progress.walked()
-    assert progress.walk == 1
+    assert progress.operations_done == 0
+    progress.next_operation()
+    assert progress.operations_done == 1
 
 
 def test_감지_조건이_맞으면_다음_조작으로_간다():
-    progress = Progress([STRETCH, JOIN_PARTS], walk=1)
+    progress = Progress([STRETCH, JOIN_PARTS], operations_done=1)
     progress.on_state(IDLE)
     progress.on_state(RESIZED)
-    assert progress.walk == 2
+    assert progress.operations_done == 2
 
 
 def test_방금_조작_감지는_그_조작을_안내한_뒤에_새로_한_것만_센다():
     # S로 이미 한 번 늘린 뒤(기록에 transform.resize가 남아 있음) 같은 조작을 다시 안내하는 걸음
-    progress = Progress([STRETCH, JOIN_PARTS], walk=1)
+    progress = Progress([STRETCH, JOIN_PARTS], operations_done=1)
     progress.on_state(RESIZED)  # 이 걸음을 시작할 때 이미 있던 기록
     progress.on_state(replace(RESIZED, selected_objects=()))  # 다른 것만 바뀜
-    assert progress.walk == 1
+    assert progress.operations_done == 1
     progress.on_state(replace(RESIZED, recent_operators=("transform.resize", "transform.resize")))
-    assert progress.walk == 2
+    assert progress.operations_done == 2
 
 
 def test_한_번_바뀐_상태로는_조작_하나만_넘어간다():
@@ -325,17 +327,17 @@ def test_한_번_바뀐_상태로는_조작_하나만_넘어간다():
     progress = Progress([twice])
     progress.on_state(IDLE)
     progress.on_state(RESIZED)
-    assert progress.walk == 1
+    assert progress.operations_done == 1
 
 
 def test_마지막_조작_뒤에는_했어요가_아무것도_하지_않고_단계가_바뀌면_첫_조작부터():
-    progress = Progress([STRETCH, JOIN_PARTS], walk=3)
-    progress.walked()
-    assert progress.walk == 3
+    progress = Progress([STRETCH, JOIN_PARTS], operations_done=3)
+    progress.next_operation()
+    assert progress.operations_done == 3
     progress.next_step()
-    assert progress.walk == 0
+    assert progress.operations_done == 0
     progress.back()
-    assert progress.walk == 0
+    assert progress.operations_done == 0
 
 
 def test_조작마다_안내_말과_감지_조건을_읽는다(tmp_path):
@@ -364,3 +366,102 @@ def test_조작마다_안내_말과_감지_조건을_읽는다(tmp_path):
         Operation("크기 바꾸기", "Object > Transform > Scale", "S", "S로 늘려 보세요.", (("방금 조작", "transform.resize"),)),
         Operation("옆 패널 보기", "View > Sidebar", "N", "N으로 치수를 보세요."),
     )
+
+
+# 공통 준비 1단계를 줄인 것. 화면 조작은 조작 기록에 남지 않아 시점 값으로 알아챈다(2026-10-23 사용자가 직접 해 본 결과).
+NAVIGATE = Step("view-navigate", "화면 돌리고 당기고 옮겨 보기", operations=tuple(
+    Operation(name, "없음", "없음", f"{name}해 보세요.", (("화면", value),))
+    for name, value in (("돌리기", "돌림"), ("확대", "확대"), ("축소", "축소"), ("옮기기", "옮김"), ("전체 담기", "전체"))
+))
+
+
+def with_view(**changes) -> WorkState:
+    """IDLE에서 시점 칸 몇 개만 바꾼 작업 상태."""
+    return replace(IDLE, view=replace(IDLE.view, **changes))
+
+
+ORBITED = with_view(rotation=(0.77, 0.48, 0.22, 0.35))
+ZOOMED_IN = replace(ORBITED, view=replace(ORBITED.view, distance=10.6))
+ZOOMED_OUT = replace(ZOOMED_IN, view=replace(ZOOMED_IN.view, distance=15.3))
+PANNED = replace(ZOOMED_OUT, view=replace(ZOOMED_OUT.view, center=(1.0, 0.0, 0.0)))
+FRAMED = replace(PANNED, view=replace(PANNED.view, distance=16.3, center=(3.7, -3.0, 3.0)))  # Home
+
+
+def test_화면_조작은_그_조작을_안내한_때보다_시점이_어떻게_바뀌었나로_알아챈다():
+    progress = Progress([NAVIGATE], latest=IDLE)
+    for state, done in ((ORBITED, 1), (ZOOMED_IN, 2), (ZOOMED_OUT, 3), (PANNED, 4), (FRAMED, 5)):
+        progress.on_state(state)
+        assert progress.operations_done == done
+
+
+@pytest.mark.parametrize(
+    ("value", "state"),
+    [
+        ("확대", with_view(distance=19.0)),  # 거리가 늘면 축소
+        ("확대", with_view(distance=10.0, center=(3.7, -3.0, 3.0))),  # 중심도 바뀌면 Home(장면 전체 담기)
+        ("축소", with_view(distance=10.0)),
+        ("옮김", with_view(distance=16.3, center=(3.7, -3.0, 3.0))),  # 거리도 바뀌면 Home
+        ("전체", with_view(center=(1.0, 0.0, 0.0))),  # 중심만 바뀌면 옮기기
+        ("돌림", with_view(distance=18.4004)),  # 아주 작은 흔들림은 바뀐 것이 아니다
+        ("돌림", replace(IDLE, view=None)),  # 3D 화면이 없어짐
+    ],
+)
+def test_화면_감지는_다른_화면_조작이나_작은_흔들림으로는_넘어가지_않는다(value, state):
+    step = Step("any", "아무 단계", operations=(Operation("화면", "없음", "없음", "해 보세요.", (("화면", value),)),))
+    progress = Progress([step], latest=IDLE)
+    progress.on_state(state)
+    assert progress.operations_done == 0
+
+
+# 칼날 1단계를 줄인 것. S로 크기를 바꾼 방향은 조작 이름(transform.resize)에 없어 활성 물체 배율로 알아챈다.
+STRETCH_AXES = Step("blade-stretch", "칼날 모양 잡기", operations=(
+    Operation("길게 늘이기", "Object > Transform > Scale", "S", "S Z로 늘여 보세요.", (("배율 늘어남", "Z"),)),
+    Operation("폭 줄이기", "Object > Transform > Scale", "S", "S X로 좁혀 보세요.", (("배율 줄어듦", "X"),)),
+    Operation("두께 줄이기", "Object > Transform > Scale", "S", "S Y로 얇게 해 보세요.", (("배율 줄어듦", "Y"),)),
+))
+
+
+def test_크기_바꾸기는_그_조작을_안내한_때보다_어느_방향_배율이_바뀌었나로_알아챈다():
+    progress = Progress([STRETCH_AXES], latest=IDLE)
+    for scale, done in (((1.0, 1.0, 7.0), 1), ((0.5, 1.0, 7.0), 2), ((0.5, 0.2, 7.0), 3)):
+        progress.on_state(with_object(scale=scale))
+        assert progress.operations_done == done
+
+
+@pytest.mark.parametrize(
+    ("condition", "state"),
+    [
+        (("배율 늘어남", "Z"), with_object(scale=(1.0, 1.0, 0.5))),  # 반대 방향
+        (("배율 늘어남", "Z"), with_object(scale=(2.0, 1.0, 1.0))),  # 다른 방향
+        (("배율 늘어남", "Z"), with_object(name="Cylinder", scale=(1.0, 1.0, 2.0))),  # 배율이 다른 물체를 골랐을 뿐
+        (("배율 늘어남", "Z"), replace(IDLE, active_object=None)),
+        (("배율 줄어듦", ["Y", "Z"]), with_object(scale=(1.0, 0.2, 1.0))),  # 둘 다 줄어야 한다
+        (("배율 줄어듦", "X"), with_object(scale=(0.9999, 1.0, 1.0))),  # 아주 작은 흔들림
+    ],
+)
+def test_배율_감지는_다른_방향이나_다른_물체로는_넘어가지_않는다(condition, state):
+    step = Step("any", "아무 단계", operations=(Operation("크기", "없음", "S", "해 보세요.", (condition,)),))
+    progress = Progress([step], latest=IDLE)
+    progress.on_state(state)
+    assert progress.operations_done == 0
+
+
+def test_배율_감지는_여러_방향을_함께_볼_수_있다():
+    step = Step("any", "아무 단계", operations=(Operation("크기", "없음", "S", "해 보세요.", (("배율 줄어듦", ["Y", "Z"]),)),))
+    progress = Progress([step], latest=IDLE)
+    progress.on_state(with_object(scale=(1.5, 0.2, 0.3)))
+    assert progress.operations_done == 1
+
+
+def test_옮기기는_그_조작을_안내한_때보다_어느_방향으로_옮겼나로_알아챈다():
+    # 코등이를 "G 다음 Z로 칼날 아래 끝까지 내려" 붙이는 조작. 얼마나 옮겼는지(끝까지 붙었나)는 보지 않는다
+    step = Step("guard-add", "코등이 붙이기", operations=(
+        Operation("옮기기", "Object > Transform > Move", "G", "G Z로 내려 보세요.", (("위치 줄어듦", "Z"),)),
+    ))
+    progress = Progress([step], latest=IDLE)
+    progress.on_state(with_object(location=(1.5, 0.0, 0.0)))  # 옆으로만 옮김
+    assert progress.operations_done == 0
+    progress.on_state(with_object(location=(1.5, 0.0, 2.0)))  # 위로 올림
+    assert progress.operations_done == 0
+    progress.on_state(with_object(location=(1.5, 0.0, -1.0)))  # 아래로 내림(조금만 내려도 넘어간다)
+    assert progress.operations_done == 1

@@ -13,6 +13,7 @@ import os
 import sys
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication, QObject, Qt, QTimer, Signal
@@ -24,7 +25,7 @@ from blender_tutor.answer_engine import Failure
 from blender_tutor.conversation import PROGRAM_ERROR, Conversation
 from blender_tutor.course_desk import CourseDesk, Line
 from blender_tutor.helper_window import FONT, HelperWindow, Tray
-from blender_tutor.paths import COURSES, PROGRESS_RECORDS, PROJECT
+from blender_tutor.paths import COURSES, PROJECT, default_progress_records
 from blender_tutor.progress import Course, load_courses
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
 from blender_tutor.stand_in import build_engine
@@ -47,7 +48,7 @@ class _Bridge(QObject):
 
 
 class Helper:
-    """도우미 창 하나와 그 둘레: Blender 따라가기, F10·Esc·트레이, 질문 → 답 엔진."""
+    """도우미 창 하나와 그 둘레: Blender 따라가기, F10·Esc·트레이, 질문 → 답 엔진, 연습 과정 카드 ↔ 진행 관리(course_desk)."""
 
     def __init__(self, app: QApplication, receiver: Receiver, bridge: _Bridge):
         self._receiver = receiver
@@ -55,7 +56,7 @@ class Helper:
         self._front = FrontBlender()
         self._conversation = Conversation()
         self._courses = _courses()
-        self._desk = CourseDesk(self._courses, PROGRESS_RECORDS)
+        self._desk = CourseDesk(self._courses, default_progress_records())
         self._own_pid = os.getpid()
         self._moved: tuple[Place, int] | None = None  # 지난번에 옮긴 (자리, 그때 앞 창 번호)
         self._progress_of: int | None = None  # 연습 과정 카드에 진행을 보이는 Blender 창 번호
@@ -68,7 +69,7 @@ class Helper:
         self.window.went_back.connect(lambda: self._on_card(self._desk.back))
         self.window.skipped_to.connect(lambda label: self._on_card(lambda window: self._desk.skip_to(window, label)))
         self.window.answered.connect(lambda yes: self._on_card(lambda window: self._desk.answer(window, yes)))
-        self.window.walked.connect(lambda: self._on_card(self._desk.walked))
+        self.window.operation_done.connect(lambda: self._on_card(self._desk.next_operation))
         bridge.summoned.connect(self._summon)
         bridge.message.connect(self._on_message)
         bridge.answer_event.connect(self.window.show_answer_event)
@@ -118,11 +119,16 @@ class Helper:
 
     # ---- 연습 과정(진행 관리는 창 번호마다 하나, course_desk)
     def _on_message(self, message: Message) -> None:
-        """화면 스레드에서: 봉투의 파일 사건·작업 상태를 그 Blender의 진행 관리에 넘긴다."""
-        self._show_lines(self._desk.on_message(message.window, message.state, message.event))
+        """화면 스레드에서: 봉투의 파일 사건·작업 상태를 그 Blender의 진행 관리에 넘긴다.
+
+        대화에는 지금 보이는(마지막으로 앞에 있던) Blender의 말만 붙인다. 뒤에 있는 Blender의 알림은 course_desk가
+        모아 두었다가 그 Blender로 옮겨 올 때 보인다.
+        """
+        shown = message.window == self._front.window(self._receiver.blenders())
+        self._show_lines(self._desk.on_message(message.window, message.state, message.event, shown))
         self._show_progress()
 
-    def _on_card(self, action) -> None:
+    def _on_card(self, action: Callable[[int], list[Line]]) -> None:
         """카드 버튼·[네]/[아니요]: 지금 카드에 보이는 Blender의 진행 관리에 넘긴다."""
         if self._progress_of is not None:
             self._show_lines(action(self._progress_of))
@@ -136,8 +142,11 @@ class Helper:
         """마지막으로 앞에 있던 Blender의 진행을 카드에 그린다. 닫힌 Blender의 진행은 버린다(기록은 파일에 남음)."""
         blenders = self._receiver.blenders()
         self._desk.keep(set(blenders))
-        self._progress_of = self._front.window(blenders)
-        view = None if self._progress_of is None else self._desk.view(self._progress_of)
+        front = self._front.window(blenders)
+        if front is not None and front != self._progress_of:  # 다른 Blender로 옮겨 왔다: 그 Blender의 지금 자리를 알려 준다
+            self._show_lines(self._desk.switched_to(front))
+        self._progress_of = front
+        view = None if front is None else self._desk.view(front)
         self.window.show_progress(view, self._courses)
 
     # ---- 부르기·돌아가기
@@ -194,7 +203,7 @@ class Helper:
 
 
 def _courses() -> list[Course]:
-    """저장소의 연습 과정을 읽는다. 파일이 깨졌으면 연습 과정 없이 자유 질문만 받는다(검사: course_check)."""
+    """저장소의 연습 과정을 읽는다. 파일이 깨졌으면 연습 과정 없이 자유 질문만 받는다(고르기 카드에 읽지 못했다고 보임, 검사: course_check)."""
     try:
         return load_courses(COURSES)
     except Exception:

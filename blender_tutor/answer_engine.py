@@ -330,6 +330,11 @@ def _failure(error: Exception, results: list[Chunk]) -> Failure:
     return Failure(message, tuple(results))
 
 
+def _for_model(state: WorkState) -> dict:
+    """모델에 넘길 작업 상태. 시점(거리·각도·중심 숫자)은 화면 조작 감지에만 쓰고 답에는 도움이 안 되어 뺀다."""
+    return {key: value for key, value in state.to_json().items() if key != "view"}
+
+
 def _messages(
     question: str,
     state: WorkState,
@@ -354,7 +359,7 @@ def _messages(
     if step and step.guide:
         content += f"# 지금 단계\n\n{step.guide}\n\n"
     content += (
-        f"# 작업 상태\n\n{json.dumps(state.to_json(), ensure_ascii=False, indent=2)}\n\n"
+        f"# 작업 상태\n\n{json.dumps(_for_model(state), ensure_ascii=False, indent=2)}\n\n"
         f"# 질문\n\n{question}"
     )
     return messages + [{"role": "user", "content": content}]

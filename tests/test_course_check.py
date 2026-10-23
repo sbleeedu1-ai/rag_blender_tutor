@@ -102,12 +102,12 @@ def test_공통_준비와_단계_이름표가_겹치면_잡는다(tmp_path):
     assert kinds(write_folder(tmp_path, course=course)) == ["duplicate-label"]
 
 
-def test_정해진_7가지_밖의_끝난_조건_종류를_잡는다(tmp_path):
+def test_정해진_종류_밖의_끝난_조건_종류를_잡는다(tmp_path):
     course = COURSE.replace("          - 모드: EDIT_MESH\n", "          - 꼭짓점 수: 8\n")
     assert kinds(write_folder(tmp_path, course=course)) == ["condition-kind"]
 
 
-def test_7가지_끝난_조건_종류는_모두_받아들인다(tmp_path):
+def test_정해진_끝난_조건_종류는_모두_받아들인다(tmp_path):
     conditions = """\
           - 모드: EDIT_MESH
           - 방금 조작: mesh.merge
@@ -116,6 +116,11 @@ def test_7가지_끝난_조건_종류는_모두_받아들인다(tmp_path):
           - 재질 슬롯 수: 2
           - 배율: [1, 1, 1]
           - 크기 비율: 3
+          - 배율 늘어남: Z
+          - 배율 줄어듦: [Y, Z]
+          - 위치 늘어남: X
+          - 위치 줄어듦: Z
+          - 화면: 확대
 """
     course = COURSE.replace("          - 모드: EDIT_MESH\n          - 방금 조작: mesh.merge\n", conditions)
     assert kinds(write_folder(tmp_path, course=course)) == []

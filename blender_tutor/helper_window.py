@@ -31,6 +31,7 @@ MOVE_BAND = 40  # 맨 위 이 높이 안을 끌면 창 옮기기
 PANEL_ALPHA = 235  # 판 진하기(0-255, 사용자 결정 HISTORY [18])
 FONT = "Malgun Gothic"
 THINKING = "생각 중…"
+COURSES_UNREADABLE = "연습 과정 파일을 읽지 못했어요. 질문은 그대로 할 수 있어요."  # 검 파일이 늘 있으니 빈 목록은 읽기 실패
 PICK_HINT = "목록에 없으면 만들고 싶은 것을 아래에 물어보세요. 비슷한 연습 과정을 알려 드려요. 연습 과정 없이 질문만 해도 돼요."
 
 STYLE = f"""
@@ -84,7 +85,7 @@ class HelperWindow(QWidget):
     went_back = Signal()  # '뒤로' 버튼
     skipped_to = Signal(str)  # 건너뛰어 갈 단계 이름표
     answered = Signal(bool)  # 물음에 [네](True)/[아니요](False)
-    walked = Signal()  # [했어요]: 안내한 조작을 했다
+    operation_done = Signal()  # [했어요]: 안내한 조작을 했다
 
     def __init__(self):
         super().__init__(None, Qt.FramelessWindowHint | Qt.Tool)  # Tool: 작업 표시줄·Alt+Tab에 나오지 않음
@@ -135,13 +136,13 @@ class HelperWindow(QWidget):
         bar.rangeChanged.connect(lambda _low, high: bar.setValue(high))  # 새 글이 붙으면 맨 아래로
         root.addWidget(self._scroll, 1)
         root.addWidget(self._build_prompt())
-        walk_row = QHBoxLayout()  # 안내한 조작을 했으면 누르는 버튼(입력칸 바로 위 오른쪽)
-        walk_row.addStretch()
-        self.walk_button = _button("했어요 ✓", "cardButton")
-        self.walk_button.clicked.connect(self.walked)
-        self.walk_button.hide()
-        walk_row.addWidget(self.walk_button)
-        root.addLayout(walk_row)
+        done_row = QHBoxLayout()  # 안내한 조작을 했으면 누르는 버튼(입력칸 바로 위 오른쪽)
+        done_row.addStretch()
+        self.done_button = _button("했어요 ✓", "cardButton")
+        self.done_button.clicked.connect(self.operation_done)
+        self.done_button.hide()
+        done_row.addWidget(self.done_button)
+        root.addLayout(done_row)
 
         self.input = QLineEdit()
         self.input.setObjectName("input")
@@ -182,10 +183,10 @@ class HelperWindow(QWidget):
         self._course_row = QHBoxLayout()
         self._course_row.setSpacing(6)
         picker.addLayout(self._course_row)
-        hint = QLabel(PICK_HINT)
-        hint.setObjectName("hint")
-        hint.setWordWrap(True)
-        picker.addWidget(hint)
+        self._pick_hint = QLabel(PICK_HINT)
+        self._pick_hint.setObjectName("hint")
+        self._pick_hint.setWordWrap(True)
+        picker.addWidget(self._pick_hint)
         layout.addWidget(self._picker)
 
         self._stepper = QWidget()  # 진행 중: 연습 과정 · n단계 · 바꾸기 / 단계 이름 / 뒤로 · 다음 단계 · 건너뛰기
@@ -252,7 +253,7 @@ class HelperWindow(QWidget):
             self._show_step(view)
         self._prompt_text.setText(view.prompt or "")
         self.prompt.setVisible(view.prompt is not None)  # 창을 앞으로 끌어오지 않고 창 안에만 띄운다
-        self.walk_button.setVisible(view.can_walk)
+        self.done_button.setVisible(view.done_button)
 
     def show_line(self, line: Line) -> None:
         """도우미 안내 말(guide)이나 진행 관리의 알림(notice) 한 줄을 대화에 붙인다."""
@@ -260,6 +261,7 @@ class HelperWindow(QWidget):
 
     def _set_courses(self, courses: list[Course]) -> None:
         """고르기 버튼과 바꾸기 메뉴는 연습 과정 목록이 바뀌었을 때만 다시 만든다(진행 모양은 자주 다시 그린다)."""
+        self._pick_hint.setText(PICK_HINT if courses else COURSES_UNREADABLE)
         labels = tuple(course.label for course in courses)
         if labels == self._course_labels:
             return

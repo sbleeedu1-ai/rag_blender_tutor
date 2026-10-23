@@ -10,6 +10,7 @@ EDITING = {
         "scale": [1.0, 1.0, 2.0],
         "dimensions": [2.0, 2.0, 4.0],
         "material_slot_count": 1,
+        "location": [0.0, 0.0, -3.5],
     },
     "selected_objects": ["실린더", "Cube"],
     "language": "ko_KR",
@@ -19,4 +20,5 @@ EDITING = {
     "blender_version": "5.2.2",
     "edit_selected": {"VERT": 4},
     "recent_operators": ["mesh.select_all", "mesh.merge"],
+    "view": {"distance": 18.388, "rotation": [0.712, 0.441, 0.287, 0.464], "center": [0.0, 0.0, 0.0]},
 }

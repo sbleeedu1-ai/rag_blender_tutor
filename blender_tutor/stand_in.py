@@ -65,7 +65,8 @@ def build_engine(
     """data_dir(보통 data/)의 청크·메뉴 이름 사전으로 임시 엔진을 만든다. 청크 파일이 없으면 FileNotFoundError.
 
     메뉴 이름 사전이 없으면 메뉴 이름을 영어 그대로 보인다. courses는 연습 과정 밖 질문에 권할 연습 과정이고,
-    벡터는 이름 + 한 줄 설명을 낱말 세기로 만든다(진짜 벡터에 무엇을 넣을지는 티켓 31).
+    벡터는 이름 + 한 줄 설명을 낱말 세기로 만든다. 정해진 것은 이름 + 한 줄 설명 + 비슷한 말이지만(티켓 14·31),
+    Course에 비슷한 말 칸이 아직 없어 임시 엔진은 둘만 쓴다(칸은 진짜 벡터를 만드는 티켓 31에서 더한다).
     """
     chunks = load_chunks(data_dir / "chunks" / "manual_chunks.jsonl")
     embedder = WordEmbedder()

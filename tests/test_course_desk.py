@@ -1,12 +1,12 @@
-"""창 번호마다 진행 관리(티켓 27): Blender에서 온 봉투와 창의 버튼·답을 차례로 넣고, 창에 보일 단계와 물음을 본다.
+"""창 번호마다 진행 관리(티켓 27): Blender에서 온 봉투와 창의 버튼·답을 차례로 넣고, 창에 보일 단계·물음과 대화에 붙일 안내 말을 본다.
 
-진행 관리 자체의 규칙은 test_progress_record.py가 보고, 여기서는 Blender 창 번호로 나누기와 떠 있는 물음 정리를 본다.
+진행 관리 자체의 규칙은 test_progress_record.py가 보고, 여기서는 Blender 창 번호로 나누기, 카드에 보일 모양, 대화에 붙일 말을 본다.
 기록은 테스트마다 임시 폴더(tmp_path)에 쓴다.
 """
 
 from pathlib import Path
 
-from blender_tutor.course_desk import CourseDesk, Line, StepView
+from blender_tutor.course_desk import CourseDesk, Line, LineKind, StepView
 from blender_tutor.progress import Course, Operation, Step
 from blender_tutor.receiver import FileEvent
 from blender_tutor.work_state import WorkState
@@ -98,13 +98,15 @@ def test_이어_하기를_묻는_중에_다른_파일을_열면_물음을_거둔
     assert desk.view(A) == StepView(None, 0, None, None)
 
 
-def test_이어_하기를_묻는_중에_연습_과정을_고르면_물음을_거두고_고른_것을_시작한다(tmp_path):
+def test_이어_하기를_묻는_중에_연습_과정을_고르면_덮어쓸지_묻고_네면_고른_것을_시작한다(tmp_path):
     saved_at_join(tmp_path)
     desk = make(tmp_path)
     desk.on_message(A, IDLE, FileEvent("opened", BLEND))
     desk.choose(A, "shield")
+    assert desk.view(A).prompt.startswith("이 파일의 진행 기록(검, 3단계)이 방패로 처음부터 바뀌어요.")
+    desk.answer(A, True)
     assert desk.view(A) == StepView(SHIELD, 1, SHIELD.steps[0], None)
-    desk.answer(A, True)  # 거둔 물음에 늦게 온 답
+    desk.answer(A, True)  # 물음이 없을 때 온 답은 아무것도 하지 않는다
     assert desk.view(A).course == SHIELD
 
 
@@ -135,7 +137,7 @@ def test_진행_관리의_알림은_대화에_붙일_글로_돌려준다(tmp_pat
     assert desk.view(A) == StepView(SHIELD, 0, None, None)  # 다 마침
     desk.on_message(A, IDLE, FileEvent("saved", BLEND))
     assert make(tmp_path).on_message(A, IDLE, FileEvent("opened", BLEND)) == [
-        Line("notice", "이 파일에서 방패 연습 과정을 다 마쳤어요. 다음엔 다른 연습 과정을 골라 볼까요?")
+        Line(LineKind.NOTICE, "이 파일에서 방패 연습 과정을 다 마쳤어요. 다음엔 다른 연습 과정을 골라 볼까요?")
     ]
 
 
@@ -174,43 +176,85 @@ def guided(tmp_path) -> CourseDesk:
 def test_연습_과정을_고르면_인사와_단계_시작과_첫_조작_안내를_대화에_붙인다(tmp_path):
     desk = guided(tmp_path)
     assert desk.choose(A, "guided") == [
-        Line("guide", "단순한 검 연습 과정을 시작할게요."),
-        Line("guide", "1단계, 정육면체를 늘려 칼날 모양 잡기예요."),
-        Line("guide", GRAB.say),
+        Line(LineKind.GUIDE, "단순한 검 연습 과정을 시작할게요."),
+        Line(LineKind.GUIDE, "1단계, 정육면체를 늘려 칼날 모양 잡기예요."),
+        Line(LineKind.GUIDE, GRAB.say),
     ]
-    assert desk.view(A).can_walk  # 감지 조건이 없는 조작이라 [했어요]로 넘어간다
+    assert desk.view(A).done_button  # 감지 조건이 없는 조작이라 [했어요]로 넘어간다
 
 
 def test_했어요를_누르면_다음_조작_안내만_붙고_감지되면_그다음으로(tmp_path):
     desk = guided(tmp_path)
     desk.choose(A, "guided")
-    assert desk.walked(A) == [Line("guide", SCALE.say)]
+    assert desk.next_operation(A) == [Line(LineKind.GUIDE, SCALE.say)]
     assert desk.on_message(A, IDLE) == []  # 같은 자리면 다시 말하지 않는다
-    assert desk.on_message(A, RESIZED) == [Line("guide", "이 단계에서 할 조작은 다 했어요. 다 됐으면 '다음 단계'를 눌러 주세요.")]
-    assert not desk.view(A).can_walk
+    assert desk.on_message(A, RESIZED) == [Line(LineKind.GUIDE, "이 단계에서 할 조작은 다 했어요. 다 됐으면 '다음 단계'를 눌러 주세요.")]
+    assert not desk.view(A).done_button
 
 
 def test_다음_단계로_가면_단계_시작을_알리고_조작이_없으면_버튼으로_넘어가라고_한다(tmp_path):
     desk = guided(tmp_path)
     desk.choose(A, "guided")
     assert desk.next_step(A) == [
-        Line("guide", "2단계, 부품 합치기예요."),
-        Line("guide", "이 단계는 다 되면 '다음 단계'를 눌러 넘어가요."),
+        Line(LineKind.GUIDE, "2단계, 부품 합치기예요."),
+        Line(LineKind.GUIDE, "이 단계는 다 되면 '다음 단계'를 눌러 넘어가요."),
     ]
-    assert desk.next_step(A) == [Line("guide", "단순한 검 연습 과정을 다 마쳤어요. 수고하셨어요!")]
+    assert desk.next_step(A) == [Line(LineKind.GUIDE, "단순한 검 연습 과정을 다 마쳤어요. 수고하셨어요!")]
 
 
 def test_이어_하면_이어서_한다고_말하고_그_조작부터_안내한다(tmp_path):
     desk = guided(tmp_path)
     desk.on_message(A, IDLE, FileEvent("saved", BLEND))
     desk.choose(A, "guided")
-    desk.walked(A)
+    desk.next_operation(A)
     desk.on_message(A, IDLE, FileEvent("saved", BLEND))
 
     reopened = CourseDesk([GUIDED], tmp_path)
     reopened.on_message(A, IDLE, FileEvent("opened", BLEND))
     assert reopened.answer(A, True) == [
-        Line("guide", "단순한 검 연습 과정을 이어서 할게요."),
-        Line("guide", "1단계, 정육면체를 늘려 칼날 모양 잡기예요."),
-        Line("guide", SCALE.say),
+        Line(LineKind.GUIDE, "단순한 검 연습 과정을 이어서 할게요."),
+        Line(LineKind.GUIDE, "1단계, 정육면체를 늘려 칼날 모양 잡기예요."),
+        Line(LineKind.GUIDE, SCALE.say),
+    ]
+
+
+def test_뒤에_있는_blender의_말은_대화에_붙이지_않고_옮겨_오면_지금_자리를_알려_준다(tmp_path):
+    desk = guided(tmp_path)  # A: 앞
+    desk.on_message(B, IDLE, FileEvent("opened", ""), shown=False)
+    assert desk.on_message(B, IDLE, shown=False) == []
+    desk.choose(A, "guided")
+    desk.next_operation(A)
+    assert desk.switched_to(B) == []  # B는 연습 과정을 고르지 않았다(카드에 고르기 목록이 보임)
+    assert desk.switched_to(A) == [
+        Line(LineKind.GUIDE, "이 Blender는 단순한 검 1단계, 정육면체를 늘려 칼날 모양 잡기예요."),
+        Line(LineKind.GUIDE, SCALE.say),
+    ]
+
+
+def test_뒤에_있을_때_생긴_알림은_옮겨_올_때_보인다(tmp_path):
+    desk = CourseDesk([GUIDED, SHIELD], tmp_path)
+    desk.on_message(A, IDLE, FileEvent("opened", BLEND))
+    desk.choose(A, "shield")
+    desk.next_step(A)
+    desk.next_step(A)
+    desk.on_message(A, IDLE, FileEvent("saved", BLEND))  # 방패를 다 마치고 저장
+
+    other = CourseDesk([GUIDED, SHIELD], tmp_path)
+    assert other.on_message(B, IDLE, FileEvent("opened", BLEND), shown=False) == []
+    assert other.switched_to(B) == [Line(LineKind.NOTICE, "이 파일에서 방패 연습 과정을 다 마쳤어요. 다음엔 다른 연습 과정을 골라 볼까요?")]
+    assert other.switched_to(B) == []  # 한 번만
+
+
+def test_단추로_답했을_때_진행_관리가_돌려준_알림도_대화_말로_나온다(tmp_path):
+    # 3단계에서 저장한 뒤 버튼으로 마치고 저장하지 않음 → 다시 열면 "그 뒤 다 마친 상태까지…" 물음 → [네]
+    saved_at_join(tmp_path)
+    desk = make(tmp_path)
+    desk.on_message(A, IDLE, FileEvent("opened", BLEND))
+    desk.answer(A, True)
+    desk.next_step(A)
+    reopened = make(tmp_path)
+    reopened.on_message(A, IDLE, FileEvent("opened", BLEND))
+    assert reopened.view(A).prompt.endswith("그 뒤 다 마친 상태까지 진행하신 것 같아요. 파일에도 그만큼 되어 있나요?")
+    assert reopened.answer(A, True) == [
+        Line(LineKind.NOTICE, "이 파일에서 검 연습 과정을 다 마쳤어요. 다음엔 다른 연습 과정을 골라 볼까요?")
     ]

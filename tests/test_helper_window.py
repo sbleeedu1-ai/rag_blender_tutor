@@ -13,8 +13,8 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 
 from blender_tutor.answer_engine import Done, Failure, Piece, Source
-from blender_tutor.course_desk import Line, StepView
-from blender_tutor.helper_window import HelperWindow, resize_edges
+from blender_tutor.course_desk import Line, LineKind, StepView
+from blender_tutor.helper_window import COURSES_UNREADABLE, PICK_HINT, HelperWindow, resize_edges
 from blender_tutor.progress import Course, Operation, Step
 
 BEVEL = Source("Bevel Modifier > Options", "https://docs.blender.org/manual/en/5.2/modeling/modifiers/generate/bevel.html#options", True, True, ("https://example.org/bevel.mp4",))
@@ -44,7 +44,7 @@ def window(app):
     window.went_back.connect(lambda: window.sent.append(("뒤로",)))
     window.skipped_to.connect(lambda label: window.sent.append(("건너뜀", label)))
     window.answered.connect(lambda yes: window.sent.append(("답", yes)))
-    window.walked.connect(lambda: window.sent.append(("했어요",)))
+    window.operation_done.connect(lambda: window.sent.append(("했어요",)))
     window.show()
     yield window
     window.close()
@@ -189,16 +189,24 @@ def test_blender가_없으면_카드를_누를_수_없다(window):
 
 
 def test_안내_말과_알림은_대화에_한_줄씩_붙는다(window):
-    window.show_line(Line("guide", "정육면체를 눌러 보시겠어요?"))
-    window.show_line(Line("notice", "이 파일에서 검 연습 과정을 다 마쳤어요."))
+    window.show_line(Line(LineKind.GUIDE, "정육면체를 눌러 보시겠어요?"))
+    window.show_line(Line(LineKind.NOTICE, "이 파일에서 검 연습 과정을 다 마쳤어요."))
     assert texts(window, "guide") == ["정육면체를 눌러 보시겠어요?"]
     assert texts(window, "notice") == ["이 파일에서 검 연습 과정을 다 마쳤어요."]
 
 
 def test_안내하는_조작이_있으면_했어요_버튼을_보이고_누르면_알린다(window):
-    window.show_progress(StepView(SWORD, 2, TIP, None, can_walk=True), COURSES)
-    assert window.walk_button.isVisible()
-    window.walk_button.click()
+    window.show_progress(StepView(SWORD, 2, TIP, None, done_button=True), COURSES)
+    assert window.done_button.isVisible()
+    window.done_button.click()
     assert window.sent == [("했어요",)]
     window.show_progress(AT_TIP, COURSES)
-    assert not window.walk_button.isVisible()
+    assert not window.done_button.isVisible()
+
+
+def test_연습_과정을_하나도_읽지_못했으면_고르기_카드에_그렇다고_보인다(window):
+    # 연습 과정 파일이 깨졌을 때(helper._courses가 빈 목록을 줌). 원래 연습 과정이 없는 프로그램처럼 보이지 않게
+    window.show_progress(StepView(None, 0, None, None), [])
+    assert texts(window, "hint") == [COURSES_UNREADABLE]
+    window.show_progress(StepView(None, 0, None, None), COURSES)
+    assert texts(window, "hint") == [PICK_HINT]
