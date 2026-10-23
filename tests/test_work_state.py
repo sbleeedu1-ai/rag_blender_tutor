@@ -13,6 +13,7 @@ def test_애드온이_보낸_JSON을_읽는다():
     assert state.selected_objects == ("실린더", "Cube")
     assert state.edit_selected == {"VERT": 4}
     assert state.recent_operators == ("mesh.select_all", "mesh.merge")
+    assert state.running_operators == ()
     assert state.view == View(18.388, (0.712, 0.441, 0.287, 0.464), (0.0, 0.0, 0.0))
 
 

@@ -1,6 +1,6 @@
 """Blender 첫걸음 도우미 애드온(명세 "애드온", ADR-0001, 티켓 25).
 
-작업 상태 13칸을 읽어 도우미 프로그램에 내 PC 안 HTTP로 보낸다. 검색·답 생성은 하지 않는다.
+작업 상태 14칸을 읽어 도우미 프로그램에 내 PC 안 HTTP로 보낸다. 검색·답 생성은 하지 않는다.
 - 0.5초마다 읽어 바뀌었을 때만 보내고, F10이면 바뀌지 않아도 보내며 도우미 창을 부른다.
 - 파일 열기·저장은 사건(opened·saved)으로 함께 보낸다(티켓 18).
 - Blender를 켤 때와 F10 때 도우미 프로그램이 없으면 켠다. 끄는 일은 도우미 프로그램이 한다(켜진 Blender가 없으면 끝남).
@@ -105,8 +105,16 @@ def _view(context) -> dict | None:
     return {"distance": view.view_distance, "rotation": list(view.view_rotation), "center": list(view.view_location)}
 
 
+def _running(context) -> list[str]:
+    """확정을 기다리며 진행 중인 조작(S·G·화면 끌기 등). 그동안 배율·위치·시점은 마우스대로 바뀌는 확정 전 값이다.
+
+    진행 관리는 크기·옮기기·화면 조작이 진행 중이면 감지를 기다린다(2026-10-23 사용자 눈 확인에서 찾음).
+    """
+    return [operator_name(op.bl_idname) for window in context.window_manager.windows for op in window.modal_operators]
+
+
 def read_state(context, recent_operators) -> dict:
-    """작업 상태 13칸(blender_tutor/work_state.py의 WorkState와 같은 칸)."""
+    """작업 상태 14칸(blender_tutor/work_state.py의 WorkState와 같은 칸)."""
     active = context.active_object
     return {
         "mode": context.mode,
@@ -127,6 +135,7 @@ def read_state(context, recent_operators) -> dict:
         "blender_version": bpy.app.version_string,
         "edit_selected": _edit_selected(context),
         "recent_operators": list(recent_operators),
+        "running_operators": _running(context),
         "view": _view(context),
     }
 

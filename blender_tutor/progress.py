@@ -124,6 +124,12 @@ def _guide(step: dict) -> str:
     return "\n".join(lines)
 
 
+# 이 조작이 진행 중이면(확정 전) 감지·단계 끝 물음을 기다린다. Blender는 S·G·화면 끌기 동안 배율·위치·시점을
+# 마우스대로 바로 바꿔 보여서, 확정 전 값으로 넘어가 버리기 때문이다(2026-10-23 사용자 눈 확인에서 찾음).
+# 다른 애드온이 늘 켜 두는 조작 때문에 계속 기다리지 않게 이름 앞부분으로 좁힌다.
+WAIT_WHILE_RUNNING = ("transform.", "view3d.")
+
+
 class Progress:
     """한 연습 과정의 진행. 사건 함수마다 창이 할 일(물음 띄우기·거두기) 목록을 돌려준다."""
 
@@ -181,8 +187,10 @@ class Progress:
         self._latest = state
         if self._step_started_at is None:
             self._step_started_at = state
+        if self._operation_started_at is None:  # 기준은 조작 중이어도 잡는다(그 뒤 확정한 상태를 기준으로 삼으면 놓친다)
+            self._operation_started_at = state
         step = self.step
-        if step is None:
+        if step is None or any(name.startswith(WAIT_WHILE_RUNNING) for name in state.running_operators):
             return []
         self._detect_operation(step, state)
         met = bool(step.conditions) and all(
@@ -241,9 +249,6 @@ class Progress:
 
     def _detect_operation(self, step: Step, state: WorkState) -> None:
         """지금 조작의 감지 조건이 맞으면 다음 조작으로. 안내를 시작한 때와 같은 상태로는 넘어가지 않는다(한 번에 하나씩)."""
-        if self._operation_started_at is None:
-            self._operation_started_at = state
-            return
         operation = self.operation
         if operation is None or state == self._operation_started_at:
             return

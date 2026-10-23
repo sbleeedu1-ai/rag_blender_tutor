@@ -51,7 +51,7 @@ TOWARD_BEVEL, TOWARD_ARRAY, EVERYWHERE = [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0,
 
 STATE = WorkState(
     "OBJECT", ActiveObject("Cube", "MESH", (), (1.0, 1.0, 1.0), (2.0, 2.0, 2.0), 0), ("Cube",),
-    "en_US", False, "", 3, "5.2.2", {}, (), View(18.4, (0.71, 0.44, 0.29, 0.46), (0.0, 0.0, 0.0)),
+    "en_US", False, "", 3, "5.2.2", {}, (), view=View(18.4, (0.71, 0.44, 0.29, 0.46), (0.0, 0.0, 0.0)),
 )
 TIMEOUT_MESSAGE = "답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
 ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물어봐 주세요."

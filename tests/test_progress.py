@@ -465,3 +465,34 @@ def test_옮기기는_그_조작을_안내한_때보다_어느_방향으로_옮�
     assert progress.operations_done == 0
     progress.on_state(with_object(location=(1.5, 0.0, -1.0)))  # 아래로 내림(조금만 내려도 넘어간다)
     assert progress.operations_done == 1
+
+
+def test_크기를_조절하는_동안에는_넘어가지_않고_확정한_뒤에_넘어간다():
+    # S를 누르면 Blender는 확정 전에도 마우스대로 배율을 바꿔 보인다(2026-10-23 사용자 눈 확인에서 찾음)
+    progress = Progress([STRETCH_AXES], latest=IDLE)
+    adjusting = replace(with_object(scale=(1.0, 1.0, 1.3)), running_operators=("transform.resize",))
+    progress.on_state(adjusting)
+    assert progress.operations_done == 0
+    progress.on_state(with_object(scale=(1.0, 1.0, 3.5)))  # 클릭으로 확정
+    assert progress.operations_done == 1
+
+
+def test_화면을_끄는_동안에는_단계_끝_물음도_기다린다():
+    step = Step("view", "화면 돌려 보기", (("화면", "돌림"),))
+    progress = Progress([step, JOIN_PARTS], latest=IDLE)
+    assert progress.on_state(replace(ORBITED, running_operators=("view3d.rotate",))) == []
+    assert progress.on_state(ORBITED) == [Ask("view", "'화면 돌려 보기' 단계를 끝낸 것 같아요. 다음 단계(부품 합치기)로 갈까요?")]
+
+
+def test_다른_조작이_진행_중이어도_감지는_멈추지_않는다():
+    # 다른 애드온이 늘 켜 두는 조작이 있어도 감지가 계속 기다리지 않게, 크기·옮기기·화면 조작만 기다린다
+    progress = Progress([STRETCH_AXES], latest=IDLE)
+    progress.on_state(replace(with_object(scale=(1.0, 1.0, 3.5)), running_operators=("screencast.keys",)))
+    assert progress.operations_done == 1
+
+
+def test_처음_받은_상태가_조작_중이어도_그때를_기준으로_삼는다():
+    progress = Progress([STRETCH_AXES])  # 고르기 전에 받아 둔 작업 상태가 없을 때
+    progress.on_state(replace(with_object(scale=(1.0, 1.0, 1.3)), running_operators=("transform.resize",)))
+    progress.on_state(with_object(scale=(1.0, 1.0, 3.5)))
+    assert progress.operations_done == 1

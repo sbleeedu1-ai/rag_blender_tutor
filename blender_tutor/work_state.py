@@ -1,4 +1,4 @@
-"""작업 상태: 애드온이 Blender에서 읽어 보내는 13칸(명세 "애드온").
+"""작업 상태: 애드온이 Blender에서 읽어 보내는 14칸(명세 "애드온").
 
 애드온은 이 모양을 JSON으로 보내고, 진행 관리(끝난 조건 판정)와 답 엔진(모델에 넘기는 글)이 같은 WorkState를 쓴다.
 칸 이름은 JSON과 같다. 애드온(addon/blender_tutor_addon)은 Blender 안에서 돌아 이 파일을 가져다 쓰지 못하므로,
@@ -36,7 +36,7 @@ class View:
 
 @dataclass(frozen=True)
 class WorkState:
-    """작업 상태 13칸. 활성 물체 칸에 이름·종류·모디파이어·배율·크기·재질 슬롯 수·위치, 시점 칸에 거리·각도·중심이 함께 든다."""
+    """작업 상태 14칸. 활성 물체 칸에 이름·종류·모디파이어·배율·크기·재질 슬롯 수·위치, 시점 칸에 거리·각도·중심이 함께 든다."""
 
     mode: str  # Blender context.mode 값(예: OBJECT, EDIT_MESH)
     active_object: ActiveObject | None  # 활성 물체가 없으면 None
@@ -48,6 +48,8 @@ class WorkState:
     blender_version: str  # 예: 5.2.2
     edit_selected: dict[str, int]  # 편집 모드 선택 방식(VERT·EDGE·FACE) → 고른 개수. 메시 편집 모드가 아니면 비움
     recent_operators: tuple[str, ...]  # 방금 실행한 조작(오래된 차례, 최대 3개), 'mesh.merge' 꼴
+    # 확정을 기다리며 진행 중인 조작(S·G·화면 끌기 등, 'transform.resize' 꼴). 그동안 배율·시점은 확정 전 값이다
+    running_operators: tuple[str, ...] = ()
     view: View | None = None  # 가장 큰 3D 화면의 시점. 3D 화면이 없으면 None. 테스트에서 줄여 쓰도록 기본값을 둔다
 
     @classmethod
@@ -146,6 +148,7 @@ _STATE: dict[str, Callable] = {
     "blender_version": _text,
     "edit_selected": _counts,
     "recent_operators": _texts,
+    "running_operators": _texts,
     "view": _part_or_none,  # 안쪽 칸은 _VIEW로 따로 읽는다
 }
 _OBJECT: dict[str, Callable] = {

@@ -20,7 +20,7 @@
 ## 지금 상태
 
 - **구조 한눈에: `STRUCTURE.md`**(사용자가 켜 두고 보는 문서, 2026-10-22 사용자 요청). 프로그램·파일·주고받는 모양이 바뀌면 같은 PR에서 고친다.
-- 애드온(티켓 25, HISTORY [44]): `addon/blender_tutor_addon/`가 작업 상태 13칸(`blender_tutor/work_state.py`의 `WorkState`, 13칸째 3D 화면 시점과 활성 물체 위치는 티켓 27)을 0.5초마다 읽어 바뀌면, F10이면 바로, 파일 열기·저장이면 사건과 함께 도우미 프로그램에 내 PC 안 HTTP(127.0.0.1:8766, 비밀 글자)로 보낸다. 받는 쪽 `blender_tutor/receiver.py`는 창 번호마다 최신 상태를 들고, 마지막 Blender가 닫히면 끝난다.
+- 애드온(티켓 25, HISTORY [44]): `addon/blender_tutor_addon/`가 작업 상태 14칸(`blender_tutor/work_state.py`의 `WorkState`, 3D 화면 시점·활성 물체 위치·진행 중인 조작은 티켓 27)을 0.5초마다 읽어 바뀌면, F10이면 바로, 파일 열기·저장이면 사건과 함께 도우미 프로그램에 내 PC 안 HTTP(127.0.0.1:8766, 비밀 글자)로 보낸다. 받는 쪽 `blender_tutor/receiver.py`는 창 번호마다 최신 상태를 들고, 마지막 Blender가 닫히면 끝난다.
   - 사용자가 2026-10-22 직접 확인: Blender를 켜면 도우미가 켜지고 닫으면 꺼짐, 메뉴로 한 glTF 내보내기가 `export_scene.gltf`로 잡힘.
   - 진행 관리·답 엔진은 이제 사전 대신 `WorkState`를 받는다(답 엔진의 임시 칸 이름 `language`·`translate_interface`는 그대로 확정).
 - 도우미 창(티켓 26, HISTORY [45]): 입구 `blender_tutor/helper.py`(애드온 `config.json` 명령이 `-m blender_tutor.helper`)가 받는 쪽·PySide6 위젯 창(`helper_window.py`)·답 엔진을 잇는다. 창 자리 판단은 `window_rules.py`(시험함), Windows 조작은 `winapi.py`(눈 확인), 최근 대화 3쌍은 `conversation.py`.
@@ -30,7 +30,7 @@
 
 - 연습 과정 연결(티켓 27, HISTORY [51]-[53]): 창 맨 위 카드(연습 과정 · n단계 · 바꾸기 / 단계 이름 / 뒤로 · 다음 단계 · 건너뛰기)와 대화의 조작 안내. 판단은 `course_desk.py`(Blender 창 번호마다 진행 관리 하나, 대화에 붙일 말, 카드 모양)에 모으고 `helper.py`는 잇기만 한다.
   - 연습 과정 파일의 조작마다 `안내`(선생님 말투, Claude 초안, 티켓 32에서 사용자 검수)와 `감지`(선택). 감지가 맞거나 [했어요]면 다음 조작. [했어요]는 감지되는 조작에도 보인다(`course_desk.DONE_BUTTON_EVEN_IF_DETECTED`, 티켓 32 뒤 끌 수 있음)
-  - 감지는 그 조작 안내를 시작할 때의 작업 상태와 견준다. 화면 조작은 3D 화면 시점(`화면: 돌림·확대·축소·옮김·전체`), 크기·옮기기는 방향만(`배율/위치 늘어남·줄어듦`, 얼마나는 안 봄, 사용자 결정)
+  - 감지는 그 조작 안내를 시작할 때의 작업 상태와 견주고, S·G·화면 끌기가 진행 중이면(확정 전) 기다린다. 화면 조작은 3D 화면 시점(`화면: 돌림·확대·축소·옮김·전체`), 크기·옮기기는 방향만(`배율/위치 늘어남·줄어듦`, 얼마나는 안 봄, 사용자 결정)
   - 진행 기록은 이중: 바뀔 때마다(끝낸 조작 수 포함) + 저장할 때의 자리 `저장 때`. 다르면 다시 열 때 묻는다
   - 기록 폴더는 `%APPDATA%\blender_tutor\progress`, 쓸 수 없으면 사용자 폴더, 둘 다 안 되면 메모리에만
 - 답 엔진(`blender_tutor/answer_engine.py`): 티켓 21에서 질문 → 임베딩 1번 → 뜻 + 낱말(BM25) 검색 RRF 상위 6개 → 답변 모델 1번 → 답 조각 + 근거 목록(HISTORY [37]).
@@ -47,7 +47,7 @@
     - `[[[`처럼 대괄호가 겹칠 때의 처리는 지어낸 경계 사례라 지금대로 두고, 실제 모델 결과(티켓 33)를 보고 다시 본다
   - 아직 가짜 모델만 끼운다. 실제 OpenAI 연결은 유료 티켓 31(임베딩)·33(답변)에서.
   - 넘긴 것: 작업 상태 모양(25), 창의 오류 받기·엔진에 단계 넘기기(26·27, 끝남), 번역을 BM25에도 넣을지·연습 과정 벡터(31), 검 파일 용어를 화면 글자로(32), 제목에서만 뽑은 이름 검수 뒤 더하기(30). 각 티켓 Comments.
-- 테스트: `.venv\Scripts\python -m pytest` 350개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
+- 테스트: `.venv\Scripts\python -m pytest` 354개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 다른 PC에서 data/ 다시 만들기

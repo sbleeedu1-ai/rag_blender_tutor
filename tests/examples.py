@@ -20,5 +20,6 @@ EDITING = {
     "blender_version": "5.2.2",
     "edit_selected": {"VERT": 4},
     "recent_operators": ["mesh.select_all", "mesh.merge"],
+    "running_operators": [],
     "view": {"distance": 18.388, "rotation": [0.712, 0.441, 0.287, 0.464], "center": [0.0, 0.0, 0.0]},
 }
