@@ -96,6 +96,7 @@
 | 만드는 사람 | `blender_tutor/course_check.py` | 연습 과정 파일 검사 | 15, 24 |
 | 만드는 사람 | `courses/*.yaml` | 연습 과정(검 `sword.yaml`, 공통 준비 `_common.yaml`) | 16 |
 | 설치 | `blender_tutor/install_addon.py` | 애드온을 Blender 애드온 폴더에 복사하고 `config.json`(도우미 켜는 법·비밀 글자)을 적음 | 25 |
+| 공통 | `blender_tutor/paths.py` | 프로젝트 폴더 위치(`PROJECT`). 설치·도우미·임시 엔진이 함께 씀. 함께 쓰는 경로가 늘면 여기에 | 26 뒤 |
 | 시험 | `tests/` | 기본 테스트(API 키·Blender 없이) | 각 티켓 |
 | 시험 | `addon/selftest.py` | Blender를 화면 없이 띄워 애드온을 확인(기본 테스트 밖) | 25 |
 | 저장소 | `menu_choices.json` | 번역이 여러 개인 메뉴 이름의 고정 짝(지금은 비어 있음) | 23 |

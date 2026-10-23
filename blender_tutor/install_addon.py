@@ -15,9 +15,9 @@ import shutil
 import sys
 from pathlib import Path
 
+from blender_tutor.paths import PROJECT
 from blender_tutor.receiver import PORT
 
-PROJECT = Path(__file__).resolve().parent.parent
 ADDON_NAME = "blender_tutor_addon"
 SOURCE = PROJECT / "addon" / ADDON_NAME
 

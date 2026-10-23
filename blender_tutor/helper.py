@@ -25,7 +25,7 @@ from blender_tutor.answer_engine import Failure
 from blender_tutor.conversation import PROGRAM_ERROR, Conversation
 from blender_tutor.helper_window import FONT, HelperWindow, Tray
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
-from blender_tutor.install_addon import PROJECT
+from blender_tutor.paths import PROJECT
 from blender_tutor.stand_in import build_engine
 from blender_tutor.window_rules import FrontBlender, Place, Screen, needs_move, place
 

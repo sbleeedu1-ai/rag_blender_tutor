@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
 from blender_tutor.answer_engine import AnswerEngine, AnswerModel
-from blender_tutor.install_addon import PROJECT
+from blender_tutor.paths import PROJECT
 from blender_tutor.manual_chunks import load_chunks
 from blender_tutor.menu_names import MenuNames
 
