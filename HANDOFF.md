@@ -47,7 +47,7 @@
     - `[[[`처럼 대괄호가 겹칠 때의 처리는 지어낸 경계 사례라 지금대로 두고, 실제 모델 결과(티켓 33)를 보고 다시 본다
   - 아직 가짜 모델만 끼운다. 실제 OpenAI 연결은 유료 티켓 31(임베딩)·33(답변)에서.
   - 넘긴 것: 작업 상태 모양(25), 창의 오류 받기·엔진에 단계 넘기기(26·27, 끝남), 번역을 BM25에도 넣을지·연습 과정 벡터(31), 검 파일 용어를 화면 글자로(32), 제목에서만 뽑은 이름 검수 뒤 더하기(30). 각 티켓 Comments.
-- 테스트: `.venv\Scripts\python -m pytest` 357개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
+- 테스트: `.venv\Scripts\python -m pytest` 358개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 다른 PC에서 data/ 다시 만들기
@@ -96,7 +96,7 @@
 - 끝난 조건·감지 조건 값 꼴:
   - 모드는 `context.mode` 꼴이다(`EDIT_MESH`).
   - 방금 조작은 `object.join` 꼴이다. 애드온이 `OBJECT_OT_join`에서 바꿔 보내야 한다(티켓 25).
-  - 배율·위치 늘어남/줄어듦은 방향 하나(`Z`)나 목록(`[Y, Z]`), 화면은 `돌림`·`확대`·`축소`·`옮김`·`전체`(티켓 27).
+  - 배율·위치 늘어남/줄어듦과 배율 그대로는 방향 하나(`Z`)나 목록(`[Y, Z]`), 화면은 `돌림`·`확대`·`축소`·`옮김`·`전체`(티켓 27).
 - **화면 돌리기·확대·옮기기·Home은 Blender 조작 기록에 남지 않는다**(기록 표시 REGISTER가 없음, 2026-10-23 설치본에서 확인). 그래서 3D 화면 시점 값으로 알아챈다. S·G의 조작 이름(`transform.resize`·`translate`)에는 방향이 없다.
 - Blender 조작 기록에는 사람이 키보드·메뉴로 실행한 것만 남는다. 이런 확인은 사용자에게 순서를 알려 주고 직접 해 달라고 한다.
 - 이 PC의 Blender: `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`(5.2.2).

@@ -120,6 +120,7 @@ def test_정해진_끝난_조건_종류는_모두_받아들인다(tmp_path):
           - 배율 줄어듦: [Y, Z]
           - 위치 늘어남: X
           - 위치 줄어듦: Z
+          - 배율 그대로: [X, Y]
           - 화면: 확대
 """
     course = COURSE.replace("          - 모드: EDIT_MESH\n          - 방금 조작: mesh.merge\n", conditions)

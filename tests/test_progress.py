@@ -271,7 +271,7 @@ def test_단계마다_먼저_볼_소제목과_답변_모델에_넘길_단계_내
 def test_검사가_받아들이는_끝난_조건_종류는_모두_판정할_수_있다():
     values = {"모드": "OBJECT", "방금 조작": "object.join", "물체 수 늘어남": 1, "모디파이어": "BEVEL",
               "재질 슬롯 수": 2, "배율": [1, 1, 1], "크기 비율": 3, "화면": "확대",
-              "배율 늘어남": "Z", "배율 줄어듦": ["X", "Y"], "위치 늘어남": "X", "위치 줄어듦": "Z"}  # fmt: skip
+              "배율 늘어남": "Z", "배율 줄어듦": ["X", "Y"], "위치 늘어남": "X", "위치 줄어듦": "Z", "배율 그대로": ["X", "Y"]}  # fmt: skip
     assert set(values) == set(CONDITIONS)
     for kind, value in values.items():
         Progress([Step("any", "아무 단계", ((kind, value),))]).on_state(IDLE)  # 판정 규칙이 값과 작업 상태로 오류 없이 돈다
@@ -536,3 +536,14 @@ def test_앞_조작의_휠이_더_굴러_거리가_바뀐_뒤에도_옮기기를
     progress.on_state(rolled_on)
     progress.on_state(replace(rolled_on, view=replace(rolled_on.view, center=(1.0, 0.0, 0.0))))  # Shift + 가운데 끌기
     assert progress.operations_done == 2
+
+
+def test_한_축만_바꾸는_조작은_다른_축이_바뀌면_넘어가지_않는다():
+    # S Z 중 가운데 버튼으로 축이 바뀐 채 확정한 경우(2026-10-23 사용자 눈 확인에서 찾음). Ctrl+Z로 되돌리면 다시 판정한다
+    only_z = Operation("길게 늘이기", "Object > Transform > Scale", "S", "S Z로 늘여 보세요.",
+                       (("배율 늘어남", "Z"), ("배율 그대로", ["X", "Y"])))
+    progress = Progress([Step("blade-stretch", "칼날 모양 잡기", operations=(only_z,))], latest=IDLE)
+    progress.on_state(with_object(scale=(1.4, 1.0, 3.0)))
+    assert progress.operations_done == 0
+    progress.on_state(with_object(scale=(1.0, 1.0, 4.0)))  # 되돌린 뒤 다시 S Z
+    assert progress.operations_done == 1

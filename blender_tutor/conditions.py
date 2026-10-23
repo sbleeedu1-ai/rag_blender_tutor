@@ -87,8 +87,11 @@ def _is_axes(value: object) -> bool:
     return bool(axes) and all(axis in AXES for axis in axes) and len(set(axes)) == len(axes)
 
 
-def _changed(field: str, grew: bool) -> Callable[[object, WorkState, WorkState], bool]:
-    """기준 때보다 같은 활성 물체의 배율·위치(field)가 그 방향으로 모두 커졌나(grew) / 작아졌나.
+def _changed(field: str, grew: bool | None) -> Callable[[object, WorkState, WorkState], bool]:
+    """기준 때보다 같은 활성 물체의 배율·위치(field)가 그 방향으로 모두 커졌나(grew 참) / 작아졌나(거짓) / 그대로인가(None).
+
+    '그대로'는 한 축만 바꾸는 조작에 함께 적는다: S Z 중 가운데 버튼으로 축이 바뀐 채 확정해도 Z만 보면 넘어가서다
+    (2026-10-23 사용자 눈 확인). 잘못 바꾼 뒤에는 Ctrl+Z로 되돌려야 다시 맞는다.
 
     S·G 다음 X·Y·Z로 방향을 정해도 조작 이름은 transform.resize·transform.translate 하나라 방향을 모른다.
     값으로 보면 옆 패널(N)에서 숫자로 고친 것(조작 기록에 남지 않음)도 잡힌다. 다른 물체를 골라 값이 달라진 것은
@@ -102,7 +105,8 @@ def _changed(field: str, grew: bool) -> Callable[[object, WorkState, WorkState],
             return False
         for axis in value if isinstance(value, list) else [value]:
             have, had = getattr(now, field)[AXES.index(axis)], getattr(before, field)[AXES.index(axis)]
-            if math.isclose(have, had, rel_tol=1e-3, abs_tol=1e-3) or (have > had) != grew:
+            same = math.isclose(have, had, rel_tol=1e-3, abs_tol=1e-3)
+            if same != (grew is None) or (grew is not None and (have > had) != grew):
                 return False
         return True
 
@@ -114,7 +118,7 @@ def _view_is(value, state: WorkState, start: WorkState) -> bool:
     return state.view is not None and start.view is not None and VIEW_CHANGES[value](state.view, start.view)
 
 
-# 끝난 조건 종류(명세에서 정한 7가지와 티켓 27에서 더한 배율·위치 늘어남/줄어듦과 화면). 판정은 AI 없이 이 규칙으로만 한다.
+# 끝난 조건 종류(명세에서 정한 7가지와 티켓 27에서 더한 배율·위치 늘어남/줄어듦, 배율 그대로, 화면). 판정은 AI 없이 이 규칙으로만 한다.
 CONDITIONS: dict[str, ConditionKind] = {
     "모드": ConditionKind(
         lambda v: v in MODES,
@@ -161,6 +165,11 @@ CONDITIONS: dict[str, ConditionKind] = {
         _is_axes,
         "방향 하나(예: X)나 방향 목록(예: [Y, Z])입니다. 기준 때보다 그 방향 배율이 모두 작아졌나.",
         _changed("scale", grew=False),
+    ),
+    "배율 그대로": ConditionKind(
+        _is_axes,
+        "방향 하나(예: X)나 방향 목록(예: [X, Y])입니다. 기준 때와 그 방향 배율이 모두 같은가(한 축만 바꾸는 조작에 함께 적음).",
+        _changed("scale", grew=None),
     ),
     "위치 늘어남": ConditionKind(
         _is_axes,
