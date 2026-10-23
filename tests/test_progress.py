@@ -496,3 +496,31 @@ def test_처음_받은_상태가_조작_중이어도_그때를_기준으로_삼�
     progress.on_state(replace(with_object(scale=(1.0, 1.0, 1.3)), running_operators=("transform.resize",)))
     progress.on_state(with_object(scale=(1.0, 1.0, 3.5)))
     assert progress.operations_done == 1
+
+
+# 끝난 조건(크기 비율 3)이 첫 조작(길게 늘이기)만으로 맞아 버리는 단계(2026-10-23 사용자 눈 확인에서 찾음)
+STRETCH_WITH_END = replace(STRETCH_AXES, conditions=(("크기 비율", 3),))
+STRETCHED = with_object(scale=(1.0, 1.0, 3.5), dimensions=(2.0, 2.0, 7.0))
+
+
+def test_조작을_다_끝내기_전에는_끝난_조건이_맞아도_묻지_않는다():
+    progress = Progress([STRETCH_WITH_END, JOIN_PARTS], latest=IDLE)
+    assert progress.on_state(STRETCHED) == []
+    assert progress.operations_done == 1
+
+
+def test_마지막_조작을_했어요로_끝냈을_때_끝난_조건이_맞아_있으면_바로_묻는다():
+    progress = Progress([STRETCH_WITH_END, JOIN_PARTS], latest=IDLE)
+    progress.on_state(STRETCHED)
+    progress.next_operation()
+    assert progress.next_operation() == [
+        Ask("blade-stretch", "'칼날 모양 잡기' 단계를 끝낸 것 같아요. 다음 단계(부품 합치기)로 갈까요?")
+    ]
+
+
+def test_마지막_조작이_감지로_끝나고_끝난_조건이_맞으면_그때_묻는다():
+    one = replace(STRETCH_WITH_END, operations=STRETCH_WITH_END.operations[:1])  # 길게 늘이기 하나뿐
+    progress = Progress([one, JOIN_PARTS], latest=IDLE)
+    assert progress.on_state(STRETCHED) == [
+        Ask("blade-stretch", "'칼날 모양 잡기' 단계를 끝낸 것 같아요. 다음 단계(부품 합치기)로 갈까요?")
+    ]

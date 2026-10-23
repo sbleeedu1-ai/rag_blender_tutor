@@ -47,7 +47,7 @@
     - `[[[`처럼 대괄호가 겹칠 때의 처리는 지어낸 경계 사례라 지금대로 두고, 실제 모델 결과(티켓 33)를 보고 다시 본다
   - 아직 가짜 모델만 끼운다. 실제 OpenAI 연결은 유료 티켓 31(임베딩)·33(답변)에서.
   - 넘긴 것: 작업 상태 모양(25), 창의 오류 받기·엔진에 단계 넘기기(26·27, 끝남), 번역을 BM25에도 넣을지·연습 과정 벡터(31), 검 파일 용어를 화면 글자로(32), 제목에서만 뽑은 이름 검수 뒤 더하기(30). 각 티켓 Comments.
-- 테스트: `.venv\Scripts\python -m pytest` 354개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
+- 테스트: `.venv\Scripts\python -m pytest` 357개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 다른 PC에서 data/ 다시 만들기

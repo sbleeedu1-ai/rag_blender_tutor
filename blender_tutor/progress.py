@@ -193,8 +193,18 @@ class Progress:
         if step is None or any(name.startswith(WAIT_WHILE_RUNNING) for name in state.running_operators):
             return []
         self._detect_operation(step, state)
-        met = bool(step.conditions) and all(
-            CONDITIONS[kind].is_met(value, state, self._step_started_at) for kind, value in step.conditions
+        return self._ask_if_done(step, state)
+
+    def _ask_if_done(self, step: Step, state: WorkState) -> list[Command]:
+        """끝난 조건이 맞으면 다음 단계로 갈지 묻고, 깨지면 거둔다. 조작 안내 중에는 보지 않는다.
+
+        첫 조작만으로 끝난 조건이 맞는 단계가 있어서다(예: 길게 늘이기만 해도 크기 비율 3, 2026-10-23 사용자 눈 확인).
+        조작을 다 끝내기 전에 넘어가고 싶으면 [다음 단계]를 누른다.
+        """
+        met = (
+            self.operation is None
+            and bool(step.conditions)
+            and all(CONDITIONS[kind].is_met(value, state, self._step_started_at) for kind, value in step.conditions)
         )
         if met and not self._asking and step.label not in self._declined:
             self._asking = True
@@ -235,10 +245,20 @@ class Progress:
 
     def next_operation(self) -> list[Command]:
         """[했어요]·감지: 지금 조작을 끝낸 것으로 치고 다음 조작으로 간다. 조작을 다 끝냈으면 그대로."""
-        if self.operation is not None:
-            self._operations_done += 1
-            self._operation_started_at = self._latest
+        if not self._advance():
+            return []
+        # 마지막 조작을 끝냈는데 끝난 조건이 이미 맞아 있으면 다음 작업 상태를 기다리지 않고 묻는다
+        if self.operation is None and self._latest is not None:
+            return self._ask_if_done(self.step, self._latest)
         return []
+
+    def _advance(self) -> bool:
+        """지금 조작을 끝낸 것으로 치고 다음 조작 안내를 시작한다. 조작을 다 끝냈으면 그대로 두고 거짓."""
+        if self.operation is None:
+            return False
+        self._operations_done += 1
+        self._operation_started_at = self._latest
+        return True
 
     def close(self) -> list[Command]:
         """이 진행을 그만둘 때(다른 연습 과정·다른 파일로 바뀜). 떠 있던 물음을 거둔다."""
@@ -253,7 +273,7 @@ class Progress:
         if operation is None or state == self._operation_started_at:
             return
         if operation.detect and all(self._detected(kind, value, state) for kind, value in operation.detect):
-            self.next_operation()
+            self._advance()  # 단계 끝 물음은 on_state가 이어서 본다
 
     def _detected(self, kind: str, value: object, state: WorkState) -> bool:
         """감지 조건 하나. '방금 조작'은 안내를 시작한 뒤 새로 한 조작이 그것일 때만 맞는다.
