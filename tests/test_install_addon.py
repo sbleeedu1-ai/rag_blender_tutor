@@ -18,7 +18,7 @@ def test_애드온을_복사하고_도우미_프로그램_켜는_법을_적는�
     install(tmp_path, PYTHON)
     assert (tmp_path / ADDON_NAME / "__init__.py").read_bytes() == (SOURCE / "__init__.py").read_bytes()
     config = config_of(tmp_path)
-    assert config["command"] == [str(PYTHON), "-m", "blender_tutor.receiver"]
+    assert config["command"] == [str(PYTHON), "-m", "blender_tutor.helper"]
     assert config["cwd"] == str(PROJECT)
     assert config["port"] == PORT
     assert len(config["token"]) >= 32

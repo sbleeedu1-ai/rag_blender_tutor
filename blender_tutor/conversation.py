@@ -1,0 +1,45 @@
+"""대화: 도우미 창이 든 최근 대화와 답 엔진 부르기(명세 "도우미 창", 티켓 09·26).
+
+최근 대화는 질문과 답 글만 최근 3쌍(근거 목록 뺌). Blender가 여럿이어도 하나이고, 도우미 프로그램이 꺼지면 사라진다.
+답 엔진은 바깥 서비스 오류만 짧은 문구로 바꾸고 우리 코드의 버그는 그대로 올려 보낸다(티켓 21).
+그런 버그는 여기서 한 번 받아 창이 꺼지지 않게 하고, 내용은 기록 파일에 남긴다.
+"""
+
+import logging
+from collections import deque
+from collections.abc import Iterator
+
+from blender_tutor.answer_engine import AnswerEngine, Done, Event, Failure, Piece
+from blender_tutor.work_state import WorkState
+
+RECENT_PAIRS = 3  # 명세 "최근 대화". 평가에서 바꿔 볼 수 있는 설정값(User Story 72)
+PROGRAM_ERROR = "도우미 프로그램에 문제가 생겼어요. 다시 물어봐도 같으면 도우미를 끝냈다가 F10으로 다시 켜 주세요."
+NOT_READY = "도우미가 설명서를 읽는 중이에요. 몇 초 뒤 다시 물어봐 주세요."
+
+log = logging.getLogger(__name__)
+
+
+class Conversation:
+    """최근 대화를 들고 질문마다 답 엔진을 부른다. engine이 없으면(준비 중·자료 없음) waiting_message를 낸다."""
+
+    def __init__(self, keep: int = RECENT_PAIRS):
+        self.engine: AnswerEngine | None = None
+        self.waiting_message = NOT_READY
+        self._recent: deque[tuple[str, str]] = deque(maxlen=keep)
+
+    def ask(self, question: str, state: WorkState) -> Iterator[Event]:
+        """질문을 엔진에 넘기고 나온 사건을 그대로 낸다. 끝까지 나온 답만 최근 대화에 넣는다."""
+        if self.engine is None:
+            yield Failure(self.waiting_message)
+            return
+        answer = []
+        try:
+            for event in self.engine.answer(question, state, list(self._recent)):
+                if isinstance(event, Piece):
+                    answer.append(event.text)
+                elif isinstance(event, Done):
+                    self._recent.append((question, "".join(answer)))
+                yield event
+        except Exception:
+            log.exception("답을 만들다 도우미 프로그램 버그: %s", question)
+            yield Failure(PROGRAM_ERROR)

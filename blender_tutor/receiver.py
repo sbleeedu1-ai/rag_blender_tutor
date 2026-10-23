@@ -3,18 +3,13 @@
 애드온 → 도우미 프로그램은 내 PC 안 HTTP(127.0.0.1)다. 두 프로그램이 따로 돌아 함수를 바로 부를 수 없어서다.
 설치 때 만든 비밀 글자(X-Tutor-Token)가 없는 요청은 버린다. 브라우저의 웹페이지가 127.0.0.1로 보내는 요청을 막으려는 것이다.
 창 번호마다 최신 작업 상태 하나를 들고, 닫힌 Blender의 상태는 버리고, 마지막 Blender가 닫히면 끝난다.
-
-혼자 실행(도우미 창이 생기기 전, 티켓 26에서 창을 붙임): 애드온이 켜 준다. 손으로 켤 때는
-`set BLENDER_TUTOR_TOKEN=<애드온 폴더 config.json의 token>` 뒤 `.venv\\Scripts\\python -m blender_tutor.receiver`
+도우미 프로그램 입구(blender_tutor.helper)가 이것을 띄운다.
 """
 
-import argparse
 import ctypes
 import json
 import logging
-import os
 import secrets
-import sys
 import threading
 import time
 from collections.abc import Callable
@@ -131,6 +126,11 @@ class Receiver:
             entry = self._latest.get(window)
         return entry[1] if entry else None
 
+    def blenders(self) -> dict[int, int]:
+        """켜진 Blender들의 창 번호 → 프로세스 번호(처음 받은 차례)."""
+        with self._lock:
+            return {window: pid for window, (pid, _) in self._latest.items()}
+
     def forget_closed(self) -> None:
         """닫힌 Blender의 상태를 버린다. 켜진 시각이 처음과 다르면(번호가 다른 프로그램에 다시 쓰임) 닫힌 것으로 본다."""
         with self._lock:
@@ -215,34 +215,3 @@ class Receiver:
                 pass
 
         return Handler
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="애드온이 보낸 작업 상태를 받습니다.")
-    parser.add_argument("--port", type=int, default=PORT, help=f"받을 자리 번호(기본 {PORT}, 자체 시험은 다른 번호를 씀)")
-    args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-    token = os.environ.get(TOKEN_ENV)
-    if not token:
-        log.error("환경 변수 %s가 없습니다. 애드온이 켜 주거나, 애드온 config.json의 token을 넣고 켜세요.", TOKEN_ENV)
-        return 2
-
-    def show(message: Message) -> None:
-        state = message.state
-        log.info("창 %s: %s, 방금 조작 %s%s%s", message.window, state.mode, list(state.recent_operators),
-                 " [F10]" if message.summon else "", f" [{message.event.kind} {message.event.path}]" if message.event else "")
-
-    try:
-        receiver = Receiver(token, show, port=args.port)
-    except OSError as error:
-        log.error("%s번 자리를 열 수 없습니다(다른 프로그램이 쓰는 중일 수 있음): %s", args.port, error)
-        return 1
-    with receiver:
-        log.info("작업 상태를 받는 중(127.0.0.1:%s). 마지막 Blender가 닫히면 끝납니다.", receiver.port)
-        receiver.run_until_no_blender()
-    log.info("켜진 Blender가 없어 끝냅니다.")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

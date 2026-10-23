@@ -6,7 +6,7 @@
 
 - 무엇: Blender 5.2를 처음 쓰는 사람이 3D 아이템을 만들 때, 공식 설명서를 근거로 다음 조작을 쉬운 한국어로 안내하는 도우미
 - 준비: `python -m venv .venv` 뒤 `.venv\Scripts\python -m pip install -e ".[dev]"`
-- 실행: 도우미 창은 아직 없음. 애드온 설치 `.venv\Scripts\python -m blender_tutor.install_addon`(뒤에 Blender 환경 설정에서 애드온 켜기) · 애드온 자체 시험(Blender를 화면 없이 띄움, 기본 테스트 밖) `.venv\Scripts\python addon\selftest.py` · 연습 과정 파일 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` · 테스트: `.venv\Scripts\python -m pytest` (테스트는 API 키 없이 돌게 만들고 늘 통과 상태로 둔다)
+- 실행: 도우미 창은 Blender를 켜면 애드온이 함께 켠다(F10으로 부름, 손으로는 `.venv\Scripts\python -m blender_tutor.helper`, 환경 변수 `BLENDER_TUTOR_TOKEN` 필요). 애드온 설치 `.venv\Scripts\python -m blender_tutor.install_addon`(뒤에 Blender 환경 설정에서 애드온 켜기) · 애드온 자체 시험(Blender를 화면 없이 띄움, 기본 테스트 밖) `.venv\Scripts\python addon\selftest.py` · 연습 과정 파일 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` · 테스트: `.venv\Scripts\python -m pytest` (테스트는 API 키 없이 돌게 만들고 늘 통과 상태로 둔다)
 
 ## 기록 (저장소가 기억이다)
 

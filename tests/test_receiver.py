@@ -80,6 +80,16 @@ def test_닫힌_Blender의_상태는_버린다(receiver, alive):
     assert receiver.latest(2) is not None
 
 
+def test_켜진_Blender의_창_번호와_프로세스_번호를_알려_준다(receiver, alive):
+    # 창이 "앞 프로그램이 Blender인가"를 가르고, 질문을 어느 Blender 상태로 보낼지 고를 때 쓴다
+    send(receiver, 1, 100)
+    send(receiver, 2, 200)
+    assert receiver.blenders() == {1: 100, 2: 200}
+    del alive[100]
+    receiver.forget_closed()
+    assert receiver.blenders() == {2: 200}
+
+
 def test_프로세스_번호가_다른_프로그램에_다시_쓰이면_닫힌_것으로_본다(receiver, alive):
     send(receiver, 1, 100)
     alive[100] = 9.0  # Blender가 닫히고 같은 번호를 받은 다른 프로그램(켜진 시각이 다름)

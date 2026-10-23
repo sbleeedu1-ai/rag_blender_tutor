@@ -7,6 +7,7 @@ import copy
 import json
 import re
 import sys
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
@@ -485,6 +486,33 @@ def _title(section: Tag) -> str:
     return _plain(_squash(_render(section.find(_HEADING))))
 
 
+def save_chunks(chunks: Iterable[Chunk], path: Path) -> None:
+    """청크를 한 줄에 하나씩 JSON으로 쓴다. url·text는 사람이 파일을 볼 때 편하라고 계산해 덧붙인 값이다."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as file:
+        for chunk in chunks:
+            row = {**asdict(chunk), "url": chunk.url, "text": chunk.text}
+            file.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def load_chunks(path: Path) -> list[Chunk]:
+    """save_chunks로 쓴 파일을 Chunk로 되돌린다(덧붙인 url·text는 버림, JSON 리스트는 튜플로)."""
+    chunks = []
+    with path.open(encoding="utf-8") as file:
+        for line in file:
+            row = json.loads(line)
+            del row["url"], row["text"]
+            for name in ("headings", "option_path", "options", "images", "videos", "ui_names"):
+                row[name] = tuple(row[name])
+            row["reference"] = tuple(tuple(pair) for pair in row["reference"])
+            row["examples"] = tuple(
+                Example(MediaKind(example["kind"]), example["heading"], example["url"], tuple(example["media"]))
+                for example in row["examples"]
+            )
+            chunks.append(Chunk(**row))
+    return chunks
+
+
 def main(argv: list[str]) -> int:
     """사용법: python -m blender_tutor.manual_chunks <설명서 HTML 폴더> <청크 JSONL 파일>
 
@@ -498,11 +526,7 @@ def main(argv: list[str]) -> int:
         return 2
     root, out = Path(argv[0]), Path(argv[1])
     chunks = chunk_manual(root)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open("w", encoding="utf-8") as file:
-        for chunk in chunks:
-            row = {**asdict(chunk), "url": chunk.url, "text": chunk.text}
-            file.write(json.dumps(row, ensure_ascii=False) + "\n")
+    save_chunks(chunks, out)
     sizes = [len(chunk.body.split()) for chunk in chunks]
     pieces = {}  # 나눈 소제목(쪽 경로, 앵커) → 조각 단어 수들
     for chunk, size in zip(chunks, sizes):

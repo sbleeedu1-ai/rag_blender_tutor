@@ -367,3 +367,19 @@ def test_코드_파일에_보이지_않는_표식_글자가_그대로_들어가�
     source = Path(manual_chunks.__file__).read_text(encoding="utf-8")
 
     assert [ch for ch in source if 0xE000 <= ord(ch) <= 0xF8FF] == []
+
+
+def test_청크_파일에_쓰고_다시_읽으면_같은_청크가_나온다(tmp_path):
+    # 칸을 모두 채운 청크(지어낸 값)와 기본값만 둔 청크
+    full = manual_chunks.Chunk(
+        "modeling/modifiers/generate/bevel", "options", "modeling", "modeling/modifiers/generate",
+        "Bevel Modifier", ("Options", "Width"), "Width sets the size.",
+        option_path=("Width Type",), options=("Width", "Segments"),
+        images=("https://example.org/a.png",), videos=("https://example.org/a.mp4",),
+        examples=(Example(manual_chunks.MediaKind.VIDEO, "Example", "https://example.org/x.html#example", ("https://example.org/b.mp4",)),),
+        reference=(("Mode", "Edit Mode"), ("Menu", "Edge ‣ Bevel")), ui_names=("Edge ‣ Bevel",),
+    )
+    bare = manual_chunks.Chunk("files/blend/save", "save", "files", "files/blend", "Saving", (), "Save writes the file.")
+    path = tmp_path / "chunks.jsonl"
+    manual_chunks.save_chunks([full, bare], path)
+    assert manual_chunks.load_chunks(path) == [full, bare]
