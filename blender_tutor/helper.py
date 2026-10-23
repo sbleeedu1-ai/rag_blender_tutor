@@ -2,7 +2,6 @@
 
 애드온이 Blender를 켤 때 켜 준다(config.json의 명령). 마지막 Blender가 닫히거나 트레이에서 끝내면 끝난다.
 손으로 켤 때: `set BLENDER_TUTOR_TOKEN=<애드온 폴더 config.json의 token>` 뒤 `.venv\\Scripts\\python -m blender_tutor.helper`
-(--blur: 진짜 배경 흐림 켜기, 문서 없는 Windows 함수라 기본은 끔)
 
 부품끼리 잇기만 한다. 판단은 window_rules, 대화는 conversation, 그리기는 helper_window에 있고 각각 시험한다.
 이 파일과 winapi는 실제 화면·Blender가 있어야 해서 애드온 자체 시험과 눈 확인으로 본다.
@@ -47,23 +46,19 @@ class _Bridge(QObject):
 class Helper:
     """도우미 창 하나와 그 둘레: Blender 따라가기, F10·Esc·트레이, 질문 → 답 엔진."""
 
-    def __init__(self, app: QApplication, receiver: Receiver, bridge: _Bridge, blur: bool):
+    def __init__(self, app: QApplication, receiver: Receiver, bridge: _Bridge):
         self._receiver = receiver
         self._bridge = bridge
         self._front = FrontBlender()
         self._conversation = Conversation()
         self._own_pid = os.getpid()
         self._moved: tuple[Place, int] | None = None  # 지난번에 옮긴 (자리, 그때 앞 창 번호)
-        self.window = HelperWindow(blur)
+        self.window = HelperWindow()
         self._tray = Tray(self._tray_show, app.quit)
         self.window.asked.connect(self._ask)
         self.window.escape.connect(self._back_to_blender)
         bridge.summoned.connect(self._summon)
         bridge.answer_event.connect(self.window.show_answer_event)
-        if blur:
-            self.window.winId()  # 창 번호를 먼저 만들어 둔다
-            if not winapi.blur_behind(int(self.window.winId())):
-                log.warning("진짜 배경 흐림을 켜지 못했어요(판만 보입니다)")
         self._timer = QTimer(interval=FOLLOW_EVERY_MS, timeout=self._follow)
         self._timer.start()
         threading.Thread(target=self._prepare_engine, daemon=True).start()
@@ -157,7 +152,6 @@ class Helper:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Blender 첫걸음 도우미 창을 켭니다.")
     parser.add_argument("--port", type=int, default=PORT, help=f"받을 자리 번호(기본 {PORT}, 자체 시험은 다른 번호를 씀)")
-    parser.add_argument("--blur", action="store_true", help="진짜 배경 흐림 켜기(문서 없는 Windows 함수, 기본은 끔)")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     token = os.environ.get(TOKEN_ENV)
@@ -183,7 +177,7 @@ def main() -> int:
         log.error("%s번 자리를 열 수 없습니다(다른 프로그램이 쓰는 중일 수 있음): %s", args.port, error)
         return 1
     with receiver:
-        helper = Helper(app, receiver, bridge, args.blur)
+        helper = Helper(app, receiver, bridge)
         bridge.no_blender.connect(app.quit)
 
         def watch() -> None:

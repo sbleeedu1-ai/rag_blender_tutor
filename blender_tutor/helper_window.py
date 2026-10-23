@@ -24,7 +24,6 @@ EDGE = 8  # 가장자리에서 이 폭 안을 끌면 크기 조절
 CORNER = 24  # 모서리에서 이만큼 안쪽 네모를 끌면 대각선 조절(둥근 모서리의 투명한 곳은 클릭이 아래 창으로 가서 넓게 잡음)
 MOVE_BAND = 40  # 맨 위 이 높이 안을 끌면 창 옮기기
 PANEL_ALPHA = 235  # 판 진하기(0-255, 사용자 결정 HISTORY [18])
-BLUR_PANEL_ALPHA = 170  # 진짜 흐림을 켰을 때는 뒤가 흐려 보이므로 판을 덜 진하게
 FONT = "Malgun Gothic"
 THINKING = "생각 중…"
 
@@ -55,7 +54,7 @@ class HelperWindow(QWidget):
     asked = Signal(str)  # Enter로 보낸 질문
     escape = Signal()  # Esc: Blender로 돌아가기
 
-    def __init__(self, blur: bool = False):
+    def __init__(self):
         super().__init__(None, Qt.FramelessWindowHint | Qt.Tool)  # Tool: 작업 표시줄·Alt+Tab에 나오지 않음
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)  # Blender를 따라 보일 때 초점을 빼앗지 않는다
@@ -63,7 +62,6 @@ class HelperWindow(QWidget):
         self.setMinimumSize(MIN_WIDTH, MIN_HEIGHT)
         self.setGeometry(_home())
         self.setStyleSheet(STYLE)
-        self._panel_alpha = BLUR_PANEL_ALPHA if blur else PANEL_ALPHA
         self.put_away = False  # 사용자가 X로 직접 내렸나(F10·트레이로 부를 때까지 내린 채)
         self._busy = False  # 답을 기다리는 중
         self._answer: QLabel | None = None
@@ -172,7 +170,7 @@ class HelperWindow(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         path = QPainterPath()
         path.addRoundedRect(self.rect().adjusted(1, 1, -1, -1), 22, 22)
-        painter.fillPath(path, QColor(22, 22, 28, self._panel_alpha))
+        painter.fillPath(path, QColor(22, 22, 28, PANEL_ALPHA))
         painter.setPen(QPen(QColor(255, 255, 255, 22), 1))
         painter.drawPath(path)
 
