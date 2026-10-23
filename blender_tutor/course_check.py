@@ -184,6 +184,8 @@ OPERATION = {
     "설명": (True, _text),
     "메뉴": (True, _text),
     "단축키": (True, _text),
+    "안내": (True, _text),  # 도우미가 대화에 띄울 안내 말(티켓 27)
+    "감지": (False, _conditions),  # 이 조작을 했다고 볼 조건. 끝난 조건과 같은 종류. 없으면 [했어요]로 넘어간다
 }
 
 STEP = {
@@ -303,7 +305,7 @@ def _check_against_manual(data: object, manual: Manual, report: Report) -> None:
 COPY_WORDS = 8
 _WORD = re.compile(r"\w+")
 # 화면·설명서 글자를 일부러 그대로 적는 칸은 옮김 검사에서 뺀다.
-_NOT_PROSE = {"이름표", "메뉴", "먼저 볼 소제목", "끝난 조건"}
+_NOT_PROSE = {"이름표", "메뉴", "먼저 볼 소제목", "끝난 조건", "감지"}
 
 
 def _prose(value: object, where: str):

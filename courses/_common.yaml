@@ -19,18 +19,19 @@
           - 설명: 화면 돌리기
             메뉴: View > Navigation > Orbit
             단축키: 가운데 버튼 누른 채 끌기
-          - 설명: 확대
+            안내: "먼저 화면 보는 법부터 익혀 볼게요. 마우스 가운데 버튼(휠)을 누른 채 끌어서 정육면체를 이리저리 돌려 보세요."
+          - 설명: 확대·축소
             메뉴: View > Navigation > Zoom In
-            단축키: 휠 앞으로 굴리기
-          - 설명: 축소
-            메뉴: View > Navigation > Zoom Out
-            단축키: 휠 뒤로 굴리기
+            단축키: 휠 앞뒤로 굴리기
+            안내: "잘하셨어요. 이번엔 휠을 앞뒤로 굴려 정육면체를 가까이 당겼다가 멀리 밀어 보세요."
           - 설명: 화면 옮기기
             메뉴: View > Navigation > Pan
             단축키: Shift + 가운데 버튼 끌기
+            안내: "Shift를 누른 채 가운데 버튼으로 끌면 화면이 옆으로 옮겨져요. 한번 해 보시겠어요?"
           - 설명: 장면 전체를 다시 화면에 담기
             메뉴: View > Frame All
             단축키: Home
+            안내: "혹시 정육면체가 화면 밖으로 나가 길을 잃었다면 Home 키를 눌러 보세요. 장면 전체가 다시 화면에 들어와요."
         먼저 볼 소제목:
           - editors/3dview/navigate/navigation.html#orbit
           - editors/3dview/navigate/navigation.html#zoom-in-out
@@ -51,8 +52,10 @@
           - 설명: 환경 설정 창 열기
             메뉴: Edit > Preferences
             단축키: 없음
+            안내: "이번엔 Blender 메뉴가 어떤 언어로 보이는지 확인할게요. 맨 위 Edit 메뉴에서 Preferences를 열어 보세요."
           - 설명: Interface 쪽에서 언어와 메뉴 번역 켜짐 확인
             메뉴: Edit > Preferences > Interface > Language
             단축키: 없음
+            안내: "열린 창 왼쪽에서 Interface를 고르고 Language 칸을 보세요. 한국어든 영어든 괜찮아요. 어느 쪽인지 보셨으면 창을 닫아 주세요."
         먼저 볼 소제목:
           - editors/preferences/interface.html#language

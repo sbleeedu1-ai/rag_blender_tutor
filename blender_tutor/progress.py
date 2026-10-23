@@ -16,6 +16,20 @@ from blender_tutor.work_state import WorkState
 
 
 @dataclass(frozen=True)
+class Operation:
+    """단계의 조작 하나: 한 줄 설명, 영어 메뉴 경로(없으면 "없음"), 단축키, 도우미가 대화에 띄울 안내 말, 감지 조건.
+
+    도우미는 한 단계 안에서 조작을 파일 순서대로 하나씩 안내하고, 감지 조건이 맞거나 [했어요]를 누르면 다음 조작으로 간다.
+    """
+
+    description: str
+    menu: str
+    keys: str
+    say: str = ""  # 안내 말(선생님 말투, 연습 과정 파일에 미리 써 둠)
+    detect: tuple[tuple[str, object], ...] = ()  # 감지 조건 (종류, 값). 끝난 조건과 같은 종류. 비면 [했어요]로만 넘어간다
+
+
+@dataclass(frozen=True)
 class Step:
     """연습 과정의 단계 하나에서 진행 관리가 쓰는 것."""
 
@@ -24,6 +38,7 @@ class Step:
     conditions: tuple[tuple[str, object], ...] = ()  # 끝난 조건 (종류, 값) 목록. 비면 버튼으로만 넘어간다
     manual: tuple[str, ...] = ()  # 먼저 볼 설명서 소제목 주소(경로.html#앵커). 답 엔진이 검색어와 검색 결과 위에 붙인다
     guide: str = ""  # 답변 모델에 넘길 이 단계 내용 글(연습 과정 파일 전체가 아니라 이 단계만)
+    operations: tuple[Operation, ...] = ()  # 도우미가 대화에 하나씩 안내할 조작(파일 순서)
 
 
 @dataclass(frozen=True)
@@ -68,15 +83,29 @@ def load_course(course: Path) -> Course:
     return Course(data["이름표"], data["이름"], tuple(_steps_of(data, course.parent)), data.get("한 줄 설명", ""))
 
 
+def load_courses(folder: Path) -> list[Course]:
+    """연습 과정 폴더(courses/)의 연습 과정을 파일 이름 차례로 읽는다. '_'로 시작하는 공통 준비 파일은 뺀다."""
+    return [load_course(path) for path in sorted(folder.glob("*.yaml")) if not path.name.startswith("_")]
+
+
 def _steps_of(data: dict, folder: Path) -> list[Step]:
     """읽어 둔 연습 과정 파일 내용에서 단계를 꺼낸다. '먼저 할 것'은 같은 폴더에서 찾는다."""
     steps = load_steps(folder / data["먼저 할 것"]) if "먼저 할 것" in data else []
     for section in data["구간"]:
         for step in section["단계"]:
-            conditions = tuple(next(iter(c.items())) for c in step.get("끝난 조건", []))
+            conditions = _conditions(step.get("끝난 조건", []))
             manual = tuple(step.get("먼저 볼 소제목", []))
-            steps.append(Step(step["이름표"], step["이름"], conditions, manual, _guide(step)))
+            operations = tuple(
+                Operation(o["설명"], o["메뉴"], o["단축키"], o.get("안내", ""), _conditions(o.get("감지", [])))
+                for o in step.get("조작", [])
+            )
+            steps.append(Step(step["이름표"], step["이름"], conditions, manual, _guide(step), operations))
     return steps
+
+
+def _conditions(items: list[dict]) -> tuple[tuple[str, object], ...]:
+    """'종류: 값' 한 줄씩 적힌 조건 목록을 (종류, 값) 묶음으로."""
+    return tuple(next(iter(item.items())) for item in items)
 
 
 def _guide(step: dict) -> str:
@@ -94,20 +123,38 @@ def _guide(step: dict) -> str:
 class Progress:
     """한 연습 과정의 진행. 사건 함수마다 창이 할 일(물음 띄우기·거두기) 목록을 돌려준다."""
 
-    def __init__(self, steps: Sequence[Step], start: int = 0, finished: tuple[str, ...] = ()):
-        """이어 할 때는 시작할 단계 번호(0부터, 단계 수와 같으면 마친 상태)와 끝낸 단계 이름표를 받는다."""
+    def __init__(
+        self,
+        steps: Sequence[Step],
+        start: int = 0,
+        finished: tuple[str, ...] = (),
+        walk: int = 0,
+        latest: WorkState | None = None,
+    ):
+        """이어 할 때는 시작할 단계 번호(0부터, 단계 수와 같으면 마친 상태)와 끝낸 단계 이름표, 그 단계의 조작 번호를 받는다.
+
+        latest는 진행을 만들기 전에 받아 둔 작업 상태다. 주면 그때를 단계 시작·조작 안내 시작으로 삼아,
+        고른 뒤 처음 온 변화(사용자의 첫 조작)도 감지한다.
+        """
         self._steps = list(steps)
         self._index = start
         self._finished = list(finished)  # 사용자가 [네]나 '다음 단계' 버튼으로 끝낸 단계 이름표. 건너뛴 단계는 넣지 않는다
         self._asking = False  # 물음을 띄워 두고 답을 기다리는 중
         self._declined: set[str] = set()  # 물음을 거절한 단계 이름표. 이 단계들은 다시 묻지 않는다
-        self._latest: WorkState | None = None  # 마지막으로 받은 작업 상태
-        self._start_count: int | None = None  # 지금 단계를 시작할 때 장면 물체 수(모르면 다음 상태에서 정함)
+        self._latest = latest  # 마지막으로 받은 작업 상태
+        self._start_count = latest.scene_object_count if latest else None  # 지금 단계를 시작할 때 장면 물체 수(모르면 다음 상태에서 정함)
+        self._walk = walk  # 지금 안내하는 조작 번호(0부터). 조작 수와 같으면 이 단계 조작을 다 안내함
+        self._walk_from = latest  # 지금 조작을 안내하기 시작할 때의 작업 상태(모르면 다음 상태에서 정함)
 
     @property
     def step(self) -> Step | None:
         """지금 단계. 연습 과정을 마쳤으면 None."""
         return self._steps[self._index] if self._index < len(self._steps) else None
+
+    @property
+    def walk(self) -> int:
+        """지금 단계에서 안내하는 조작 번호(0부터). 조작 수와 같으면 다 안내했다."""
+        return self._walk
 
     @property
     def finished(self) -> tuple[str, ...]:
@@ -122,6 +169,7 @@ class Progress:
         step = self.step
         if step is None:
             return []
+        self._detect_walk(step, state)
         met = bool(step.conditions) and all(
             CONDITIONS[kind].is_met(value, state, self._start_count) for kind, value in step.conditions
         )
@@ -162,12 +210,44 @@ class Progress:
         """앞 단계로 가기. 첫 단계에서는 그대로 머문다."""
         return self._go_to(max(self._index - 1, 0))
 
+    def walked(self) -> list[Command]:
+        """[했어요]: 지금 조작을 했다고 보고 다음 조작으로 간다. 조작을 다 안내했으면 그대로."""
+        step = self.step
+        if step is not None and self._walk < len(step.operations):
+            self._next_walk()
+        return []
+
     def close(self) -> list[Command]:
         """이 진행을 그만둘 때(다른 연습 과정·다른 파일로 바뀜). 떠 있던 물음을 거둔다."""
         if not self._asking:
             return []
         self._asking = False
         return [Withdraw(self._steps[self._index].label)]
+
+    def _detect_walk(self, step: Step, state: WorkState) -> None:
+        """지금 조작의 감지 조건이 맞으면 다음 조작으로. 안내를 시작한 때와 같은 상태로는 넘어가지 않는다(한 번에 하나씩)."""
+        if self._walk_from is None:
+            self._walk_from = state
+            return
+        if self._walk >= len(step.operations) or state == self._walk_from:
+            return
+        detect = step.operations[self._walk].detect
+        if detect and all(self._walk_met(kind, value, state) for kind, value in detect):
+            self._next_walk()
+
+    def _walk_met(self, kind: str, value: object, state: WorkState) -> bool:
+        """감지 조건 하나. '방금 조작'은 안내를 시작한 뒤 새로 한 조작이 그것일 때만 맞는다.
+
+        조작 기록은 최근 3개라 앞 걸음에서 한 같은 조작이 남아 있을 수 있어서다.
+        """
+        if kind == "방금 조작":
+            operators = state.recent_operators
+            return operators != self._walk_from.recent_operators and bool(operators) and operators[-1] == value
+        return CONDITIONS[kind].is_met(value, state, self._start_count)
+
+    def _next_walk(self) -> None:
+        self._walk += 1
+        self._walk_from = self._latest
 
     def _finish(self) -> None:
         """지금 단계를 끝낸 단계에 넣는다."""
@@ -179,4 +259,5 @@ class Progress:
         commands = self.close()
         self._index = index
         self._start_count = self._latest.scene_object_count if self._latest else None
+        self._walk, self._walk_from = 0, self._latest
         return commands

@@ -1,9 +1,9 @@
-"""도우미 프로그램 입구: 받는 쪽 + 도우미 창 + 답 엔진을 한 프로그램으로 잇는다(명세 "전체 구성", ADR-0001, 티켓 26).
+"""도우미 프로그램 입구: 받는 쪽 + 도우미 창 + 진행 관리 + 답 엔진을 한 프로그램으로 잇는다(명세 "전체 구성", ADR-0001, 티켓 26·27).
 
 애드온이 Blender를 켤 때 켜 준다(config.json의 명령). 마지막 Blender가 닫히거나 트레이에서 끝내면 끝난다.
 손으로 켤 때: `set BLENDER_TUTOR_TOKEN=<애드온 폴더 config.json의 token>` 뒤 `.venv\\Scripts\\python -m blender_tutor.helper`
 
-부품끼리 잇기만 한다. 판단은 window_rules, 대화는 conversation, 그리기는 helper_window에 있고 각각 시험한다.
+부품끼리 잇기만 한다. 판단은 window_rules, 대화는 conversation, 진행은 course_desk, 그리기는 helper_window에 있고 각각 시험한다.
 이 파일과 winapi는 실제 화면·Blender가 있어야 해서 애드온 자체 시험과 눈 확인으로 본다.
 """
 
@@ -22,9 +22,11 @@ from PySide6.QtWidgets import QApplication
 from blender_tutor import winapi
 from blender_tutor.answer_engine import Failure
 from blender_tutor.conversation import PROGRAM_ERROR, Conversation
+from blender_tutor.course_desk import CourseDesk, Line
 from blender_tutor.helper_window import FONT, HelperWindow, Tray
+from blender_tutor.paths import COURSES, PROGRESS_RECORDS, PROJECT
+from blender_tutor.progress import Course, load_courses
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
-from blender_tutor.paths import PROJECT
 from blender_tutor.stand_in import build_engine
 from blender_tutor.window_rules import FrontBlender, Place, Screen, needs_move, place
 
@@ -39,6 +41,7 @@ class _Bridge(QObject):
     """다른 스레드(받는 쪽·답 만들기·엔진 준비)에서 화면 스레드로 넘기는 신호. Qt가 화면 스레드에서 차례로 부른다."""
 
     summoned = Signal(int)  # F10을 누른 Blender 창 번호
+    message = Signal(object)  # 받은 봉투(진행 관리에 넘긴다)
     answer_event = Signal(object)  # 답 사건(Piece·Done·Failure)
     no_blender = Signal()  # 켜진 Blender가 없어 끝낼 때
 
@@ -51,14 +54,25 @@ class Helper:
         self._bridge = bridge
         self._front = FrontBlender()
         self._conversation = Conversation()
+        self._courses = _courses()
+        self._desk = CourseDesk(self._courses, PROGRESS_RECORDS)
         self._own_pid = os.getpid()
         self._moved: tuple[Place, int] | None = None  # 지난번에 옮긴 (자리, 그때 앞 창 번호)
+        self._progress_of: int | None = None  # 연습 과정 카드에 진행을 보이는 Blender 창 번호
         self.window = HelperWindow()
         self._tray = Tray(self._tray_show, app.quit)
         self.window.asked.connect(self._ask)
         self.window.escape.connect(self._back_to_blender)
+        self.window.chose_course.connect(lambda label: self._on_card(lambda window: self._desk.choose(window, label)))
+        self.window.went_next.connect(lambda: self._on_card(self._desk.next_step))
+        self.window.went_back.connect(lambda: self._on_card(self._desk.back))
+        self.window.skipped_to.connect(lambda label: self._on_card(lambda window: self._desk.skip_to(window, label)))
+        self.window.answered.connect(lambda yes: self._on_card(lambda window: self._desk.answer(window, yes)))
+        self.window.walked.connect(lambda: self._on_card(self._desk.walked))
         bridge.summoned.connect(self._summon)
+        bridge.message.connect(self._on_message)
         bridge.answer_event.connect(self.window.show_answer_event)
+        self._show_progress()
         self._timer = QTimer(interval=FOLLOW_EVERY_MS, timeout=self._follow)
         self._timer.start()
         threading.Thread(target=self._prepare_engine, daemon=True).start()
@@ -67,6 +81,7 @@ class Helper:
         """받는 쪽 스레드에서 봉투마다 불린다. 다른 Blender 봉투가 막히지 않게 화면 일은 넘기고 바로 돌아온다."""
         if message.event:
             log.info("창 %s: %s %s", message.window, message.event.kind, message.event.path)
+        self._bridge.message.emit(message)
         if message.summon:
             self._bridge.summoned.emit(message.window)
 
@@ -74,7 +89,7 @@ class Helper:
         """설명서를 읽어 엔진을 만든다(약 2초). 창은 먼저 떠 있고, 그동안 물으면 '읽는 중' 문구를 보인다."""
         started = time.perf_counter()
         try:
-            self._conversation.engine = build_engine(PROJECT / "data")
+            self._conversation.engine = build_engine(PROJECT / "data", courses=self._courses)
         except FileNotFoundError as error:
             log.warning("설명서 자료가 없음: %s", error)
             self._conversation.waiting_message = NO_DATA
@@ -93,17 +108,44 @@ class Helper:
             self.window.show_answer_event(Failure(NO_STATE))
             return
 
+        step = self._desk.step(window)  # 답이 끝나도 진행은 그대로라 카드는 같은 단계에 머문다
+
         def work() -> None:  # 답을 기다리는 동안 창과 Blender가 멈추지 않게 따로 돈다
-            for event in self._conversation.ask(question, state):
+            for event in self._conversation.ask(question, state, step):
                 self._bridge.answer_event.emit(event)
 
         threading.Thread(target=work, daemon=True).start()
+
+    # ---- 연습 과정(진행 관리는 창 번호마다 하나, course_desk)
+    def _on_message(self, message: Message) -> None:
+        """화면 스레드에서: 봉투의 파일 사건·작업 상태를 그 Blender의 진행 관리에 넘긴다."""
+        self._show_lines(self._desk.on_message(message.window, message.state, message.event))
+        self._show_progress()
+
+    def _on_card(self, action) -> None:
+        """카드 버튼·[네]/[아니요]: 지금 카드에 보이는 Blender의 진행 관리에 넘긴다."""
+        if self._progress_of is not None:
+            self._show_lines(action(self._progress_of))
+        self._show_progress()
+
+    def _show_lines(self, lines: list[Line]) -> None:
+        for line in lines:
+            self.window.show_line(line)
+
+    def _show_progress(self) -> None:
+        """마지막으로 앞에 있던 Blender의 진행을 카드에 그린다. 닫힌 Blender의 진행은 버린다(기록은 파일에 남음)."""
+        blenders = self._receiver.blenders()
+        self._desk.keep(set(blenders))
+        self._progress_of = self._front.window(blenders)
+        view = None if self._progress_of is None else self._desk.view(self._progress_of)
+        self.window.show_progress(view, self._courses)
 
     # ---- 부르기·돌아가기
     def _summon(self, window: int) -> None:
         """F10: 그 Blender를 '앞에 있던 Blender'로 삼고 창을 맨 위로, 입력칸에 초점."""
         started = time.perf_counter()
         self._front.summoned(window)
+        self._show_progress()
         self._bring_up()
         log.info("F10 받음 → 입력 가능 %.0fms", 1000 * (time.perf_counter() - started))
 
@@ -131,6 +173,8 @@ class Helper:
         blenders = self._receiver.blenders()
         front_hwnd, front_pid, taskbar = winapi.foreground()
         self._front.saw_foreground(front_pid, blenders)
+        if self._front.window(blenders) != self._progress_of:  # 다른 Blender로 옮겨 갔거나 닫혔다
+            self._show_progress()
         shown = winapi.any_shown(blenders)
         self._tray.blender_shown(shown)
         screen = Screen(front_pid, taskbar, frozenset(blenders.values()), shown)
@@ -147,6 +191,15 @@ class Helper:
             else:
                 winapi.put_behind(hwnd, front_hwnd)
         self._moved = (where, front_hwnd)
+
+
+def _courses() -> list[Course]:
+    """저장소의 연습 과정을 읽는다. 파일이 깨졌으면 연습 과정 없이 자유 질문만 받는다(검사: course_check)."""
+    try:
+        return load_courses(COURSES)
+    except Exception:
+        log.exception("연습 과정을 읽지 못함(course_check로 검사해 보세요)")
+        return []
 
 
 def main() -> int:

@@ -1,6 +1,9 @@
 # 검 연습 과정(AI 초안). 사용자가 Blender 5.2에서 따라 하며 고치는 검수는 티켓 32에서 한다.
 # 빠른 설정 창을 닫은 뒤의 기본 장면에서 시작해, 기본 정육면체를 칼날로 쓰고 glTF 파일로 내보내며 끝난다.
 # 글은 우리 말로 새로 쓰고, 설명서는 소제목 주소로만 가리킨다. 치수는 비율 위주의 참고값이다.
+# 조작마다 '안내'는 도우미가 대화에 하나씩 띄우는 말이고 '감지'는 그 조작을 했다고 볼 조건이다(티켓 27).
+# 감지의 조작 이름(transform.resize 등)은 Blender에서 사람이 직접 해 보며 아직 확인하지 않았다. 티켓 32 검수에서 확인하고,
+# 감지가 안 되는 조작은 감지를 지운다(그 조작은 [했어요]로 넘어간다).
 이름표: sword
 이름: 단순한 검
 한 줄 설명: 기본 정육면체를 늘려 칼날을 만들고, 코등이·손잡이·끝장식을 붙여 색을 입힌 뒤 게임용 파일로 내보낸다.
@@ -23,12 +26,23 @@
           - 설명: 정육면체 고르기
             메뉴: 없음
             단축키: 왼쪽 버튼 클릭
-          - 설명: 크기 바꾸기(이어서 X·Y·Z를 누르면 그 방향으로만)
+            안내: "이제 검을 만들어 볼게요. 화면 가운데 있는 정육면체를 칼날 재료로 쓸 거예요. 정육면체를 마우스 왼쪽 버튼으로 눌러 골라 보시겠어요? 처음부터 주황 테두리로 골라져 있으면 그대로 두셔도 돼요."
+          - 설명: 위아래로 길게 늘이기(S 다음 Z를 누르면 그 방향으로만)
             메뉴: Object > Transform > Scale
             단축키: S
+            안내: "좋아요. 정육면체를 고른 채 S를 누르고 이어서 Z를 눌러 보세요. 위아래로만 늘어나요. 마우스를 움직여 길쭉하게 만든 뒤 왼쪽 버튼으로 확정해요."
+            감지:
+              - 방금 조작: transform.resize
+          - 설명: 폭과 두께 줄이기(S 다음 X 또는 Y)
+            메뉴: Object > Transform > Scale
+            단축키: S
+            안내: "이번엔 S 다음 X를 눌러 폭을 좁혀 보세요. 같은 방법으로 S 다음 Y를 누르면 앞뒤 두께도 얇게 만들 수 있어요."
+            감지:
+              - 방금 조작: transform.resize
           - 설명: 옆 패널에서 치수 직접 보기·고치기
             메뉴: View > Sidebar
             단축키: N
+            안내: "N을 누르면 오른쪽에 옆 패널이 열려요. Dimensions 칸에서 길이·폭·두께를 숫자로 볼 수 있고, 마음에 안 들면 숫자를 직접 고쳐도 돼요."
         먼저 볼 소제목:
           - scene_layout/object/editing/transform/scale.html#scale
           - scene_layout/object/editing/transform/control/axis_locking.html#axis-locking
@@ -49,21 +63,33 @@
           - 설명: 편집 모드로 들어가기(헤더 왼쪽 모드 칸에서 골라도 됨)
             메뉴: 없음
             단축키: Tab
+            안내: "이제 칼끝을 뾰족하게 만들어 볼게요. 칼날을 고른 채 Tab을 눌러 편집 모드로 들어가 보세요."
+            감지:
+              - 모드: EDIT_MESH
           - 설명: 꼭짓점 고르기 방식으로 바꾸기
             메뉴: 없음
             단축키: "1"
+            안내: "편집 모드에서는 점·선·면을 골라 모양을 바꿔요. 키보드 위쪽 숫자 1을 눌러 꼭짓점을 고르는 방식으로 바꿔 주세요."
           - 설명: 가로 고리 넣고 위로 밀기
             메뉴: Edge > Loop Cut and Slide
             단축키: Ctrl + R
+            안내: "Ctrl + R을 누르고 칼날 위에 마우스를 올리면 노란 가로 고리가 보여요. 클릭한 뒤 마우스를 위로 움직여 칼끝 가까이로 밀고 다시 클릭하세요."
+            감지:
+              - 방금 조작: mesh.loopcut_slide
           - 설명: 뒤쪽까지 비쳐 보이게 하기(X-ray)
             메뉴: 없음
             단축키: Alt + Z
+            안내: "뒤쪽 꼭짓점도 함께 고를 수 있게 Alt + Z로 X-ray를 켜 볼게요. 물체가 반투명하게 비쳐 보이면 된 거예요."
           - 설명: 맨 위 꼭짓점들을 상자로 둘러 고르기
             메뉴: Select > Box Select
             단축키: B
+            안내: "B를 누르고 칼날 맨 위 꼭짓점들을 상자로 둘러싸 고르세요. 앞뒤 네 개가 모두 골라져야 해요."
           - 설명: 고른 꼭짓점을 가운데 한 점으로 모으기
             메뉴: Mesh > Merge > At Center
             단축키: M
+            안내: "마지막으로 M을 누르고 At Center를 고르세요. 네 꼭짓점이 가운데 한 점으로 모여 칼끝이 돼요."
+            감지:
+              - 방금 조작: mesh.merge
         먼저 볼 소제목:
           - modeling/meshes/editing/edge/loopcut_slide.html#loop-cut-and-slide
           - modeling/meshes/selecting/introduction.html#x-ray
@@ -86,15 +112,27 @@
           - 설명: 물체 모드로 돌아오기(헤더 왼쪽 모드 칸에서 골라도 됨)
             메뉴: 없음
             단축키: Tab
+            안내: "이번엔 칼날 아래에 코등이를 붙일게요. 먼저 Tab을 눌러 물체 모드로 돌아와 주세요."
+            감지:
+              - 모드: OBJECT
           - 설명: 새 정육면체 더하기
             메뉴: Add > Mesh > Cube
             단축키: Shift + A
+            안내: "Shift + A를 누르고 Mesh > Cube를 골라 새 정육면체를 더해 보세요. 칼날 속에 묻혀 안 보여도 괜찮아요."
+            감지:
+              - 물체 수 늘어남: 1
           - 설명: 크기 바꾸기(이어서 X·Y·Z로 방향 고정)
             메뉴: Object > Transform > Scale
             단축키: S
+            안내: "새 정육면체를 S와 X·Y·Z로 줄여 옆으로 긴 납작한 막대로 만들어 보세요."
+            감지:
+              - 방금 조작: transform.resize
           - 설명: 옮기기(이어서 Z를 누르면 위아래로만)
             메뉴: Object > Transform > Move
             단축키: G
+            안내: "G 다음 Z를 누르면 위아래로만 움직여요. 막대를 칼날 아래 끝까지 내려 붙여 보세요."
+            감지:
+              - 방금 조작: transform.translate
         먼저 볼 소제목:
           - modeling/meshes/primitives.html#cube
           - scene_layout/object/editing/transform/move.html#move
@@ -114,12 +152,21 @@
           - 설명: 새 원기둥 더하기
             메뉴: Add > Mesh > Cylinder
             단축키: Shift + A
+            안내: "다음은 손잡이예요. Shift + A에서 Mesh > Cylinder를 골라 원기둥을 더해 보세요."
+            감지:
+              - 물체 수 늘어남: 1
           - 설명: 크기 바꾸기
             메뉴: Object > Transform > Scale
             단축키: S
+            안내: "S로 원기둥을 가늘게 줄이고, S 다음 Z로 길이를 맞춰 보세요."
+            감지:
+              - 방금 조작: transform.resize
           - 설명: 옮기기
             메뉴: Object > Transform > Move
             단축키: G
+            안내: "G 다음 Z로 원기둥을 코등이 바로 아래로 내려 보세요."
+            감지:
+              - 방금 조작: transform.translate
         먼저 볼 소제목:
           - modeling/meshes/primitives.html#cylinder
           - scene_layout/object/editing/transform/scale.html#scale
@@ -138,12 +185,21 @@
           - 설명: 새 UV 구 더하기
             메뉴: Add > Mesh > UV Sphere
             단축키: Shift + A
+            안내: "손잡이 끝에 작은 공을 달아 마무리할게요. Shift + A에서 Mesh > UV Sphere를 골라 보세요."
+            감지:
+              - 물체 수 늘어남: 1
           - 설명: 크기 바꾸기
             메뉴: Object > Transform > Scale
             단축키: S
+            안내: "S를 눌러 공을 손잡이보다 조금 굵은 크기로 줄여 보세요."
+            감지:
+              - 방금 조작: transform.resize
           - 설명: 옮기기
             메뉴: Object > Transform > Move
             단축키: G
+            안내: "G 다음 Z로 공을 손잡이 맨 아래로 옮겨 보세요. 숫자패드 1이나 3으로 옆에서 보면 맞추기 쉬워요."
+            감지:
+              - 방금 조작: transform.translate
         먼저 볼 소제목:
           - modeling/meshes/primitives.html#uv-sphere
           - scene_layout/object/editing/transform/move.html#move
@@ -163,9 +219,15 @@
           - 설명: 모두 고르기
             메뉴: Select > All
             단축키: A
+            안내: "지금은 부품 네 개가 따로따로예요. A를 눌러 모두 골라 보세요."
+            감지:
+              - 방금 조작: object.select_all
           - 설명: 고른 물체를 하나로 합치기
             메뉴: Object > Join
             단축키: Ctrl + J
+            안내: "모두 고른 채 Ctrl + J를 누르면 한 물체로 합쳐져요. 합친 뒤 한 군데를 눌러 검 전체가 함께 골라지는지 보세요."
+            감지:
+              - 방금 조작: object.join
         먼저 볼 소제목:
           - scene_layout/object/editing/join.html#join
         끝난 조건:
@@ -182,6 +244,9 @@
           - 설명: 배율을 모양에 굳히기
             메뉴: Object > Apply > Scale
             단축키: Ctrl + A
+            안내: "Ctrl + A를 누르고 Scale을 골라 보세요. 모양은 그대로인데 N 옆 패널의 Scale 칸이 1, 1, 1로 돌아와요."
+            감지:
+              - 방금 조작: object.transform_apply
         먼저 볼 소제목:
           - scene_layout/object/editing/apply.html#transforms
         끝난 조건:
@@ -200,9 +265,13 @@
           - 설명: Bevel 모디파이어 더하기
             메뉴: Properties > Modifiers > Add Modifier > Generate > Bevel
             단축키: 없음
+            안내: "오른쪽 속성 창에서 파란 렌치 모양 탭을 열고 Add Modifier > Generate > Bevel을 골라 보세요. 모서리가 살짝 깎여요."
+            감지:
+              - 모디파이어: BEVEL
           - 설명: 깎는 폭 줄이기
             메뉴: Properties > Modifiers > Bevel > Amount
             단축키: 없음
+            안내: "Bevel의 Amount 값을 작게 줄여 칼날이 뭉툭해지지 않게 해 주세요."
         먼저 볼 소제목:
           - modeling/modifiers/introduction.html#interface
           - modeling/modifiers/generate/bevel.html#bevel-modifier
@@ -222,21 +291,35 @@
           - 설명: 첫 칸에 재질이 없으면 새로 만들기
             메뉴: Properties > Material > New
             단축키: 없음
+            안내: "이제 색을 입힐게요. 속성 창의 재질 탭(빨간 공 모양)을 열고, 첫 칸에 재질이 없으면 New를 눌러 만들어 주세요."
           - 설명: 재질 칸 하나 더하기
             메뉴: Properties > Material > Material Slots > Add Material Slot
             단축키: 없음
+            안내: "재질 칸 목록 옆의 + 버튼을 눌러 칸을 하나 더 만들고, 새 칸에서도 New를 눌러 재질을 만들어 보세요."
+            감지:
+              - 방금 조작: object.material_slot_add
           - 설명: 색 고르기
             메뉴: Properties > Material > Surface > Base Color
             단축키: 없음
+            안내: "첫 칸은 쇠처럼 회색, 둘째 칸은 갈색이 되도록 Base Color를 눌러 색을 골라 보세요."
           - 설명: 편집 모드로 들어가기(헤더 왼쪽 모드 칸에서 골라도 됨)
             메뉴: 없음
             단축키: Tab
+            안내: "Tab을 눌러 편집 모드로 들어가 주세요."
+            감지:
+              - 모드: EDIT_MESH
           - 설명: 고른 면과 이어진 부분 전체 고르기
             메뉴: Select > Select Linked > Linked
             단축키: Ctrl + L
+            안내: "숫자 3으로 면 고르기 방식으로 바꾼 뒤 손잡이 면 하나를 누르고, Ctrl + L로 손잡이 전체를 골라 보세요."
+            감지:
+              - 방금 조작: mesh.select_linked
           - 설명: 고른 면에 지금 재질 칸 쓰기
             메뉴: Properties > Material > Assign
             단축키: 없음
+            안내: "재질 목록에서 갈색 칸을 고른 채 Assign을 누르면 손잡이만 갈색이 돼요."
+            감지:
+              - 방금 조작: object.material_slot_assign
         먼저 볼 소제목:
           - render/materials/assignment.html#material-slots
           - render/materials/assignment.html#edit-mode
@@ -256,12 +339,19 @@
           - 설명: 물체 모드로 돌아오기(헤더 왼쪽 모드 칸에서 골라도 됨)
             메뉴: 없음
             단축키: Tab
+            안내: "거의 다 왔어요! Tab을 눌러 물체 모드로 돌아와 주세요."
+            감지:
+              - 모드: OBJECT
           - 설명: glTF로 내보내기 창 열기
             메뉴: File > Export > glTF 2.0 (.glb/.gltf)
             단축키: 없음
+            안내: "File > Export > glTF 2.0을 눌러 내보내기 창을 열어 보세요. 형식은 glTF Binary(.glb)로 두면 돼요."
           - 설명: 모디파이어를 적용해 내보내기 켜기
             메뉴: Data > Mesh > Apply Modifiers
             단축키: 없음
+            안내: "오른쪽 설정의 Data > Mesh에서 Apply Modifiers를 켜고, 파일 이름을 sword.glb로 정해 Export를 눌러 주세요."
+            감지:
+              - 방금 조작: export_scene.gltf
         먼저 볼 소제목:
           - addons/scene_gltf2.html#export
           - addons/scene_gltf2.html#gltf-binary-glb

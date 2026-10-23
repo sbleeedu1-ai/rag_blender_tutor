@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from blender_tutor.conditions import CONDITIONS
-from blender_tutor.progress import Ask, Progress, Step, Withdraw, load_steps
+from blender_tutor.progress import Ask, Operation, Progress, Step, Withdraw, load_courses, load_steps
 from blender_tutor.work_state import ActiveObject, WorkState
 
 COURSES = Path(__file__).resolve().parent.parent / "courses"
@@ -263,6 +263,8 @@ def test_단계마다_먼저_볼_소제목과_답변_모델에_넘길_단계_내
         "- 뒤쪽 꼭짓점이 안 골라지면 X-ray를 켠다."
     )
     assert export.guide == "이름: 내보내기"  # 다른 단계 내용은 섞이지 않는다
+    assert tip.operations == (Operation("편집 모드로 들어가기", "없음", "Tab"), Operation("가운데로 모으기", "Mesh > Merge > At Center", "M"))
+    assert export.operations == ()
 
 
 def test_검사가_받아들이는_끝난_조건_종류는_모두_판정할_수_있다():
@@ -277,3 +279,88 @@ def test_저장소의_검_연습_과정을_읽어_첫_단계부터_시작한다(
     steps = load_steps(COURSES / "sword.yaml")
     assert [s.label for s in steps[:3]] == ["view-navigate", "interface-language", "blade-stretch"]
     assert Progress(steps).step.label == "view-navigate"
+
+
+def test_연습_과정_폴더에서_공통_준비_파일을_뺀_연습_과정을_이름_차례로_읽는다():
+    courses = load_courses(COURSES)
+    assert [course.label for course in courses] == ["sword"]
+    assert courses[0].steps[0].label == "view-navigate"  # 공통 준비는 각 연습 과정 맨 앞에 들어 있다
+
+
+# 조작 셋을 차례로 안내하는 단계. 둘째 조작만 감지 조건이 있다(나머지는 [했어요]로 넘어감).
+STRETCH = Step("blade-stretch", "칼날 모양 잡기", operations=(
+    Operation("정육면체 고르기", "없음", "왼쪽 버튼 클릭", "정육면체를 눌러 보세요."),
+    Operation("크기 바꾸기", "Object > Transform > Scale", "S", "S로 늘려 보세요.", (("방금 조작", "transform.resize"),)),
+    Operation("옆 패널 보기", "View > Sidebar", "N", "N으로 치수를 보세요."),
+))
+RESIZED = replace(IDLE, recent_operators=("transform.resize",))
+
+
+def test_조작은_첫_조작부터_차례로_안내하고_했어요를_누르면_다음_조작으로_간다():
+    progress = Progress([STRETCH, JOIN_PARTS])
+    assert progress.walk == 0
+    progress.walked()
+    assert progress.walk == 1
+
+
+def test_감지_조건이_맞으면_다음_조작으로_간다():
+    progress = Progress([STRETCH, JOIN_PARTS], walk=1)
+    progress.on_state(IDLE)
+    progress.on_state(RESIZED)
+    assert progress.walk == 2
+
+
+def test_방금_조작_감지는_그_조작을_안내한_뒤에_새로_한_것만_센다():
+    # S로 이미 한 번 늘린 뒤(기록에 transform.resize가 남아 있음) 같은 조작을 다시 안내하는 걸음
+    progress = Progress([STRETCH, JOIN_PARTS], walk=1)
+    progress.on_state(RESIZED)  # 이 걸음을 시작할 때 이미 있던 기록
+    progress.on_state(replace(RESIZED, selected_objects=()))  # 다른 것만 바뀜
+    assert progress.walk == 1
+    progress.on_state(replace(RESIZED, recent_operators=("transform.resize", "transform.resize")))
+    assert progress.walk == 2
+
+
+def test_한_번_바뀐_상태로는_조작_하나만_넘어간다():
+    twice = replace(STRETCH, operations=(STRETCH.operations[1], STRETCH.operations[1]))
+    progress = Progress([twice])
+    progress.on_state(IDLE)
+    progress.on_state(RESIZED)
+    assert progress.walk == 1
+
+
+def test_마지막_조작_뒤에는_했어요가_아무것도_하지_않고_단계가_바뀌면_첫_조작부터():
+    progress = Progress([STRETCH, JOIN_PARTS], walk=3)
+    progress.walked()
+    assert progress.walk == 3
+    progress.next_step()
+    assert progress.walk == 0
+    progress.back()
+    assert progress.walk == 0
+
+
+def test_조작마다_안내_말과_감지_조건을_읽는다(tmp_path):
+    (tmp_path / "sword.yaml").write_text(
+        """\
+구간:
+  - 단계:
+      - 이름표: blade-stretch
+        이름: 칼날 모양 잡기
+        조작:
+          - 설명: 크기 바꾸기
+            메뉴: Object > Transform > Scale
+            단축키: S
+            안내: S로 늘려 보세요.
+            감지:
+              - 방금 조작: transform.resize
+          - 설명: 옆 패널 보기
+            메뉴: View > Sidebar
+            단축키: N
+            안내: N으로 치수를 보세요.
+""",
+        encoding="utf-8",
+    )
+    [step] = load_steps(tmp_path / "sword.yaml")
+    assert step.operations == (
+        Operation("크기 바꾸기", "Object > Transform > Scale", "S", "S로 늘려 보세요.", (("방금 조작", "transform.resize"),)),
+        Operation("옆 패널 보기", "View > Sidebar", "N", "N으로 치수를 보세요."),
+    )

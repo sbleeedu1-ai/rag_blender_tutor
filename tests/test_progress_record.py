@@ -6,10 +6,11 @@
 """
 
 import json
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from blender_tutor.progress import Ask, Course, Step, Withdraw, load_course
+from blender_tutor.progress import Ask, Course, Operation, Step, Withdraw, load_course
 from blender_tutor.progress_record import AskChangeCourse, AskResume, Notice, ProgressManager
 from blender_tutor.work_state import WorkState
 
@@ -33,6 +34,7 @@ def test_저장한_파일을_다시_열면_지난번_단계부터_이어_할지_
     manager.on_file_saved(BLEND)
     manager.next_step()
     manager.next_step()
+    manager.on_file_saved(BLEND)  # 저장할 때마다 그 자리를 다시 남긴다
 
     reopened = make(tmp_path)
     assert reopened.on_file_opened(BLEND) == [AskResume("지난번 3단계(부품 합치기)까지 했어요. 이어 할까요?")]
@@ -82,8 +84,13 @@ def test_다른_이름으로_저장하면_새_경로로_복사되고_그_뒤_진
     manager.next_step()
     manager.on_file_saved(copy)
     manager.next_step()
-    assert make(tmp_path).on_file_opened(BLEND) == [AskResume("지난번 2단계(칼끝 모으기)까지 했어요. 이어 할까요?")]
-    assert make(tmp_path).on_file_opened(copy) == [AskResume("지난번 3단계(부품 합치기)까지 했어요. 이어 할까요?")]
+    # BLEND는 1단계에서 저장한 뒤 2단계로 넘어갔고 다시 저장하지 않았다
+    assert make(tmp_path).on_file_opened(BLEND) == [AskResume(
+        "저장한 때는 1단계(화면 돌려 보기)였는데, 그 뒤 2단계(칼끝 모으기)까지 진행하신 것 같아요. 파일에도 그만큼 되어 있나요?"
+    )]
+    assert make(tmp_path).on_file_opened(copy) == [AskResume(
+        "저장한 때는 2단계(칼끝 모으기)였는데, 그 뒤 3단계(부품 합치기)까지 진행하신 것 같아요. 파일에도 그만큼 되어 있나요?"
+    )]
 
 
 def test_다른_연습_과정으로_바꾸면_먼저_확인을_묻고_네면_바꾼다(tmp_path):
@@ -98,7 +105,9 @@ def test_다른_연습_과정으로_바꾸면_먼저_확인을_묻고_네면_바
     assert manager.on_change_answer(True) == []
     assert manager.course == SHIELD
     assert manager.step.label == "view"
-    assert make(tmp_path).on_file_opened(BLEND) == [AskResume("지난번 1단계(화면 돌려 보기)까지 했어요. 이어 할까요?")]
+    assert make(tmp_path).on_file_opened(BLEND) == [AskResume(  # 바꾼 뒤 저장하지 않아 파일은 검 그대로일 수 있다
+        "저장한 때는 검 1단계(화면 돌려 보기)였는데, 그 뒤 방패 1단계(화면 돌려 보기)까지 진행하신 것 같아요. 파일에도 그만큼 되어 있나요?"
+    )]
 
 
 def test_다른_파일을_열면_지금_진행을_비우고_앞_파일의_기록은_남는다(tmp_path):
@@ -240,6 +249,8 @@ def test_진행_기록에는_사용자가_확인한_것만_남는다(tmp_path):
         "현재 단계": "view",
         "끝낸 단계": ["view"],
         "바뀐 시각": "2026-10-20T15:30:00",
+        # Blender에서 저장할 때의 자리. 저장 뒤 바뀐 것은 여기에 들지 않는다
+        "저장 때": {"연습 과정": "sword", "현재 단계": "view", "조작": 0, "조작 수": 0, "끝낸 단계": [], "시각": "2026-10-20T15:30:00"},
     }
 
 
@@ -251,6 +262,7 @@ def test_다_마친_파일을_열면_다른_연습_과정을_권한다(tmp_path)
     manager.on_answer(True)  # 칼끝 모으기를 [네]로 끝냄
     manager.next_step()  # 부품 합치기를 버튼으로 끝냄
     assert manager.step is None
+    manager.on_file_saved(BLEND)
     reopened = make(tmp_path, courses=(ASKING,))
     assert reopened.on_file_opened(BLEND) == [
         Notice("이 파일에서 묻는 과정 연습 과정을 다 마쳤어요. 다음엔 다른 연습 과정을 골라 볼까요?")
@@ -266,6 +278,7 @@ def test_저장소의_검_연습_과정으로_저장하고_이어_할_수_있다
     manager.choose_course("sword")
     manager.on_file_saved(BLEND)
     manager.skip_to("blade-stretch")
+    manager.on_file_saved(BLEND)
     assert make(tmp_path, courses=(sword,)).on_file_opened(BLEND) == [
         AskResume(f"지난번 3단계({sword.steps[2].name})까지 했어요. 이어 할까요?")
     ]
@@ -285,3 +298,98 @@ def test_blender_창마다_진행_관리를_따로_두면_오가도_기록이_�
     assert (window2.course, window2.step.label) == (SHIELD, "rim")
     assert make(tmp_path).on_file_opened(BLEND) == [AskResume("지난번 3단계(부품 합치기)까지 했어요. 이어 할까요?")]
     assert make(tmp_path).on_file_opened(OTHER) == [AskResume("지난번 2단계(테두리 만들기)까지 했어요. 이어 할까요?")]
+
+
+def test_새_파일_열림은_경로가_비어_오고_저장_전_파일로_받는다(tmp_path):
+    # Blender를 켤 때와 File > New 때 애드온은 경로 ""로 열림을 보낸다(티켓 25)
+    manager = make(tmp_path)
+    assert manager.on_file_opened("") == []
+    manager.choose_course("sword")
+    assert manager.choose_course("shield") == [AskChangeCourse("지금 진행(검, 1단계)은 저장 전 파일이라 남지 않아요. 방패로 바꿀까요?")]
+    assert make(tmp_path).on_file_opened("") == []  # 빈 경로로 기록을 쓰지 않았다
+    assert list(tmp_path.iterdir()) == []
+
+
+
+# 칼끝 모으기에 조작 셋이 있는 검(조작 안내 자리를 기록하는지 보려고)
+TIP_WALK = Step("blade-tip", "칼끝 모으기", operations=(Operation("가", "없음", "Tab", "가요."), Operation("나", "없음", "M", "나요."), Operation("다", "없음", "B", "다요.")))
+WALKING = Course("sword", "검", (Step("view", "화면 돌려 보기"), TIP_WALK, Step("join", "부품 합치기")))
+
+
+def saved_at_tip_walk(tmp_path, then=lambda manager: None) -> None:
+    """검 2단계(칼끝 모으기)의 3번째 조작에서 BLEND로 저장해 두고, then으로 저장 뒤 일을 더 한다."""
+    manager = make(tmp_path, courses=(WALKING, SHIELD))
+    manager.on_file_opened(BLEND)
+    manager.choose_course("sword")
+    manager.next_step()
+    manager.walked()
+    manager.walked()
+    manager.on_file_saved(BLEND)
+    then(manager)
+
+
+def test_저장할_때의_조작_자리까지_남기고_다시_열면_그_조작부터_이어_한다(tmp_path):
+    saved_at_tip_walk(tmp_path)
+    manager = make(tmp_path, courses=(WALKING, SHIELD))
+    assert manager.on_file_opened(BLEND) == [AskResume("지난번 2단계(칼끝 모으기) 3번째 조작을 하던 중이었어요. 이어 할까요?")]
+    manager.on_resume_answer(True)
+    assert (manager.step, manager.walk) == (TIP_WALK, 2)
+
+
+def test_조작_안내는_사람이_확인한_것이_아니라_저장할_때만_남는다(tmp_path):
+    saved_at_tip_walk(tmp_path, then=lambda manager: manager.walked())  # 저장 뒤 [했어요]만 더 누르고 저장하지 않음
+    manager = make(tmp_path, courses=(WALKING, SHIELD))
+    manager.on_file_opened(BLEND)
+    manager.on_resume_answer(True)
+    assert manager.walk == 2
+
+
+def test_저장_뒤_단계를_더_넘겼으면_파일에도_되어_있는지_묻고_네면_기록대로_간다(tmp_path):
+    saved_at_tip_walk(tmp_path, then=lambda manager: manager.next_step())
+    manager = make(tmp_path, courses=(WALKING, SHIELD))
+    assert manager.on_file_opened(BLEND) == [AskResume(
+        "저장한 때는 2단계(칼끝 모으기) 3번째 조작이었는데, 그 뒤 3단계(부품 합치기)까지 진행하신 것 같아요. 파일에도 그만큼 되어 있나요?"
+    )]
+    manager.on_resume_answer(True)
+    assert (manager.step.label, manager.walk) == ("join", 0)
+
+
+def test_저장_뒤_진행이_파일에_없다고_하면_저장한_때_자리로_간다(tmp_path):
+    saved_at_tip_walk(tmp_path, then=lambda manager: manager.next_step())
+    manager = make(tmp_path, courses=(WALKING, SHIELD))
+    manager.on_file_opened(BLEND)
+    manager.on_resume_answer(False)
+    assert (manager.step, manager.walk) == (TIP_WALK, 2)
+    assert make(tmp_path, courses=(WALKING, SHIELD)).on_file_opened(BLEND) == [  # 고른 자리를 기록에 다시 쓴다
+        AskResume("지난번 2단계(칼끝 모으기) 3번째 조작을 하던 중이었어요. 이어 할까요?")
+    ]
+
+
+def test_저장_뒤_연습_과정을_바꿨으면_연습_과정_이름도_함께_묻는다(tmp_path):
+    def change(manager):
+        manager.choose_course("shield")
+        manager.on_change_answer(True)
+
+    saved_at_tip_walk(tmp_path, then=change)
+    assert make(tmp_path, courses=(WALKING, SHIELD)).on_file_opened(BLEND) == [AskResume(
+        "저장한 때는 검 2단계(칼끝 모으기) 3번째 조작이었는데, 그 뒤 방패 1단계(화면 돌려 보기)까지 진행하신 것 같아요. 파일에도 그만큼 되어 있나요?"
+    )]
+
+
+def test_연습_과정이_고쳐져_그_단계_조작_수가_달라졌으면_첫_조작부터(tmp_path):
+    saved_at_tip_walk(tmp_path)
+    fewer = replace(TIP_WALK, operations=TIP_WALK.operations[:2])
+    manager = make(tmp_path, courses=(Course("sword", "검", (WALKING.steps[0], fewer, WALKING.steps[2])),))
+    assert manager.on_file_opened(BLEND) == [AskResume("지난번 2단계(칼끝 모으기)까지 했어요. 이어 할까요?")]
+    manager.on_resume_answer(True)
+    assert manager.walk == 0
+
+
+def test_연습_과정을_고르기_전에_받은_작업_상태를_기준으로_고른_뒤_첫_조작을_감지한다(tmp_path):
+    scale = Operation("늘리기", "Object > Transform > Scale", "S", "S로 늘려 보세요.", (("방금 조작", "transform.resize"),))
+    course = Course("sword", "검", (Step("blade-stretch", "칼날 모양 잡기", operations=(scale, scale)),))
+    manager = make(tmp_path, courses=(course,))
+    manager.on_state(MERGED)  # 고르기 전 Blender 상태
+    manager.choose_course("sword")
+    manager.on_state(replace(MERGED, recent_operators=("mesh.merge", "transform.resize")))  # 고른 뒤 처음 한 조작
+    assert manager.walk == 1

@@ -30,6 +30,7 @@ COMMON = """\
           - 설명: 화면 돌리기
             메뉴: View > Navigation > Orbit
             단축키: 가운데 버튼 끌기
+            안내: 가운데 버튼을 누른 채 끌어 화면을 돌려 보세요.
         먼저 볼 소제목:
           - editors/3dview/navigate/navigation.html#orbit
 """
@@ -54,6 +55,9 @@ COURSE = """\
           - 설명: 고른 점을 가운데로 모으기
             메뉴: Mesh > Merge > At Center
             단축키: M
+            안내: 이제 M을 눌러 가운데로 모아 볼까요?
+            감지:
+              - 방금 조작: mesh.merge
         먼저 볼 소제목:
           - modeling/meshes/editing/mesh/merge.html#merge
         끝난 조건:
@@ -347,3 +351,17 @@ def test_저장소의_연습_과정_파일은_실제_자료로도_검사를_통�
     if manual is None:
         pytest.skip("data/에 청크·ko.po·fr.po가 없음(커밋하지 않는 자료)")
     assert check_folder(COURSES, manual) == []
+
+
+def test_조작에_안내_말이_빠지면_잡는다(tmp_path):
+    course = COURSE.replace("            안내: 이제 M을 눌러 가운데로 모아 볼까요?\n", "")
+    assert kinds(write_folder(tmp_path, course=course)) == ["missing"]
+
+
+def test_감지는_빼도_되고_끝난_조건과_같은_종류만_받는다(tmp_path):
+    without = COURSE.replace("            감지:\n              - 방금 조작: mesh.merge\n", "")
+    assert kinds(write_folder(tmp_path, course=without)) == []
+    wrong_kind = COURSE.replace("              - 방금 조작: mesh.merge\n", "              - 꼭짓점 수: 8\n")
+    assert kinds(write_folder(tmp_path, course=wrong_kind)) == ["condition-kind"]
+    wrong_value = COURSE.replace("              - 방금 조작: mesh.merge\n", "              - 방금 조작: Merge At Center\n")
+    assert kinds(write_folder(tmp_path, course=wrong_value)) == ["condition-value"]

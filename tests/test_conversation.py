@@ -4,6 +4,7 @@ import logging
 
 from blender_tutor.answer_engine import Done, Failure, Piece
 from blender_tutor.conversation import NOT_READY, PROGRAM_ERROR, Conversation
+from blender_tutor.progress import Step
 from blender_tutor.work_state import WorkState
 from tests.examples import EDITING
 
@@ -17,10 +18,12 @@ class FakeEngine:
         self.events = events
         self.error = error
         self.recent: list[list[tuple[str, str]]] = []
+        self.steps: list = []
 
     def answer(self, question, state, recent, step=None):
         self.recent.append(list(recent))
-        assert state is STATE and step is None
+        self.steps.append(step)
+        assert state is STATE
         yield from self.events or [Piece(f"{question}의 "), Piece("답"), Done((), ())]
         if self.error:
             raise self.error
@@ -65,3 +68,13 @@ def test_엔진이_준비되기_전에는_기다리라는_문구():
     assert ask(conversation, "가") == [Failure(NOT_READY)]
     conversation.waiting_message = "설명서 자료가 없어요."
     assert ask(conversation, "가") == [Failure("설명서 자료가 없어요.")]
+
+
+def test_지금_단계를_엔진에_넘기고_자유_질문도_같은_최근_대화에_넣는다():
+    conversation = Conversation()
+    conversation.engine = engine = FakeEngine()
+    step = Step("blade-tip", "칼끝 모으기")
+    list(conversation.ask("가", STATE, step))
+    list(conversation.ask("나", STATE))  # 연습 과정 밖 자유 질문
+    assert engine.steps == [step, None]
+    assert engine.recent[1] == [("가", "가의 답")]

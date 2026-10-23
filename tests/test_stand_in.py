@@ -4,6 +4,7 @@ import numpy as np
 
 from blender_tutor.answer_engine import Done, Piece
 from blender_tutor.manual_chunks import Chunk, save_chunks
+from blender_tutor.progress import Course, Step
 from blender_tutor.stand_in import STAND_IN_ANSWER, StandInModel, WordEmbedder, build_engine
 from blender_tutor.work_state import WorkState
 from tests.examples import EDITING
@@ -45,3 +46,19 @@ def test_청크_파일로_엔진을_만들면_질문에_맞는_근거가_붙는�
     assert "".join(event.text for event in events if isinstance(event, Piece)) == STAND_IN_ANSWER.replace("[[Add > Mesh]]", "Add > Mesh")
     assert events[-1].sources[0].path == "Bevel Modifier > Options"
     assert isinstance(events[-1], Done)
+
+
+def test_연습_과정을_넘기면_연습_과정_밖_질문에_비슷한_연습_과정이_붙는다(tmp_path):
+    chunks = [Chunk("modeling/modifiers/generate/bevel", "options", "modeling", "modeling/modifiers/generate", "Bevel Modifier", ("Options",), "Width sets the size of the chamfer.")]
+    save_chunks(chunks, tmp_path / "chunks" / "manual_chunks.jsonl")
+    sent = []
+
+    class Recording(StandInModel):
+        def stream(self, messages, timeout):
+            sent.append(messages)
+            yield "답"
+
+    sword = Course("sword", "단순한 검", (Step("view", "화면 돌려 보기"),), "기본 정육면체로 검을 만든다.")
+    engine = build_engine(tmp_path, model=Recording(), courses=[sword])
+    list(engine.answer("활을 만들고 싶어요", WorkState.from_json(EDITING), []))
+    assert "단순한 검: 기본 정육면체로 검을 만든다." in str(sent[0])
