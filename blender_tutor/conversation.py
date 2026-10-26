@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 
 def settings_record(settings: Settings, recent_pairs: int) -> dict:
-    """기록에 남기는 설정: 답 엔진 설정 + 최근 대화 쌍 수. 시간 기록 줄(helper)과 평가 결과의 설정.json(evaluate)이
+    """기록에 남기는 설정: 답 엔진 설정 + 최근 대화 쌍 수. 시간 기록 줄(question_flow)과 평가 결과의 설정.json(evaluate)이
     이 모양 하나를 함께 써서 "같은 설정으로 잰 것"을 맞대 볼 수 있다(티켓 29). 설정이 늘면 여기만 고친다."""
     return {**dataclasses.asdict(settings), "recent_pairs": recent_pairs}
 

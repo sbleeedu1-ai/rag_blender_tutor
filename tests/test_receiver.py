@@ -7,16 +7,14 @@
 import http.client
 import json
 import threading
-import urllib.error
 import urllib.request
 
 import pytest
 
 from blender_tutor.receiver import TOKEN_HEADER, FileEvent, Message, Receiver
 from blender_tutor.work_state import WorkState
-from tests.examples import EDITING
+from tests.examples import EDITING, TOKEN, send
 
-TOKEN = "test-token"
 OBJECT_MODE = {**EDITING, "mode": "OBJECT", "edit_selected": {}}
 
 
@@ -34,24 +32,6 @@ def received():
 def receiver(alive, received):
     with Receiver(TOKEN, received.append, process_started=alive.get, port=0) as receiver:
         yield receiver
-
-
-def send(
-    receiver, window, pid, state=EDITING, *, summon=False, event=None, pressed=None, token=TOKEN, path="/state", body=None
-) -> int:
-    """애드온처럼 보내고 응답 번호를 돌려준다."""
-    if body is None:
-        body = {"window": window, "pid": pid, "state": state, "summon": summon, "event": event, "pressed": pressed}
-    request = urllib.request.Request(
-        f"http://127.0.0.1:{receiver.port}{path}",
-        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json", TOKEN_HEADER: token},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=5) as response:
-            return response.status
-    except urllib.error.HTTPError as error:
-        return error.code
 
 
 def test_창_번호마다_최신_상태_하나를_든다(receiver):
