@@ -4,6 +4,7 @@
 """
 
 import inspect
+import json
 
 from blender_tutor.course_desk import CourseDesk
 from blender_tutor.progress import Course, Operation, Step
@@ -112,3 +113,20 @@ def test_진행_관리의_함수는_흐름_기록에도_모두_같은_모양으�
     for name in public:
         assert hasattr(RecordingDesk, name), f"흐름 기록에 {name}이 없음"
         assert inspect.signature(getattr(RecordingDesk, name)) == inspect.signature(getattr(CourseDesk, name)), name
+
+
+def test_쓰기가_잠깐_실패해도_다시_되면_이어_쓰고_빠진_자리를_표시한다(tmp_path):
+    """백신이 파일을 잠깐 잡는 등으로 실패해도 검수 흐름이 통째로 끊기지 않게, 쓸 때마다 다시 시도한다.
+
+    빠진 줄이 있으면 다시 돌린 결과가 달라질 수 있어서, 이어 쓰기 전에 빠진 자리 표시(gap)를 한 줄 남긴다.
+    """
+    stream = tmp_path / "later" / "stream.jsonl"  # 폴더가 아직 없어 처음엔 쓰기가 실패한다
+    desk = recording(tmp_path / "records", stream)
+    desk.on_message(A, IDLE, FileEvent("opened", "C:/work/sword.blend"))  # 못 씀
+    stream.parent.mkdir()
+    desk.choose(A, "sword")  # 다시 됨
+    desk.forward(A)
+    assert [json.loads(line)["call"] for line in stream.read_text(encoding="utf-8").splitlines()] == ["gap", "choose", "forward"]
+
+    replayed = [(entry["call"], lines) for entry, lines in replay(stream, CourseDesk([SWORD], tmp_path / "again"), tmp_path / "again")]
+    assert replayed[0] == ("gap", [])

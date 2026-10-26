@@ -21,7 +21,10 @@ log = logging.getLogger(__name__)
 
 
 class RecordingDesk:
-    """CourseDesk를 감싸 바꾸는 부름마다 흐름 파일에 한 줄 쓰고 그대로 넘긴다. 못 쓰면 한 번 알리고 기록만 멈춘다.
+    """CourseDesk를 감싸 바꾸는 부름마다 흐름 파일에 한 줄 쓰고 그대로 넘긴다.
+
+    못 쓰면 진행은 그대로 넘기고, 다음 부름 때 다시 써 본다(백신이 파일을 잠깐 잡는 등). 다시 써지면 그 앞에
+    빠진 자리 표시 {"call": "gap"}을 한 줄 남긴다. 기록 파일에는 처음 실패할 때와 다시 써질 때만 알린다.
 
     record_dir는 desk가 쓰는 진행 기록 폴더(파일을 열 때 그 파일의 진행 기록을 읽어 함께 남긴다).
     """
@@ -30,7 +33,7 @@ class RecordingDesk:
         self._desk = desk
         self._path = path
         self._record_dir = record_dir
-        self._broken = False
+        self._failing = False  # 지난번 쓰기가 실패했나
         self._windows: set[int] = set()  # 기록한 부름에 나온 창 번호(keep이 버릴 진행이 있는지 가리려고)
 
     def on_message(self, window: int, state: WorkState, event: FileEvent | None = None, shown: bool = True) -> list[Line]:
@@ -80,14 +83,19 @@ class RecordingDesk:
     def _write(self, call: str, **values) -> None:
         if "window" in values:
             self._windows.add(values["window"])
-        if self._broken:
-            return
+        lines = [{"call": "gap"}] if self._failing else []
+        lines.append({"call": call, **values})
         try:
             with open(self._path, "a", encoding="utf-8") as file:
-                file.write(json.dumps({"call": call, **values}, ensure_ascii=False) + "\n")
+                file.writelines(json.dumps(line, ensure_ascii=False) + "\n" for line in lines)
         except OSError as error:
-            self._broken = True
-            log.warning("작업 상태 흐름을 쓰지 못해 기록을 멈춤(%s): %s", self._path, error)
+            if not self._failing:
+                log.warning("작업 상태 흐름을 쓰지 못함, 다음 부름 때 다시 써 봄(%s): %s", self._path, error)
+            self._failing = True
+            return
+        if self._failing:
+            log.info("작업 상태 흐름을 다시 씀(빠진 자리에 gap 표시): %s", self._path)
+        self._failing = False
 
 
 def _read_text(path: Path) -> str | None:
@@ -116,6 +124,8 @@ def replay(path: Path, desk: CourseDesk, record_dir: Path) -> Iterator[tuple[dic
             lines = desk.answer(window, entry["yes"])
         elif call == "keep":
             desk.keep(set(entry["windows"]))
+            lines = []
+        elif call == "gap":  # 기록하지 못한 줄이 있던 자리. 이 뒤로는 실제와 다르게 흐를 수 있다
             lines = []
         else:  # switched_to·forward·back
             lines = getattr(desk, call)(window)
