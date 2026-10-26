@@ -2,7 +2,7 @@
 
 도우미 창과 떼어 둔 모듈이다(시험 경계 ②: .scratch/mvp-roundtrip/spec.md의 Testing Decisions 참고).
 창을 그리거나 앞으로 끌어오는 일은 하지 않고, 돌려준 물음을 창이 자기 안에만 띄운다.
-단계 안의 조작은 파일 순서대로 하나씩 안내하고, 감지 조건이 맞거나 [했어요]를 받으면 다음 조작으로 간다(티켓 27).
+단계 안의 조작은 파일 순서대로 하나씩 안내하고, 감지 조건이 맞거나 '다음' 버튼을 받으면 다음 조작으로 간다(티켓 27).
 끝난 조건·감지 조건의 판정 규칙은 conditions.py에 있다.
 """
 
@@ -20,14 +20,14 @@ from blender_tutor.work_state import WorkState
 class Operation:
     """단계의 조작 하나: 한 줄 설명, 영어 메뉴 경로(없으면 "없음"), 단축키, 도우미가 대화에 띄울 안내 말, 감지 조건.
 
-    도우미는 한 단계 안에서 조작을 파일 순서대로 하나씩 안내하고, 감지 조건이 맞거나 [했어요]를 누르면 다음 조작으로 간다.
+    도우미는 한 단계 안에서 조작을 파일 순서대로 하나씩 안내하고, 감지 조건이 맞거나 '다음' 버튼을 누르면 다음 조작으로 간다.
     """
 
     description: str
     menu: str
     keys: str
     say: str = ""  # 안내 말(선생님 말투, 연습 과정 파일에 미리 써 둠)
-    detect: tuple[tuple[str, object], ...] = ()  # 감지 조건 (종류, 값). 끝난 조건과 같은 종류. 비면 [했어요]로만 넘어간다
+    detect: tuple[tuple[str, object], ...] = ()  # 감지 조건 (종류, 값). 끝난 조건과 같은 종류. 비면 '다음' 버튼으로만 넘어간다
 
 
 @dataclass(frozen=True)
@@ -148,7 +148,7 @@ class Progress:
         """
         self._steps = list(steps)
         self._index = start
-        self._finished = list(finished)  # 사용자가 [네]나 '다음 단계' 버튼으로 끝낸 단계 이름표. 건너뛴 단계는 넣지 않는다
+        self._finished = list(finished)  # 사용자가 [네]나 '다음 단계'('다음' 버튼, 조작을 다 끝낸 자리)로 끝낸 단계 이름표. 건너뛴 단계는 넣지 않는다
         self._asking = False  # 물음을 띄워 두고 답을 기다리는 중
         self._declined: set[str] = set()  # 물음을 거절한 단계 이름표. 이 단계들은 다시 묻지 않는다
         self._latest = latest  # 마지막으로 받은 작업 상태
@@ -199,7 +199,7 @@ class Progress:
         """끝난 조건이 맞으면 다음 단계로 갈지 묻고, 깨지면 거둔다. 조작 안내 중에는 보지 않는다.
 
         첫 조작만으로 끝난 조건이 맞는 단계가 있어서다(예: 길게 늘이기만 해도 크기 비율 3, 2026-10-23 사용자 눈 확인).
-        조작을 다 끝내기 전에 넘어가고 싶으면 [다음 단계]를 누른다.
+        조작을 다 끝내기 전에 넘어가고 싶으면 '다음'을 이어 누르거나 '단계' 목록에서 고른다.
         """
         met = (
             self.operation is None
@@ -231,20 +231,36 @@ class Progress:
         return []
 
     def next_step(self) -> list[Command]:
-        """'다음 단계' 버튼. 끝난 조건과 상관없이 언제나 넘어간다(마지막 단계에서는 연습 과정을 마침)."""
+        """다음 단계로. 끝난 조건과 상관없이 언제나 넘어간다(마지막 단계에서는 연습 과정을 마침)."""
         self._finish()
         return self._go_to(min(self._index + 1, len(self._steps)))
 
     def skip_to(self, label: str) -> list[Command]:
-        """원하는 단계로 건너뛰기. 없는 이름표면 ValueError."""
+        """'단계' 목록에서 고른 단계로 건너뛰기. 없는 이름표면 ValueError."""
         return self._go_to([step.label for step in self._steps].index(label))
 
+    def forward(self) -> list[Command]:
+        """'다음' 버튼. 안내 중인 조작이 있으면 다음 조작으로, 이 단계 조작을 다 끝냈으면 다음 단계로('다음 단계')."""
+        return self.next_operation() if self.operation is not None else self.next_step()
+
     def back(self) -> list[Command]:
-        """앞 단계로 가기. 첫 단계에서는 그대로 머문다."""
-        return self._go_to(max(self._index - 1, 0))
+        """'뒤로' 버튼. 앞 조작으로 가고, 첫 조작에서는 앞 단계의 조작을 다 끝낸 자리로 간다('다음 단계'를 되돌림).
+
+        첫 단계 첫 조작에서는 그대로 머문다. 끝낸 단계는 줄이지 않는다.
+        """
+        if self._operations_done > 0:
+            commands = self.close()
+            self._operations_done -= 1
+            self._operation_started_at = self._latest
+            return commands
+        if self._index == 0:
+            return []
+        commands = self._go_to(self._index - 1)
+        self._operations_done = len(self.step.operations)
+        return commands
 
     def next_operation(self) -> list[Command]:
-        """[했어요]·감지: 지금 조작을 끝낸 것으로 치고 다음 조작으로 간다. 조작을 다 끝냈으면 그대로."""
+        """'다음' 버튼·감지: 지금 조작을 끝낸 것으로 치고 다음 조작으로 간다. 조작을 다 끝냈으면 그대로."""
         if not self._advance():
             return []
         # 마지막 조작을 끝냈는데 끝난 조건이 이미 맞아 있으면 다음 작업 상태를 기다리지 않고 묻는다

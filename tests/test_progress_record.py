@@ -338,6 +338,20 @@ def test_저장할_때의_조작_자리까지_남기고_다시_열면_그_조작
     assert (manager.step, manager.operations_done) == (TIP_STEP, 2)
 
 
+def test_다음_뒤로_버튼으로_바뀐_조작_자리도_바로_기록한다(tmp_path):
+    saved_at_tip_operation(tmp_path, then=lambda manager: (manager.back(), manager.back()))  # 3번째 → 1번째 조작
+    manager = make(tmp_path, courses=(GUIDED_SWORD, SHIELD))
+    manager.on_file_opened(BLEND)
+    manager.on_resume_answer(True)
+    assert (manager.step, manager.operations_done) == (TIP_STEP, 0)
+    manager.forward()
+    manager.forward()
+    manager.forward()  # 조작을 다 끝낸 자리
+    assert (manager.step, manager.operations_done) == (TIP_STEP, 3)
+    manager.forward()  # '다음 단계'
+    assert manager.step == GUIDED_SWORD.steps[2]
+
+
 def test_조작을_더_하고_저장하지_않았으면_다시_열_때_그만큼_되어_있는지_묻는다(tmp_path):
     saved_at_tip_operation(tmp_path, then=lambda manager: manager.next_operation())  # 저장 뒤 [했어요]만 더 누르고 저장하지 않음
     manager = make(tmp_path, courses=(GUIDED_SWORD, SHIELD))

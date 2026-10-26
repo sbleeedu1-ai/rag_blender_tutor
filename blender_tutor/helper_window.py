@@ -1,8 +1,9 @@
 """도우미 창 화면: PySide6 위젯(파이썬만, QML 쓰지 않음, HISTORY [17]·[18], 티켓 26·27).
 
 테두리·제목 표시줄 없는 어두운 반투명 판에 맨 위 연습 과정 카드 / 대화(도우미 안내 말, 회색 질문, 크고 굵은 흰 답,
-근거 카드) / [네] [아니요] 물음 줄 / [했어요] / 알약 입력칸.
-연습 과정 카드는 연습 과정·n단계·바꾸기, 단계 이름, 뒤로·다음 단계·건너뛰기만 둔다(사용자 결정, 티켓 27).
+근거 카드) / [네] [아니요] 물음 줄 / 알약 입력칸.
+연습 과정 카드는 연습 과정·n단계, 단계 이름, 뒤로·다음과 오른쪽 끝 '단계 ▼'만 둔다(사용자 결정, 티켓 27, HISTORY [55]).
+'다음'은 조작 하나씩 넘기고 조작을 다 끝내면 '다음 단계'가 된다. '단계 ▼'는 다섯 줄 높이 단계 목록과 그 아래 연습 과정 바꾸기.
 목표 모양은 보이지 않고, 조작은 도우미가 대화에 하나씩 안내한다(course_desk).
 작업 표시줄·Alt+Tab에 나오지 않는 도구 창이고 트레이 아이콘만 둔다. Apple·Siri 이름·로고는 쓰지 않는다.
 창은 그리기와 입력만 한다. 언제 맨 위·뒤·숨김인지(window_rules)와 답 만들기(conversation)는 helper가 잇는다.
@@ -13,8 +14,8 @@ import html
 from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton, QScrollArea, QSizePolicy,
-    QSystemTrayIcon, QVBoxLayout, QWidget,
+    QAbstractItemView, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
+    QMenu, QPushButton, QScrollArea, QSizePolicy, QSystemTrayIcon, QVBoxLayout, QWidget, QWidgetAction,
 )
 
 from blender_tutor.answer_engine import Done, Event, Failure, Piece, Source
@@ -32,6 +33,7 @@ PANEL_ALPHA = 235  # 판 진하기(0-255, 사용자 결정 HISTORY [18])
 FONT = "Malgun Gothic"
 THINKING = "생각 중…"
 COURSES_UNREADABLE = "연습 과정 파일을 읽지 못했어요. 질문은 그대로 할 수 있어요."  # 검 파일이 늘 있으니 빈 목록은 읽기 실패
+STEP_ROWS = 5  # '단계 ▼' 목록에 한 번에 보이는 줄 수(넘으면 스크롤, 사용자 결정)
 PICK_HINT = "목록에 없으면 만들고 싶은 것을 아래에 물어보세요. 비슷한 연습 과정을 알려 드려요. 연습 과정 없이 질문만 해도 돼요."
 
 STYLE = f"""
@@ -63,9 +65,9 @@ QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::su
 #course, #cardButton {{ background: rgba(255,255,255,0.10); border: none; border-radius: 10px; padding: 5px 12px; font-size: 13px; }}
 #course:hover, #cardButton:hover {{ background: rgba(255,255,255,0.20); }}
 #cardButton::menu-indicator {{ image: none; width: 0; }}
-#small {{ background: transparent; border: none; color: rgba(235,235,245,0.55); font-size: 12px; }}
-#small:hover {{ color: white; }}
-#small::menu-indicator {{ image: none; width: 0; }}
+#stepList {{ background: transparent; border: none; outline: none; font-size: 13px; }}
+#stepList::item {{ padding: 5px 10px; border-radius: 6px; }}
+#stepList::item:hover {{ background: rgba(120,140,255,0.45); }}
 QMenu {{ background: rgb(40,40,48); color: white; border: 1px solid rgba(255,255,255,0.12); padding: 4px; }}
 QMenu::item {{ padding: 5px 14px; border-radius: 6px; }}
 QMenu::item:selected {{ background: rgba(120,140,255,0.45); }}
@@ -81,11 +83,10 @@ class HelperWindow(QWidget):
     asked = Signal(str)  # Enter로 보낸 질문
     escape = Signal()  # Esc: Blender로 돌아가기
     chose_course = Signal(str)  # 고른 연습 과정 이름표(처음 고르기·바꾸기)
-    went_next = Signal()  # '다음 단계' 버튼
+    went_next = Signal()  # '다음' 버튼(조작을 다 끝냈으면 '다음 단계')
     went_back = Signal()  # '뒤로' 버튼
-    skipped_to = Signal(str)  # 건너뛰어 갈 단계 이름표
+    skipped_to = Signal(str)  # '단계 ▼' 목록에서 고른 단계 이름표
     answered = Signal(bool)  # 물음에 [네](True)/[아니요](False)
-    operation_done = Signal()  # [했어요]: 안내한 조작을 했다
 
     def __init__(self):
         super().__init__(None, Qt.FramelessWindowHint | Qt.Tool)  # Tool: 작업 표시줄·Alt+Tab에 나오지 않음
@@ -100,7 +101,8 @@ class HelperWindow(QWidget):
         self._answer: QLabel | None = None
         self._answer_text = ""
         self._course_labels: tuple[str, ...] = ()  # 고르기 버튼·바꾸기 메뉴를 만든 연습 과정 목록
-        self._skip_for: Course | None = None  # 건너뛰기 메뉴를 만든 연습 과정
+        self._steps_for: Course | None = None  # 단계 목록을 만든 연습 과정
+        self._marked = -1  # 단계 목록에서 ▶로 표시한 줄(0부터)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 12, 18, 18)
@@ -136,13 +138,6 @@ class HelperWindow(QWidget):
         bar.rangeChanged.connect(lambda _low, high: bar.setValue(high))  # 새 글이 붙으면 맨 아래로
         root.addWidget(self._scroll, 1)
         root.addWidget(self._build_prompt())
-        done_row = QHBoxLayout()  # 안내한 조작을 했으면 누르는 버튼(입력칸 바로 위 오른쪽)
-        done_row.addStretch()
-        self.done_button = _button("했어요 ✓", "cardButton")
-        self.done_button.clicked.connect(self.operation_done)
-        self.done_button.hide()
-        done_row.addWidget(self.done_button)
-        root.addLayout(done_row)
 
         self.input = QLineEdit()
         self.input.setObjectName("input")
@@ -189,19 +184,13 @@ class HelperWindow(QWidget):
         picker.addWidget(self._pick_hint)
         layout.addWidget(self._picker)
 
-        self._stepper = QWidget()  # 진행 중: 연습 과정 · n단계 · 바꾸기 / 단계 이름 / 뒤로 · 다음 단계 · 건너뛰기
+        self._stepper = QWidget()  # 진행 중: 연습 과정 · n단계 / 단계 이름 / 뒤로 · 다음 ··· 단계 ▼
         stepper = QVBoxLayout(self._stepper)
         stepper.setContentsMargins(0, 0, 0, 0)
         stepper.setSpacing(6)
-        head = QHBoxLayout()
         self._header = QLabel()
         self._header.setObjectName("stepHeader")
-        head.addWidget(self._header)
-        head.addStretch()
-        self.change_button = _button("바꾸기", "small")
-        self.change_button.setMenu(QMenu(self.change_button))
-        head.addWidget(self.change_button)
-        stepper.addLayout(head)
+        stepper.addWidget(self._header)
         self._name = QLabel()
         self._name.setObjectName("stepName")
         self._name.setWordWrap(True)
@@ -212,17 +201,42 @@ class HelperWindow(QWidget):
         row.setSpacing(6)
         self.back_button = _button("◀ 뒤로", "cardButton")
         self.back_button.clicked.connect(self.went_back)
-        self.next_button = _button("다음 단계 ▶", "cardButton")
+        self.next_button = _button("다음 ▶", "cardButton")
         self.next_button.clicked.connect(self.went_next)
-        self.skip_button = _button("건너뛰기 ▼", "cardButton")
-        self.skip_button.setMenu(QMenu(self.skip_button))
+        self.step_button = _button("단계 ▼", "cardButton")
+        self.step_button.setMenu(self._build_step_menu())
         row.addWidget(self.back_button)
         row.addWidget(self.next_button)
-        row.addWidget(self.skip_button)
         row.addStretch()
+        row.addWidget(self.step_button)
         stepper.addWidget(buttons)
         layout.addWidget(self._stepper)
         return self.card
+
+    def _build_step_menu(self) -> QMenu:
+        """'단계 ▼' 메뉴: 다섯 줄 높이로 스크롤하는 단계 목록, 구분선, 연습 과정 바꾸기(하위 메뉴)."""
+        menu = QMenu(self)
+        self.step_list = QListWidget()
+        self.step_list.setObjectName("stepList")
+        self.step_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.step_list.setFocusPolicy(Qt.NoFocus)
+
+        def chosen(item: QListWidgetItem) -> None:
+            menu.close()
+            self.skipped_to.emit(item.data(Qt.UserRole))
+
+        def opening() -> None:  # 열 때마다 지금 단계가 보이게 스크롤한다(12단계 중 10단계에 있어도 찾아 내려가지 않게)
+            if self._marked >= 0:
+                self.step_list.scrollToItem(self.step_list.item(self._marked), QAbstractItemView.PositionAtCenter)
+
+        self.step_list.itemClicked.connect(chosen)
+        menu.aboutToShow.connect(opening)
+        rows = QWidgetAction(menu)
+        rows.setDefaultWidget(self.step_list)
+        menu.addAction(rows)
+        menu.addSeparator()
+        self._change_menu = menu.addMenu("연습 과정 바꾸기")
+        return menu
 
     def _build_prompt(self) -> QFrame:
         self.prompt = QFrame()
@@ -253,7 +267,6 @@ class HelperWindow(QWidget):
             self._show_step(view)
         self._prompt_text.setText(view.prompt or "")
         self.prompt.setVisible(view.prompt is not None)  # 창을 앞으로 끌어오지 않고 창 안에만 띄운다
-        self.done_button.setVisible(view.done_button)
 
     def show_line(self, line: Line) -> None:
         """도우미 안내 말(guide)이나 진행 관리의 알림(notice) 한 줄을 대화에 붙인다."""
@@ -269,7 +282,7 @@ class HelperWindow(QWidget):
         while self._course_row.count():
             if widget := self._course_row.takeAt(0).widget():
                 widget.deleteLater()
-        menu = self.change_button.menu()
+        menu = self._change_menu
         menu.clear()
         for course in courses:
             button = _button(course.name, "course")
@@ -281,19 +294,30 @@ class HelperWindow(QWidget):
 
     def _show_step(self, view: StepView) -> None:
         course, step = view.course, view.step
-        if course is not self._skip_for:
-            self._skip_for = course
-            menu = self.skip_button.menu()
-            menu.clear()
-            for number, each in enumerate(course.steps, 1):
-                menu.addAction(f"{number}. {each.name}", lambda label=each.label: self.skipped_to.emit(label))
+        if course is not self._steps_for:
+            self._steps_for = course
+            self.step_list.clear()
+            for each in course.steps:
+                item = QListWidgetItem()
+                item.setData(Qt.UserRole, each.label)
+                self.step_list.addItem(item)
+        self._mark(view.number - 1)
         self.next_button.setVisible(step is not None)
+        self.next_button.setText("다음 ▶" if view.operating else "다음 단계 ▶")
         if step is None:
             self._header.setText(f"{course.name} · 다 마쳤어요")
-            self._name.setText("다른 연습 과정은 '바꾸기'에서 고를 수 있어요.")
+            self._name.setText("다른 연습 과정은 '단계 ▼'의 '연습 과정 바꾸기'에서 고를 수 있어요.")
             return
         self._header.setText(f"{course.name} · {view.number}단계 / {len(course.steps)}")
         self._name.setText(step.name)
+
+    def _mark(self, index: int) -> None:
+        """단계 목록의 지금 단계 줄 앞에 ▶(마쳤으면 index가 -1이라 표시 없음). 높이는 다섯 줄까지만."""
+        self._marked = index
+        for row, each in enumerate(self._steps_for.steps):
+            self.step_list.item(row).setText(f"{'▶' if row == index else '  '} {row + 1}. {each.name}")
+        rows = min(self.step_list.count(), STEP_ROWS)
+        self.step_list.setFixedHeight(self.step_list.sizeHintForRow(0) * rows + 2 * self.step_list.frameWidth())
 
     # ---- 대화
     def _send(self) -> None:

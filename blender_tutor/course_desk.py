@@ -5,7 +5,7 @@ Blender 둘을 오가도 창을 바꿀 때 "파일 열림"이 오지 않으므�
 도우미 창(helper)은 사건과 버튼을 여기 넘기고, 돌려받은 말(Line)을 대화에 붙이고 view로 단계 카드를 다시 그린다.
 
 대화에 붙이는 말: 연습 과정을 시작하거나 이어 할 때 인사, 단계가 바뀌면 단계 시작, 조작마다 연습 과정 파일의 안내 말.
-조작은 감지 조건이 맞거나 [했어요]를 누르면 다음으로 간다.
+조작은 감지 조건이 맞거나 카드의 '다음'을 누르면 다음으로 간다. 감지 조건이 없는 조작은 안내 말 끝에 '다음'을 누르라는 말을 붙인다.
 """
 
 from collections.abc import Callable
@@ -20,11 +20,9 @@ from blender_tutor.progress_record import ManagerCommand, Notice, ProgressManage
 from blender_tutor.receiver import FileEvent
 from blender_tutor.work_state import WorkState
 
-# 감지 조건이 있는 조작에도 [했어요]를 보인다. 감지 조건(조작 이름·배율·위치·시점)은 아직 도우미 창에서 사람이 직접
-# 해 보며 확인하지 않아, 감지가 빗나가도 막히지 않게 하려는 것이다. 티켓 32(검 연습 과정 따라 하며 고치기)에서 감지가 잘
-# 되는 것을 확인하면 False로 바꿔, 감지 조건이 없는 조작(옆 패널 열기·X-ray 켜기처럼 작업 상태로 알 수 없는 것)에만 [했어요]를 남긴다.
-DONE_BUTTON_EVEN_IF_DETECTED = True
-
+# 감지 조건이 없는 조작(옆 패널 열기·X-ray 켜기처럼 작업 상태로 알 수 없는 것)의 안내 말 끝에 붙인다.
+# 붙이지 않으면 알아서 넘어가기를 기다리기만 할 수 있어서다(HISTORY [55]).
+PRESS_NEXT = "다 되면 '다음'을 눌러 주세요."
 ALL_OPERATIONS_DONE = "이 단계에서 할 조작은 다 했어요. 다 됐으면 '다음 단계'를 눌러 주세요."
 NO_OPERATIONS = "이 단계는 다 되면 '다음 단계'를 눌러 넘어가요."
 
@@ -37,7 +35,7 @@ class StepView:
     number: int  # 지금 단계가 몇 번째인지(파일 순서, 1부터). 고르지 않았거나 마쳤으면 0
     step: Step | None  # 지금 단계. 고르지 않았거나 마쳤으면 None
     prompt: str | None  # [네] [아니요]로 답할 물음 글. 없으면 None
-    done_button: bool = False  # [했어요]를 보이나(안내 중인 조작이 있음)
+    operating: bool = False  # 안내 중인 조작이 있나. 있으면 카드 버튼이 '다음'(다음 조작), 없으면 '다음 단계'
 
 
 class LineKind(StrEnum):
@@ -104,24 +102,20 @@ class CourseDesk:
         """연습 과정 고르기(처음 고르기·바꾸기). 떠 있는 물음을 어떻게 할지는 진행 관리가 정한다."""
         return self._apply(window, self._manager(window).choose_course(label))
 
-    def next_step(self, window: int) -> list[Line]:
-        """'다음 단계' 버튼."""
-        return self._apply(window, self._manager(window).next_step())
-
-    def next_operation(self, window: int) -> list[Line]:
-        """[했어요]: 안내 중인 조작을 했다."""
-        return self._apply(window, self._manager(window).next_operation())
+    def forward(self, window: int) -> list[Line]:
+        """'다음' 버튼: 조작이 남았으면 다음 조작, 다 끝냈으면 다음 단계('다음 단계')."""
+        return self._apply(window, self._manager(window).forward())
 
     def answer(self, window: int, yes: bool) -> list[Line]:
         """떠 있는 물음에 [네]/[아니요]. 어느 물음의 답인지는 진행 관리가 가린다(물음이 없으면 아무것도 하지 않음)."""
         return self._apply(window, self._manager(window).answer(yes))
 
     def back(self, window: int) -> list[Line]:
-        """'뒤로' 버튼."""
+        """'뒤로' 버튼: 앞 조작, 첫 조작에서는 앞 단계의 다 끝낸 자리."""
         return self._apply(window, self._manager(window).back())
 
     def skip_to(self, window: int, label: str) -> list[Line]:
-        """원하는 단계로 건너뛰기."""
+        """'단계' 목록에서 고른 단계로 건너뛰기."""
         return self._apply(window, self._manager(window).skip_to(label))
 
     def keep(self, windows: set[int]) -> None:
@@ -138,9 +132,7 @@ class CourseDesk:
     def view(self, window: int) -> StepView:
         """그 창에 보일 진행 모양."""
         manager = self._manager(window)
-        course, step, operation = manager.course, manager.step, manager.operation
-        done_button = operation is not None and (DONE_BUTTON_EVEN_IF_DETECTED or not operation.detect)
-        return StepView(course, manager.number, step, manager.prompt, done_button)
+        return StepView(manager.course, manager.number, manager.step, manager.prompt, manager.operation is not None)
 
     def _manager(self, window: int) -> ProgressManager:
         if window not in self._managers:
@@ -178,9 +170,10 @@ class CourseDesk:
 
     @staticmethod
     def _operation_line(manager: ProgressManager) -> list[Line]:
-        """지금 조작의 안내 말. 조작을 다 끝냈거나 조작이 없는 단계면 '다음 단계'를 누르라는 말."""
-        if manager.operation is not None:
-            return [Line(LineKind.GUIDE, manager.operation.say)]
+        """지금 조작의 안내 말(감지 조건이 없으면 '다음'을 누르라는 말을 붙임). 조작을 다 끝냈거나 조작이 없는 단계면 '다음 단계'를 누르라는 말."""
+        operation = manager.operation
+        if operation is not None:
+            return [Line(LineKind.GUIDE, operation.say if operation.detect else f"{operation.say} {PRESS_NEXT}")]
         return [Line(LineKind.GUIDE, ALL_OPERATIONS_DONE if manager.step.operations else NO_OPERATIONS)]
 
 

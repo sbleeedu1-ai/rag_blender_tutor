@@ -4,8 +4,8 @@
 어느 연습 과정을 어느 파일에서 하는지와 진행 기록을 맡는다. 도우미 창은 course_desk를 거쳐 Blender 창마다
 하나씩 만든 이 모듈의 ProgressManager에 사건을 넘긴다.
 진행 기록은 열린 파일 경로마다 작은 JSON 하나이고(사용자 설정 폴더, 저장소 밖), 지우지 않는다.
-단계 옮기기와 끝낸 단계는 사용자가 확인한 변화([네], 버튼, 건너뛰기·뒤로, 연습 과정 고르기·바꾸기)만 기록에 쓴다.
-단계 안 몇 번째 조작인지는 감지·[했어요]로 바뀔 때마다 쓴다(티켓 27).
+단계 옮기기와 끝낸 단계는 사용자가 확인한 변화([네], 다음·뒤로 버튼, '단계' 목록, 연습 과정 고르기·바꾸기)만 기록에 쓴다.
+단계 안 몇 번째 조작인지는 감지·다음·뒤로로 바뀔 때마다 쓴다(티켓 27).
 Blender에서 저장할 때마다 그때의 자리도 "저장 때"로 따로 쓴다. 다시 열 때 기록이 저장 때와 다르면(저장 뒤 진행했는데
 저장하지 않고 닫음) 그 진행이 파일에도 있는지 사람에게 물어 어느 자리로 갈지 정한다.
 한 Blender 창에서 다른 파일을 열면 지금 진행을 비운다(앞 파일의 진행은 그 파일 기록에 남아 있다).
@@ -262,7 +262,7 @@ class ProgressManager:
         return []
 
     def next_operation(self) -> list[ManagerCommand]:
-        """[했어요]: 다음 조작으로 가고 기록한다."""
+        """다음 조작으로 가고 기록한다."""
         return self._recorded(lambda progress: progress.next_operation())
 
     # 아래는 한 연습 과정 안의 사건. Progress에 넘기고, 단계·끝낸 단계·끝낸 조작 수가 바뀌었으면 기록한다.
@@ -279,15 +279,19 @@ class ProgressManager:
         return self._recorded(lambda progress: progress.on_answer(yes))
 
     def next_step(self) -> list[ManagerCommand]:
-        """'다음 단계' 버튼."""
+        """다음 단계로(조작이 남아 있어도)."""
         return self._recorded(lambda progress: progress.next_step())
 
+    def forward(self) -> list[ManagerCommand]:
+        """'다음' 버튼: 조작이 남았으면 다음 조작, 다 끝냈으면 다음 단계."""
+        return self._recorded(lambda progress: progress.forward())
+
     def skip_to(self, label: str) -> list[ManagerCommand]:
-        """원하는 단계로 건너뛰기."""
+        """'단계' 목록에서 고른 단계로 건너뛰기."""
         return self._recorded(lambda progress: progress.skip_to(label))
 
     def back(self) -> list[ManagerCommand]:
-        """앞 단계로 가기."""
+        """'뒤로' 버튼: 앞 조작, 첫 조작에서는 앞 단계의 다 끝낸 자리."""
         return self._recorded(lambda progress: progress.back())
 
     def _recorded(self, event: Callable[[Progress], list[Command]]) -> list[ManagerCommand]:

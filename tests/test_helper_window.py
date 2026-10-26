@@ -8,7 +8,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")  # QApplication보다 먼저
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 
@@ -44,7 +44,6 @@ def window(app):
     window.went_back.connect(lambda: window.sent.append(("뒤로",)))
     window.skipped_to.connect(lambda label: window.sent.append(("건너뜀", label)))
     window.answered.connect(lambda yes: window.sent.append(("답", yes)))
-    window.operation_done.connect(lambda: window.sent.append(("했어요",)))
     window.show()
     yield window
     window.close()
@@ -141,25 +140,62 @@ def test_연습_과정을_고르지_않았으면_목록과_자유_질문_안내�
     assert window.sent == [("고름", "shield")]
 
 
-def test_단계_카드는_n단계와_이름만_보이고_버튼으로_뒤로_다음_건너뛰기(window):
+def test_단계_카드는_n단계와_이름만_보이고_버튼은_뒤로_다음_그리고_오른쪽_끝에_단계(window):
     window.show_progress(AT_TIP, COURSES)
     assert texts(window, "stepHeader") == ["검 · 2단계 / 3"]
     assert texts(window, "stepName") == ["칼끝 모으기"]
+    assert window.step_button.text() == "단계 ▼"
     buttons = window.back_button.parentWidget().layout()
-    order = [buttons.itemAt(i).widget() for i in range(buttons.count()) if buttons.itemAt(i).widget()]
-    assert order == [window.back_button, window.next_button, window.skip_button]  # 사용자가 정한 차례
+    order = [buttons.itemAt(i).widget() for i in range(buttons.count())]
+    assert order == [window.back_button, window.next_button, None, window.step_button]  # 사용자가 정한 차례(None은 빈 칸)
     window.back_button.click()
     window.next_button.click()
-    skip = {action.text(): action for action in window.skip_button.menu().actions()}
-    assert list(skip) == ["1. 화면 돌려 보기", "2. 칼끝 모으기", "3. 부품 합치기"]
-    skip["3. 부품 합치기"].trigger()
-    assert window.sent == [("뒤로",), ("다음",), ("건너뜀", "join")]
+    assert window.sent == [("뒤로",), ("다음",)]
 
 
-def test_다른_연습_과정으로_바꾸기는_카드의_메뉴에서_고른다(window):
+def test_다음_버튼은_안내_중인_조작이_있으면_다음_다_끝냈으면_다음_단계(window):
+    window.show_progress(StepView(SWORD, 2, TIP, None, operating=True), COURSES)
+    assert window.next_button.text() == "다음 ▶"
     window.show_progress(AT_TIP, COURSES)
-    change = {action.text(): action for action in window.change_button.menu().actions()}
-    change["방패"].trigger()
+    assert window.next_button.text() == "다음 단계 ▶"
+
+
+def step_rows(window: HelperWindow) -> list[str]:
+    return [window.step_list.item(i).text() for i in range(window.step_list.count())]
+
+
+def test_단계_목록은_지금_단계를_표시하고_고르면_건너뛴다(window):
+    window.show_progress(AT_TIP, COURSES)
+    assert step_rows(window) == ["   1. 화면 돌려 보기", "▶ 2. 칼끝 모으기", "   3. 부품 합치기"]
+    window.show_progress(StepView(SWORD, 3, SWORD.steps[2], None), COURSES)
+    assert step_rows(window)[2] == "▶ 3. 부품 합치기"
+    window.step_list.itemClicked.emit(window.step_list.item(0))
+    assert window.sent == [("건너뜀", "view")]
+
+
+def test_단계_목록은_다섯_줄_높이로_스크롤하고_열면_지금_단계가_보인다(window, app):
+    long = Course("long", "긴 과정", tuple(Step(f"s{n}", f"단계 {n}") for n in range(1, 13)))
+    rows, menu = window.step_list, window.step_button.menu()
+
+    def open_and_see(number: int) -> bool:
+        window.show_progress(StepView(long, number, long.steps[number - 1], None), [long])
+        menu.popup(window.step_button.mapToGlobal(QPoint(0, 0)))
+        app.processEvents()
+        seen = rows.viewport().rect().intersects(rows.visualItemRect(rows.item(number - 1)))
+        menu.close()
+        return seen
+
+    assert open_and_see(1)
+    assert rows.viewport().height() < rows.sizeHintForRow(0) * 6  # 12줄을 다 보이지 않고 다섯 줄
+    assert not rows.viewport().rect().intersects(rows.visualItemRect(rows.item(9)))  # 10단계는 스크롤해야 보인다
+    assert open_and_see(10)
+
+
+def test_다른_연습_과정으로_바꾸기는_단계_목록_아래의_메뉴에서_고른다(window):
+    window.show_progress(AT_TIP, COURSES)
+    [change] = [action for action in window.step_button.menu().actions() if action.menu()]
+    assert change.text() == "연습 과정 바꾸기"
+    {action.text(): action for action in change.menu().actions()}["방패"].trigger()
     assert window.sent == [("고름", "shield")]
 
 
@@ -193,15 +229,6 @@ def test_안내_말과_알림은_대화에_한_줄씩_붙는다(window):
     window.show_line(Line(LineKind.NOTICE, "이 파일에서 검 연습 과정을 다 마쳤어요."))
     assert texts(window, "guide") == ["정육면체를 눌러 보시겠어요?"]
     assert texts(window, "notice") == ["이 파일에서 검 연습 과정을 다 마쳤어요."]
-
-
-def test_안내하는_조작이_있으면_했어요_버튼을_보이고_누르면_알린다(window):
-    window.show_progress(StepView(SWORD, 2, TIP, None, done_button=True), COURSES)
-    assert window.done_button.isVisible()
-    window.done_button.click()
-    assert window.sent == [("했어요",)]
-    window.show_progress(AT_TIP, COURSES)
-    assert not window.done_button.isVisible()
 
 
 def test_연습_과정을_하나도_읽지_못했으면_고르기_카드에_그렇다고_보인다(window):

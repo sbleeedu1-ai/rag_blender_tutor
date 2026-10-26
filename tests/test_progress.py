@@ -330,14 +330,61 @@ def test_한_번_바뀐_상태로는_조작_하나만_넘어간다():
     assert progress.operations_done == 1
 
 
-def test_마지막_조작_뒤에는_했어요가_아무것도_하지_않고_단계가_바뀌면_첫_조작부터():
+def test_마지막_조작_뒤에는_다음_조작이_아무것도_하지_않고_단계가_바뀌면_첫_조작부터():
     progress = Progress([STRETCH, JOIN_PARTS], operations_done=3)
     progress.next_operation()
     assert progress.operations_done == 3
     progress.next_step()
     assert progress.operations_done == 0
+
+
+def test_다음_버튼은_조작이_남았으면_다음_조작으로_다_끝냈으면_다음_단계로_간다():
+    progress = Progress([STRETCH, JOIN_PARTS], operations_done=2)
+    assert progress.forward() == []
+    assert (progress.step, progress.operations_done) == (STRETCH, 3)
+    assert progress.finished == ()
+    progress.forward()
+    assert (progress.step, progress.operations_done) == (JOIN_PARTS, 0)
+    assert progress.finished == ("blade-stretch",)  # '다음 단계'로 넘어간 단계는 끝낸 단계로 센다
+
+
+def test_뒤로는_앞_조작으로_가고_첫_조작에서는_앞_단계의_다_끝낸_자리로_간다():
+    progress = Progress([STRETCH, JOIN_PARTS, BLADE_TIP], start=2)
     progress.back()
-    assert progress.operations_done == 0
+    assert (progress.step, progress.operations_done) == (JOIN_PARTS, 0)  # 조작이 없는 단계는 처음이 곧 다 끝낸 자리
+    progress.back()
+    assert (progress.step, progress.operations_done) == (STRETCH, 3)
+    progress.back()
+    assert (progress.step, progress.operations_done) == (STRETCH, 2)
+    progress.forward()
+    progress.forward()
+    assert (progress.step, progress.operations_done) == (JOIN_PARTS, 0)  # 다음 단계와 뒤로가 서로 되돌린다
+
+
+def test_첫_단계_첫_조작에서_뒤로는_그대로_머물고_마친_뒤에는_마지막_단계의_다_끝낸_자리로():
+    progress = Progress([STRETCH])
+    progress.back()
+    assert (progress.step, progress.operations_done) == (STRETCH, 0)
+    progress.next_step()
+    progress.back()
+    assert (progress.step, progress.operations_done) == (STRETCH, 3)
+
+
+def test_뒤로_간_조작은_그때부터_감지한다():
+    progress = Progress([STRETCH, JOIN_PARTS], operations_done=2, latest=RESIZED)
+    progress.back()
+    progress.on_state(RESIZED)  # 뒤로 가기 전에 이미 있던 기록으로는 넘어가지 않는다
+    assert progress.operations_done == 1
+    progress.on_state(replace(RESIZED, recent_operators=("transform.resize", "transform.resize")))
+    assert progress.operations_done == 2
+
+
+def test_물음이_떠_있을_때_뒤로_가면_물음을_거둔다():
+    progress = Progress([STRETCH_WITH_END, JOIN_PARTS], operations_done=len(STRETCH_WITH_END.operations), latest=IDLE)
+    assert [type(c) for c in progress.on_state(STRETCHED)] == [Ask]
+    assert progress.back() == [Withdraw("blade-stretch")]
+    assert progress.on_answer(True) == []  # 늦게 온 응답은 무시
+    assert progress.step == STRETCH_WITH_END
 
 
 def test_조작마다_안내_말과_감지_조건을_읽는다(tmp_path):
