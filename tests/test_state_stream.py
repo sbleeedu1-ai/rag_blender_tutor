@@ -3,6 +3,8 @@
 검수(티켓 32)에서 사용자가 따라 한 흐름을 이렇게 회귀 테스트로 쓴다. 기록 폴더는 테스트마다 임시 폴더다.
 """
 
+import inspect
+
 from blender_tutor.course_desk import CourseDesk
 from blender_tutor.progress import Course, Operation, Step
 from blender_tutor.receiver import FileEvent
@@ -101,3 +103,12 @@ def test_진행_기록이_있는_파일을_이어_한_흐름도_빈_폴더에서
     replayed = [line for _, lines in replay(stream, again, tmp_path / "empty") for line in lines]
     assert replayed == said
     assert again.view(A) == second_day.view(A) and again.view(A).number == 2
+
+
+def test_진행_관리의_함수는_흐름_기록에도_모두_같은_모양으로_있다():
+    """진행 관리에 버튼 함수를 더하고 흐름 기록에 빠뜨리면, 도우미 창에서 그 버튼을 누를 때 오류가 난다(도우미 입구는 시험 밖)."""
+    public = [name for name in vars(CourseDesk) if not name.startswith("_") and callable(getattr(CourseDesk, name))]
+    assert "choose" in public and "keep" in public
+    for name in public:
+        assert hasattr(RecordingDesk, name), f"흐름 기록에 {name}이 없음"
+        assert inspect.signature(getattr(RecordingDesk, name)) == inspect.signature(getattr(CourseDesk, name)), name
