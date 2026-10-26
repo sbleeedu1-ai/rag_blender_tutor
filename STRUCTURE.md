@@ -215,10 +215,11 @@
 - 흐름 기록(티켓 28): `%APPDATA%\blender_tutor\streams\<켠 시각>.jsonl`. 도우미를 켤 때마다 새 파일, 지우지 않는다. 검수 동안 늘 켜 두고 코드 동결 전에 끈다(`helper.py`의 `RECORD_STREAM`, 티켓 37). 한 줄이 창마다 진행에 넣은 부름 하나(지어낸 예):
 
   ```json
-  {"call": "on_message", "window": 591400, "state": {"작업 상태 14칸": "..."}, "event": {"kind": "opened", "path": "C:/work/sword.blend"}, "shown": true}
+  {"call": "on_message", "window": 591400, "state": {"작업 상태 14칸": "..."}, "event": {"kind": "opened", "path": "C:/work/sword.blend"}, "shown": true, "record": null}
   {"call": "choose", "window": 591400, "label": "sword"}
   {"call": "forward", "window": 591400}
   ```
+  파일을 여는 줄의 `record`는 그때 그 파일의 진행 기록 글(처음 여는 파일이면 `null`). 다시 돌릴 때(`replay`) 빈 임시 폴더에 이것을 먼저 깔아, 다음 날 이어 한 흐름도 그 파일 하나로 똑같이 돈다.
 - 지금 상태 저장(Ctrl+F10, 티켓 28): 프로젝트 `data\snapshots\<저장 시각>.json`(작업 상태 14칸 그대로)과 같은 이름 `.png`(Blender 창). `.blend`는 저장하지 않는다. Blender 상태 줄에 저장했다고 알린다.
 - 설치된 애드온은 복사본이다. 애드온 코드를 고치면 설치 명령을 다시 돌린다.
 

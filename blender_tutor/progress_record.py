@@ -67,7 +67,7 @@ def _place_key(record: dict) -> tuple:
     )
 
 
-def _record_path(record_dir: Path, blend: str) -> Path:
+def record_path(record_dir: Path, blend: str) -> Path:
     """파일 경로마다 기록 파일 하나. 이름은 경로의 해시라 경로에 어떤 글자가 있어도 된다."""
     key = os.path.normcase(os.path.abspath(blend))
     return record_dir / f"{hashlib.sha256(key.encode('utf-8')).hexdigest()[:16]}.json"
@@ -343,11 +343,11 @@ class ProgressManager:
 
         기록이 없거나 깨졌거나 연습 과정이 없어졌으면 (None, None).
         """
-        record_path = _record_path(self._record_dir, path)
-        if not record_path.exists():
+        file = record_path(self._record_dir, path)
+        if not file.exists():
             return None, None
         try:
-            record = json.loads(record_path.read_text(encoding="utf-8"))
+            record = json.loads(file.read_text(encoding="utf-8"))
             saved = record.get("저장 때")
             now, then = _place_key(record), _place_key(saved) if saved else None
         except (ValueError, KeyError, TypeError):
@@ -405,7 +405,7 @@ class ProgressManager:
             record["저장 때"] = self._saved
         try:
             self._record_dir.mkdir(parents=True, exist_ok=True)
-            _record_path(self._record_dir, self._path).write_text(
+            record_path(self._record_dir, self._path).write_text(
                 json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8"
             )
         except OSError:  # 기록 폴더에 쓸 수 없음(paths.progress_records가 고를 곳이 없었음): 진행은 메모리에서 계속한다

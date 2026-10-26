@@ -3,6 +3,7 @@
 검수(티켓 32)에서 사용자가 따라 한 흐름을 그대로 회귀 테스트에 넣으려는 것이다. 받은 작업 상태만 남기면 연습 과정 고르기·
 '다음'·[네] 같은 버튼이 빠져 다시 돌려도 진행이 움직이지 않으므로, CourseDesk를 바꾸는 부름을 모두 차례대로 남긴다.
 한 줄(JSON)이 부름 하나: {"call": 함수 이름, "window": 창 번호, ...그 함수의 값}. 작업 상태는 애드온이 보낸 JSON 모양 그대로.
+파일을 열 때는 그 파일의 진행 기록(있으면) 글도 함께 남긴다. 다음 날 이어 한 흐름도 그 파일 하나로 다시 돌게 하려는 것이다.
 """
 
 import json
@@ -12,6 +13,7 @@ from pathlib import Path
 
 from blender_tutor.course_desk import CourseDesk, Line, StepView
 from blender_tutor.progress import Step
+from blender_tutor.progress_record import record_path
 from blender_tutor.receiver import FileEvent
 from blender_tutor.work_state import WorkState
 
@@ -19,17 +21,24 @@ log = logging.getLogger(__name__)
 
 
 class RecordingDesk:
-    """CourseDesk를 감싸 바꾸는 부름마다 흐름 파일에 한 줄 쓰고 그대로 넘긴다. 못 쓰면 한 번 알리고 기록만 멈춘다."""
+    """CourseDesk를 감싸 바꾸는 부름마다 흐름 파일에 한 줄 쓰고 그대로 넘긴다. 못 쓰면 한 번 알리고 기록만 멈춘다.
 
-    def __init__(self, desk: CourseDesk, path: Path):
+    record_dir는 desk가 쓰는 진행 기록 폴더(파일을 열 때 그 파일의 진행 기록을 읽어 함께 남긴다).
+    """
+
+    def __init__(self, desk: CourseDesk, path: Path, record_dir: Path):
         self._desk = desk
         self._path = path
+        self._record_dir = record_dir
         self._broken = False
         self._windows: set[int] = set()  # 기록한 부름에 나온 창 번호(keep이 버릴 진행이 있는지 가리려고)
 
     def on_message(self, window: int, state: WorkState, event: FileEvent | None = None, shown: bool = True) -> list[Line]:
         event_json = None if event is None else {"kind": event.kind, "path": event.path}
-        self._write("on_message", window=window, state=state.to_json(), event=event_json, shown=shown)
+        record = None
+        if event is not None and event.kind == "opened" and event.path:
+            record = _read_text(record_path(self._record_dir, event.path))
+        self._write("on_message", window=window, state=state.to_json(), event=event_json, shown=shown, record=record)
         return self._desk.on_message(window, state, event, shown)
 
     def switched_to(self, window: int) -> list[Line]:
@@ -81,13 +90,25 @@ class RecordingDesk:
             log.warning("작업 상태 흐름을 쓰지 못해 기록을 멈춤(%s): %s", self._path, error)
 
 
-def replay(path: Path, desk: CourseDesk) -> Iterator[tuple[dict, list[Line]]]:
-    """흐름 파일을 desk에 차례로 넣는다. 줄마다 (그 줄, 돌려받은 대화 말)을 내므로 그 사이에 desk.view로 진행을 볼 수 있다."""
+def _read_text(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:  # 진행 기록이 없음(처음 여는 파일)
+        return None
+
+
+def replay(path: Path, desk: CourseDesk, record_dir: Path) -> Iterator[tuple[dict, list[Line]]]:
+    """흐름 파일을 desk(진행 기록 폴더 record_dir)에 차례로 넣는다. 줄마다 (그 줄, 돌려받은 대화 말)을 내므로 그 사이에 desk.view로 진행을 볼 수 있다.
+
+    파일을 여는 줄 앞에서는 그때의 진행 기록을 record_dir에 깔아 둔다(없었으면 지운다). 그래서 record_dir는 빈 임시 폴더를 준다.
+    """
     for text in path.read_text(encoding="utf-8").splitlines():
         entry = json.loads(text)
         call, window = entry["call"], entry.get("window")
         if call == "on_message":
             event = None if entry["event"] is None else FileEvent(entry["event"]["kind"], entry["event"]["path"])
+            if event is not None and event.kind == "opened" and event.path:
+                _lay_record(record_path(record_dir, event.path), entry.get("record"))
             lines = desk.on_message(window, WorkState.from_json(entry["state"]), event, entry["shown"])
         elif call in ("choose", "skip_to"):
             lines = getattr(desk, call)(window, entry["label"])
@@ -99,3 +120,11 @@ def replay(path: Path, desk: CourseDesk) -> Iterator[tuple[dict, list[Line]]]:
         else:  # switched_to·forward·back
             lines = getattr(desk, call)(window)
         yield entry, lines
+
+
+def _lay_record(path: Path, record: str | None) -> None:
+    if record is None:
+        path.unlink(missing_ok=True)
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(record, encoding="utf-8")

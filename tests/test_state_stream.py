@@ -27,6 +27,11 @@ MERGED = WorkState("EDIT_MESH", CUBE, ("Cube",), "ko_KR", True, "", 3, "5.2.2", 
 A, B = 101, 202  # Blender 창 번호 둘
 
 
+def recording(records, stream) -> RecordingDesk:
+    """진행 기록 폴더 records를 쓰는 진행 관리를 흐름 기록으로 감싼다(도우미가 하는 것과 같게)."""
+    return RecordingDesk(CourseDesk([SWORD], records), stream, records)
+
+
 def follow_along(desk) -> list:
     """사용자가 따라 하는 모습(지어낸 것): 파일 열기 → 검 고르기 → 화면 돌림(감지) → 칼끝 모음(물음) → [네] → 뒤로 → 건너뛰기, 사이에 다른 Blender."""
     said = []
@@ -47,11 +52,11 @@ def follow_along(desk) -> list:
 
 def test_기록한_흐름을_새_진행_관리에_다시_넣으면_같은_말과_자리가_나온다(tmp_path):
     stream = tmp_path / "stream.jsonl"
-    original = RecordingDesk(CourseDesk([SWORD], tmp_path / "first"), stream)
+    original = recording(tmp_path / "first", stream)
     said = follow_along(original)
 
     again = CourseDesk([SWORD], tmp_path / "second")  # 진행 기록 폴더가 다르면 처음 하는 것과 같다
-    replayed = [line for _, lines in replay(stream, again) for line in lines]
+    replayed = [line for _, lines in replay(stream, again, tmp_path / "second") for line in lines]
 
     assert said and replayed == said
     assert again.view(A) == original.view(A)
@@ -60,14 +65,39 @@ def test_기록한_흐름을_새_진행_관리에_다시_넣으면_같은_말과
 def test_다시_돌리며_줄마다_진행_모양을_볼_수_있다(tmp_path):
     """회귀 테스트는 '이 줄 뒤에 물음이 떠야 한다'처럼 줄마다 본다."""
     stream = tmp_path / "stream.jsonl"
-    follow_along(RecordingDesk(CourseDesk([SWORD], tmp_path / "first"), stream))
+    follow_along(recording(tmp_path / "first", stream))
     again = CourseDesk([SWORD], tmp_path / "second")
-    prompts = [(entry["call"], again.view(A).prompt) for entry, _ in replay(stream, again)]
+    prompts = [(entry["call"], again.view(A).prompt) for entry, _ in replay(stream, again, tmp_path / "second")]
     assert ("on_message", "'칼끝 모으기' 단계를 끝낸 것 같아요. 다음 단계(부품 합치기)로 갈까요?") in prompts
 
 
 def test_기록_파일을_쓸_수_없어도_진행_관리는_그대로_돈다(tmp_path):
     """흐름 기록은 검수용 덤이라 못 써도 도우미는 멈추지 않는다."""
-    desk = RecordingDesk(CourseDesk([SWORD], tmp_path / "first"), tmp_path)  # 폴더를 파일 자리에 줘서 쓰기가 실패한다
+    desk = recording(tmp_path / "first", tmp_path)  # 폴더를 파일 자리에 줘서 쓰기가 실패한다
     assert follow_along(desk)
     assert desk.view(A).step == SWORD.steps[2]
+
+
+def test_진행_기록이_있는_파일을_이어_한_흐름도_빈_폴더에서_똑같이_다시_돈다(tmp_path):
+    """검수가 하루에 안 끝나 다음 날 이어 하면, 도우미는 파일을 열 때 진행 기록을 읽어 '이어 할까요'를 묻는다.
+
+    그날의 흐름 파일만으로 다시 돌려도 같아야 하므로, 열 때의 진행 기록이 흐름에 함께 남아야 한다.
+    """
+    records = tmp_path / "records"
+    first_day = recording(records, tmp_path / "day1.jsonl")
+    first_day.on_message(A, IDLE, FileEvent("opened", "C:/work/sword.blend"))
+    first_day.choose(A, "sword")
+    first_day.on_message(A, LOOKED)
+    first_day.forward(A)
+    first_day.on_message(A, IDLE, FileEvent("saved", "C:/work/sword.blend"))  # 2단계에서 저장하고 끔
+
+    stream = tmp_path / "day2.jsonl"
+    second_day = recording(records, stream)  # 다음 날 도우미를 다시 켬: 새 흐름 파일, 진행 기록은 그대로
+    said = second_day.on_message(A, IDLE, FileEvent("opened", "C:/work/sword.blend"))
+    said += second_day.answer(A, True)  # 이어 할까요? [네]
+    said += second_day.on_message(A, MERGED)
+
+    again = CourseDesk([SWORD], tmp_path / "empty")
+    replayed = [line for _, lines in replay(stream, again, tmp_path / "empty") for line in lines]
+    assert replayed == said
+    assert again.view(A) == second_day.view(A) and again.view(A).number == 2

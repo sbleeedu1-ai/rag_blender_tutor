@@ -63,7 +63,7 @@ class Helper:
         self._conversation = Conversation()
         self._courses = _courses()
         records = default_progress_records()
-        self._desk = _recording(CourseDesk(self._courses, records), records.parent / "streams")
+        self._desk = _recording(CourseDesk(self._courses, records), records, records.parent / "streams")
         self._stopwatch = Stopwatch(records.parent / "timings.jsonl", platform.node())
         self._own_pid = os.getpid()
         self._moved: tuple[Place, int] | None = None  # 지난번에 옮긴 (자리, 그때 앞 창 번호)
@@ -222,7 +222,7 @@ class Helper:
         self._moved = (where, front_hwnd)
 
 
-def _recording(desk: CourseDesk, folder: Path) -> CourseDesk | RecordingDesk:
+def _recording(desk: CourseDesk, records: Path, folder: Path) -> CourseDesk | RecordingDesk:
     """RECORD_STREAM이면 진행 관리를 흐름 기록으로 감싼다. 도우미를 켤 때마다 새 파일(켠 시각 이름)이고 지우지 않는다."""
     if not RECORD_STREAM:
         return desk
@@ -233,7 +233,7 @@ def _recording(desk: CourseDesk, folder: Path) -> CourseDesk | RecordingDesk:
         return desk
     path = folder / f"{datetime.now():%Y%m%d-%H%M%S}.jsonl"
     log.info("작업 상태 흐름 기록: %s", path)
-    return RecordingDesk(desk, path)
+    return RecordingDesk(desk, path, records)
 
 
 def _courses() -> list[Course]:
