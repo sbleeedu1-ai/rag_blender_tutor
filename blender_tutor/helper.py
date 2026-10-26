@@ -8,6 +8,7 @@
 """
 
 import argparse
+import dataclasses
 import logging
 import os
 import platform
@@ -22,7 +23,7 @@ from PySide6.QtCore import QCoreApplication, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication
 
-from blender_tutor import winapi
+from blender_tutor import stand_in, winapi
 from blender_tutor.answer_engine import Failure
 from blender_tutor.conversation import PROGRAM_ERROR, Conversation
 from blender_tutor.course_desk import CourseDesk, Line
@@ -110,8 +111,7 @@ class Helper:
 
     # ---- 질문
     def _ask(self, question: str) -> None:
-        engine = self._conversation.engine
-        lap = self._stopwatch.asked(question, None if engine is None else engine.settings.reasoning)
+        lap = self._stopwatch.asked(question, self._engine_info())
         window = self._front.window(self._receiver.blenders())
         state = None if window is None else self._receiver.latest(window)
         if state is None:  # 실패도 한 줄 남긴다(F10 시각이 다음 질문으로 넘어가지 않게)
@@ -127,6 +127,14 @@ class Helper:
                 self._bridge.answer_event.emit(event)
 
         threading.Thread(target=work, daemon=True).start()
+
+    def _engine_info(self) -> dict | None:
+        """시간 기록에 남길 엔진 이름과 설정. 엔진 준비 전이면 None."""
+        engine = self._conversation.engine
+        if engine is None:
+            return None
+        settings = {**dataclasses.asdict(engine.settings), "recent_pairs": self._conversation.recent_pairs}
+        return {"name": stand_in.NAME, "settings": settings}
 
     # ---- 연습 과정(진행 관리는 창 번호마다 하나, course_desk)
     def _on_message(self, message: Message) -> None:

@@ -99,7 +99,7 @@
 | 도우미 | `blender_tutor/progress.py` | 담당자: 연습 과정 파일 읽기, 연습 과정 하나의 진행. 조작을 차례로 안내하고 감지 조건이 맞으면 다음 조작, 끝난 조건이 맞으면 묻고 깨지면 거두기, 단계 옮기기 | 17, 27 |
 | 도우미 | `blender_tutor/conditions.py` | 판정표: 끝난 조건·감지 조건 13종류의 "값의 꼴"과 "맞는지 판정"(지금 상태와 기준 상태를 견줌) | 17, 27 |
 | 도우미 | `blender_tutor/korean_particles.py` | 한국어 조사 고르기: 이름 끝 받침에 따라 "이에요/예요", "으로/로" | 27 |
-| 도우미 | `blender_tutor/timing.py` | 시간 기록: 질문마다 F10 누름·받음·입력 가능·보냄·첫 글자·답 끝 시각, 생각 수준, PC 이름을 한 줄로 | 28 |
+| 도우미 | `blender_tutor/timing.py` | 시간 기록: 질문마다 F10 누름·받음·입력 가능·보냄·첫 글자·답 끝 시각, PC 이름, 그때의 엔진 이름·설정(생각 수준 등)을 한 줄로 | 28 |
 | 도우미 | `blender_tutor/answer_engine.py` | 답 엔진: 질문 + 작업 상태 + 지금 단계 → 설명서 검색 → 답 글 흐름 + 근거 목록 | 21-23 |
 | 도우미(임시) | `blender_tutor/stand_in.py` | 진짜 모델 전 무료 임시 엔진: `data/`로 엔진 만들기, 낱말 세기 임베딩, 1.5초 쉬고 정해 둔 글을 흘리는 가짜 답변. 티켓 31·33 뒤 `archive/`로 | 26 |
 | 자료 만들기 + 읽기 | `blender_tutor/manual_chunks.py` | 만들기: 설명서 HTML → 소제목 단위 청크(`data/chunks/`, 한 번 돌림, `save_chunks`). 읽기: 청크 파일(`load_chunks`)과 청크 서식 `Chunk`(답 엔진이 씀) | 19 |
@@ -208,10 +208,12 @@
 - 시간 기록(티켓 28): `%APPDATA%\blender_tutor\timings.jsonl`에 질문마다 한 줄. 늘 남기고 지우지 않는다. 평가 프로그램(티켓 29)이 읽는다. 예(지어낸 것):
 
   ```json
-  {"pc": "DESKTOP-J9LV5HK", "reasoning": "none", "question": "칼끝은 어떻게 모아요?", "f10_pressed": 1792977551.65, "f10_received": 1792977551.70,
+  {"pc": "DESKTOP-J9LV5HK", "engine": "stand_in",
+   "settings": {"top_k": 6, "timeout": 10.0, "use_bm25": true, "reasoning": "none", "recent_pairs": 3},
+   "question": "칼끝은 어떻게 모아요?", "f10_pressed": 1792977551.65, "f10_received": 1792977551.70,
    "ready": 1792977551.95, "sent": 1792977556.0, "first_piece": 1792977557.5, "done": 1792977559.0, "outcome": "done"}
   ```
-  F10 시각 셋은 F10 뒤 첫 질문에만 있고, 창이 떠 있는 채 이어 물으면 `null`. 실패로 끝나면 `outcome`이 `failure`이고 `first_piece`는 `null`일 수 있다.
+  F10 시각 셋은 F10 뒤 첫 질문에만 있고, 창이 떠 있는 채 이어 물으면 `null`. 실패로 끝나면 `outcome`이 `failure`이고 `first_piece`는 `null`일 수 있다. `engine`(지금은 임시 엔진 `stand_in`)과 `settings`(답 엔진 설정 + 최근 대화 쌍 수)로 평가 프로그램이 줄을 가른다. 엔진 준비 전에 물은 줄은 둘 다 `null`. 리랭커·임베딩 종류 설정은 생기는 티켓에서 `settings`에 더한다.
 - 흐름 기록(티켓 28): `%APPDATA%\blender_tutor\streams\<켠 시각>.jsonl`. 도우미를 켤 때마다 새 파일, 지우지 않는다. 검수 동안 늘 켜 두고 코드 동결 전에 끈다(`helper.py`의 `RECORD_STREAM`, 티켓 37). 한 줄이 창마다 진행에 넣은 부름 하나(지어낸 예):
 
   ```json
