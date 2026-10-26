@@ -1,17 +1,17 @@
 # 인수인계
 
-마지막 갱신: 2026-10-26(남은 순서 정함) · Claude · DESKTOP-J9LV5HK(강의실 PC) · **PR #26 병합 전에 씀**(이어받으면 이 PR이 병합됐는지 git으로 먼저 본다)
+마지막 갱신: 2026-10-26(티켓 30 중간) · Claude · DESKTOP-J9LV5HK(강의실 PC) · **PR 없음, 브랜치 `feat/30-beginner-scope`는 이 PC에만 있고 푸시 안 함**(사용자 지시 "PR 하지마 기록 커밋만")
 
 ## 다음 할 일
 
 순서(사용자 결정, HISTORY [62]): **30 → 31 → 34 → 33 → 32 → 35 → 36·37**. 38(메뉴 이름 비슷한 말 표)은 needs-triage, 30 뒤.
 
-1. **티켓 30(💰 초보자 범위 분류)을 `/implement`로 시작.** 돈이 드는 곳 앞에서 멈추고 추정 비용을 보여 확인받는다: ① 바로 넣는 쪽 목록·분류 프로그램(가짜 모델로 TDD)·50쪽 고르기와 Claude 기준 판단은 무료 → ② 50쪽 luna 분류 전 멈춤(다른 쪽은 사용자가 봄) → ③ 전체 분류 전 다시 멈춤. OpenAI 잔액은 예전 기록에 약 $2.8, 지금 값은 사용자에게 묻는다. 닫을 때 메뉴 이름 검수 자리를 묻는다(30 Comments).
-2. **티켓 34는 사용자가 집에서**(31 뒤, 33 전): 초보자 영상을 따라 하다 막힌 곳을 Ctrl+F10 + 메모로 모은다. 방법은 34 Comments. 메모는 `data\holdout_raw\` 같은 곳에 두고 AI에 보여 주지 않는다.
-3. **집 PC에서는** new-setup을 `git pull`한 뒤 `install.cmd -SkipMatt`를 돌려 새 개인설정을 받는다(강의실 PC는 끝남). 34를 하려면 집 PC에도 애드온 설치·도우미가 돌아야 Ctrl+F10이 저장된다.
-4. 이 PR(#26, 기록만)은 main 병합을 사용자 확인 뒤에. 병합하면 브랜치 `docs/order-30-first`를 로컬·원격 모두 지운다.
+1. **티켓 34는 사용자가 집에서**: 초보자 영상을 따라 하다 막힌 곳을 Ctrl+F10 + 메모로 모은다(34 Comments). Ctrl+F10은 `data\snapshots\`(JSON + PNG)에 저장되니 메모에 그 파일 이름을 적고, 메모는 `data\holdout_raw\`에 두어 AI에 보여 주지 않는다. 드라이브에는 `holdout_raw`·`snapshots`를 함께 올린다(`.env`는 올리지 않음). 집 PC 준비: main `git pull` → `pip install -e ".[dev]"` → `install_addon` + 애드온 켜기 → new-setup `install.cmd -SkipMatt`. 34에는 이 브랜치도 `data/chunks`도 필요 없다(자료가 없으면 도우미가 안내만 함).
+2. **티켓 30 이어서(강의실 PC에서, 브랜치 `feat/30-beginner-scope`)**: 전체 분류가 1,625/2,053쪽에서 멈춤(HISTORY [63]). 같은 명령을 다시 돌리면 받은 쪽은 건너뛴다(남은 약 430쪽, 약 $0.015, 확인받고): `.venv\Scripts\python -m blender_tutor.beginner_scope classify --out data/beginner_scope/all_luna_low.jsonl --model gpt-6-luna --effort low`. 그다음 바로 넣는 32 + 50쪽 결정(`trial_decided.jsonl`) + luna 결과를 합친 최종 범위 파일 → `/code-review`(검토 결과는 한 항목씩 사용자 판단) → 푸시·PR → 닫을 때 메뉴 이름 검수 자리를 묻는다(30 Comments). 결과 폴더 `data\beginner_scope\`는 다 돈 뒤 드라이브에 올린다.
+   - 이 브랜치는 푸시하지 않아 다른 PC에는 없다. 다른 PC에서 이으려면 강의실 PC에서 먼저 푸시해야 한다.
+   - `data/.env`에 OpenAI 키가 있다(강의실 PC). 프로그램은 환경 변수 → `data/.env` 순서로 읽는다.
 
-- **검토 결과는 하나도 빼지 말고 한 항목씩** 보여 주고 사용자 판단을 받은 뒤 다음으로. 자세한 규칙은 이제 `AGENTS.md` "지킬 것"에 있다(HISTORY [52]·[56]·[59]). 티켓 28에서 묻지 않고 고쳐 커밋했다가 지적받았다.
+- **검토 결과는 하나도 빼지 말고 한 항목씩** 보여 주고 사용자 판단을 받은 뒤 다음으로. 자세한 규칙은 `AGENTS.md` "지킬 것"(HISTORY [52]·[56]·[59]).
 
 ## 지금 상태
 
@@ -49,7 +49,7 @@
     - `[[[`처럼 대괄호가 겹칠 때의 처리는 지어낸 경계 사례라 지금대로 두고, 실제 모델 결과(티켓 33)를 보고 다시 본다
   - 아직 가짜 모델만 끼운다. 실제 OpenAI 연결은 유료 티켓 31(임베딩)·33(답변)에서.
   - 넘긴 것: 작업 상태 모양(25), 창의 오류 받기·엔진에 단계 넘기기(26·27, 끝남), 번역을 BM25에도 넣을지·연습 과정 벡터(31), 검 파일 용어를 화면 글자로(32), 제목에서만 뽑은 이름 검수 뒤 더하기(30). 각 티켓 Comments.
-- 테스트: `.venv\Scripts\python -m pytest` 423개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
+- 테스트: `.venv\Scripts\python -m pytest` 432개 통과(티켓 30 브랜치, main은 423개)(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 다른 PC에서 data/ 다시 만들기

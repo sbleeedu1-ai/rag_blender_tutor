@@ -90,6 +90,7 @@ INSTRUCTIONS = """너는 Blender 5.2 공식 설명서의 쪽을 '초보자 범�
 마주칠 가능성이 있는 쪽. 기본 화면·조작, 물체 모드와 편집 모드의 기본 편집, 자주 쓰는 모디파이어, 재질 색 정도,
 저장·내보내기, 그리고 초보자가 실수로 겪는 문제(화면이 사라짐, 단축키가 안 먹음 등)가 들어간다.
 애니메이션·리깅·시뮬레이션·노드 깊은 내용·고급 렌더 설정·영상 편집·파이썬처럼 그 길에서 마주칠 일이 드문 쪽은 뺀다.
+꼭 필요한지가 아니라 마주칠 가능성으로 판단한다. 실수로 켜서 겪는 기능, 기본 화면에 늘 보이는 설정도 넣는다.
 
 쪽마다 주소(path), 쪽 제목(title), 첫 겹 소제목(headings), 첫머리 글(intro)을 준다.
 JSON 하나로만 답한다: {"pages": [{"path": "...", "include": true 또는 false, "reason": "한국어 이유 한 줄"}]}
@@ -193,12 +194,14 @@ class OpenAIModel:
 
     URL = "https://api.openai.com/v1/chat/completions"
 
-    def __init__(self, model: str, key: str, timeout: float = 120):
-        self.model, self.key, self.timeout = model, key, timeout
-        self.input_tokens = self.output_tokens = self.requests = 0
+    def __init__(self, model: str, key: str, effort: str | None = None, timeout: float = 120):
+        self.model, self.key, self.effort, self.timeout = model, key, effort, timeout
+        self.input_tokens = self.output_tokens = self.reasoning_tokens = self.requests = 0
 
     def ask(self, messages: list[dict[str, str]]) -> str:
         body = {"model": self.model, "messages": messages, "response_format": {"type": "json_object"}}
+        if self.effort:  # 생각 수준. 주지 않으면 모델 기본값(티켓 30에서 처음 두 번은 주지 않고 돌렸다)
+            body["reasoning_effort"] = self.effort
         request = urllib.request.Request(
             self.URL, json.dumps(body).encode("utf-8"),
             {"Authorization": f"Bearer {self.key}", "Content-Type": "application/json"},
@@ -207,7 +210,8 @@ class OpenAIModel:
             answer = json.loads(response.read())
         self.requests += 1
         self.input_tokens += answer["usage"]["prompt_tokens"]
-        self.output_tokens += answer["usage"]["completion_tokens"]
+        self.output_tokens += answer["usage"]["completion_tokens"]  # 생각 토큰을 포함한 출력(이것으로 요금을 매긴다)
+        self.reasoning_tokens += answer["usage"].get("completion_tokens_details", {}).get("reasoning_tokens", 0)
         return answer["choices"][0]["message"]["content"]
 
 
@@ -250,6 +254,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     estimate_command.add_argument("--price", type=float, nargs=2, metavar=("입력", "출력"), help="백만 토큰당 달러")
     classify_command.add_argument("--out", type=Path, required=True, help="분류를 덧붙일 파일(이미 있는 쪽은 다시 묻지 않음)")
     classify_command.add_argument("--model", required=True, help="OpenAI 모델 이름")
+    classify_command.add_argument("--effort", help="생각 수준(none·low 등). 없으면 모델 기본값")
     args = parser.parse_args(argv)
 
     pages = pages_of(load_chunks(args.chunks))
@@ -268,11 +273,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.price:
             print(f"약 ${guess.dollars(*args.price):.4f}")
         return 0
-    model = OpenAIModel(args.model, openai_key())
+    model = OpenAIModel(args.model, openai_key(), args.effort)
     try:
         labels = classify(chosen, model, args.out)
     finally:
-        print(f"물음 {model.requests}번, 입력 {model.input_tokens:,} 토큰, 출력 {model.output_tokens:,} 토큰")
+        print(f"물음 {model.requests}번, 입력 {model.input_tokens:,} 토큰, 출력 {model.output_tokens:,} 토큰(그중 생각 {model.reasoning_tokens:,})")
     print(f"넣음 {sum(label.include for label in labels)}개 / 뺌 {sum(not label.include for label in labels)}개 → {args.out}")
     return 0
 
