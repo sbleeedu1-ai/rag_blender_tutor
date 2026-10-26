@@ -160,7 +160,9 @@ with tempfile.TemporaryDirectory() as folder:
     saved, picture = addon.save_snapshot(bpy.context, Path(folder) / "snapshots")
     snapshot = WorkState.from_json(json.loads(saved.read_text(encoding="utf-8")))
     check("지금 상태 저장: JSON이 WorkState 모양과 맞음", snapshot.mode == "OBJECT" and saved.suffix == ".json", saved.name)
-    check("지금 상태 저장: PNG(화면 없이 띄우면 못 찍음)", True, picture)
+    check("지금 상태 저장: PNG(화면 없이 띄우면 못 찍어 결과만 보임, 눈 확인)", True, picture)
+    again, _ = addon.save_snapshot(bpy.context, Path(folder) / "snapshots")
+    check("같은 초에 또 저장해도 덮지 않음", again != saved and saved.exists(), again.name)
 
 with tempfile.TemporaryDirectory() as folder:
     blend = str(Path(folder) / "sword.blend")

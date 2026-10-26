@@ -189,6 +189,11 @@ class Sender:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
+    @property
+    def project(self) -> str:
+        """프로젝트 폴더(설치 명령이 적은 도우미 켜는 자리)."""
+        return self._config["cwd"]
+
     def send(self, payload: dict, launch: bool = False) -> None:
         """payload를 보낸다. launch면 도우미 프로그램이 없을 때 켜고 보낸다(F10)."""
         self._queue.put((payload, launch))
@@ -344,10 +349,14 @@ def save_snapshot(context, folder: Path) -> tuple[Path, Path | None]:
     """작업 상태 JSON과 Blender 창 PNG를 같은 이름(저장 시각)으로 folder에 저장한다. .blend는 저장하지 않는다(명세 "애드온").
 
     JSON은 도우미에 보내는 14칸 그대로라 평가 프로그램이 WorkState로 바로 읽는다. 창이 없어(화면 없이 띄운 Blender)
-    PNG를 못 찍으면 PNG 자리는 None이다.
+    PNG를 못 찍으면 PNG 자리는 None이다. 같은 초에 또 누르면 이름 뒤에 -2, -3을 붙여 앞 것을 덮지 않는다.
     """
     folder.mkdir(parents=True, exist_ok=True)
-    stem = folder / datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    stem, number = folder / stamp, 1
+    while stem.with_suffix(".json").exists() or stem.with_suffix(".png").exists():
+        number += 1
+        stem = folder / f"{stamp}-{number}"
     _recent.update(context.window_manager.operators)
     state = stem.with_suffix(".json")
     state.write_text(json.dumps(read_state(context, _recent.names), ensure_ascii=False, indent=2), encoding="utf-8")
@@ -366,10 +375,10 @@ class TUTOR_OT_snapshot(bpy.types.Operator):
     bl_label = "도우미: 지금 상태 저장"
 
     def execute(self, context):
-        if not CONFIG.exists():
+        if _sender is None:
             self.report({"ERROR"}, "도우미 애드온 설치가 끝나지 않았습니다(config.json 없음). 설치 명령을 실행해 주세요.")
             return {"CANCELLED"}
-        folder = Path(json.loads(CONFIG.read_text(encoding="utf-8"))["cwd"]) / "data" / "snapshots"
+        folder = Path(_sender.project) / "data" / "snapshots"
         try:
             state, picture = save_snapshot(context, folder)
         except OSError as error:

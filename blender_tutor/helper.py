@@ -110,15 +110,16 @@ class Helper:
 
     # ---- 질문
     def _ask(self, question: str) -> None:
+        engine = self._conversation.engine
+        lap = self._stopwatch.asked(question, None if engine is None else engine.settings.reasoning)
         window = self._front.window(self._receiver.blenders())
         state = None if window is None else self._receiver.latest(window)
-        if state is None:
+        if state is None:  # 실패도 한 줄 남긴다(F10 시각이 다음 질문으로 넘어가지 않게)
+            lap.saw(Failure(NO_STATE))
             self.window.show_answer_event(Failure(NO_STATE))
             return
 
         step = self._desk.step(window)  # 답이 끝나도 진행은 그대로라 카드는 같은 단계에 머문다
-        engine = self._conversation.engine
-        lap = self._stopwatch.asked(question, None if engine is None else engine.settings.reasoning)
 
         def work() -> None:  # 답을 기다리는 동안 창과 Blender가 멈추지 않게 따로 돈다
             for event in self._conversation.ask(question, state, step):
