@@ -87,7 +87,7 @@
 |---|---|---|---|
 | Blender 안 | `addon/blender_tutor_addon/__init__.py` | 작업 상태 14칸 읽기, 바뀐 때만 보내기, F10(누른 시각을 함께 보냄), 파일 열기·저장 알림, glTF 내보내기 잡기, 도우미 프로그램 켜기, Ctrl+F10 지금 상태 저장(JSON + PNG → `data/snapshots/`) | 25, 28 |
 | 도우미 | `blender_tutor/helper.py` | 도우미 프로그램 입구(애드온이 켬). 받는 쪽·창·답 엔진·창마다 진행을 띄우고 잇는다. Blender 따라가기(0.1초), F10·Esc·트레이, 질문을 답 스레드로, 카드 단추를 창마다 진행으로. 시간 기록·흐름 기록을 붙임 | 26, 27, 28 |
-| 도우미 | `blender_tutor/receiver.py` | 받는 쪽. Blender 창 번호마다 최신 작업 상태 하나, 켜진 Blender 목록, 닫힌 Blender 버림, 마지막 Blender가 닫히면 끝남 | 25, 26 |
+| 도우미 | `blender_tutor/receiver.py` | 받는 쪽. Blender 창 번호마다 최신 작업 상태 하나, 켜진 Blender 목록, 닫힌 Blender 버림, 마지막 Blender가 닫히면 끝남, 모양이 틀린 봉투(옛 애드온)를 받은 적 있음(도우미 창이 '다시 설치' 안내에 씀) | 25, 26, 28 |
 | 도우미(서식) | `blender_tutor/work_state.py` | 작업 상태 14칸의 서식(애드온 JSON ↔ `WorkState`). 받는 쪽·진행 관리·답 엔진이 함께 씀 | 25, 27 |
 | 도우미 | `blender_tutor/helper_window.py` | 창 그리기(PySide6 위젯): 어두운 반투명 판, 연습 과정 카드(단계 ▼: 다섯 줄 단계 목록 + 연습 과정 바꾸기), 물음 줄 [네]/[아니요], 안내 말·알림, 회색 질문·굵은 흰 답·근거 카드·알약 입력칸, X, 가장자리 크기 조절, 트레이 아이콘 | 26, 27 |
 | 도우미 | `blender_tutor/window_rules.py` | 창 규칙: 화면 모습 → 맨 위/뒤로/숨김/그대로, 마지막 앞 Blender, 문장마다 줄바꿈 | 26 |

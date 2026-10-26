@@ -41,6 +41,8 @@ FOLLOW_EVERY_MS = 100  # Blender를 따라 창 자리를 다시 보는 간격
 RECORD_STREAM = True
 NO_DATA = "설명서 자료(data/)가 없어 답할 수 없어요. HANDOFF.md의 'data/ 다시 만들기'를 봐 주세요."
 NO_STATE = "Blender 작업 상태를 아직 받지 못했어요. Blender에서 F10을 눌러 주세요."
+# 봉투 모양이 바뀐 뒤 설치 명령을 다시 돌리지 않으면 옛 애드온의 봉투를 모두 거절한다. 그때 F10을 눌러도 소용없어서 따로 알린다
+OLD_ADDON = "Blender의 도우미 애드온이 도우미와 판이 달라요. 설치 명령을 다시 돌리고 Blender를 다시 켜 주세요."
 
 log = logging.getLogger(__name__)
 
@@ -115,8 +117,9 @@ class Helper:
         window = self._front.window(self._receiver.blenders())
         state = None if window is None else self._receiver.latest(window)
         if state is None:  # 실패도 한 줄 남긴다(F10 시각이 다음 질문으로 넘어가지 않게)
-            lap.saw(Failure(NO_STATE))
-            self.window.show_answer_event(Failure(NO_STATE))
+            failure = Failure(OLD_ADDON if self._receiver.rejected else NO_STATE)
+            lap.saw(failure)
+            self.window.show_answer_event(failure)
             return
 
         step = self._desk.step(window)  # 답이 끝나도 진행은 그대로라 카드는 같은 단계에 머문다

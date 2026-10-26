@@ -142,6 +142,15 @@ def test_모양이_틀린_것은_받지_않는다(receiver, received, body):
     assert receiver.latest(1) is None and received == []
 
 
+def test_모양이_틀린_봉투를_받은_적이_있는지_알려_준다(receiver):
+    """설치 명령을 다시 돌리지 않은 옛 애드온의 봉투는 모두 거절된다. 도우미 창이 그때 '다시 설치' 안내를 보이려고 쓴다."""
+    send(receiver, 1, 100)
+    assert not receiver.rejected
+    old_addon = {"window": 1, "pid": 100, "state": EDITING, "summon": True, "event": None}  # 누른 시각 칸이 없음
+    assert send(receiver, 1, 100, body=old_addon) == 400
+    assert receiver.rejected
+
+
 def test_내용_길이가_음수면_기다리지_않고_돌려보낸다(receiver):
     connection = http.client.HTTPConnection("127.0.0.1", receiver.port, timeout=2)
     connection.putrequest("POST", "/state")

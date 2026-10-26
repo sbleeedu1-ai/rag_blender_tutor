@@ -116,6 +116,7 @@ class Receiver:
         self._latest: dict[int, tuple[int, WorkState]] = {}  # 창 번호 → (프로세스 번호, 최신 작업 상태)
         self._started: dict[int, object] = {}  # 프로세스 번호 → 처음 받았을 때 그 프로세스가 켜진 시각
         self._heard = False  # Blender가 한 번이라도 보냈나
+        self._rejected = False  # 비밀 글자는 맞는데 모양이 틀린 봉투를 받은 적이 있나(설치 명령을 다시 돌리지 않은 옛 애드온)
         self._server = HTTPServer(("127.0.0.1", port), self._handler())
         # 끌 때 기다리는 시간(기본 0.5초)을 줄인다
         self._thread = threading.Thread(target=self._server.serve_forever, args=(0.05,), daemon=True)
@@ -131,6 +132,11 @@ class Receiver:
     def __exit__(self, *exc) -> None:
         self._server.shutdown()
         self._server.server_close()
+
+    @property
+    def rejected(self) -> bool:
+        """모양이 틀린 봉투를 받은 적이 있나. 도우미 창이 상태가 없을 때 '다시 설치' 안내를 고르는 데 쓴다."""
+        return self._rejected
 
     def latest(self, window: int) -> WorkState | None:
         """그 창 번호의 최신 작업 상태. 받은 적이 없거나 닫힌 Blender면 None."""
@@ -204,6 +210,7 @@ class Receiver:
                     message = Message.from_json(json.loads(body.decode("utf-8")))
                 except (ValueError, UnicodeDecodeError) as error:  # json 오류도 ValueError
                     log.warning("모양이 틀린 작업 상태: %s", error)
+                    receiver._rejected = True
                     return self._reply(400, {"error": str(error)})
                 receiver._receive(message)
                 self._reply(200, {})
