@@ -81,3 +81,23 @@ def test_기록_파일을_쓸_수_없어도_멈추지_않는다(tmp_path):
     watch = Stopwatch(tmp_path, pc="집", clock=Clock(1.0, 2.0))  # 폴더를 파일 자리에 줘서 쓰기가 실패한다
     lap = watch.asked("질문", ENGINE)
     lap.saw(DONE)  # 예외가 나지 않으면 통과
+
+
+def test_F10_뒤_60초가_지나서_보낸_질문에는_F10_시각을_붙이지_않는다(tmp_path):
+    """F10을 누르고 묻지 않은 채 Blender에서 작업하다 창을 눌러 물으면, 그 사이 시간이 준비 시간으로 잡히지 않게 한다.
+
+    60초 안이면 다른 창에서 복사해 붙여 넣느라 오가도 그대로 붙는다.
+    """
+    path = tmp_path / "timings.jsonl"
+    watch = Stopwatch(path, pc="집", clock=Clock(1.0, 2.0, 61.5, 70.0, 71.0, 72.0, 200.0, 201.0))
+    watch.summoned(pressed=0.5)  # 받음 1.0
+    watch.ready()  # 입력 가능 2.0
+    lap = watch.asked("60초 안", ENGINE)  # 보냄 61.5: 입력 가능 뒤 59.5초
+    lap.saw(DONE)  # 70.0
+    watch.summoned(pressed=70.5)  # 받음 71.0
+    watch.ready()  # 입력 가능 72.0
+    lap = watch.asked("60초 넘음", ENGINE)  # 보냄 200.0: 입력 가능 뒤 128초
+    lap.saw(DONE)  # 201.0
+    within, over = lines(path)
+    assert (within["f10_pressed"], within["ready"]) == (0.5, 2.0)
+    assert (over["f10_pressed"], over["f10_received"], over["ready"], over["sent"]) == (None, None, None, 200.0)

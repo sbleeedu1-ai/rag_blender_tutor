@@ -2,7 +2,8 @@
 
 한 줄(JSON)은 질문 하나: F10 누름 → 받음 → 입력 가능 → 보냄 → 첫 글자 → 답 끝 시각(time.time() 초), PC 이름,
 그때의 엔진 이름과 설정(생각 수준·검색 개수·최근 대화 쌍 수 등). 임시 엔진의 줄과 진짜 엔진의 줄, 설정을 바꿔 잰 줄을 가르려는 것이다.
-F10 시각은 F10 뒤 첫 질문에만 붙인다. 창이 떠 있는 채 이어 물으면 준비 시간이 없어 비운다(None).
+F10 시각은 F10 뒤 첫 질문에만, 입력 가능 뒤 F10_VALID초 안에 보냈을 때만 붙인다. 창이 떠 있는 채 이어 물었거나,
+F10을 누르고 묻지 않은 채 Blender에서 작업하다 창을 눌러 물었으면 준비 시간이 아니라서 비운다(None).
 평가 프로그램(티켓 29)이 이 파일을 읽어 가운데값·최대값을 낸다. 못 써도 답에는 영향이 없게 기록 오류는 삼킨다.
 """
 
@@ -14,6 +15,10 @@ from collections.abc import Callable
 from pathlib import Path
 
 from blender_tutor.answer_engine import Event, Failure, Piece
+
+# F10 시각을 붙이는 한도(초). 다른 창에서 복사해 붙여 넣느라 오가는 시간은 넉넉히 들고,
+# 묻지 않고 떠났다 돌아온 질문은 거른다(2026-10-26 사용자 결정)
+F10_VALID = 60.0
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +48,9 @@ class Stopwatch:
         답 사건을 Lap.saw에 넘기면 답이 끝날 때 한 줄을 쓴다.
         """
         f10, self._f10 = self._f10, {}
+        sent = self._clock()
+        if f10 and sent - (f10["ready"] or f10["f10_received"]) > F10_VALID:
+            f10 = {}
         record = {
             "pc": self._pc,
             "engine": None if engine is None else engine["name"],
@@ -51,7 +59,7 @@ class Stopwatch:
             "f10_pressed": f10.get("f10_pressed"),
             "f10_received": f10.get("f10_received"),
             "ready": f10.get("ready"),
-            "sent": self._clock(),
+            "sent": sent,
             "first_piece": None,
         }
         return Lap(record, self._clock, self._write)
