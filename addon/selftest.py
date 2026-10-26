@@ -37,6 +37,8 @@ if "bpy" not in sys.modules:  # 1) 보통 파이썬: 임시 폴더에 설치하�
         config["port"] = TEST_PORT
         (target / "config.json").write_text(json.dumps(config), encoding="utf-8")
         env = {**os.environ, "BLENDER_USER_SCRIPTS": scripts, "TUTOR_PROJECT": str(PROJECT), "TUTOR_ADDON": ADDON_NAME}
+        # 시험이 켜는 도우미의 흐름·시간·진행 기록이 실제 사용자 폴더에 쌓이지 않게 설정 폴더를 임시 폴더로(티켓 28)
+        env["APPDATA"] = str(Path(scripts) / "appdata")
         result = subprocess.run([blender, "-b", "--factory-startup", "--python", __file__], env=env)
 
         # Blender가 닫혔으니 도우미 프로그램도 몇 초 안에 끝나야 한다
