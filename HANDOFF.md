@@ -121,3 +121,33 @@
 
 - 명세 `.scratch/mvp-roundtrip/spec.md`("답 엔진", "자료 준비"), 티켓 `.scratch/mvp-roundtrip/issues/21-답-엔진-첫-왕복.md`·`22-답-엔진-검색어-만들기와-덧붙이기.md`, 조사 `git show 734adb5:".scratch/mvp-roundtrip/research/12-화면-한국어-번역-조사.md"`
 - 용어집 `CONTEXT.md`, 결정 `docs/adr/`, 경과 `HISTORY.md`
+
+## Codex에 붙여 넣을 프롬프트 (사용자가 읽고 쓰는 칸, 2026-10-26)
+
+프로젝트가 어디까지 왔는지 한눈에 보고, 그 뒤 코드 구조와 일하는 방식을 함께 점검하기 위해, 아래 상자 하나를 Codex 새 세션에 그대로 붙여 넣는다. 1단계 정리를 보고 "검토 끝"이라고 말하면 2·3단계로 이어진다.
+
+```
+이 저장소(rag_blender_tutor)의 AGENTS.md를 먼저 읽고 그 규칙을 지켜. 코드·문서는 고치지 말고 보고만 해. 비용이 드는 API 호출은 하지 마.
+
+[1단계: 전체 상황 정리]
+HANDOFF.md, HISTORY.md, STRUCTURE.md, .scratch/의 스펙과 티켓(각 파일의 Status: 줄), git log를 읽고 한 쪽으로 정리해 줘.
+① 끝난 것 ② 남은 티켓과 권하는 순서(막는 관계 포함) ③ 미뤄 둔 결정(HISTORY에서 "뒤로", "나중에"로 남긴 것) ④ 위험·막힌 것 ⑤ 코드에서 커지거나 꼬이는 곳
+HANDOFF와 git·티켓 상태가 서로 어긋나는 곳이 있으면 따로 짚어 줘.
+정리를 보여 준 뒤 멈추고, 내가 "검토 끝"이라고 하면 2단계로 가.
+
+[2단계: 코드 구조 점검 — $improve-codebase-architecture]
+범위는 저장소 전체. git log로 자주 바뀐 곳을 먼저 봐.
+이 저장소는 용어집이 GLOSSARY.md가 아니라 CONTEXT.md이고, 결정은 docs/adr/에 있어. ADR로 정한 것은 다시 뒤집지 마.
+HTML 보고서를 보여 준 뒤 후보를 한 항목씩 내 판단을 받아. 내가 고른 것만 질문을 이어 가며 다듬고, 끝나면 3단계로 가.
+
+[3단계: 일하는 방식 점검 — $retro]
+돌아볼 범위는 이 프로젝트의 모든 세션 대화야. 지금 세션만 보지 마.
+- Claude 기록: %USERPROFILE%\.claude\projects\C--WORK-rag-blender-tutor\*.jsonl
+- Codex 기록: %USERPROFILE%\.codex\sessions\ 아래에서 작업 폴더가 rag_blender_tutor인 것
+- 기록은 이 PC에 있는 것만 보이니, 어느 PC의 기록을 몇 개 읽었는지 처음에 말해 줘.
+- 양이 많으니 하위 에이전트를 쓸 수 있으면 나눠 맡기고, 못 쓰면 몇 개씩 나눠 읽으며 요약을 쌓아. 특히 "내가 같은 것을 두 번 이상 지적한 곳"을 찾아(예: HANDOFF의 "검토 결과는 하나도 빼지 말고 한 항목씩", AGENTS.md의 번역투 줄).
+- HISTORY.md도 함께 대조해.
+후보는 심각한 순서로 한 항목씩 보여 주고 내 판단을 받아.
+
+[마무리]
+2·3단계에서 내가 고른 것과 고르지 않은 것을 HISTORY.md에 새 번호로 남기는 안을 보여 줘(쓰기 전에 확인받아).
