@@ -12,6 +12,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable
+from enum import StrEnum
 from pathlib import Path
 
 from blender_tutor.answer_engine import Event, Failure, Piece
@@ -21,6 +22,13 @@ from blender_tutor.answer_engine import Event, Failure, Piece
 F10_VALID = 60.0
 
 log = logging.getLogger(__name__)
+
+
+class Outcome(StrEnum):
+    """질문 하나가 어떻게 끝났나. 정해 둔 이름만 쓴다."""
+
+    DONE = "done"  # 답이 끝까지 나옴
+    FAILURE = "failure"  # 오류·시간 초과·작업 상태 없음 등으로 멈춤
 
 
 class Stopwatch:
@@ -87,5 +95,5 @@ class Lap:
                 self._record["first_piece"] = self._clock()
             return
         self._record["done"] = self._clock()
-        self._record["outcome"] = "failure" if isinstance(event, Failure) else "done"
+        self._record["outcome"] = Outcome.FAILURE if isinstance(event, Failure) else Outcome.DONE
         self._write(self._record)

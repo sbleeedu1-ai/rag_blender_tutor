@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 
-from blender_tutor.answer_engine import AnswerEngine, Done, Failure, Piece, Settings, Source
+from blender_tutor.answer_engine import AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source
 from blender_tutor.manual_chunks import Chunk, Example, MediaKind
 from blender_tutor.menu_names import MenuName, MenuNames, Translation
 from blender_tutor.menu_names import Source as MenuSource
@@ -610,3 +610,14 @@ def test_답변_모델에게_메뉴_이름을_영어로_표시해_쓰라고_지�
     model = FakeModel()
     ask(model=model)
     assert "[[Add > Mesh]]" in model.calls[0][0]["content"]
+
+
+def test_생각_수준은_정해_둔_이름만_받는다():
+    """평가 때 설정을 바꿔 가며 사람이 넣는 값이라, 오타가 그대로 기록되지 않게 바로 오류를 낸다(티켓 28).
+
+    값은 명세의 none·low·medium. 실제 모델이 받는 값은 티켓 33에서 맞춘다.
+    """
+    assert Settings().reasoning is Reasoning.NONE
+    assert Settings(reasoning="low").reasoning is Reasoning.LOW
+    with pytest.raises(ValueError):
+        Settings(reasoning="nnoe")
