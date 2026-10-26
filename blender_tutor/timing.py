@@ -12,6 +12,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
@@ -31,6 +32,15 @@ class Outcome(StrEnum):
     FAILURE = "failure"  # 오류·시간 초과·작업 상태 없음 등으로 멈춤
 
 
+@dataclass
+class _F10:
+    """다음 질문에 붙일 F10 시각 셋. 칸 이름을 틀리면 바로 오류가 나게 묶는다."""
+
+    pressed: float | None  # 애드온이 F10을 받은 시각(옛 봉투면 None)
+    received: float  # 도우미가 받은 시각
+    ready: float | None = None  # 입력 가능해진 시각
+
+
 class Stopwatch:
     """도우미 창 하나의 시간 기록. summoned·ready·asked는 화면 스레드에서, Lap.saw는 답 만들기 스레드에서 부른다."""
 
@@ -38,35 +48,35 @@ class Stopwatch:
         self._path = path
         self._pc = pc
         self._clock = clock
-        self._f10: dict[str, float | None] = {}  # 다음 질문에 붙일 F10 시각(누름·받음·입력 가능)
+        self._f10: _F10 | None = None  # 다음 질문에 붙일 F10 시각
         self._lock = threading.Lock()  # 답 둘이 겹쳐 끝나도 줄이 섞이지 않게
 
     def summoned(self, pressed: float | None) -> None:
         """F10 봉투를 받았을 때. pressed는 애드온이 F10을 받은 시각."""
-        self._f10 = {"f10_pressed": pressed, "f10_received": self._clock(), "ready": None}
+        self._f10 = _F10(pressed, self._clock())
 
     def ready(self) -> None:
         """F10 뒤 창이 올라와 입력할 수 있게 됐을 때."""
-        if self._f10:
-            self._f10["ready"] = self._clock()
+        if self._f10 is not None:
+            self._f10.ready = self._clock()
 
     def asked(self, question: str, engine: dict | None) -> "Lap":
         """질문을 보냈을 때. engine은 {"name": 엔진 이름, "settings": 설정 사전}, 엔진 준비 전이면 None.
 
         답 사건을 Lap.saw에 넘기면 답이 끝날 때 한 줄을 쓴다.
         """
-        f10, self._f10 = self._f10, {}
+        f10, self._f10 = self._f10, None
         sent = self._clock()
-        if f10 and sent - (f10["ready"] or f10["f10_received"]) > F10_VALID:
-            f10 = {}
+        if f10 is not None and sent - (f10.ready or f10.received) > F10_VALID:
+            f10 = None
         record = {
             "pc": self._pc,
             "engine": None if engine is None else engine["name"],
             "settings": None if engine is None else engine["settings"],
             "question": question,
-            "f10_pressed": f10.get("f10_pressed"),
-            "f10_received": f10.get("f10_received"),
-            "ready": f10.get("ready"),
+            "f10_pressed": None if f10 is None else f10.pressed,
+            "f10_received": None if f10 is None else f10.received,
+            "ready": None if f10 is None else f10.ready,
             "sent": sent,
             "first_piece": None,
         }
