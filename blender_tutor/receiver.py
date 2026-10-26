@@ -43,20 +43,23 @@ class Message:
     state: WorkState
     summon: bool = False  # F10: 도우미 창을 앞으로 부른다
     event: FileEvent | None = None
+    pressed: float | None = None  # F10을 누른 시각(애드온의 time.time(), 같은 PC 시계). 시간 기록이 여기서부터 잰다(티켓 28)
 
     @classmethod
     def from_json(cls, data: object) -> "Message":
         """애드온이 보낸 JSON을 읽는다. 모양이 틀리면 ValueError."""
-        if not isinstance(data, dict) or set(data) != {"window", "pid", "state", "summon", "event"}:
-            raise ValueError("칸이 window·pid·state·summon·event가 아님")
-        window, pid, summon, event = data["window"], data["pid"], data["summon"], data["event"]
+        if not isinstance(data, dict) or set(data) != {"window", "pid", "state", "summon", "event", "pressed"}:
+            raise ValueError("칸이 window·pid·state·summon·event·pressed가 아님")
+        window, pid, summon, event, pressed = data["window"], data["pid"], data["summon"], data["event"], data["pressed"]
         if not all(isinstance(n, int) and not isinstance(n, bool) for n in (window, pid)) or not isinstance(summon, bool):
             raise ValueError("창 번호·프로세스 번호는 정수, summon은 참/거짓")
+        if pressed is not None and (isinstance(pressed, bool) or not isinstance(pressed, (int, float))):
+            raise ValueError("누른 시각은 숫자")
         if event is not None:
             if not (isinstance(event, dict) and event.get("kind") in FILE_EVENTS and isinstance(event.get("path"), str)):
                 raise ValueError(f"사건은 {FILE_EVENTS} 가운데 하나와 경로")
             event = FileEvent(event["kind"], event["path"])
-        return cls(window, pid, WorkState.from_json(data["state"]), summon, event)
+        return cls(window, pid, WorkState.from_json(data["state"]), summon, event, None if pressed is None else float(pressed))
 
 
 def process_started(pid: int) -> int | None:

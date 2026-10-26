@@ -67,6 +67,8 @@ class Settings:
     top_k: int = 6  # 답변 모델에 넘길 검색 결과 수(명세 6-8개, 22번의 먼저 볼 소제목이 이 위에 더 붙는다)
     timeout: float = 10.0  # 모델이 이만큼(초) 아무것도 보내지 않으면 멈춘 것으로 본다(사용자 결정, 2026-10-21)
     use_bm25: bool = True  # 낱말 검색(BM25)을 섞을지. 끄면 뜻 검색만(평가에서 견줄 스위치)
+    # 답변 모델의 생각 수준(none·low·medium, 명세 기본 none). 시간 기록에 남긴다. 실제 모델에 넘기는 일은 티켓 33
+    reasoning: str = "none"
 
 
 @dataclass(frozen=True)
@@ -144,6 +146,10 @@ class AnswerEngine:
         self._embedder = embedder
         self._model = model
         self._settings = settings
+
+    @property
+    def settings(self) -> Settings:
+        return self._settings
 
     def answer(
         self, question: str, state: WorkState, recent: Sequence[tuple[str, str]], step: Step | None = None

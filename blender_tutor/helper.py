@@ -10,10 +10,12 @@
 import argparse
 import logging
 import os
+import platform
 import sys
 import threading
 import time
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication, QObject, Qt, QTimer, Signal
@@ -29,9 +31,13 @@ from blender_tutor.paths import COURSES, PROJECT, default_progress_records
 from blender_tutor.progress import Course, load_courses
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
 from blender_tutor.stand_in import build_engine
+from blender_tutor.state_stream import RecordingDesk
+from blender_tutor.timing import Stopwatch
 from blender_tutor.window_rules import FrontBlender, Place, Screen, needs_move, place
 
 FOLLOW_EVERY_MS = 100  # Blender를 따라 창 자리를 다시 보는 간격
+# 작업 상태 흐름을 늘 기록한다(검수 동안 쓰려고, 2026-10-26 사용자 결정). 코드 동결 전에 False로 바꾼다(티켓 37)
+RECORD_STREAM = True
 NO_DATA = "설명서 자료(data/)가 없어 답할 수 없어요. HANDOFF.md의 'data/ 다시 만들기'를 봐 주세요."
 NO_STATE = "Blender 작업 상태를 아직 받지 못했어요. Blender에서 F10을 눌러 주세요."
 
@@ -41,7 +47,7 @@ log = logging.getLogger(__name__)
 class _Bridge(QObject):
     """다른 스레드(받는 쪽·답 만들기·엔진 준비)에서 화면 스레드로 넘기는 신호. Qt가 화면 스레드에서 차례로 부른다."""
 
-    summoned = Signal(int)  # F10을 누른 Blender 창 번호
+    summoned = Signal(int, object)  # F10을 누른 Blender 창 번호, 누른 시각(없으면 None)
     message = Signal(object)  # 받은 봉투(진행 관리에 넘긴다)
     answer_event = Signal(object)  # 답 사건(Piece·Done·Failure)
     no_blender = Signal()  # 켜진 Blender가 없어 끝낼 때
@@ -56,7 +62,9 @@ class Helper:
         self._front = FrontBlender()
         self._conversation = Conversation()
         self._courses = _courses()
-        self._desk = CourseDesk(self._courses, default_progress_records())
+        records = default_progress_records()
+        self._desk = _recording(CourseDesk(self._courses, records), records.parent / "streams")
+        self._stopwatch = Stopwatch(records.parent / "timings.jsonl", platform.node())
         self._own_pid = os.getpid()
         self._moved: tuple[Place, int] | None = None  # 지난번에 옮긴 (자리, 그때 앞 창 번호)
         self._progress_of: int | None = None  # 연습 과정 카드에 진행을 보이는 Blender 창 번호
@@ -83,7 +91,7 @@ class Helper:
             log.info("창 %s: %s %s", message.window, message.event.kind, message.event.path)
         self._bridge.message.emit(message)
         if message.summon:
-            self._bridge.summoned.emit(message.window)
+            self._bridge.summoned.emit(message.window, message.pressed)
 
     def _prepare_engine(self) -> None:
         """설명서를 읽어 엔진을 만든다(약 2초). 창은 먼저 떠 있고, 그동안 물으면 '읽는 중' 문구를 보인다."""
@@ -109,9 +117,12 @@ class Helper:
             return
 
         step = self._desk.step(window)  # 답이 끝나도 진행은 그대로라 카드는 같은 단계에 머문다
+        engine = self._conversation.engine
+        lap = self._stopwatch.asked(question, None if engine is None else engine.settings.reasoning)
 
         def work() -> None:  # 답을 기다리는 동안 창과 Blender가 멈추지 않게 따로 돈다
             for event in self._conversation.ask(question, state, step):
+                lap.saw(event)
                 self._bridge.answer_event.emit(event)
 
         threading.Thread(target=work, daemon=True).start()
@@ -156,12 +167,14 @@ class Helper:
         self.window.show_progress(view, self._courses)
 
     # ---- 부르기·돌아가기
-    def _summon(self, window: int) -> None:
-        """F10: 그 Blender를 '앞에 있던 Blender'로 삼고 창을 맨 위로, 입력칸에 초점."""
+    def _summon(self, window: int, pressed: float | None) -> None:
+        """F10: 그 Blender를 '앞에 있던 Blender'로 삼고 창을 맨 위로, 입력칸에 초점. 시각은 시간 기록에 남긴다."""
+        self._stopwatch.summoned(pressed)
         started = time.perf_counter()
         self._front.summoned(window)
         self._show_progress()
         self._bring_up()
+        self._stopwatch.ready()
         log.info("F10 받음 → 입력 가능 %.0fms", 1000 * (time.perf_counter() - started))
 
     def _bring_up(self) -> None:
@@ -206,6 +219,20 @@ class Helper:
             else:
                 winapi.put_behind(hwnd, front_hwnd)
         self._moved = (where, front_hwnd)
+
+
+def _recording(desk: CourseDesk, folder: Path) -> CourseDesk | RecordingDesk:
+    """RECORD_STREAM이면 진행 관리를 흐름 기록으로 감싼다. 도우미를 켤 때마다 새 파일(켠 시각 이름)이고 지우지 않는다."""
+    if not RECORD_STREAM:
+        return desk
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        log.warning("작업 상태 흐름 폴더를 만들지 못해 기록하지 않음(%s): %s", folder, error)
+        return desk
+    path = folder / f"{datetime.now():%Y%m%d-%H%M%S}.jsonl"
+    log.info("작업 상태 흐름 기록: %s", path)
+    return RecordingDesk(desk, path)
 
 
 def _courses() -> list[Course]:
