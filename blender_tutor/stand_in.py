@@ -11,7 +11,7 @@ import zlib
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
-from blender_tutor.answer_engine import AnswerEngine, AnswerModel
+from blender_tutor.answer_engine import AnswerEngine, AnswerModel, Settings
 from blender_tutor.paths import PROJECT
 from blender_tutor.manual_chunks import load_chunks
 from blender_tutor.menu_names import MenuNames
@@ -62,12 +62,14 @@ def build_engine(
     model: AnswerModel | None = None,
     menu_choices: Path = PROJECT / "menu_choices.json",
     courses: Sequence[Course] = (),
+    settings: Settings = Settings(),
 ) -> AnswerEngine:
     """data_dir(보통 data/)의 청크·메뉴 이름 사전으로 임시 엔진을 만든다. 청크 파일이 없으면 FileNotFoundError.
 
     메뉴 이름 사전이 없으면 메뉴 이름을 영어 그대로 보인다. courses는 연습 과정 밖 질문에 권할 연습 과정이고,
     벡터는 이름 + 한 줄 설명을 낱말 세기로 만든다. 정해진 것은 이름 + 한 줄 설명 + 비슷한 말이지만(티켓 14·31),
     Course에 비슷한 말 칸이 아직 없어 임시 엔진은 둘만 쓴다(칸은 진짜 벡터를 만드는 티켓 31에서 더한다).
+    settings는 평가 프로그램이 바꿔 넘기는 엔진 설정이다(티켓 29).
     """
     chunks = load_chunks(data_dir / "chunks" / "manual_chunks.jsonl")
     embedder = WordEmbedder()
@@ -76,5 +78,6 @@ def build_engine(
     vectors = embedder.embed([chunk.text for chunk in chunks], timeout=0)
     course_vectors = embedder.embed([f"{course.name} {course.summary}" for course in courses], timeout=0)
     return AnswerEngine(
-        chunks, vectors, embedder, model or StandInModel(), menu_names=names, courses=courses, course_vectors=course_vectors
+        chunks, vectors, embedder, model or StandInModel(), settings=settings,
+        menu_names=names, courses=courses, course_vectors=course_vectors,
     )

@@ -8,7 +8,6 @@
 """
 
 import argparse
-import dataclasses
 import logging
 import os
 import platform
@@ -25,7 +24,7 @@ from PySide6.QtWidgets import QApplication
 
 from blender_tutor import stand_in, winapi
 from blender_tutor.answer_engine import Failure
-from blender_tutor.conversation import PROGRAM_ERROR, Conversation
+from blender_tutor.conversation import PROGRAM_ERROR, Conversation, settings_record
 from blender_tutor.course_desk import CourseDesk, Line
 from blender_tutor.helper_window import FONT, HelperWindow, Tray
 from blender_tutor.paths import COURSES, PROJECT, default_progress_records
@@ -136,8 +135,7 @@ class Helper:
         engine = self._conversation.engine
         if engine is None:
             return None
-        settings = {**dataclasses.asdict(engine.settings), "recent_pairs": self._conversation.recent_pairs}
-        return {"name": stand_in.NAME, "settings": settings}
+        return {"name": stand_in.NAME, "settings": settings_record(engine.settings, self._conversation.recent_pairs)}
 
     # ---- 연습 과정(진행 관리는 창 번호마다 하나, course_desk)
     def _on_message(self, message: Message) -> None:

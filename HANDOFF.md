@@ -1,14 +1,13 @@
 # 인수인계
 
-마지막 갱신: 2026-10-26(티켓 28 닫음) · Claude · DESKTOP-J9LV5HK(강의실 PC)
+마지막 갱신: 2026-10-26(티켓 29 닫음) · Claude · DESKTOP-J9LV5HK(강의실 PC)
 
 ## 다음 할 일
 
-1. 티켓 28(시간 기록·Ctrl+F10 상태 저장·작업 상태 흐름 기록)은 구현·검토·사용자 눈 확인을 마치고 브랜치 `tickets/28-timing-log`로 PR #20을 올렸다(HISTORY [56]). **main 병합은 사용자 확인 뒤**, 병합하면 브랜치를 로컬·원격 모두 지운다. 카드 버튼 PR #19는 이미 main에 병합됨.
-   - **병합 뒤 PC마다 설치 명령 `.venv\Scripts\python -m blender_tutor.install_addon`을 다시 돌리고 Blender를 다시 켠다.** 봉투에 `pressed` 칸이 생겨 옛 애드온의 봉투는 모두 거절된다(창에 "설치 명령을 다시 돌려 주세요"가 뜸).
-2. 다음으로 권한 것: 티켓 29(평가 프로그램). 시간 기록 읽는 법은 티켓 29 Comments(2026-10-26).
-3. 시작할 수 있는 티켓: 29(평가 프로그램), 34(홀드아웃 봉인, 사람), 30(유료 초보자 범위 분류). 32(검 따라 하며 고치기)는 이제 31만 남음. 새 티켓 38(메뉴 이름 비슷한 말 표)은 needs-triage, 30 뒤.
-4. 티켓 29까지 끝나면 `/improve-codebase-architecture`로 답 엔진 나누기를 본다(HISTORY [43]).
+1. 티켓 29(평가 프로그램)는 구현·검토(14개 + 추가 9개를 하나씩)를 마치고 브랜치 `tickets/29-eval`로 PR #21을 올렸다(HISTORY [57]). **main 병합은 사용자 확인 뒤**, 병합하면 브랜치를 로컬·원격 모두 지운다. 티켓 28 PR #20은 이미 main에 병합됨.
+   - 병합 뒤 설치 명령을 다시 돌릴 필요는 없다(애드온은 바뀌지 않음).
+   - 로컬 브랜치 `docs/codex-review-prompt`의 커밋(HANDOFF 맨 아래 "Codex에 붙여 넣을 프롬프트")도 사용자 요청으로 이 PR에 합쳤다.
+2. 다음으로 권하는 것: `/improve-codebase-architecture`에 "답 엔진만"으로 범위를 줘 답 엔진 나누기를 본다(HISTORY [43], 29까지 끝나면 보기로 함). 그 뒤 시작할 수 있는 티켓: 34(홀드아웃 봉인, 사람), 30(유료 초보자 범위 분류). 35(개발 평가)는 29가 끝나 이제 32·33·34만 남음. 새 티켓 38(메뉴 이름 비슷한 말 표)은 needs-triage, 30 뒤.
 
 - **검토 결과는 하나도 빼지 말고 한 항목씩** 보여 주고 사용자 판단을 받은 뒤 다음으로(HISTORY [52]·[56]). "분명한 버그라 바로 고침", "작아서 묻지 않음"도 안 된다. 티켓 28에서 이렇게 넘겼다가 지적받았다.
 
@@ -33,6 +32,7 @@
   - 시간 기록 `blender_tutor/timing.py` → `%APPDATA%\blender_tutor\timings.jsonl`(질문마다 한 줄, 늘 남김). F10 시각은 입력 가능 뒤 60초 안에 보낸 질문에만 붙고, 줄마다 `engine`(지금 `stand_in`)과 `settings`가 있다
   - 상태 저장: Blender에서 Ctrl+F10 → 프로젝트 `data\snapshots\<시각>.json` + `.png`(커밋 안 함)
   - 흐름 기록 `blender_tutor/state_stream.py` → `%APPDATA%\blender_tutor\streams\<켠 시각>.jsonl`(도우미를 켤 때마다 새 파일, 받은 상태 + 카드 버튼 + 파일을 열 때의 진행 기록). 다시 돌리기는 `replay(흐름 파일, 새 CourseDesk, 빈 임시 폴더)`. 2026-10-26 사용자 눈 확인 흐름 `20261026-112137.jsonl` 하나가 남아 있다(검수 흐름이 아니라 시험용)
+- 평가 프로그램(티켓 29, HISTORY [57], 쓰는 법·모양은 `STRUCTURE.md` 6절): `blender_tutor/evaluate.py`. `run`은 문항 파일 → 답 엔진(지금은 임시 엔진만) → `results/<YYYYMMDD>_<이름>/` 설정.json(커밋 번호 포함)·답.jsonl·요약.md(검색 적중, 연습 과정을 권한 차례, 엔진만 잰 시간). `times`는 도우미 창 시간 기록 → PC·엔진·설정 묶음마다 창 뜨기·질문 준비(F10 → 보냄)·첫 글자·답 끝·F10 → 답 끝. 시나리오형은 실제로 이어 묻고 차례마다 채점(모든 차례에 핵심 필수). 평가 문항(`eval/`)은 아직 없음(34·35)
 - 답 엔진(`blender_tutor/answer_engine.py`): 티켓 21에서 질문 → 임베딩 1번 → 뜻 + 낱말(BM25) 검색 RRF 상위 6개 → 답변 모델 1번 → 답 조각 + 근거 목록(HISTORY [37]).
   - 티켓 22에서 검색어와 넘기는 글을 보탰다(PR #13 main 병합, HISTORY [38]-[41]). 호출은 그대로 2번.
     - 검색어 = 질문(+ 질문 속 한국어 메뉴 이름의 영어) + 직전 질문 + 단계 이름 + 먼저 볼 소제목 경로 + 방금 조작
@@ -47,7 +47,7 @@
     - `[[[`처럼 대괄호가 겹칠 때의 처리는 지어낸 경계 사례라 지금대로 두고, 실제 모델 결과(티켓 33)를 보고 다시 본다
   - 아직 가짜 모델만 끼운다. 실제 OpenAI 연결은 유료 티켓 31(임베딩)·33(답변)에서.
   - 넘긴 것: 작업 상태 모양(25), 창의 오류 받기·엔진에 단계 넘기기(26·27, 끝남), 번역을 BM25에도 넣을지·연습 과정 벡터(31), 검 파일 용어를 화면 글자로(32), 제목에서만 뽑은 이름 검수 뒤 더하기(30). 각 티켓 Comments.
-- 테스트: `.venv\Scripts\python -m pytest` 384개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
+- 테스트: `.venv\Scripts\python -m pytest` 419개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 다른 PC에서 data/ 다시 만들기
@@ -121,3 +121,33 @@
 
 - 명세 `.scratch/mvp-roundtrip/spec.md`("답 엔진", "자료 준비"), 티켓 `.scratch/mvp-roundtrip/issues/21-답-엔진-첫-왕복.md`·`22-답-엔진-검색어-만들기와-덧붙이기.md`, 조사 `git show 734adb5:".scratch/mvp-roundtrip/research/12-화면-한국어-번역-조사.md"`
 - 용어집 `CONTEXT.md`, 결정 `docs/adr/`, 경과 `HISTORY.md`
+
+## Codex에 붙여 넣을 프롬프트 (사용자가 읽고 쓰는 칸, 2026-10-26)
+
+프로젝트가 어디까지 왔는지 한눈에 보고, 그 뒤 코드 구조와 일하는 방식을 함께 점검하기 위해, 아래 상자 하나를 Codex 새 세션에 그대로 붙여 넣는다. 1단계 정리를 보고 "검토 끝"이라고 말하면 2·3단계로 이어진다.
+
+```
+이 저장소(rag_blender_tutor)의 AGENTS.md를 먼저 읽고 그 규칙을 지켜. 코드·문서는 고치지 말고 보고만 해. 비용이 드는 API 호출은 하지 마.
+
+[1단계: 전체 상황 정리]
+HANDOFF.md, HISTORY.md, STRUCTURE.md, .scratch/의 스펙과 티켓(각 파일의 Status: 줄), git log를 읽고 한 쪽으로 정리해 줘.
+① 끝난 것 ② 남은 티켓과 권하는 순서(막는 관계 포함) ③ 미뤄 둔 결정(HISTORY에서 "뒤로", "나중에"로 남긴 것) ④ 위험·막힌 것 ⑤ 코드에서 커지거나 꼬이는 곳
+HANDOFF와 git·티켓 상태가 서로 어긋나는 곳이 있으면 따로 짚어 줘.
+정리를 보여 준 뒤 멈추고, 내가 "검토 끝"이라고 하면 2단계로 가.
+
+[2단계: 코드 구조 점검 — $improve-codebase-architecture]
+범위는 저장소 전체. git log로 자주 바뀐 곳을 먼저 봐.
+이 저장소는 용어집이 GLOSSARY.md가 아니라 CONTEXT.md이고, 결정은 docs/adr/에 있어. ADR로 정한 것은 다시 뒤집지 마.
+HTML 보고서를 보여 준 뒤 후보를 한 항목씩 내 판단을 받아. 내가 고른 것만 질문을 이어 가며 다듬고, 끝나면 3단계로 가.
+
+[3단계: 일하는 방식 점검 — $retro]
+돌아볼 범위는 이 프로젝트의 모든 세션 대화야. 지금 세션만 보지 마.
+- Claude 기록: %USERPROFILE%\.claude\projects\C--WORK-rag-blender-tutor\*.jsonl
+- Codex 기록: %USERPROFILE%\.codex\sessions\ 아래에서 작업 폴더가 rag_blender_tutor인 것
+- 기록은 이 PC에 있는 것만 보이니, 어느 PC의 기록을 몇 개 읽었는지 처음에 말해 줘.
+- 양이 많으니 하위 에이전트를 쓸 수 있으면 나눠 맡기고, 못 쓰면 몇 개씩 나눠 읽으며 요약을 쌓아. 특히 "내가 같은 것을 두 번 이상 지적한 곳"을 찾아(예: HANDOFF의 "검토 결과는 하나도 빼지 말고 한 항목씩", AGENTS.md의 번역투 줄).
+- HISTORY.md도 함께 대조해.
+후보는 심각한 순서로 한 항목씩 보여 주고 내 판단을 받아.
+
+[마무리]
+2·3단계에서 내가 고른 것과 고르지 않은 것을 HISTORY.md에 새 번호로 남기는 안을 보여 줘(쓰기 전에 확인받아).

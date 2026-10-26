@@ -5,11 +5,12 @@
 그런 버그는 여기서 한 번 받아 창이 꺼지지 않게 하고, 내용은 기록 파일에 남긴다.
 """
 
+import dataclasses
 import logging
 from collections import deque
 from collections.abc import Iterator
 
-from blender_tutor.answer_engine import AnswerEngine, Done, Event, Failure, Piece
+from blender_tutor.answer_engine import AnswerEngine, Done, Event, Failure, Piece, Settings
 from blender_tutor.progress import Step
 from blender_tutor.work_state import WorkState
 
@@ -18,6 +19,12 @@ PROGRAM_ERROR = "도우미 프로그램에 문제가 생겼어요. 다시 물어
 NOT_READY = "도우미가 설명서를 읽는 중이에요. 몇 초 뒤 다시 물어봐 주세요."
 
 log = logging.getLogger(__name__)
+
+
+def settings_record(settings: Settings, recent_pairs: int) -> dict:
+    """기록에 남기는 설정: 답 엔진 설정 + 최근 대화 쌍 수. 시간 기록 줄(helper)과 평가 결과의 설정.json(evaluate)이
+    이 모양 하나를 함께 써서 "같은 설정으로 잰 것"을 맞대 볼 수 있다(티켓 29). 설정이 늘면 여기만 고친다."""
+    return {**dataclasses.asdict(settings), "recent_pairs": recent_pairs}
 
 
 class Conversation:
