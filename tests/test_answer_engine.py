@@ -410,6 +410,16 @@ def test_연습_과정을_진행하지_않을_때만_비슷한_연습_과정_3�
     assert "가장 가까운 건" in sent  # 딱 맞는 게 없을 때 말할 꼴
 
 
+def test_답_끝_알림에_모델에_붙인_비슷한_연습_과정을_가까운_차례로_알린다():
+    # 평가에서 단순한 질문에 엉뚱하게 권했는지 보려고(티켓 29). 연습 과정을 진행 중이면 붙이지 않아 비어 있다
+    def done(step=None) -> Done:
+        engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(TOWARD_BEVEL), FakeModel(), courses=COURSES, course_vectors=COURSE_VECTORS)
+        return list(engine.answer("칼을 만들고 싶어요", STATE, [], step))[-1]
+
+    assert done().similar == (SWORD, SHIELD, CHEST)
+    assert done(Step("blade-tip", "칼끝 모으기")).similar == ()
+
+
 def test_연습_과정과_벡터_수가_다르면_만들_때_멈춘다():
     with pytest.raises(ValueError):
         AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(), courses=COURSES, course_vectors=COURSE_VECTORS[:3])

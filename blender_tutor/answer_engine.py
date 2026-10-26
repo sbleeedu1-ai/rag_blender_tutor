@@ -110,6 +110,9 @@ class Done:
 
     sources: tuple[Source, ...]
     results: tuple[Chunk, ...]
+    # 모델에 붙인 비슷한 연습 과정(가까운 차례, 연습 과정을 진행 중이면 빈 묶음). 평가에서 단순한 질문에
+    # 엉뚱하게 권했는지 보려고 알린다(티켓 29). 창은 쓰지 않는다
+    similar: tuple[Course, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -205,7 +208,7 @@ class AnswerEngine:
             return
         if text := marks.finish():
             yield Piece(text)
-        yield Done(_sources(sent), tuple(results))
+        yield Done(_sources(sent), tuple(results), tuple(similar))
 
     def _widened(self, sent: list[Chunk], preview: list[Chunk]) -> list[list[Chunk]]:
         """넘길 청크마다 함께 읽을 묶음. 작게 찾고 크게 읽기: 찾은 청크가 SHORT_WORDS 미만이면

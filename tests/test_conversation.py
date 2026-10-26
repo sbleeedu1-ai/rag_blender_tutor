@@ -2,8 +2,8 @@
 
 import logging
 
-from blender_tutor.answer_engine import Done, Failure, Piece
-from blender_tutor.conversation import NOT_READY, PROGRAM_ERROR, Conversation
+from blender_tutor.answer_engine import Done, Failure, Piece, Settings
+from blender_tutor.conversation import NOT_READY, PROGRAM_ERROR, Conversation, settings_record
 from blender_tutor.progress import Step
 from blender_tutor.work_state import WorkState
 from tests.examples import EDITING
@@ -78,3 +78,10 @@ def test_지금_단계를_엔진에_넘기고_자유_질문도_같은_최근_대
     list(conversation.ask("나", STATE))  # 연습 과정 밖 자유 질문
     assert engine.steps == [step, None]
     assert engine.recent[1] == [("가", "가의 답")]
+
+
+def test_기록에_남기는_설정은_엔진_설정에_최근_대화_쌍_수를_더한_모양():
+    # 시간 기록 줄과 평가 결과(설정.json)가 이 모양 하나를 함께 써서 서로 맞대 볼 수 있다(티켓 29)
+    assert settings_record(Settings(reasoning="low"), 5) == {
+        "top_k": 6, "timeout": 10.0, "use_bm25": True, "reasoning": "low", "recent_pairs": 5,
+    }
