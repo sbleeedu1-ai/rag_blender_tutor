@@ -33,6 +33,17 @@ class FileEvent:
     kind: str  # opened 또는 saved
     path: str  # 연 파일·저장한 파일 경로. 새 파일을 열면 ""
 
+    @classmethod
+    def from_json(cls, data: object) -> "FileEvent":
+        """애드온이 보낸 사건 JSON을 읽는다. 모양이 틀리면 ValueError."""
+        if not (isinstance(data, dict) and data.get("kind") in FILE_EVENTS and isinstance(data.get("path"), str)):
+            raise ValueError(f"사건은 {FILE_EVENTS} 가운데 하나와 경로")
+        return cls(data["kind"], data["path"])
+
+    def to_json(self) -> dict:
+        """애드온이 보내는 것과 같은 JSON(사전)."""
+        return {"kind": self.kind, "path": self.path}
+
 
 @dataclass(frozen=True)
 class Message:
@@ -56,9 +67,7 @@ class Message:
         if pressed is not None and (isinstance(pressed, bool) or not isinstance(pressed, (int, float))):
             raise ValueError("누른 시각은 숫자")
         if event is not None:
-            if not (isinstance(event, dict) and event.get("kind") in FILE_EVENTS and isinstance(event.get("path"), str)):
-                raise ValueError(f"사건은 {FILE_EVENTS} 가운데 하나와 경로")
-            event = FileEvent(event["kind"], event["path"])
+            event = FileEvent.from_json(event)
         return cls(window, pid, WorkState.from_json(data["state"]), summon, event, None if pressed is None else float(pressed))
 
 

@@ -34,7 +34,7 @@ class RecordingDesk:
         self._windows: set[int] = set()  # 기록한 부름에 나온 창 번호(keep이 버릴 진행이 있는지 가리려고)
 
     def on_message(self, window: int, state: WorkState, event: FileEvent | None = None, shown: bool = True) -> list[Line]:
-        event_json = None if event is None else {"kind": event.kind, "path": event.path}
+        event_json = None if event is None else event.to_json()
         record = None
         if event is not None and event.kind == "opened" and event.path:
             record = _read_text(record_path(self._record_dir, event.path))
@@ -106,7 +106,7 @@ def replay(path: Path, desk: CourseDesk, record_dir: Path) -> Iterator[tuple[dic
         entry = json.loads(text)
         call, window = entry["call"], entry.get("window")
         if call == "on_message":
-            event = None if entry["event"] is None else FileEvent(entry["event"]["kind"], entry["event"]["path"])
+            event = None if entry["event"] is None else FileEvent.from_json(entry["event"])
             if event is not None and event.kind == "opened" and event.path:
                 _lay_record(record_path(record_dir, event.path), entry.get("record"))
             lines = desk.on_message(window, WorkState.from_json(entry["state"]), event, entry["shown"])

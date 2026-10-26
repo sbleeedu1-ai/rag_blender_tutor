@@ -54,7 +54,7 @@ class Stopwatch:
             "sent": self._clock(),
             "first_piece": None,
         }
-        return Lap(self, record)
+        return Lap(record, self._clock, self._write)
 
     def _write(self, record: dict) -> None:
         line = json.dumps(record, ensure_ascii=False)
@@ -68,15 +68,16 @@ class Stopwatch:
 class Lap:
     """질문 하나의 시각들. 첫 Piece에 첫 글자, Done·Failure에 답 끝을 적고 그때 기록 파일에 쓴다."""
 
-    def __init__(self, watch: Stopwatch, record: dict):
-        self._watch = watch
+    def __init__(self, record: dict, clock: Callable[[], float], write: Callable[[dict], None]):
         self._record = record
+        self._clock = clock
+        self._write = write  # 답이 끝나면 한 줄을 쓴다(Stopwatch._write)
 
     def saw(self, event: Event) -> None:
         if isinstance(event, Piece):
             if self._record["first_piece"] is None:
-                self._record["first_piece"] = self._watch._clock()
+                self._record["first_piece"] = self._clock()
             return
-        self._record["done"] = self._watch._clock()
+        self._record["done"] = self._clock()
         self._record["outcome"] = "failure" if isinstance(event, Failure) else "done"
-        self._watch._write(self._record)
+        self._write(self._record)
