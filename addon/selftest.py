@@ -157,10 +157,9 @@ message = Message.from_json(addon._sender.sent[-1])  # 받는 쪽이 읽는 모�
 check("F10 봉투에 누른 시각", message.summon and before <= message.pressed <= time.time(), message.pressed)
 
 with tempfile.TemporaryDirectory() as folder:
-    saved, picture = addon.save_snapshot(bpy.context, Path(folder) / "snapshots")
+    saved, _ = addon.save_snapshot(bpy.context, Path(folder) / "snapshots")
     snapshot = WorkState.from_json(json.loads(saved.read_text(encoding="utf-8")))
     check("지금 상태 저장: JSON이 WorkState 모양과 맞음", snapshot.mode == "OBJECT" and saved.suffix == ".json", saved.name)
-    check("지금 상태 저장: PNG(화면 없이 띄우면 못 찍어 결과만 보임, 눈 확인)", True, picture)
     again, _ = addon.save_snapshot(bpy.context, Path(folder) / "snapshots")
     check("같은 초에 또 저장해도 덮지 않음", again != saved and saved.exists(), again.name)
 
