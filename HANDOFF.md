@@ -1,12 +1,12 @@
 # 인수인계
 
-마지막 갱신: 2026-10-26(전역 개인설정 옮김) · Claude · DESKTOP-J9LV5HK(강의실 PC) · **PR #24 병합 전에 씀**(이어받으면 이 PR이 병합됐는지 git으로 먼저 본다)
+마지막 갱신: 2026-10-26(티켓 39 눈 확인 끝) · Claude · DESKTOP-J9LV5HK(강의실 PC) · **PR #25 병합 전에 씀**(이어받으면 이 PR이 병합됐는지 git으로 먼저 본다)
 
 ## 다음 할 일
 
-1. Codex 점검 결과 반영(PR #23, HISTORY [58]·[59])은 main에 병합됨. 설명 순서·요약 줄 규칙을 new-setup `개인설정.md`로 옮겼다(HISTORY [60], 브랜치 `docs/agents-move-summary-rule`, PR #24). **main 병합은 사용자 확인 뒤**, 병합하면 브랜치를 로컬·원격 모두 지운다.
+1. **티켓 39(질문 한 번을 화면 없이 시험, HISTORY [61])**: 브랜치 `feat/39-question-flow`, PR #25. 구현·검토 14개 반영·사용자 눈 확인 끝, 티켓 닫음. **main 병합은 사용자 확인 뒤**, 병합하면 브랜치를 로컬·원격 모두 지운다.
 2. **집 PC에서는** new-setup을 `git pull`한 뒤 `install.cmd -SkipMatt`를 돌려 새 개인설정을 받는다(강의실 PC는 끝남).
-3. 지금 시작할 수 있는 티켓: 39(질문 처리 순서를 화면 없이 시험, 무료), 34(홀드아웃 봉인, 사람), 30(유료 초보자 범위 분류). 그 뒤 31(C2 일부·C3 함께) → 33(C2 마무리, 39에 막힘) → 32 → 35 → 36·37. 30을 닫을 때 메뉴 이름 검수 자리를 묻는다(30 Comments). 새 티켓 38(메뉴 이름 비슷한 말 표)은 needs-triage, 30 뒤.
+3. 그다음 시작할 수 있는 티켓: 34(홀드아웃 봉인, 사람), 30(유료 초보자 범위 분류). 그 뒤 31(C2 일부·C3 함께) → 33(C2 마무리, 39가 병합되면 풀림) → 32 → 35 → 36·37. 30을 닫을 때 메뉴 이름 검수 자리를 묻는다(30 Comments). 새 티켓 38(메뉴 이름 비슷한 말 표)은 needs-triage, 30 뒤.
 
 - **검토 결과는 하나도 빼지 말고 한 항목씩** 보여 주고 사용자 판단을 받은 뒤 다음으로. 자세한 규칙은 이제 `AGENTS.md` "지킬 것"에 있다(HISTORY [52]·[56]·[59]). 티켓 28에서 묻지 않고 고쳐 커밋했다가 지적받았다.
 
@@ -16,7 +16,7 @@
 - 애드온(티켓 25, HISTORY [44]): `addon/blender_tutor_addon/`가 작업 상태 14칸(`blender_tutor/work_state.py`의 `WorkState`, 3D 화면 시점·활성 물체 위치·진행 중인 조작은 티켓 27)을 0.5초마다 읽어 바뀌면, F10이면 바로, 파일 열기·저장이면 사건과 함께 도우미 프로그램에 내 PC 안 HTTP(127.0.0.1:8766, 비밀 글자)로 보낸다. 받는 쪽 `blender_tutor/receiver.py`는 창 번호마다 최신 상태를 들고, 마지막 Blender가 닫히면 끝난다.
   - 사용자가 2026-10-22 직접 확인: Blender를 켜면 도우미가 켜지고 닫으면 꺼짐, 메뉴로 한 glTF 내보내기가 `export_scene.gltf`로 잡힘.
   - 진행 관리·답 엔진은 이제 사전 대신 `WorkState`를 받는다(답 엔진의 임시 칸 이름 `language`·`translate_interface`는 그대로 확정).
-- 도우미 창(티켓 26, HISTORY [45]): 입구 `blender_tutor/helper.py`(애드온 `config.json` 명령이 `-m blender_tutor.helper`)가 받는 쪽·PySide6 위젯 창(`helper_window.py`)·답 엔진을 잇는다. 창 자리 판단은 `window_rules.py`(시험함), Windows 조작은 `winapi.py`(눈 확인), 최근 대화 3쌍은 `conversation.py`.
+- 도우미 창(티켓 26, HISTORY [45]): 입구 `blender_tutor/helper.py`(애드온 `config.json` 명령이 `-m blender_tutor.helper`)가 받는 쪽·PySide6 위젯 창(`helper_window.py`)·답 엔진을 잇는다. 질문 한 번의 순서는 `question_flow.py`(티켓 39, 화면 없이 시험함, 창 쪽 연결 `WindowSide`만 바꿔 끼움). 창 자리 판단은 `window_rules.py`(시험함), Windows 조작은 `winapi.py`(눈 확인), 최근 대화 3쌍은 `conversation.py`.
   - **답은 아직 임시 엔진**(`stand_in.py`, 사용자 결정): 실제 `data/` 청크·검색 + 낱말 세기 임베딩 + 1.5초 쉬고 정해 둔 글을 흘리는 가짜 답변. 창 동작 확인용이라 답·근거의 질은 의미 없다. 티켓 31·33에서 갈아 끼운다.
   - 기록 파일 `%TEMP%\blender_tutor_receiver.log`에 엔진 준비 시간, F10 → 입력 가능 ms, 엔진 버그 내용이 남는다.
   - 사용자가 2026-10-22 강의실 PC에서 확인: 한글 입력·F10·Esc·최소화 연동·X·트레이·크기 조절·Alt+Tab 모두 정상(HISTORY [46]·[47]). 창을 옮기면 F10에도 그 자리에서 나온다(사용자 결정).
@@ -46,7 +46,7 @@
     - `[[[`처럼 대괄호가 겹칠 때의 처리는 지어낸 경계 사례라 지금대로 두고, 실제 모델 결과(티켓 33)를 보고 다시 본다
   - 아직 가짜 모델만 끼운다. 실제 OpenAI 연결은 유료 티켓 31(임베딩)·33(답변)에서.
   - 넘긴 것: 작업 상태 모양(25), 창의 오류 받기·엔진에 단계 넘기기(26·27, 끝남), 번역을 BM25에도 넣을지·연습 과정 벡터(31), 검 파일 용어를 화면 글자로(32), 제목에서만 뽑은 이름 검수 뒤 더하기(30). 각 티켓 Comments.
-- 테스트: `.venv\Scripts\python -m pytest` 419개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
+- 테스트: `.venv\Scripts\python -m pytest` 423개 통과(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 다른 PC에서 data/ 다시 만들기
@@ -73,6 +73,7 @@
 - **도우미 기록 파일에 한글이 깨져 보이면** 예전 판(UTF-8 설정 전) 줄이다. 2026-10-22 16시 뒤 줄은 UTF-8.
 - **흐름 기록은 늘 켜져 있다(`helper.py`의 `RECORD_STREAM = True`).** 검수 동안만 쓰기로 했고, 코드 동결 전에 False로 바꾼다(티켓 37 완료 조건 첫 줄).
 - **애드온 자체 시험은 설정 폴더(`APPDATA`)를 임시 폴더로 바꿔 띄운다.** 바꾸기 전에는 시험이 켠 도우미가 실제 흐름 폴더에 창 번호 0짜리 쓰레기 파일을 남겼다(2026-10-26 지움).
+- **Qt 신호에 객체의 메서드를 이을 때는 그 객체를 `self.`로 붙잡아 둔다.** 생성자 안 지역 변수면 생성자가 끝나며 치워지고 연결도 끊긴다(티켓 39 검토 S1: Enter가 아무것도 부르지 않았음, 자동 시험·자체 시험 모두 못 잡음).
 - **진행 관리(`CourseDesk`)에 버튼 함수를 더하면 흐름 기록(`RecordingDesk`)과 `replay`에도 더한다.** 흐름 기록에 빠뜨리면 창에서 그 버튼을 누를 때 오류가 난다(`tests/test_state_stream.py`가 잡음).
 
 - **부품이 늘었다(numpy, rank-bm25, 티켓 26에서 PySide6-Essentials 약 219MB).** 다른 PC에서 `git pull` 뒤 `.venv\Scripts\python -m pip install -e ".[dev]"`를 다시 돌려야 테스트와 도우미 창이 돈다. 설치 명령(`install_addon`)도 다시 돌린다(애드온이 켜는 명령이 바뀜).

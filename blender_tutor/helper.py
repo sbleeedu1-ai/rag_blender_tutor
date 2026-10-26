@@ -3,7 +3,7 @@
 애드온이 Blender를 켤 때 켜 준다(config.json의 명령). 마지막 Blender가 닫히거나 트레이에서 끝내면 끝난다.
 손으로 켤 때: `set BLENDER_TUTOR_TOKEN=<애드온 폴더 config.json의 token>` 뒤 `.venv\\Scripts\\python -m blender_tutor.helper`
 
-부품끼리 잇기만 한다. 판단은 window_rules, 대화는 conversation, 진행은 course_desk, 그리기는 helper_window에 있고 각각 시험한다.
+부품끼리 잇기만 한다. 판단은 window_rules, 질문 한 번의 순서는 question_flow, 대화는 conversation, 진행은 course_desk, 그리기는 helper_window에 있고 각각 시험한다.
 이 파일과 winapi는 실제 화면·Blender가 있어야 해서 애드온 자체 시험과 눈 확인으로 본다.
 """
 
@@ -22,13 +22,14 @@ from PySide6.QtCore import QCoreApplication, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication
 
-from blender_tutor import stand_in, winapi
-from blender_tutor.answer_engine import Failure
-from blender_tutor.conversation import PROGRAM_ERROR, Conversation, settings_record
+from blender_tutor import winapi
+from blender_tutor.answer_engine import Event
+from blender_tutor.conversation import PROGRAM_ERROR, Conversation
 from blender_tutor.course_desk import CourseDesk, Line
 from blender_tutor.helper_window import FONT, HelperWindow, Tray
 from blender_tutor.paths import COURSES, PROJECT, default_progress_records
 from blender_tutor.progress import Course, load_courses
+from blender_tutor.question_flow import QuestionFlow
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
 from blender_tutor.stand_in import build_engine
 from blender_tutor.state_stream import RecordingDesk
@@ -39,9 +40,6 @@ FOLLOW_EVERY_MS = 100  # Blender를 따라 창 자리를 다시 보는 간격
 # 작업 상태 흐름을 늘 기록한다(검수 동안 쓰려고, 2026-10-26 사용자 결정). 코드 동결 전에 False로 바꾼다(티켓 37)
 RECORD_STREAM = True
 NO_DATA = "설명서 자료(data/)가 없어 답할 수 없어요. HANDOFF.md의 'data/ 다시 만들기'를 봐 주세요."
-NO_STATE = "Blender 작업 상태를 아직 받지 못했어요. Blender에서 F10을 눌러 주세요."
-# 봉투 모양이 바뀐 뒤 설치 명령을 다시 돌리지 않으면 옛 애드온의 봉투를 모두 거절한다. 그때 F10을 눌러도 소용없어서 따로 알린다
-OLD_ADDON = "Blender의 도우미 애드온이 도우미와 판이 달라요. 설치 명령을 다시 돌리고 Blender를 다시 켜 주세요."
 
 log = logging.getLogger(__name__)
 
@@ -72,7 +70,9 @@ class Helper:
         self._progress_of: int | None = None  # 연습 과정 카드에 진행을 보이는 Blender 창 번호
         self.window = HelperWindow()
         self._tray = Tray(self._tray_show, app.quit)
-        self.window.asked.connect(self._ask)
+        # 붙잡아 둔다: Qt는 메서드에 이은 연결을 그 객체가 살아 있을 때만 지켜, 지역 변수면 Enter가 아무것도 부르지 않는다
+        self._flow = QuestionFlow(receiver, self._front, self._desk, self._conversation, self._stopwatch, _QtWindowSide(bridge))
+        self.window.asked.connect(self._flow.ask)
         self.window.escape.connect(self._back_to_blender)
         self.window.chose_course.connect(lambda label: self._on_card(lambda window: self._desk.choose(window, label)))
         self.window.went_next.connect(lambda: self._on_card(self._desk.forward, to_blender=True))
@@ -109,33 +109,6 @@ class Helper:
             self._conversation.waiting_message = PROGRAM_ERROR
             return
         log.info("답 엔진 준비 %.1f초(임시 엔진: 낱말 세기 임베딩 + 가짜 답변, 티켓 31·33에서 진짜로)", time.perf_counter() - started)
-
-    # ---- 질문
-    def _ask(self, question: str) -> None:
-        lap = self._stopwatch.asked(question, self._engine_info())
-        window = self._front.window(self._receiver.blenders())
-        state = None if window is None else self._receiver.latest(window)
-        if state is None:  # 실패도 한 줄 남긴다(F10 시각이 다음 질문으로 넘어가지 않게)
-            failure = Failure(OLD_ADDON if self._receiver.rejected else NO_STATE)
-            lap.saw(failure)
-            self.window.show_answer_event(failure)
-            return
-
-        step = self._desk.step(window)  # 답이 끝나도 진행은 그대로라 카드는 같은 단계에 머문다
-
-        def work() -> None:  # 답을 기다리는 동안 창과 Blender가 멈추지 않게 따로 돈다
-            for event in self._conversation.ask(question, state, step):
-                lap.saw(event)
-                self._bridge.answer_event.emit(event)
-
-        threading.Thread(target=work, daemon=True).start()
-
-    def _engine_info(self) -> dict | None:
-        """시간 기록에 남길 엔진 이름과 설정. 엔진 준비 전이면 None."""
-        engine = self._conversation.engine
-        if engine is None:
-            return None
-        return {"name": stand_in.NAME, "settings": settings_record(engine.settings, self._conversation.recent_pairs)}
 
     # ---- 연습 과정(진행 관리는 창 번호마다 하나, course_desk)
     def _on_message(self, message: Message) -> None:
@@ -229,6 +202,19 @@ class Helper:
             else:
                 winapi.put_behind(hwnd, front_hwnd)
         self._moved = (where, front_hwnd)
+
+
+class _QtWindowSide:
+    """질문 한 번(question_flow)의 실제 창 연결: 답 사건은 Qt 신호로 화면 스레드에 넘기고, 답은 따로 도는 스레드에서 기다린다."""
+
+    def __init__(self, bridge: _Bridge):
+        self._bridge = bridge
+
+    def show(self, event: Event) -> None:
+        self._bridge.answer_event.emit(event)
+
+    def start(self, work: Callable[[], None]) -> None:
+        threading.Thread(target=work, daemon=True).start()  # 답을 기다리는 동안 창과 Blender가 멈추지 않게
 
 
 def _recording(desk: CourseDesk, records: Path, folder: Path) -> CourseDesk | RecordingDesk:
