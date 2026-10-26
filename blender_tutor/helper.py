@@ -65,11 +65,10 @@ class Helper:
         self.window.asked.connect(self._ask)
         self.window.escape.connect(self._back_to_blender)
         self.window.chose_course.connect(lambda label: self._on_card(lambda window: self._desk.choose(window, label)))
-        self.window.went_next.connect(lambda: self._on_card(self._desk.next_step))
-        self.window.went_back.connect(lambda: self._on_card(self._desk.back))
-        self.window.skipped_to.connect(lambda label: self._on_card(lambda window: self._desk.skip_to(window, label)))
-        self.window.answered.connect(lambda yes: self._on_card(lambda window: self._desk.answer(window, yes)))
-        self.window.operation_done.connect(lambda: self._on_card(self._desk.next_operation))
+        self.window.went_next.connect(lambda: self._on_card(self._desk.forward, to_blender=True))
+        self.window.went_back.connect(lambda: self._on_card(self._desk.back, to_blender=True))
+        self.window.skipped_to.connect(lambda label: self._on_card(lambda window: self._desk.skip_to(window, label), to_blender=True))
+        self.window.answered.connect(lambda yes: self._on_card(lambda window: self._desk.answer(window, yes), to_blender=True))
         bridge.summoned.connect(self._summon)
         bridge.message.connect(self._on_message)
         bridge.answer_event.connect(self.window.show_answer_event)
@@ -128,11 +127,18 @@ class Helper:
         self._show_lines(self._desk.on_message(message.window, message.state, message.event, shown))
         self._show_progress()
 
-    def _on_card(self, action: Callable[[int], list[Line]]) -> None:
-        """카드 버튼·[네]/[아니요]: 지금 카드에 보이는 Blender의 진행 관리에 넘긴다."""
+    def _on_card(self, action: Callable[[int], list[Line]], to_blender: bool = False) -> None:
+        """카드 버튼·[네]/[아니요]: 지금 카드에 보이는 Blender의 진행 관리에 넘긴다.
+
+        to_blender면 누른 뒤 Esc처럼 Blender로 초점을 돌린다. 누르고 나면 보통 Blender에서 조작을 이어 하므로,
+        Blender를 한 번 더 누르지 않아도 단축키가 들게 하려는 것이다(2026-10-26 사용자 요청, HISTORY [55]).
+        연습 과정 고르기는 고른 뒤 안내를 읽을 때라 돌리지 않는다.
+        """
         if self._progress_of is not None:
             self._show_lines(action(self._progress_of))
         self._show_progress()
+        if to_blender:
+            self._back_to_blender()
 
     def _show_lines(self, lines: list[Line]) -> None:
         for line in lines:
