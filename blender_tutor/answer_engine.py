@@ -9,6 +9,7 @@ import json
 import re
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from itertools import islice
 from typing import Protocol
 
@@ -60,6 +61,17 @@ class AnswerModel(Protocol):
     def stream(self, messages: list[dict[str, str]], timeout: float) -> Iterable[str]: ...
 
 
+class Reasoning(StrEnum):
+    """답변 모델의 생각 수준. 정해 둔 이름만 쓴다(오타를 내면 바로 오류가 난다).
+
+    명세의 none·low·medium. 실제 모델이 받는 값과 다르면 모델을 붙이는 티켓 33에서 고친다.
+    """
+
+    NONE = "none"
+    LOW = "low"
+    MEDIUM = "medium"  # 최후의 수단. 답 끝 6초를 넘기면 고르지 않는다(명세)
+
+
 @dataclass(frozen=True)
 class Settings:
     """답 엔진 설정. 평가 때 바꿔 같은 문항을 다시 잰다."""
@@ -67,6 +79,11 @@ class Settings:
     top_k: int = 6  # 답변 모델에 넘길 검색 결과 수(명세 6-8개, 22번의 먼저 볼 소제목이 이 위에 더 붙는다)
     timeout: float = 10.0  # 모델이 이만큼(초) 아무것도 보내지 않으면 멈춘 것으로 본다(사용자 결정, 2026-10-21)
     use_bm25: bool = True  # 낱말 검색(BM25)을 섞을지. 끄면 뜻 검색만(평가에서 견줄 스위치)
+    # 답변 모델의 생각 수준(명세 기본 none). 시간 기록에 남긴다. 실제 모델에 넘기는 일은 티켓 33
+    reasoning: Reasoning = Reasoning.NONE
+
+    def __post_init__(self):
+        object.__setattr__(self, "reasoning", Reasoning(self.reasoning))  # "low"처럼 글자로 줘도 받고, 모르는 이름이면 ValueError
 
 
 @dataclass(frozen=True)
@@ -144,6 +161,10 @@ class AnswerEngine:
         self._embedder = embedder
         self._model = model
         self._settings = settings
+
+    @property
+    def settings(self) -> Settings:
+        return self._settings
 
     def answer(
         self, question: str, state: WorkState, recent: Sequence[tuple[str, str]], step: Step | None = None

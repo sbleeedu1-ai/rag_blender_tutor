@@ -33,6 +33,17 @@ class FileEvent:
     kind: str  # opened 또는 saved
     path: str  # 연 파일·저장한 파일 경로. 새 파일을 열면 ""
 
+    @classmethod
+    def from_json(cls, data: object) -> "FileEvent":
+        """애드온이 보낸 사건 JSON을 읽는다. 모양이 틀리면 ValueError."""
+        if not (isinstance(data, dict) and data.get("kind") in FILE_EVENTS and isinstance(data.get("path"), str)):
+            raise ValueError(f"사건은 {FILE_EVENTS} 가운데 하나와 경로")
+        return cls(data["kind"], data["path"])
+
+    def to_json(self) -> dict:
+        """애드온이 보내는 것과 같은 JSON(사전)."""
+        return {"kind": self.kind, "path": self.path}
+
 
 @dataclass(frozen=True)
 class Message:
@@ -43,20 +54,21 @@ class Message:
     state: WorkState
     summon: bool = False  # F10: 도우미 창을 앞으로 부른다
     event: FileEvent | None = None
+    pressed: float | None = None  # F10을 누른 시각(애드온의 time.time(), 같은 PC 시계). 시간 기록이 여기서부터 잰다(티켓 28)
 
     @classmethod
     def from_json(cls, data: object) -> "Message":
         """애드온이 보낸 JSON을 읽는다. 모양이 틀리면 ValueError."""
-        if not isinstance(data, dict) or set(data) != {"window", "pid", "state", "summon", "event"}:
-            raise ValueError("칸이 window·pid·state·summon·event가 아님")
-        window, pid, summon, event = data["window"], data["pid"], data["summon"], data["event"]
+        if not isinstance(data, dict) or set(data) != {"window", "pid", "state", "summon", "event", "pressed"}:
+            raise ValueError("칸이 window·pid·state·summon·event·pressed가 아님")
+        window, pid, summon, event, pressed = data["window"], data["pid"], data["summon"], data["event"], data["pressed"]
         if not all(isinstance(n, int) and not isinstance(n, bool) for n in (window, pid)) or not isinstance(summon, bool):
             raise ValueError("창 번호·프로세스 번호는 정수, summon은 참/거짓")
+        if pressed is not None and (isinstance(pressed, bool) or not isinstance(pressed, (int, float))):
+            raise ValueError("누른 시각은 숫자")
         if event is not None:
-            if not (isinstance(event, dict) and event.get("kind") in FILE_EVENTS and isinstance(event.get("path"), str)):
-                raise ValueError(f"사건은 {FILE_EVENTS} 가운데 하나와 경로")
-            event = FileEvent(event["kind"], event["path"])
-        return cls(window, pid, WorkState.from_json(data["state"]), summon, event)
+            event = FileEvent.from_json(event)
+        return cls(window, pid, WorkState.from_json(data["state"]), summon, event, None if pressed is None else float(pressed))
 
 
 def process_started(pid: int) -> int | None:
@@ -104,6 +116,7 @@ class Receiver:
         self._latest: dict[int, tuple[int, WorkState]] = {}  # 창 번호 → (프로세스 번호, 최신 작업 상태)
         self._started: dict[int, object] = {}  # 프로세스 번호 → 처음 받았을 때 그 프로세스가 켜진 시각
         self._heard = False  # Blender가 한 번이라도 보냈나
+        self._rejected = False  # 비밀 글자는 맞는데 모양이 틀린 봉투를 받은 적이 있나(설치 명령을 다시 돌리지 않은 옛 애드온)
         self._server = HTTPServer(("127.0.0.1", port), self._handler())
         # 끌 때 기다리는 시간(기본 0.5초)을 줄인다
         self._thread = threading.Thread(target=self._server.serve_forever, args=(0.05,), daemon=True)
@@ -119,6 +132,11 @@ class Receiver:
     def __exit__(self, *exc) -> None:
         self._server.shutdown()
         self._server.server_close()
+
+    @property
+    def rejected(self) -> bool:
+        """모양이 틀린 봉투를 받은 적이 있나. 도우미 창이 상태가 없을 때 '다시 설치' 안내를 고르는 데 쓴다."""
+        return self._rejected
 
     def latest(self, window: int) -> WorkState | None:
         """그 창 번호의 최신 작업 상태. 받은 적이 없거나 닫힌 Blender면 None."""
@@ -192,6 +210,7 @@ class Receiver:
                     message = Message.from_json(json.loads(body.decode("utf-8")))
                 except (ValueError, UnicodeDecodeError) as error:  # json 오류도 ValueError
                     log.warning("모양이 틀린 작업 상태: %s", error)
+                    receiver._rejected = True
                     return self._reply(400, {"error": str(error)})
                 receiver._receive(message)
                 self._reply(200, {})

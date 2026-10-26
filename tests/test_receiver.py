@@ -36,10 +36,12 @@ def receiver(alive, received):
         yield receiver
 
 
-def send(receiver, window, pid, state=EDITING, *, summon=False, event=None, token=TOKEN, path="/state", body=None) -> int:
+def send(
+    receiver, window, pid, state=EDITING, *, summon=False, event=None, pressed=None, token=TOKEN, path="/state", body=None
+) -> int:
     """애드온처럼 보내고 응답 번호를 돌려준다."""
     if body is None:
-        body = {"window": window, "pid": pid, "state": state, "summon": summon, "event": event}
+        body = {"window": window, "pid": pid, "state": state, "summon": summon, "event": event, "pressed": pressed}
     request = urllib.request.Request(
         f"http://127.0.0.1:{receiver.port}{path}",
         data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
@@ -69,6 +71,11 @@ def test_받은_것을_부르기와_파일_사건과_함께_건넨다(receiver, 
         Message(1, 100, state, summon=True),
         Message(1, 100, state, event=FileEvent("saved", "C:/work/sword.blend")),
     ]
+
+
+def test_F10을_누른_시각을_함께_건넨다(receiver, received):
+    send(receiver, 1, 100, summon=True, pressed=1792900000.25)  # 애드온이 F10을 받은 때의 time.time()
+    assert received == [Message(1, 100, WorkState.from_json(EDITING), summon=True, pressed=1792900000.25)]
 
 
 def test_닫힌_Blender의_상태는_버린다(receiver, alive):
@@ -123,14 +130,25 @@ def test_비밀_글자가_틀리면_받지_않는다(receiver, received):
 @pytest.mark.parametrize(
     "body",
     [
-        {"window": 1, "pid": 100, "state": {"mode": "OBJECT"}, "summon": False, "event": None},  # 칸이 빠진 작업 상태
-        {"window": "1", "pid": 100, "state": EDITING, "summon": False, "event": None},  # 창 번호가 글자
-        {"window": 1, "pid": 100, "state": EDITING, "summon": False, "event": {"kind": "deleted", "path": ""}},  # 모르는 사건
+        {"window": 1, "pid": 100, "state": {"mode": "OBJECT"}, "summon": False, "event": None, "pressed": None},  # 칸이 빠진 작업 상태
+        {"window": "1", "pid": 100, "state": EDITING, "summon": False, "event": None, "pressed": None},  # 창 번호가 글자
+        {"window": 1, "pid": 100, "state": EDITING, "summon": False, "event": {"kind": "deleted", "path": ""}, "pressed": None},  # 모르는 사건
+        {"window": 1, "pid": 100, "state": EDITING, "summon": True, "event": None, "pressed": "방금"},  # 누른 시각이 글자
+        {"window": 1, "pid": 100, "state": EDITING, "summon": True, "event": None},  # 누른 시각 칸이 없는 옛 애드온
     ],
 )
 def test_모양이_틀린_것은_받지_않는다(receiver, received, body):
     assert send(receiver, 1, 100, body=body) == 400
     assert receiver.latest(1) is None and received == []
+
+
+def test_모양이_틀린_봉투를_받은_적이_있는지_알려_준다(receiver):
+    """설치 명령을 다시 돌리지 않은 옛 애드온의 봉투는 모두 거절된다. 도우미 창이 그때 '다시 설치' 안내를 보이려고 쓴다."""
+    send(receiver, 1, 100)
+    assert not receiver.rejected
+    old_addon = {"window": 1, "pid": 100, "state": EDITING, "summon": True, "event": None}  # 누른 시각 칸이 없음
+    assert send(receiver, 1, 100, body=old_addon) == 400
+    assert receiver.rejected
 
 
 def test_내용_길이가_음수면_기다리지_않고_돌려보낸다(receiver):

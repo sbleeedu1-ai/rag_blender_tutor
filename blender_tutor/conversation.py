@@ -28,6 +28,11 @@ class Conversation:
         self.waiting_message = NOT_READY
         self._recent: deque[tuple[str, str]] = deque(maxlen=keep)
 
+    @property
+    def recent_pairs(self) -> int:
+        """답 엔진에 넘기는 최근 대화 쌍 수(시간 기록에 설정으로 남긴다)."""
+        return self._recent.maxlen
+
     def ask(self, question: str, state: WorkState, step: Step | None = None) -> Iterator[Event]:
         """질문을 엔진에 넘기고 나온 사건을 그대로 낸다. 끝까지 나온 답만 최근 대화에 넣는다.
 

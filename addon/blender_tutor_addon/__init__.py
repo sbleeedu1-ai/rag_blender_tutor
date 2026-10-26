@@ -4,6 +4,7 @@
 - 0.5초마다 읽어 바뀌었을 때만 보내고, F10이면 바뀌지 않아도 보내며 도우미 창을 부른다.
 - 파일 열기·저장은 사건(opened·saved)으로 함께 보낸다(티켓 18).
 - Blender를 켤 때와 F10 때 도우미 프로그램이 없으면 켠다. 끄는 일은 도우미 프로그램이 한다(켜진 Blender가 없으면 끝남).
+- Ctrl+F10: 평가 문항을 만들려고 그 순간의 작업 상태 JSON과 화면 PNG를 프로젝트 data/snapshots/에 함께 저장한다(티켓 28).
 
 이 애드온은 Blender 안 파이썬에서 돌아 blender_tutor 패키지를 가져다 쓰지 못한다. 작업 상태 칸은
 blender_tutor/work_state.py와 같게 맞추고, 바꾸면 둘 다 고친다(addon/selftest.py가 맞는지 본다).
@@ -13,6 +14,7 @@ blender_tutor/receiver.py의 process_started, blender_tutor/install_addon.py의 
 """
 
 import ctypes
+import datetime
 import json
 import os
 import queue
@@ -43,6 +45,7 @@ CONFIG = Path(__file__).resolve().parent / "config.json"  # 설치 명령이 적
 INTERVAL = 0.5  # 작업 상태를 읽는 간격(초)
 RECENT = 3  # 방금 실행한 조작을 몇 개 보내나
 SHORTCUT = "F10"
+SNAPSHOT_SHORTCUT = "F10"  # Ctrl과 함께. Blender 기본 단축키에 없음(Shift+F10은 이미지 편집기, Alt+F10은 화면 크게 보기)
 TOKEN_ENV = "BLENDER_TUTOR_TOKEN"  # blender_tutor/receiver.py의 TOKEN_ENV와 같아야 함
 TOKEN_HEADER = "X-Tutor-Token"  # blender_tutor/receiver.py의 TOKEN_HEADER와 같아야 함(어긋나면 자체 시험의 '보내기'가 실패)
 LOG = Path(tempfile.gettempdir()) / "blender_tutor_receiver.log"  # 애드온이 켠 도우미 프로그램의 기록
@@ -186,6 +189,11 @@ class Sender:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
+    @property
+    def project(self) -> str:
+        """프로젝트 폴더(설치 명령이 적은 도우미 켜는 자리)."""
+        return self._config["cwd"]
+
     def send(self, payload: dict, launch: bool = False) -> None:
         """payload를 보낸다. launch면 도우미 프로그램이 없을 때 켜고 보낸다(F10)."""
         self._queue.put((payload, launch))
@@ -275,8 +283,8 @@ _notice = ""  # 상태 줄에 띄울 알림(보내는 스레드가 적고 tick�
 _keymaps = []
 
 
-def _payload(state: dict, summon: bool = False, event: dict | None = None) -> dict:
-    return {"window": _own_window(), "pid": os.getpid(), "state": state, "summon": summon, "event": event}
+def _payload(state: dict, summon: bool = False, event: dict | None = None, pressed: float | None = None) -> dict:
+    return {"window": _own_window(), "pid": os.getpid(), "state": state, "summon": summon, "event": event, "pressed": pressed}
 
 
 def tick() -> float:
@@ -326,23 +334,72 @@ class TUTOR_OT_summon(bpy.types.Operator):
     bl_label = "도우미 창 부르기"
 
     def execute(self, context):
+        pressed = time.time()  # 도우미의 시간 기록이 여기서부터 잰다(같은 PC 시계, 티켓 28)
         # Windows는 뒤에 있는 프로그램이 스스로 앞으로 나오는 것을 막는다. 지금 앞에 있는 Blender가 허락해 준다(ASFW_ANY = -1).
         ctypes.windll.user32.AllowSetForegroundWindow(-1)
         if _sender is None:
             self.report({"ERROR"}, "도우미 애드온 설치가 끝나지 않았습니다(config.json 없음). 설치 명령을 실행해 주세요.")
             return {"CANCELLED"}
         _recent.update(context.window_manager.operators)
-        _sender.send(_payload(read_state(context, _recent.names), summon=True), launch=True)
+        _sender.send(_payload(read_state(context, _recent.names), summon=True, pressed=pressed), launch=True)
+        return {"FINISHED"}
+
+
+def save_snapshot(context, folder: Path) -> tuple[Path, Path | None]:
+    """작업 상태 JSON과 Blender 창 PNG를 같은 이름(저장 시각)으로 folder에 저장한다. .blend는 저장하지 않는다(명세 "애드온").
+
+    JSON은 도우미에 보내는 14칸 그대로라 평가 프로그램이 WorkState로 바로 읽는다. 창이 없어(화면 없이 띄운 Blender)
+    PNG를 못 찍으면 PNG 자리는 None이다. 같은 초에 또 누르면 이름 뒤에 -2, -3을 붙여 앞 것을 덮지 않는다.
+    """
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    stem, number = folder / stamp, 1
+    while stem.with_suffix(".json").exists() or stem.with_suffix(".png").exists():
+        number += 1
+        stem = folder / f"{stamp}-{number}"
+    _recent.update(context.window_manager.operators)
+    state = stem.with_suffix(".json")
+    state.write_text(json.dumps(read_state(context, _recent.names), ensure_ascii=False, indent=2), encoding="utf-8")
+    picture = stem.with_suffix(".png")
+    try:
+        bpy.ops.screen.screenshot(filepath=str(picture), check_existing=False)
+    except RuntimeError as error:
+        print(f"[도우미] 화면을 찍지 못했습니다: {error}")
+    return state, picture if picture.exists() else None
+
+
+class TUTOR_OT_snapshot(bpy.types.Operator):
+    """평가 문항용으로 지금 작업 상태와 화면을 저장한다"""
+
+    bl_idname = "tutor.snapshot"
+    bl_label = "도우미: 지금 상태 저장"
+
+    def execute(self, context):
+        if _sender is None:
+            self.report({"ERROR"}, "도우미 애드온 설치가 끝나지 않았습니다(config.json 없음). 설치 명령을 실행해 주세요.")
+            return {"CANCELLED"}
+        folder = Path(_sender.project) / "data" / "snapshots"
+        try:
+            state, picture = save_snapshot(context, folder)
+        except OSError as error:
+            self.report({"ERROR"}, f"지금 상태를 저장하지 못했습니다: {error}")
+            return {"CANCELLED"}
+        if picture is None:
+            self.report({"WARNING"}, f"작업 상태만 저장했습니다(화면은 못 찍음): {state}")
+        else:
+            self.report({"INFO"}, f"지금 상태를 저장했습니다: {state.stem} (.json·.png)")
         return {"FINISHED"}
 
 
 def register():
     global _sender
     bpy.utils.register_class(TUTOR_OT_summon)
+    bpy.utils.register_class(TUTOR_OT_snapshot)
     keyconfig = bpy.context.window_manager.keyconfigs.addon
     if keyconfig:
         keymap = keyconfig.keymaps.new(name="Window", space_type="EMPTY")
         _keymaps.append((keymap, keymap.keymap_items.new(TUTOR_OT_summon.bl_idname, SHORTCUT, "PRESS")))
+        _keymaps.append((keymap, keymap.keymap_items.new(TUTOR_OT_snapshot.bl_idname, SNAPSHOT_SHORTCUT, "PRESS", ctrl=True)))
     bpy.app.handlers.load_post.append(_on_load)
     bpy.app.handlers.save_post.append(_on_save)
     _recent.update(bpy.context.window_manager.operators, record=False)  # 켜기 전 조작은 '방금'이 아니다
@@ -365,6 +422,7 @@ def unregister():
     for keymap, item in _keymaps:
         keymap.keymap_items.remove(item)
     _keymaps.clear()
+    bpy.utils.unregister_class(TUTOR_OT_snapshot)
     bpy.utils.unregister_class(TUTOR_OT_summon)
     if _sender is not None:
         _sender.stop()

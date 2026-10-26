@@ -5,8 +5,8 @@ Blender 위치가 다르면 환경 변수 BLENDER로 알려 준다.
 
 확인하는 것: 애드온 켜기(설치 명령으로 임시 폴더에 설치), 14칸 읽기와 WorkState 모양 맞음, 조작 이름 바꾸기,
 편집 모드 선택 방식·개수와 읽기 시간, 바뀐 때만 보내기, 파일 사건, glTF 내보내기 잡기, 화면 언어,
-도우미 프로그램 켜기(이미 켜져 있으면 그것을 씀)와 Blender가 닫히면 꺼지기.
-화면 없이는 F10·사람이 한 조작 기록·메뉴로 한 glTF 내보내기·마우스로 움직인 시점은 볼 수 없다(사용자가 눈으로 확인).
+도우미 프로그램 켜기(이미 켜져 있으면 그것을 씀)와 Blender가 닫히면 꺼지기, F10 봉투의 누른 시각, 지금 상태 저장의 JSON.
+화면 없이는 F10 키·Ctrl+F10 키·저장의 PNG·사람이 한 조작 기록·메뉴로 한 glTF 내보내기·마우스로 움직인 시점은 볼 수 없다(사용자가 눈으로 확인).
 """
 
 import json
@@ -37,6 +37,8 @@ if "bpy" not in sys.modules:  # 1) 보통 파이썬: 임시 폴더에 설치하�
         config["port"] = TEST_PORT
         (target / "config.json").write_text(json.dumps(config), encoding="utf-8")
         env = {**os.environ, "BLENDER_USER_SCRIPTS": scripts, "TUTOR_PROJECT": str(PROJECT), "TUTOR_ADDON": ADDON_NAME}
+        # 시험이 켜는 도우미의 흐름·시간·진행 기록이 실제 사용자 폴더에 쌓이지 않게 설정 폴더를 임시 폴더로(티켓 28)
+        env["APPDATA"] = str(Path(scripts) / "appdata")
         result = subprocess.run([blender, "-b", "--factory-startup", "--python", __file__], env=env)
 
         # Blender가 닫혔으니 도우미 프로그램도 몇 초 안에 끝나야 한다
@@ -62,6 +64,7 @@ import addon_utils  # noqa: E402
 import bpy  # noqa: E402
 
 sys.path.insert(0, os.environ["TUTOR_PROJECT"])
+from blender_tutor.receiver import Message  # noqa: E402
 from blender_tutor.work_state import WorkState  # noqa: E402
 
 ok = True
@@ -75,7 +78,7 @@ def check(name, cond, detail=""):
 
 addon_utils.enable(os.environ["TUTOR_ADDON"], default_set=True)
 addon = sys.modules.get(os.environ["TUTOR_ADDON"])
-check("애드온 켜기", addon is not None and hasattr(bpy.ops.tutor, "summon"))
+check("애드온 켜기", addon is not None and hasattr(bpy.ops.tutor, "summon") and hasattr(bpy.ops.tutor, "snapshot"))
 
 check(
     "조작 이름 바꾸기",
@@ -149,6 +152,18 @@ bpy.ops.object.mode_set(mode="OBJECT")
 addon.tick()
 sent = addon._sender.sent[-1]
 check("창 번호·프로세스 번호를 함께 보냄", sent["pid"] == os.getpid() and isinstance(sent["window"], int), (sent["window"], sent["pid"]))
+check("부르기가 아니면 누른 시각 없음", sent["pressed"] is None)
+before = time.time()
+bpy.ops.tutor.summon()
+message = Message.from_json(addon._sender.sent[-1])  # 받는 쪽이 읽는 모양과 맞나
+check("F10 봉투에 누른 시각", message.summon and before <= message.pressed <= time.time(), message.pressed)
+
+with tempfile.TemporaryDirectory() as folder:
+    saved, _ = addon.save_snapshot(bpy.context, Path(folder) / "snapshots")
+    snapshot = WorkState.from_json(json.loads(saved.read_text(encoding="utf-8")))
+    check("지금 상태 저장: JSON이 WorkState 모양과 맞음", snapshot.mode == "OBJECT" and saved.suffix == ".json", saved.name)
+    again, _ = addon.save_snapshot(bpy.context, Path(folder) / "snapshots")
+    check("같은 초에 또 저장해도 덮지 않음", again != saved and saved.exists(), again.name)
 
 with tempfile.TemporaryDirectory() as folder:
     blend = str(Path(folder) / "sword.blend")

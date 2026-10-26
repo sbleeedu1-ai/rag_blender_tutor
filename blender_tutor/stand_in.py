@@ -18,6 +18,7 @@ from blender_tutor.menu_names import MenuNames
 from blender_tutor.progress import Course
 
 DIMENSIONS = 512  # 낱말을 나눠 담을 칸 수
+NAME = "stand_in"  # 시간 기록에 남기는 엔진 이름(진짜 엔진의 줄과 가르려고)
 
 STAND_IN_ANSWER = (
     "(임시 답) 아직 진짜 답변 모델을 붙이지 않아 설명은 만들지 못해요. "

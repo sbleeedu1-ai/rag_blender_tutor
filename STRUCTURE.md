@@ -85,19 +85,21 @@
 
 | 자리 | 파일 | 하는 일 | 만든 티켓 |
 |---|---|---|---|
-| Blender 안 | `addon/blender_tutor_addon/__init__.py` | 작업 상태 12칸 읽기, 바뀐 때만 보내기, F10, 파일 열기·저장 알림, glTF 내보내기 잡기, 도우미 프로그램 켜기 | 25 |
-| 도우미 | `blender_tutor/helper.py` | 도우미 프로그램 입구(애드온이 켬). 받는 쪽·창·답 엔진·창마다 진행을 띄우고 잇는다. Blender 따라가기(0.1초), F10·Esc·트레이, 질문을 답 스레드로, 카드 단추를 창마다 진행으로 | 26, 27 |
-| 도우미 | `blender_tutor/receiver.py` | 받는 쪽. Blender 창 번호마다 최신 작업 상태 하나, 켜진 Blender 목록, 닫힌 Blender 버림, 마지막 Blender가 닫히면 끝남 | 25, 26 |
+| Blender 안 | `addon/blender_tutor_addon/__init__.py` | 작업 상태 14칸 읽기, 바뀐 때만 보내기, F10(누른 시각을 함께 보냄), 파일 열기·저장 알림, glTF 내보내기 잡기, 도우미 프로그램 켜기, Ctrl+F10 지금 상태 저장(JSON + PNG → `data/snapshots/`) | 25, 28 |
+| 도우미 | `blender_tutor/helper.py` | 도우미 프로그램 입구(애드온이 켬). 받는 쪽·창·답 엔진·창마다 진행을 띄우고 잇는다. Blender 따라가기(0.1초), F10·Esc·트레이, 질문을 답 스레드로, 카드 단추를 창마다 진행으로. 시간 기록·흐름 기록을 붙임 | 26, 27, 28 |
+| 도우미 | `blender_tutor/receiver.py` | 받는 쪽. Blender 창 번호마다 최신 작업 상태 하나, 켜진 Blender 목록, 닫힌 Blender 버림, 마지막 Blender가 닫히면 끝남, 모양이 틀린 봉투(옛 애드온)를 받은 적 있음(도우미 창이 '다시 설치' 안내에 씀) | 25, 26, 28 |
 | 도우미(서식) | `blender_tutor/work_state.py` | 작업 상태 14칸의 서식(애드온 JSON ↔ `WorkState`). 받는 쪽·진행 관리·답 엔진이 함께 씀 | 25, 27 |
 | 도우미 | `blender_tutor/helper_window.py` | 창 그리기(PySide6 위젯): 어두운 반투명 판, 연습 과정 카드(단계 ▼: 다섯 줄 단계 목록 + 연습 과정 바꾸기), 물음 줄 [네]/[아니요], 안내 말·알림, 회색 질문·굵은 흰 답·근거 카드·알약 입력칸, X, 가장자리 크기 조절, 트레이 아이콘 | 26, 27 |
 | 도우미 | `blender_tutor/window_rules.py` | 창 규칙: 화면 모습 → 맨 위/뒤로/숨김/그대로, 마지막 앞 Blender, 문장마다 줄바꿈 | 26 |
 | 도우미 | `blender_tutor/winapi.py` | Windows에 창 일 시키기(앞 창 읽기, 맨 위·뒤로, 초점). 판단 없음 | 26 |
 | 도우미 | `blender_tutor/conversation.py` | 대화: 최근 대화 3쌍, 답 엔진 부르기, 엔진 버그를 "도우미 프로그램에 문제가 생겼어요"로 | 26 |
 | 도우미 | `blender_tutor/course_desk.py` | 창마다 진행: Blender 창 번호마다 진행 관리 하나, 대화에 붙일 말, 카드에 보일 모양, 뒤에 있는 Blender의 알림 모아 두기 | 27 |
+| 도우미 | `blender_tutor/state_stream.py` | 흐름 기록: 창마다 진행에 들어간 봉투·카드 단추를 차례대로 파일에 남기고(`RecordingDesk`), 그 파일을 새 진행 관리에 다시 넣는다(`replay`, 회귀 테스트용) | 28 |
 | 도우미 | `blender_tutor/progress_record.py` | 진행 관리 창구: 파일마다 진행 기록(바뀔 때마다 + 저장 때 자리)·이어 하기, 연습 과정 고르기·바꾸기(덮어쓸지 확인), 떠 있는 물음과 [네]/[아니요] | 18, 27 |
 | 도우미 | `blender_tutor/progress.py` | 담당자: 연습 과정 파일 읽기, 연습 과정 하나의 진행. 조작을 차례로 안내하고 감지 조건이 맞으면 다음 조작, 끝난 조건이 맞으면 묻고 깨지면 거두기, 단계 옮기기 | 17, 27 |
 | 도우미 | `blender_tutor/conditions.py` | 판정표: 끝난 조건·감지 조건 13종류의 "값의 꼴"과 "맞는지 판정"(지금 상태와 기준 상태를 견줌) | 17, 27 |
 | 도우미 | `blender_tutor/korean_particles.py` | 한국어 조사 고르기: 이름 끝 받침에 따라 "이에요/예요", "으로/로" | 27 |
+| 도우미 | `blender_tutor/timing.py` | 시간 기록: 질문마다 F10 누름·받음·입력 가능·보냄·첫 글자·답 끝 시각, PC 이름, 그때의 엔진 이름·설정(생각 수준 등)을 한 줄로 | 28 |
 | 도우미 | `blender_tutor/answer_engine.py` | 답 엔진: 질문 + 작업 상태 + 지금 단계 → 설명서 검색 → 답 글 흐름 + 근거 목록 | 21-23 |
 | 도우미(임시) | `blender_tutor/stand_in.py` | 진짜 모델 전 무료 임시 엔진: `data/`로 엔진 만들기, 낱말 세기 임베딩, 1.5초 쉬고 정해 둔 글을 흘리는 가짜 답변. 티켓 31·33 뒤 `archive/`로 | 26 |
 | 자료 만들기 + 읽기 | `blender_tutor/manual_chunks.py` | 만들기: 설명서 HTML → 소제목 단위 청크(`data/chunks/`, 한 번 돌림, `save_chunks`). 읽기: 청크 파일(`load_chunks`)과 청크 서식 `Chunk`(답 엔진이 씀) | 19 |
@@ -123,7 +125,8 @@
   "pid": 11052,
   "state": { "작업 상태 14칸": "아래 표" },
   "summon": false,
-  "event": null
+  "event": null,
+  "pressed": null
 }
 ```
 
@@ -133,6 +136,7 @@
 | `pid` | 보낸 Blender의 프로세스 번호. 받는 쪽이 1초마다 "아직 켜져 있나"(번호 + 켜진 시각)를 봄 |
 | `summon` | F10을 눌렀으면 참. 도우미 창을 앞으로 부름 |
 | `event` | 파일을 열었거나(`opened`) 저장했으면(`saved`) 그 경로. 경로 변화만으로는 "열기"와 "다른 이름으로 저장"을 가를 수 없어 사건으로 보냄(티켓 18) |
+| `pressed` | F10이면 애드온이 F10을 받은 시각(`time.time()` 초, 같은 PC 시계), 아니면 `null`. 시간 기록이 여기서부터 잼(티켓 28). 이 칸이 없는 옛 애드온의 봉투는 받는 쪽이 거절하므로 설치 명령을 다시 돌린다 |
 
 - 봉투 겉면(HTTP 머리)에 비밀 글자(`X-Tutor-Token`)를 싣는다. 없거나 틀리면 버린다. 브라우저의 웹페이지가 `127.0.0.1`로 보내는 요청을 막으려는 것이다(HISTORY [44]).
 - 봉투는 **바뀌었을 때만**(0.5초마다 확인), F10 때, 파일 사건 때 보낸다.
@@ -200,7 +204,25 @@
 - 도우미 창(ADR-0001): 주 화면 오른쪽 아래에 뜨고, Blender가 앞이면 맨 위, 다른 프로그램이 앞이면 그 뒤, Blender를 모두 최소화하면 숨는다. F10 = 맨 위로 + 입력칸 초점, Esc = 마지막 앞 Blender로 초점(창은 그대로), X = F10·트레이로 부를 때까지 숨김. 작업 표시줄·Alt+Tab에는 없고 트레이만(왼쪽 클릭 = 보이기, 오른쪽 메뉴 = 보이기/끝내기). 보이는 Blender가 없으면 트레이 보이기를 막고 아이콘 글에 "Blender를 먼저 열어 주세요"
 - 켜진 뒤 답 엔진을 뒤에서 만든다(약 1.5초). 그 전에 물으면 "설명서를 읽는 중" 문구. 배경 흐림은 어두운 반투명 판으로 흉내만 낸다(진짜 흐림 `--blur`는 2026-10-23 뺌, HISTORY [49])
 - 끄기: 트레이 오른쪽 메뉴 > 끝내기, 또는 도우미가 1초마다 보낸 Blender들이 아직 켜져 있나 보고, 하나도 없으면 스스로 끝난다. 켜진 직후 30초 안에 아무 Blender도 보내지 않아도 끝난다.
-- 도우미의 기록: `%TEMP%\blender_tutor_receiver.log`(켜짐·끝남, 엔진 준비 시간, F10 → 입력 가능 ms, 파일 사건, 엔진 버그 내용).
+- 도우미의 기록: `%TEMP%\blender_tutor_receiver.log`(켜짐·끝남, 엔진 준비 시간, F10 → 입력 가능 ms, 파일 사건, 엔진 버그 내용, 이번 흐름 기록 파일 경로).
+- 시간 기록(티켓 28): `%APPDATA%\blender_tutor\timings.jsonl`에 질문마다 한 줄. 늘 남기고 지우지 않는다. 평가 프로그램(티켓 29)이 읽는다. 예(지어낸 것):
+
+  ```json
+  {"pc": "DESKTOP-J9LV5HK", "engine": "stand_in",
+   "settings": {"top_k": 6, "timeout": 10.0, "use_bm25": true, "reasoning": "none", "recent_pairs": 3},
+   "question": "칼끝은 어떻게 모아요?", "f10_pressed": 1792977551.65, "f10_received": 1792977551.70,
+   "ready": 1792977551.95, "sent": 1792977556.0, "first_piece": 1792977557.5, "done": 1792977559.0, "outcome": "done"}
+  ```
+  F10 시각 셋은 F10 뒤 첫 질문에만, 입력 가능 뒤 60초 안에 보냈을 때만 있다. 창이 떠 있는 채 이어 물었거나 F10을 누르고 떠났다 한참 뒤 창을 눌러 물으면 `null`(창을 눌러 묻는 경로는 따로 재지 않음, 보냄 → 답 끝은 모든 질문에 남음). 실패로 끝나면 `outcome`이 `failure`이고 `first_piece`는 `null`일 수 있다. `engine`(지금은 임시 엔진 `stand_in`)과 `settings`(답 엔진 설정 + 최근 대화 쌍 수)로 평가 프로그램이 줄을 가른다. 엔진 준비 전에 물은 줄은 둘 다 `null`. 리랭커·임베딩 종류 설정은 생기는 티켓에서 `settings`에 더한다.
+- 흐름 기록(티켓 28): `%APPDATA%\blender_tutor\streams\<켠 시각>.jsonl`. 도우미를 켤 때마다 새 파일, 지우지 않는다. 검수 동안 늘 켜 두고 코드 동결 전에 끈다(`helper.py`의 `RECORD_STREAM`, 티켓 37). 한 줄이 창마다 진행에 넣은 부름 하나(지어낸 예):
+
+  ```json
+  {"call": "on_message", "window": 591400, "state": {"작업 상태 14칸": "..."}, "event": {"kind": "opened", "path": "C:/work/sword.blend"}, "shown": true, "record": null}
+  {"call": "choose", "window": 591400, "label": "sword"}
+  {"call": "forward", "window": 591400}
+  ```
+  파일을 여는 줄의 `record`는 그때 그 파일의 진행 기록 글(처음 여는 파일이면 `null`). 다시 돌릴 때(`replay`) 빈 임시 폴더에 이것을 먼저 깔아, 다음 날 이어 한 흐름도 그 파일 하나로 똑같이 돈다. 쓰기에 실패하면 다음 부름 때 다시 써 보고, 다시 써지면 그 앞에 `{"call": "gap"}`(빠진 줄이 있던 자리, 이 뒤로는 실제와 다르게 흐를 수 있음)을 남긴다.
+- 지금 상태 저장(Ctrl+F10, 티켓 28): 프로젝트 `data\snapshots\<저장 시각>.json`(작업 상태 14칸 그대로)과 같은 이름 `.png`(Blender 창). `.blend`는 저장하지 않는다. Blender 상태 줄에 저장했다고 알린다.
 - 설치된 애드온은 복사본이다. 애드온 코드를 고치면 설치 명령을 다시 돌린다.
 
 ## 6. 자료 만들기 (한 번 돌리는 것)
@@ -225,16 +247,18 @@ Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_
 | 진행 기록 폴더·조사 | `test_paths.py`, `test_korean_particles.py` | 쓸 수 없는 폴더 → 다음 자리, 이름 → 조사 |
 | 연습 과정 파일 | `test_course_check.py` | 파일 → 문제 목록 |
 | 자료 준비 | `test_manual_chunks.py`, `test_menu_names.py` | 손으로 쓴 작은 HTML → 청크·사전 |
-| 작업 상태·받는 쪽·설치 | `test_work_state.py`, `test_receiver.py`, `test_install_addon.py` | 애드온인 척 보낸 봉투 → 창 번호별 상태·켜진 Blender 목록·거절·끝남 |
+| 작업 상태·받는 쪽·설치 | `test_work_state.py`, `test_receiver.py`, `test_install_addon.py` | 애드온인 척 보낸 봉투 → 창 번호별 상태·F10 누른 시각·켜진 Blender 목록·거절·끝남 |
+| 시간 기록 | `test_timing.py` | 가짜 시계 + 답 사건 → 기록 파일의 한 줄(F10 없이 이어 묻기, 실패, 쓸 수 없는 파일) |
+| 흐름 기록 | `test_state_stream.py` | 진행에 넣은 봉투·단추를 기록 → 새 진행 관리에 다시 넣으면 같은 말·자리 |
 | 창 규칙 | `test_window_rules.py` | 화면 모습(앞 프로그램, 최소화, X로 내림) → 맨 위/뒤로/숨김/그대로, 마지막 앞 Blender, 줄바꿈 |
 | 대화 | `test_conversation.py` | 가짜 엔진 → 엔진이 받은 최근 대화, 실패한 답 빼기, 엔진 버그 문구 |
 | 창 그리기 | `test_helper_window.py`(화면 없이 Qt를 띄움) | Enter → 보낸 질문, 답 조각·근거 카드·오류 문구, X·Esc, 연습 과정 카드(다음/다음 단계, 단계 목록 다섯 줄 스크롤)·물음 줄 |
 | 임시 엔진 | `test_stand_in.py` | 작은 청크 파일 → 엔진이 만들어지고 근거가 붙음 |
-| 애드온 | `addon/selftest.py`(기본 테스트 밖) | 화면 없는 Blender → 14칸(시점·위치·진행 중인 조작 포함), 바뀐 때만 보내기, 도우미 켜기·꺼짐 |
+| 애드온 | `addon/selftest.py`(기본 테스트 밖) | 화면 없는 Blender → 14칸(시점·위치·진행 중인 조작 포함), 바뀐 때만 보내기, F10 봉투의 누른 시각, 지금 상태 저장의 JSON(PNG는 화면이 없어 눈 확인), 도우미 켜기·꺼짐 |
 | 입구·Windows 조작·화면·F10·한글 입력·Blender 둘 오가기 | 사용자 눈 확인(`helper.py`, `winapi.py`) | |
 
 ## 8. 아직 없는 것
 
-- 시간 기록·상태 저장 단축키(28), 평가 프로그램(29), 검 연습 과정 따라 하며 고치기·감지 확인(32)
+- 평가 프로그램(29), 검 연습 과정 따라 하며 고치기·감지 확인(32)
 - 실제 임베딩·답변 모델 연결(31·33)
 - Windows 전용이다. 맥을 붙일 때 바꿀 곳은 애드온 설명글 맨 위에 모아 적었다
