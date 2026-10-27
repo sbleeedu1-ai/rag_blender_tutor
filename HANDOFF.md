@@ -11,6 +11,12 @@
      1. `data/translations/make_meaning_sample.py`를 고쳐 **청크마다 이름표(`translate.glossary(..., body)`)를 함께 적고**, 이미 본 100개(씨앗 2027)를 뺀 1,279개를 100개씩 파일 13개로 나눈다
      2. Sonnet 세션(Claude 데스크톱이면 새 세션, VS Code 터미널이면 `claude --model sonnet`)이 파일마다 읽고 `meaning_review_sonnet_<n>.md`에 적는다. 지시문은 [76] 시험 때와 같게 하되 "이름표의 글자는 공식 화면 글자라 지적하지 않는다"를 더한다
      3. Opus가 지적만 읽고 확인해 `apply_fixes_ko_none.py`에 더한다(긴 Opus 대화는 한 번 답할 때 5시간 한도 약 1%를 쓰니 새 세션에서)
+   - **VS Code 터미널(CLI)에서 할 때**: 구독 한도는 데스크톱 앱과 같은 계정이라 함께 쓴다. 다른 점은 세션을 직접 열고, 끝난 알림이 없다는 것
+     1. 터미널 1(Opus): `cd C:\WORK\rag_blender_tutor` → `claude` → "AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번의 1단계(표본 파일 13개 만들기)까지 해"
+     2. 터미널 2(Sonnet): `cd C:\WORK\rag_blender_tutor` → `claude --model sonnet` → 노력치는 `/model` 메뉴에서 medium(정확한 방법은 `/help`로 확인) → 파일마다 "`data/translations/meaning_sample_<n>.md` 하나만 읽고 뜻을 검수해 `meaning_review_sonnet_<n>.md`에 써. 규칙은 HISTORY [76] 시험 지시문과 같고, 이름표의 글자는 지적하지 않는다. git·API·다른 파일 고치기는 하지 마"
+     3. 사용량은 각 터미널에서 `/usage`. 한 파일이 끝날 때마다 늘어난 %를 보고, 주간 한도가 모자라 보이면 멈춘다
+     4. 다 끝나면 터미널 1에 "meaning_review_sonnet_*.md 지적을 확인해 반영해"라고 알린다(자동 알림 없음)
+   - 두 터미널이 같은 폴더를 쓰므로 Sonnet 쪽은 결과 파일 쓰기 외에 아무것도 하지 않게 한다
    - 번역은 `translation_check.reviewed(Path("data/translations/ko_none.jsonl"))`로 읽는다(모델 원본 위에 고친 줄을 덮음). 원문은 `translate._in_scope(...)`의 `Piece.chunk.text`. 원문과 번역은 줄 나눔이 같아 줄 번호로 맞댈 수 있다
    - 고칠 것은 `data/translations/apply_fixes_ko_none.py`의 `FIXES`에 더하고 그 스크립트를 다시 돌린다(바꿀 글자가 없으면 멈춤). 그다음 `.venv\Scripts\python -m blender_tutor.translation_check data\translations\ko_none.jsonl`로 다시 검사
    - 판단 기준: 원문과 화면이 **같은 것을 가리킬 때** 어색하거나 오타가 있어도 화면 글자를 따른다([66] 146 Unlink, [75]). LMB → 마우스 왼쪽 버튼처럼 풀어 쓴 것은 둔다([71])
@@ -24,11 +30,11 @@
 
 ## 지금 상태
 
-- 테스트 **490개 통과**(main은 435개). 마지막 커밋 `d837541`
+- 테스트 **490개 통과**(main은 435개). 브랜치 원격에 모두 올림
 - 티켓 31 1단계(메뉴 이름 검수) 끝([66]·[67])
 - 2단계 번역 끝([68]-[71]): `blender_tutor/translate.py`. gpt-6-luna, 생각 수준 none, 5청크씩, 이름표 = 사전 표시 이름 + 본문 속 사전 이름(A) + ko.po 번역 하나뿐인 이름(B). 전체 1,379청크 약 $0.18(시험 포함 약 $0.20)
-- 3단계 이름 검수 끝([72]-[75]): `blender_tutor/translation_check.py`. 고침 71건 / 청크 63개, 다시 검사 걸린 곳 90개는 모두 일부러 둔 것([72]에 종류)
-- `data/translations/`(커밋 안 함): `ko_none.jsonl`(모델 원본, 덮어쓰지 않음), `ko_none_fixes.jsonl`(고친 줄·까닭), `apply_fixes_ko_none.py`(고침 목록), `check_ko_none.md`(검사 결과), `trial50_*.jsonl`(50청크 시험 셋)
+- 3단계 이름 검수 끝([72]-[75]), 뜻 검수 100개 시험 끝([76]): `blender_tutor/translation_check.py`. 고침 76건 / 청크 67개, 다시 검사 걸린 곳 90개는 모두 일부러 둔 것([72]에 종류)
+- `data/translations/`(커밋 안 함): `ko_none.jsonl`(모델 원본, 덮어쓰지 않음), `ko_none_fixes.jsonl`(고친 줄·까닭), `apply_fixes_ko_none.py`(고침 목록), `check_ko_none.md`(검사 결과), `make_meaning_sample.py`·`meaning_sample100.md`·`meaning_review_sonnet100.md`(뜻 검수 시험), `trial50_*.jsonl`(50청크 시험 셋). 다른 PC에서 이어 하려면 이 폴더를 드라이브에 올린다
 - 발견: 옵션 이름이 이어 붙은 청크(Absolute Increment Snap Increment 등). 티켓 31을 닫을 때 Comments에
 
 ## 사용자가 정해야 할 것
