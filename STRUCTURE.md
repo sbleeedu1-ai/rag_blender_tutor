@@ -107,6 +107,7 @@
 | 도우미(임시) | `blender_tutor/stand_in.py` | 진짜 모델 전 무료 임시 엔진: `data/`로 엔진 만들기, 낱말 세기 임베딩, 1.5초 쉬고 정해 둔 글을 흘리는 가짜 답변. 엔진 설정을 받음(평가 프로그램이 바꿔 넘김). 티켓 31·33 뒤 `archive/`로 | 26, 29 |
 | 자료 만들기 + 읽기 | `blender_tutor/manual_chunks.py` | 만들기: 설명서 HTML → 소제목 단위 청크(`data/chunks/`, 한 번 돌림, `save_chunks`). 읽기: 청크 파일(`load_chunks`)과 청크 서식 `Chunk`(답 엔진이 씀) | 19 |
 | 자료 만들기 + 읽기 | `blender_tutor/menu_names.py` | 만들기: 설명서의 블렌더 표기 ↔ 화면 한국어 번역 사전(`data/menu_names/`, 한 번 돌림). 읽기: 사전 `MenuNames`(답 엔진이 씀) | 20 |
+| 자료 만들기 | `blender_tutor/beginner_scope.py` | 설명서 쪽을 초보자 범위로 나눔(한 번 돌림, 손으로). `fixed`: 바로 넣는 쪽, `estimate`: 비용 어림, `classify`: 모델에게 물음(유료), `merge`: 분류 파일들 → 최종 범위. 모양은 6절 아래 | 30 |
 | 평가 | `blender_tutor/evaluate.py` | 평가 프로그램(도우미 밖에서 손으로 돌림). `run`: 문항 파일 → 답 엔진에 바로 넣어 답·검색 결과·검색 적중. `times`: 시간 기록 → PC·엔진·설정 묶음마다 중앙값·최대값. 결과는 `results/<날짜>_<이름>/`에 새로(있으면 멈춤). 모양은 6절 아래 | 29 |
 | 만드는 사람 | `blender_tutor/course_check.py` | 연습 과정 파일 검사 | 15, 24 |
 | 만드는 사람 | `courses/*.yaml` | 연습 과정(검 `sword.yaml`, 공통 준비 `_common.yaml`) | 16 |
@@ -240,6 +241,18 @@ Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_
 
 명령과 순서는 `HANDOFF.md` "다른 PC에서 data/ 다시 만들기".
 
+### 초보자 범위 (티켓 30, 한 번 돌림)
+
+```
+청크 + 연습 과정 ──beginner_scope fixed──▶ data/beginner_scope/fixed.jsonl (시작하기·연습 과정이 가리키는 쪽)
+청크 ──beginner_scope classify(유료)──▶ data/beginner_scope/<이름>.jsonl (모델 분류, 받은 쪽은 다시 묻지 않음)
+분류 파일들(앞 파일이 이김) ──beginner_scope merge──▶ data/beginner_scope/scope.jsonl (최종 범위)
+```
+
+- 분류 파일 한 줄 = 쪽 하나: `{"path": "modeling/modifiers/generate/array", "include": true, "reason": "…"}`. 최종 범위는 여기에 가져온 파일 이름 `"source"`가 붙는다
+- `merge`는 설명서 쪽 가운데 분류가 없는 쪽이나 설명서에 없는 쪽이 있으면 멈추고, 결과 파일이 이미 있으면 덮어쓰지 않는다
+- 2026-10-27 결과: `merge fixed.jsonl trial_decided.jsonl all_luna_low.jsonl` → 넣음 218 / 2,085쪽(HISTORY [64])
+
 ### 평가 프로그램 (티켓 29, 측정할 때 손으로 돌림)
 
 ```
@@ -286,6 +299,7 @@ Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_
 | 대화 | `test_conversation.py` | 가짜 엔진 → 엔진이 받은 최근 대화, 실패한 답 빼기, 엔진 버그 문구, 기록에 남기는 설정 모양 |
 | 창 그리기 | `test_helper_window.py`(화면 없이 Qt를 띄움) | Enter → 보낸 질문, 답 조각·근거 카드·오류 문구, X·Esc, 연습 과정 카드(다음/다음 단계, 단계 목록 다섯 줄 스크롤)·물음 줄 |
 | 임시 엔진 | `test_stand_in.py` | 작은 청크 파일 → 엔진이 만들어지고 근거가 붙음 |
+| 초보자 범위 | `test_beginner_scope.py` | 지어낸 청크·연습 과정·가짜 모델 → 쪽 목록, 바로 넣는 쪽, 묶음 분류(이어 받기·다시 묻기·멈춤), 비용 어림, 합치기(앞 파일이 이김, 빠진 쪽·없는 쪽에서 멈춤), 결과 파일 쓰기(없는 폴더에도 씀, 이미 있으면 멈춤) |
 | 평가 프로그램 | `test_evaluate.py` | 문항 파일 → 대화·차례(틀린 칸은 번호와 함께 오류), 가짜 모델 엔진 → 차례별 답·적중 순위·시나리오형의 앞 답 넘기기, 시간 기록 줄 → 묶음별 중앙값·최대값·분모, 명령 줄 → 결과 폴더(덮어쓰지 않음) |
 | 애드온 | `addon/selftest.py`(기본 테스트 밖) | 화면 없는 Blender → 14칸(시점·위치·진행 중인 조작 포함), 바뀐 때만 보내기, F10 봉투의 누른 시각, 지금 상태 저장의 JSON(PNG는 화면이 없어 눈 확인), 도우미 켜기·꺼짐 |
 | 입구·Windows 조작·화면·F10·한글 입력·Blender 둘 오가기 | 사용자 눈 확인(`helper.py`, `winapi.py`) | |
