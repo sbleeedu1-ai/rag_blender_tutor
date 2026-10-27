@@ -7,7 +7,10 @@
 티켓 순서(HISTORY [62]): 30(끝남) → **31(진행 중)** → 34 → 33 → 32 → 35 → 36·37. 38은 needs-triage.
 
 1. **티켓 31 3단계: 번역 문장 뜻 검수(표본, 무료)**. 이름 검수는 끝났다(HISTORY [72]-[75]). 이름이 아닌 문장의 뜻이 틀린 곳은 코드로 못 잡아서 Claude가 읽는다
-   - **방법은 미정**: 1,379개를 Opus로 전부 읽기(약 60만 토큰)는 구독 한도(2026-10-27 밤 5시간 58%·주간 68% 사용, 한도는 세션이 아니라 계정 전체)에 안 맞음. 후보는 A(무작위 50-100개 표본, Opus) / B(아래, 구독 한도 안 씀) / 둘 다. 표본 세션을 한 번 열었다가 사용자 요청으로 멈추고 지움(바뀐 것 없음)
+   - **방법: Sonnet(노력치 medium)으로 나머지 전부**(HISTORY [76], 100개 시험에서 5시간 약 3%·주간 약 1%, 진짜 지적 4/8, 놓침 없음 5/5). 주간 한도는 2026-10-30 0시에 다시 참
+     1. `data/translations/make_meaning_sample.py`를 고쳐 **청크마다 이름표(`translate.glossary(..., body)`)를 함께 적고**, 이미 본 100개(씨앗 2027)를 뺀 1,279개를 100개씩 파일 13개로 나눈다
+     2. Sonnet 세션(Claude 데스크톱이면 새 세션, VS Code 터미널이면 `claude --model sonnet`)이 파일마다 읽고 `meaning_review_sonnet_<n>.md`에 적는다. 지시문은 [76] 시험 때와 같게 하되 "이름표의 글자는 공식 화면 글자라 지적하지 않는다"를 더한다
+     3. Opus가 지적만 읽고 확인해 `apply_fixes_ko_none.py`에 더한다(긴 Opus 대화는 한 번 답할 때 5시간 한도 약 1%를 쓰니 새 세션에서)
    - 번역은 `translation_check.reviewed(Path("data/translations/ko_none.jsonl"))`로 읽는다(모델 원본 위에 고친 줄을 덮음). 원문은 `translate._in_scope(...)`의 `Piece.chunk.text`. 원문과 번역은 줄 나눔이 같아 줄 번호로 맞댈 수 있다
    - 고칠 것은 `data/translations/apply_fixes_ko_none.py`의 `FIXES`에 더하고 그 스크립트를 다시 돌린다(바꿀 글자가 없으면 멈춤). 그다음 `.venv\Scripts\python -m blender_tutor.translation_check data\translations\ko_none.jsonl`로 다시 검사
    - 판단 기준: 원문과 화면이 **같은 것을 가리킬 때** 어색하거나 오타가 있어도 화면 글자를 따른다([66] 146 Unlink, [75]). LMB → 마우스 왼쪽 버튼처럼 풀어 쓴 것은 둔다([71])
