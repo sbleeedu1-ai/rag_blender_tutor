@@ -9,7 +9,17 @@ import pytest
 
 from blender_tutor.manual_chunks import Chunk
 from blender_tutor.menu_names import MenuName, MenuNames, Source, Translation
-from blender_tutor.translate import KOREAN_PER_ENGLISH, TranslateError, estimate, glossary, pieces, sample, translate
+from blender_tutor.translate import (
+    KOREAN_PER_ENGLISH,
+    BodyNames,
+    TranslateError,
+    estimate,
+    glossary,
+    pieces,
+    sample,
+    screen_words,
+    translate,
+)
 
 
 def chunk(body: str, ui_names: tuple[str, ...] = (), options: tuple[str, ...] = (), anchor: str = "a",
@@ -78,6 +88,89 @@ def test_사전에_없는_것은_이름표에_넣지_않는다():  # 상자 칸�
 def test_여러_청크의_이름표는_처음_나온_차례로_한_번씩이다():
     chunks = [chunk("a", ui_names=("Edit Mode",)), chunk("b", ui_names=("Width", "Edit Mode"))]
     assert [english for english, _ in glossary(chunks, NAMES)] == ["Edit Mode", "Width"]
+
+
+TITLE_NAMES = MenuNames(
+    [
+        name("Mesh", ("메시", ("*",))),
+        name("Empty", ("비어 있음", ("*",)), ("엠프티", ("ID",))),
+        name("Smart UV Project", ("스마트 UV 투사", ("Operator",)), ("스마트 UV 프로젝트", ("*",))),
+        name("UV", ("UV", ("*",))),
+        name("Width"),
+        MenuName("Usage", (Translation("사용법", ("*",)),), 1, "x", (Source.TITLE,)),  # 검수에서 떨어진 제목
+        MenuName("Gizmos", (Translation("기즈모", ("*",)),), 1, "x", (Source.TITLE,)),  # 통과한 제목
+    ],
+    choices={"Empty": "ID"},
+    titles=["Gizmos"],
+)
+PO = """
+msgid "Subsurface Radius"
+msgstr "부분체 반지름"
+
+msgctxt "Operator"
+msgid "Slab"
+msgstr "슬래브"
+
+msgid "Material"
+msgstr "머티리얼"
+
+msgctxt "ID"
+msgid "Material"
+msgstr "소재"
+
+msgid "The type of data"
+msgstr "데이터 유형"
+
+msgid "Save file?"
+msgstr "파일을 저장할까요?"
+
+msgid "Usage"
+msgstr "사용법"
+"""
+
+
+def test_화면_글자_표는_사전에서_한국어가_정해진_이름과_ko_po에서_번역이_하나뿐인_이름이다():
+    words = screen_words(TITLE_NAMES, ["Gizmos"], PO)
+    assert words == {
+        "Mesh": "메시", "Empty": "엠프티", "Gizmos": "기즈모",  # 사전: 하나, 고정 짝, 통과 제목
+        "Subsurface Radius": "부분체 반지름", "Slab": "슬래브",  # ko.po: 문맥이 달라도 번역이 하나면
+    }
+    # 빠진 것: 짝 없는 여러 번역(Smart UV Project), 화면도 영어(UV·Width), 떨어진 제목(Usage, ko.po에 있어도),
+    # ko.po에서 번역이 여럿(Material), 관사로 시작하거나 문장 부호가 든 문구
+
+
+BODY = BodyNames({"Mesh": "메시", "Material": "머티리얼", "Radius": "반경", "Subsurface Radius": "부분체 반지름",
+                  "Object data": "오브젝트 데이터", "3D Viewport": "3D 뷰포트"})
+
+
+@pytest.mark.parametrize(
+    ("text", "found"),
+    [
+        ("Subsurface Radius is ignored.", ["Subsurface Radius"]),  # 여러 낱말 이름은 문장 첫머리여도
+        ("You can select the Mesh here.", ["Mesh"]),  # 한 낱말 이름은 문장 중간 대문자일 때
+        ("Mesh is shown. Material is not.", []),  # 문장 첫머리의 한 낱말은 일상 낱말일 수 있어 뺀다
+        ("Choose a mesh and a material.", []),  # 대소문자가 다르면 이름이 아니다
+        ("go to Mesh Material Properties", []),  # 붙은 대문자 낱말이 있으면 사전에 없는 더 긴 이름의 일부
+        ("The Subsurface Radius, then the Mesh.", ["Subsurface Radius", "Mesh"]),  # 관사는 이름의 앞 단이 아니다
+        ("the Object data-block holds it", []),  # 하이픈으로 이어진 낱말의 앞부분은 이름이 아니다
+        ("in the 3D Viewport, the Mesh and the 3D Viewport", ["3D Viewport", "Mesh"]),  # 나온 차례로 한 번씩
+    ],
+)
+def test_본문에서_화면_이름을_찾는다(text, found):
+    assert BODY.find(text) == found
+
+
+def test_이름표에_본문에서_찾은_이름을_뒤에_더하고_이미_있는_이름은_다시_넣지_않는다():
+    chunks = [chunk("Use Add ‣ Mesh in the 3D Viewport, then the Mesh.", ui_names=("Add ‣ Mesh",))]
+    assert glossary(chunks, NAMES, BODY) == [
+        ("Add ‣ Mesh", "추가(Add) ‣ 메시(Mesh)"), ("3D Viewport", "3D 뷰포트(3D Viewport)")
+    ]
+
+
+def test_번역할_때_본문_이름을_이름표에_함께_보낸다(tmp_path):
+    model = FakeModel()
+    translate(pieces([chunk("Open the 3D Viewport.")]), NAMES, model, tmp_path / "ko.jsonl", body=BODY)
+    assert model.asked[0]["glossary"] == {"3D Viewport": "3D 뷰포트(3D Viewport)"}
 
 
 def test_청크_열쇠는_주소와_같은_주소_안의_차례다():

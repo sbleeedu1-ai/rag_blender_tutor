@@ -8,6 +8,7 @@
 import argparse
 import json
 import random
+import re
 import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -15,7 +16,7 @@ from pathlib import Path
 
 from blender_tutor.beginner_scope import CHARS_PER_TOKEN, DATA, Estimate, Model, OpenAIModel, openai_key
 from blender_tutor.manual_chunks import Chunk, load_chunks
-from blender_tutor.menu_names import MenuNames
+from blender_tutor.menu_names import MenuNames, Source, read_po
 from blender_tutor.paths import PROJECT
 
 _PATH_SEP = "‣"  # 설명서 메뉴 경로의 구분 글자(Add ‣ Mesh)
@@ -41,6 +42,70 @@ def pieces(chunks: Iterable[Chunk]) -> list[Piece]:
 
 
 _NOT_NAMES = {"Shortcut"}  # "모드·메뉴·단축키" 상자에서 블렌더 표기가 아닌 칸(단축키 글자)
+ARTICLES = {"The", "A", "An", "This", "These", "That", "Those", "Each", "Its", "Your"}  # 문장 첫머리 관사·지시어
+
+
+def _looks_like_name(english: str) -> bool:
+    """ko.po 문구 가운데 화면 이름 같은 것: 대문자로 시작하는 다섯 낱말 이하, 관사로 시작하지 않고 문장 부호·자리표시가 없음."""
+    words = english.split()
+    return (0 < len(words) <= 5 and english[0].isupper() and words[0] not in ARTICLES
+            and not re.search(r'[%{}.:;!?"\\]', english))
+
+
+def screen_words(names: MenuNames, titles: Iterable[str], po_text: str) -> dict[str, str]:
+    """본문에서 찾을 블렌더 표기 → 한국어 화면 글자(사용자 결정 A+B, 2026-10-27).
+
+    A: 메뉴 이름 사전에서 한국어 글자가 정해진 이름(번역 하나, 고정 짝이 있는 여러 개). 제목에서만 뽑은 이름은 통과한 것만.
+    B: 사전에 없는 이름은 ko.po에서 번역이 하나뿐인 것(문맥이 달라도 글자가 하나면). 여러 개면 검수하지 않았으니 넣지 않는다.
+    화면도 영어로 보이는 이름과 제목 검수에서 떨어진 이름은 어느 쪽에서도 넣지 않는다.
+    """
+    passed = set(titles)
+    words: dict[str, str] = {}
+    rejected = set()
+    for name in names:
+        if name.sources == (Source.TITLE,) and name.english not in passed:
+            rejected.add(name.english)
+            continue
+        korean = names.korean(name.english)
+        if korean and korean != name.english:
+            words[name.english] = korean
+    found: dict[str, set[str]] = {}
+    for _, english, korean in read_po(po_text):
+        found.setdefault(english, set()).add(korean)
+    for english, koreans in found.items():
+        if english in rejected or names.get(english) is not None or not _looks_like_name(english) or len(koreans) != 1:
+            continue
+        korean = next(iter(koreans))
+        if korean != english:
+            words[english] = korean
+    return words
+
+
+class BodyNames:
+    """본문에 글처럼 나오는 화면 이름을 찾는다(설명서가 메뉴 표시·옵션 칸으로 적지 않은 것, 2026-10-27 50청크로 규칙을 정함).
+
+    - 대소문자까지 같고 앞뒤가 글자·숫자·하이픈이 아닐 때만(mesh·data-block의 data는 아님). 긴 이름 먼저
+    - 한 낱말 이름은 문장 중간(앞이 소문자·쉼표·여는 괄호)일 때만. 문장 첫머리의 Use·After 같은 일상 낱말을 거르려고
+    - 바로 앞(관사 빼고)이나 뒤에 대문자 낱말이 붙으면 사전에 없는 더 긴 이름의 일부로 보고 뺀다(Subsurface Radius의 Radius)
+    """
+
+    def __init__(self, words: dict[str, str]):
+        self.words = words
+        ordered = sorted(words, key=len, reverse=True)
+        self._pattern = re.compile(r"(?<![A-Za-z0-9-])(" + "|".join(map(re.escape, ordered)) + r")(?![A-Za-z0-9-])") if words else None
+
+    def find(self, text: str) -> list[str]:
+        """text에 나오는 이름을 나온 차례로 한 번씩."""
+        found: dict[str, None] = {}
+        for match in self._pattern.finditer(text) if self._pattern else ():
+            english, before, after = match[1], text[: match.start()].rstrip(" "), text[match.end() :]
+            if " " not in english and not (before and (before[-1].islower() or before[-1] in ",(")):
+                continue
+            previous = re.search(r"([A-Z][A-Za-z0-9]*)$", before) if text[: match.start()].endswith(" ") else None
+            if (previous and previous[1] not in ARTICLES) or re.match(r" [A-Z]", after):
+                continue
+            found[english] = None
+        return list(found)
 
 
 def _shown(english: str, names: MenuNames, parent: str = "") -> str:
@@ -54,13 +119,15 @@ def _items(chunk: Chunk) -> list[str]:
     return [*chunk.ui_names, *chunk.options, *(value for value in boxed if value)]
 
 
-def glossary(chunks: Iterable[Chunk], names: MenuNames) -> list[tuple[str, str]]:
+def glossary(chunks: Iterable[Chunk], names: MenuNames, body: BodyNames | None = None) -> list[tuple[str, str]]:
     """청크들에 나오는 블렌더 표기(메뉴 경로·버튼 이름·옵션 이름·상자 칸 값)와 번역에 쓸 모양. 처음 나온 차례로 한 번씩.
 
     메뉴 경로는 단마다 바꾸고, 바로 앞 단에 따른 짝을 쓴다(Add ‣ Empty → 추가(Add) ‣ 비어 있음(Empty)).
     한 단이라도 사전에 없으면 넣지 않는다(상자 칸의 All Modes 같은 글 조각은 보통 글로 번역한다).
+    body를 주면 본문에 글처럼 나오는 화면 이름을 뒤에 더한다(이미 표시된 이름이나 경로의 한 단이면 빼고).
     """
     found: dict[str, str] = {}
+    chunks = list(chunks)
     for chunk in chunks:
         for item in _items(chunk):
             parts = [part.strip() for part in item.split(_PATH_SEP)]
@@ -68,6 +135,13 @@ def glossary(chunks: Iterable[Chunk], names: MenuNames) -> list[tuple[str, str]]
                 continue
             shown = [_shown(part, names, parts[i - 1] if i else "") for i, part in enumerate(parts)]
             found[item] = f" {_PATH_SEP} ".join(shown)
+    if body is not None:
+        covered = {part.strip() for item in found for part in item.split(_PATH_SEP)}
+        for chunk in chunks:
+            for english in body.find(chunk.text):
+                if english not in covered:
+                    found[english] = f"{body.words[english]}({english})"
+                    covered.add(english)
     return list(found.items())
 
 
@@ -80,9 +154,9 @@ INSTRUCTIONS = """너는 Blender 5.2 공식 설명서(영어)를 한국어로 �
 JSON 하나로만 답한다: {"chunks": [{"key": "...", "korean": "..."}]}. 받은 청크를 하나도 빼지 말고 받은 차례대로 답한다."""
 
 
-def _question(asked: Sequence[Piece], names: MenuNames) -> list[dict[str, str]]:
+def _question(asked: Sequence[Piece], names: MenuNames, body: BodyNames | None = None) -> list[dict[str, str]]:
     shown = {
-        "glossary": dict(glossary((piece.chunk for piece in asked), names)),
+        "glossary": dict(glossary((piece.chunk for piece in asked), names, body)),
         "chunks": [{"key": piece.key, "text": piece.chunk.text} for piece in asked],
     }
     return [{"role": "system", "content": INSTRUCTIONS}, {"role": "user", "content": json.dumps(shown, ensure_ascii=False)}]
@@ -116,7 +190,9 @@ def load_translations(path: Path) -> dict[str, str]:
     return {row["key"]: row["korean"] for row in rows}
 
 
-def translate(todo: Sequence[Piece], names: MenuNames, model: Model, out: Path, batch: int = BATCH) -> dict[str, str]:
+def translate(
+    todo: Sequence[Piece], names: MenuNames, model: Model, out: Path, batch: int = BATCH, body: BodyNames | None = None
+) -> dict[str, str]:
     """청크를 batch개씩 모델에게 묻고, 묶음 하나를 받을 때마다 out(한 줄에 청크 하나, JSON)에 덧붙인다.
 
     out에 이미 있는 청크는 다시 묻지 않는다(중간에 끊겨 다시 돌려도 돈을 두 번 내지 않게).
@@ -127,10 +203,10 @@ def translate(todo: Sequence[Piece], names: MenuNames, model: Model, out: Path, 
     left = [piece for piece in todo if piece.key not in done]
     for start in range(0, len(left), batch):
         asked = left[start : start + batch]
-        got = _answers(model.ask(_question(asked, names)), asked)
+        got = _answers(model.ask(_question(asked, names, body)), asked)
         missing = [piece for piece in asked if piece.key not in got]
         if missing:  # 빠진 청크·빈 번역·깨진 답은 그 청크만 한 번 다시 묻는다
-            got.update(_answers(model.ask(_question(missing, names)), missing))
+            got.update(_answers(model.ask(_question(missing, names, body)), missing))
         with out.open("a", encoding="utf-8") as file:
             for piece in asked:
                 if piece.key in got:
@@ -152,11 +228,11 @@ def _tokens(text: str) -> int:
     return -(-ascii_chars // CHARS_PER_TOKEN) + len(text) - ascii_chars
 
 
-def estimate(todo: Sequence[Piece], names: MenuNames, batch: int = BATCH) -> Estimate:
+def estimate(todo: Sequence[Piece], names: MenuNames, batch: int = BATCH, body: BodyNames | None = None) -> Estimate:
     """translate가 todo를 처음부터 물을 때 보낼 글을 그대로 지어 센다(다시 묻기·생각 토큰은 뺌)."""
     input_tokens = requests = 0
     for start in range(0, len(todo), batch):
-        input_tokens += sum(_tokens(message["content"]) for message in _question(todo[start : start + batch], names))
+        input_tokens += sum(_tokens(m["content"]) for m in _question(todo[start : start + batch], names, body))
         requests += 1
     output_tokens = sum(_tokens(piece.chunk.text) * KOREAN_PER_ENGLISH + OUTPUT_TOKENS_PER_PIECE for piece in todo)
     return Estimate(requests, input_tokens, output_tokens)
@@ -194,6 +270,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--chunks", type=Path, default=DATA / "chunks" / "manual_chunks.jsonl", help="설명서 청크 파일")
     parser.add_argument("--scope", type=Path, default=DATA / "beginner_scope" / "scope.jsonl", help="초보자 범위 파일")
     parser.add_argument("--names", type=Path, default=DATA / "menu_names" / "menu_names.json", help="메뉴 이름 사전")
+    parser.add_argument("--po", type=Path, default=DATA / "ui_ko_5.2" / "ko.po", help="화면 번역(본문 속 이름을 찾을 때)")
     parser.add_argument("--sample", type=int, help=f"시험용으로 이만큼만(씨앗 {SEED}, {', '.join(MUST)}가 든 청크 포함). 없으면 전부")
     commands = parser.add_subparsers(dest="command", required=True)
     estimate_command = commands.add_parser("estimate", help="모델에게 물을 횟수와 토큰 수를 어림한다(무료)")
@@ -204,21 +281,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_command.add_argument("--effort", help="생각 수준(none·medium 등). 없으면 모델 기본값")
     args = parser.parse_args(argv)
 
-    names = MenuNames.load(
-        args.names, MenuNames.load_choices(PROJECT / "menu_choices.json"), MenuNames.load_titles(PROJECT / "menu_titles.json")
-    )
+    titles = MenuNames.load_titles(PROJECT / "menu_titles.json")
+    names = MenuNames.load(args.names, MenuNames.load_choices(PROJECT / "menu_choices.json"), titles)
+    body = BodyNames(screen_words(names, titles, args.po.read_text(encoding="utf-8")))
     todo = _in_scope(args.chunks, args.scope)
     if args.sample:
         todo = sample(todo, args.sample, SEED, MUST)
     if args.command == "estimate":
-        guess = estimate(todo, names)
+        guess = estimate(todo, names, body=body)
         print(f"청크 {len(todo)}개, 물음 {guess.requests}번, 입력 약 {guess.input_tokens:,} 토큰, 출력 약 {guess.output_tokens:,} 토큰(생각 토큰 뺌)")
         if args.price:
             print(f"약 ${guess.dollars(*args.price):.4f}")
         return 0
     model = OpenAIModel(args.model, openai_key(), args.effort)
     try:
-        got = translate(todo, names, model, args.out)
+        got = translate(todo, names, model, args.out, body=body)
     finally:
         print(f"물음 {model.requests}번, 입력 {model.input_tokens:,} 토큰, 출력 {model.output_tokens:,} 토큰(그중 생각 {model.reasoning_tokens:,})")
     print(f"번역 {len(got)}개 → {args.out}")
