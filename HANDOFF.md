@@ -82,6 +82,8 @@
 2. 드라이브에서 가져와 이 자리에 둔다
    - `data\manual_en_5.2\blender_manual_html.zip` (설명서. 드라이브에는 `data` 바로 아래에 있으니 `manual_en_5.2` 폴더를 만들어 넣는다)
    - `data\ui_ko_5.2\ko.po`, `data\ui_ko_5.2\fr.po` (Blender 화면 번역)
+   - `data\beginner_scope\` 폴더 통째로 (초보자 범위 218쪽 = 번역할 범위. luna 분류(유료)로 만들어 다시 만들 수 없음)
+   - `data\menu_names\` 폴더 통째로 (아래 검수 자료. 받은 뒤 3번의 메뉴 이름 사전 명령이 `menu_names.json`을 다시 써도 됨)
 3. 프로젝트 폴더에서 차례로 실행
    - 설명서 풀기: `.venv\Scripts\python -m zipfile -e data\manual_en_5.2\blender_manual_html.zip data\manual_en_5.2\html`
    - 청크 만들기: `.venv\Scripts\python -m blender_tutor.manual_chunks data\manual_en_5.2\html\blender_manual_v520_en.html data\chunks\manual_chunks.jsonl`
@@ -94,13 +96,13 @@
 
 ## 사용자가 정해야 할 것
 
-- 남은 메뉴 이름 화면 검수(위 1번), 통과 제목을 `menu_titles.json`에 따로 둘지(Claude 권함)
 - 번역 생각 수준(50청크 none/medium 결과를 보고), 번역·임베딩 비용 확인
 - 강사님 중간 확인 때 물어볼 것: GPT에게 연습 과정 정보를 주지 않는 조건이 괜찮은지
 
 ## 추천 스킬
 
-- `/implement .scratch/mvp-roundtrip/issues/31-유료-번역과-임베딩.md`: 1단계 검수 저장 뒤 `/tdd`로 구현, `/code-review`로 검토. 스킬 없이: 위 "다음 할 일" 1-3번 차례대로
+- `/implement .scratch/mvp-roundtrip/issues/31-유료-번역과-임베딩.md`: 2단계 번역부터 `/tdd`로 구현, `/code-review`로 검토. 스킬 없이: 위 "다음 할 일" 1-2번 차례대로
+- 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
 
 ## 참고 문서
 
