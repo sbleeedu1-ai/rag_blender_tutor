@@ -159,6 +159,33 @@ def load_labels(path: Path) -> list[Label]:
     return [Label(**json.loads(line)) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
 
+@dataclass(frozen=True)
+class ScopedLabel:
+    """최종 범위의 쪽 하나: 분류와, 그 분류를 어느 묶음에서 가져왔는지."""
+
+    path: str
+    include: bool
+    reason: str
+    source: str  # 묶음 이름(fixed·decided·luna)
+
+
+def merge(sources: Sequence[tuple[str, Iterable[Label]]], pages: Sequence[Page]) -> list[ScopedLabel]:
+    """(이름, 분류) 묶음들을 합쳐 쪽 차례로 돌려준다. 같은 쪽이 여러 묶음에 있으면 앞 묶음이 이긴다.
+
+    설명서 쪽 가운데 어느 묶음에도 없는 쪽이나, 설명서에 없는 쪽이 있으면 멈춘다(빠뜨리거나 옛 경로를 쓴 것).
+    """
+    chosen: dict[str, ScopedLabel] = {}
+    for name, labels in sources:
+        for label in labels:
+            chosen.setdefault(label.path, ScopedLabel(label.path, label.include, label.reason, name))
+    known = {page.path for page in pages}
+    missing = [page.path for page in pages if page.path not in chosen]
+    unknown = [path for path in chosen if path not in known]
+    if missing or unknown:
+        raise ValueError(f"분류가 없는 쪽: {', '.join(missing) or '없음'} / 설명서에 없는 쪽: {', '.join(unknown) or '없음'}")
+    return [chosen[page.path] for page in pages]
+
+
 def classify(pages: Sequence[Page], model: Model, out: Path, batch: int = BATCH) -> list[Label]:
     """쪽을 batch개씩 모델에게 묻고, 묶음 하나를 받을 때마다 out(한 줄에 쪽 하나, JSON)에 덧붙인다.
 
@@ -255,9 +282,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     classify_command.add_argument("--out", type=Path, required=True, help="분류를 덧붙일 파일(이미 있는 쪽은 다시 묻지 않음)")
     classify_command.add_argument("--model", required=True, help="OpenAI 모델 이름")
     classify_command.add_argument("--effort", help="생각 수준(none·low 등). 없으면 모델 기본값")
+    merge_command = commands.add_parser("merge", help="분류 파일들을 합쳐 최종 범위 파일을 쓴다(무료)")
+    merge_command.add_argument("labels", type=Path, nargs="+", help="분류 파일들. 같은 쪽은 앞 파일이 이긴다")
+    merge_command.add_argument("--out", type=Path, default=OUT / "scope.jsonl")
     args = parser.parse_args(argv)
 
     pages = pages_of(load_chunks(args.chunks))
+    if args.command == "merge":
+        if args.out.exists():
+            raise SystemExit(f"{args.out}가 이미 있습니다. 덮어쓰지 않습니다.")
+        scope = merge([(path.stem, load_labels(path)) for path in args.labels], pages)
+        args.out.write_text("".join(json.dumps(asdict(label), ensure_ascii=False) + "\n" for label in scope), encoding="utf-8")
+        for path in args.labels:
+            used = [label for label in scope if label.source == path.stem]
+            print(f"{path.stem}: {len(used)}쪽 가져옴, 그중 넣음 {sum(label.include for label in used)}")
+        print(f"넣음 {sum(label.include for label in scope)}쪽 / 전체 {len(scope)}쪽 → {args.out}")
+        return 0
     if args.command == "fixed":
         if args.out.exists():
             raise SystemExit(f"{args.out}가 이미 있습니다. 덮어쓰지 않습니다.")

@@ -16,6 +16,7 @@ from blender_tutor.beginner_scope import (
     classify,
     estimate,
     fixed_labels,
+    merge,
     pages_of,
 )
 from blender_tutor.manual_chunks import Chunk
@@ -148,3 +149,25 @@ def test_비용_추정은_실제로_보낼_물음_수와_글_양을_센다():
 
 def test_금액은_백만_토큰당_값으로_셈한다():
     assert Estimate(requests=2, input_tokens=1_000_000, output_tokens=500_000).dollars(0.2, 1.0) == pytest.approx(0.7)
+
+
+def test_합치면_앞_묶음이_이기고_어디서_정했는지를_남긴다():
+    pages = [page(p) for p in PATHS]
+    fixed = [Label("modeling/array", True, "연습 과정")]
+    decided = [Label("render/eevee", False, "사용자가 뺌")]
+    luna = [Label(p, True, "luna 이유") for p in PATHS]
+    scope = merge([("fixed", fixed), ("decided", decided), ("luna", luna)], pages)
+    assert [(s.path, s.include, s.reason, s.source) for s in scope] == [
+        ("modeling/array", True, "연습 과정", "fixed"),
+        ("render/eevee", False, "사용자가 뺌", "decided"),
+        ("physics/fluid", True, "luna 이유", "luna"),
+        ("modeling/uv", True, "luna 이유", "luna"),
+    ]
+
+
+def test_분류가_없는_쪽이나_설명서에_없는_쪽이_있으면_멈춘다():
+    pages = [page(p) for p in PATHS]
+    with pytest.raises(ValueError, match="physics/fluid"):
+        merge([("luna", [Label(p, True, "이유") for p in PATHS if p != "physics/fluid"])], pages)
+    with pytest.raises(ValueError, match="modeling/gone"):
+        merge([("luna", [Label(p, True, "이유") for p in (*PATHS, "modeling/gone")])], pages)
