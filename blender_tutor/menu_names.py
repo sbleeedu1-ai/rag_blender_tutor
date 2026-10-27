@@ -201,7 +201,7 @@ class MenuNames:
         return cls(names, choices, titles)
 
 
-def _question_index(names: Iterable[MenuName], passed: set[str] = set()) -> dict[str, tuple[str, ...]]:
+def _question_index(names: Iterable[MenuName], passed: set[str]) -> dict[str, tuple[str, ...]]:
     """질문 찾기용 표: 한국어(띄어쓰기 뺀 것, '기'를 뗀 꼴 포함) → 영어 이름들.
 
     제목에서만 뽑은 이름은 통과 목록(passed, 영어 열쇠)에 있는 것만 넣는다.

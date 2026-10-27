@@ -250,7 +250,7 @@ def test_질문_속_한국어_메뉴_이름에_영어를_덧붙인다(question, 
     assert embedder.calls == [[f"{question} {english}".strip()]]
 
 
-def test_제목에서만_뽑은_이름은_아직_쓰지_않는다():
+def test_통과하지_않은_제목은_질문_찾기에_쓰지_않는다():
     # 제목에서만 뽑은 이름(1,055개)에는 흔한 낱말(에서 → At)이 섞인다. 검수를 통과한 것만 쓴다(티켓 31, menu_titles.json)
     embedder = FakeEmbedder()
     list(AnswerEngine(CHUNKS, VECTORS, embedder, FakeModel(), menu_names=MENU_NAMES).answer("여기에서", STATE, []))

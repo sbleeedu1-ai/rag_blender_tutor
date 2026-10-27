@@ -1,40 +1,36 @@
 # 인수인계
 
-마지막 갱신: 2026-10-27 점심(티켓 31 진행 중) · Claude · DESKTOP-J9LV5HK(강의실 PC) · 브랜치 `feat/31-translate-embed`(PR 아직 없음). PR #27은 main에 병합됨
+마지막 갱신: 2026-10-27 저녁(티켓 31 1단계 끝) · Claude · DESKTOP-J9LV5HK(강의실 PC) · 브랜치 `feat/31-translate-embed`(PR 아직 없음, 원격에 올림). PR #27은 main에 병합됨
 
 ## 다음 할 일
 
 순서(사용자 결정, HISTORY [62]): 30(끝남) → **31(진행 중)** → 34 → 33 → 32 → 35 → 36·37. 38은 needs-triage.
 
-1. **메뉴 이름 화면 검수를 이어 간다**(티켓 31 1단계, HISTORY [65]). 같은 PC에서만 된다(`data/`에 있음).
-   - 볼 파일: `data/menu_names/remaining_route.md`(197줄). **1번 묶음(1-11번)은 끝남**, **2번 묶음(12번)부터**. 10번 묶음(187-197)은 철자 확인
-   - 사용자가 화면 글자를 알려 주면 `data/menu_names/remaining_review.json`에 번호 → {english, screen, result}로 적는다. 갈래가 "제목"이면 Haiku 판단과 같을 때 사용자는 말하지 않음(= Haiku대로)
-   - 두 갈래의 뜻: **여러 번역**은 그 자리에 어느 한국어가 보이나(답에 보일 글자), **제목**은 화면에 그 글자가 있나 + 질문 속 그 말을 메뉴 이름으로 알아볼까(통과/탈락)
-   - 사용자는 Blender 초보라 찾아가는 길이 자세해야 한다. 화면 글자로 말한다(편집 모드 → 에디트 모드, 면 → 페이스, 제어점 → 컨트롤 포인트). 3D 화면 오른쪽 위 단추 줄은 왼쪽부터 눈 · 기즈모 · 오버레이(겹친 원) · 네모 · 셰이딩(공 넷)
-2. **검수가 끝나면 저장**: 아래 네 곳을 합쳐 `menu_choices.json`(이름·경로 열쇠 → 문맥), `menu_aliases.json`(철자 표), 새 `menu_titles.json`(통과한 제목 이름 목록, 사용자 권함에 동의 전 — 만들 때 확인)을 쓰고, `MenuNames`가 통과 제목을 질문 찾기에 넣게 한다(지금 `english_in`은 제목에서만 뽑은 이름을 뺌)
-   - `data/menu_names/claude_refilter.json`: Claude가 바꾼 문맥(`changed`), 경로 열쇠(`paths`), 사용자가 화면으로 확인한 것(`confirmed_by_user`), 메모(`notes`)
-   - `data/menu_names/haiku/*_out.json`: Haiku 판단(choices 73, titles 143). `scope_review_route.md`(첫 49줄 결과), `remaining_review.json`(남은 것 결과)
-   - 고른 문맥은 `data/menu_names/scope_review.json`의 후보 문맥 안에 있어야 한다(아니면 `MenuNames`가 바로 멈춤)
-3. 1단계 커밋을 정리하고 `/code-review` → 검토 결과는 한 항목씩 사용자 판단(AGENTS.md). 그다음 2단계 번역(유료, luna, 50청크로 생각 수준 none/medium 견줌 → 비용 보이고 확인) → 3단계 번역 검수(코드 + 사용자 50개) → 4단계 임베딩(유료, large 한 벡터/두 벡터 + bge-m3 한 번 비교, 개발용 한국어 질문 20개)
-4. `data\beginner_scope\`를 드라이브에 올린다(사용자). 티켓 34는 사용자가 집에서(HISTORY [62], 34 Comments).
+1. **2단계 번역**(티켓 31, 유료): luna, 50청크로 생각 수준 none/medium을 견줌 → **비용을 보이고 확인받은 뒤** 실행. 번역은 따로 둔 원본에서 청크 안으로 합침
+   - 메뉴 이름은 사전의 고정 짝 글자를 따른다. **짝이 없는 여러 번역 이름(Smart UV Project)은 영어 그대로 두는지 시험을 넣는다**(검토 P1, HISTORY [67])
+2. 3단계 번역 검수(코드 + 사용자 50개) → 4단계 임베딩(유료, large 한 벡터/두 벡터 + bge-m3 한 번 비교, 개발용 한국어 질문 20개)
+3. 사용자: `data\beginner_scope\`와 `data\menu_names\`를 드라이브에 올린다(검수 자료는 다시 만들 수 없음, 검토 S5). 티켓 34는 사용자가 집에서(HISTORY [62], 34 Comments)
 
 - **검토 결과는 하나도 빼지 말고 한 항목씩** 보여 주고 사용자 판단을 받는다(`AGENTS.md` "지킬 것").
 
 ## 지금 상태 (티켓 31)
 
-- 테스트: `.venv\Scripts\python -m pytest` **450개 통과**(main은 435개). 브랜치 커밋은 이번 인계 커밋 하나(코드·기록 함께)
-- 새로 만든 것: `blender_tutor/menu_review.py`(검수 초안, `python -m blender_tutor.menu_review data`), `blender_tutor/blender_ui_labels.py`(Blender 안에서 화면 글자·문맥 뽑기), `menu_aliases.json`(지금 `Icosphere → Ico Sphere` 하나). 고친 것: `menu_names.py`(경로 열쇠, 철자 표), `answer_engine.py`(단마다 앞 단을 넘김). 모양은 `STRUCTURE.md`
-- `data/menu_names/menu_names.json`은 철자 표로 다시 만듦(이전 것 `menu_names_v1.json`). `scope_review.json`·`ui_labels.json`은 v4(이전 v1-v3 남김)
-- 결정 기록: HISTORY [65]. 모델 조사: `.scratch/mvp-roundtrip/research/31-번역-모델-조사.md`
-- 쉬운 말 풀이는 잠시 뺌(사용자). 번역은 따로 둔 원본에서 청크 안으로 합침
+- 테스트: `.venv\Scripts\python -m pytest` **454개 통과**(main은 435개)
+- **1단계(메뉴 이름 검수) 끝**: 화면 검수 197줄 모두 판단(HISTORY [66]), 코드 검토 9개 판단(HISTORY [67])
+  - 저장: `menu_choices.json`(짝 112 + 경로 열쇠 6), `menu_titles.json`(통과 제목 80), `menu_aliases.json`(철자 3개). `MenuNames(이름들, 고정 짝, 통과 제목)`가 통과 제목만 질문 찾기에 씀. 모양은 `STRUCTURE.md`, 용어는 `CONTEXT.md`(고정 짝·철자 표·통과 제목)
+  - 합치기는 한 번 돌린 `data/menu_names/merge_menu_review.py`(커밋 안 함). 검수 기록 `data/menu_names/remaining_review.json`
+  - 사전 `data/menu_names/menu_names.json`은 철자 표로 다시 만듦(이전 것 `menu_names_v2.json`)
+- **개발 평가 숫자가 달라질 수 있다**: 평가도 같은 엔진을 써서 이제 통과 제목이 검색어에 붙는다. 지난 평가와 견줄 때 감안
+- 결정 기록: HISTORY [65]-[67]. 모델 조사: `.scratch/mvp-roundtrip/research/31-번역-모델-조사.md`
+- 쉬운 말 풀이는 잠시 뺌(사용자)
 - 이전 티켓들의 상태(애드온·도우미 창·연습 과정·평가·답 엔진)는 `STRUCTURE.md`와 HISTORY [44]-[64]
 
 ## 모르면 실수할 것 (이번에 새로)
 
 - **Blender에서 뽑은 화면 글자는 빈틈이 있다.** C 코드가 그리는 메뉴·패널 글자(예: 미러 모디파이어의 Bisect "분할")는 안 잡힌다. 그래서 "자동"도 틀릴 수 있고, 사람이 화면으로 보는 검수가 필요했다
-- **조작 단추에 붙인 글자(`layout.operator(..., text="Overlap")`)는 조작 문맥(보통 Operator)으로 번역된다.** 이 규칙을 넣기 전 판단(Haiku 입력)은 이 점이 틀린 자료로 했다
-- **하위 에이전트는 띄울 때마다 기본 토큰이 크다**(조사 하나 약 19만, Haiku 판단 셋 합쳐 약 30만). 번역처럼 큰 일은 API 스크립트로(조사 결론)
-- **사용자에게 Blender 위치를 말할 때 일상 말이 아니라 화면 글자로.** 이번에 "면", "제어점", "화살표 단추"로 말했다가 헷갈리게 했다
+- **같은 메뉴 안에서도 공식 번역이 갈린다**(154 Single: 싱글 1줄·단일 3줄, 55 Extend: 이름 연장·설명 확장). 이름 줄 글자를 따른다
+- **하위 에이전트는 띄울 때마다 기본 토큰이 크다**(조사 하나 약 19만, Haiku 판단 셋 합쳐 약 30만, 이번 코드 검토 둘 약 15만). 번역처럼 큰 일은 API 스크립트로(조사 결론)
+- **사용자에게 Blender 위치를 말할 때 화면 글자로, 길이 확실하지 않으면 설명서를 먼저 찾아 근거와 함께.** 짐작으로 길을 냈다가 두 번 헛걸음시켰다(47 Canvas, 154 Single). Claude가 스크린숏의 작은 한글을 잘못 읽은 일도 있다(셰인함 → 세인함)
 
 ## 모르면 실수할 것 (전부터)
 
@@ -94,6 +90,7 @@
 
 - 프로젝트 폴더 경로가 길면(예: 바탕화면 깊은 곳) 설명서 풀기가 Windows 경로 길이 제한(260자)에 걸려 멈춘다. `C:\WORK\rag_blender_tutor`처럼 짧은 곳에 둔다.
 - `data\강사님의 기준.txt`는 다시 만들 수 없으니 드라이브에도 따로 둔다.
+- 메뉴 이름 검수 자료(`data\menu_names\`의 `remaining_review.json`·`claude_refilter.json`·`haiku\`·`scope_review.json`·`merge_menu_review.py`)도 사람·모델이 판단한 것이라 다시 만들 수 없다. 드라이브에서 가져온다. 결과(`menu_choices.json`·`menu_titles.json`)는 저장소에 있어 없어도 프로그램은 돈다(HISTORY [67] S5).
 
 ## 사용자가 정해야 할 것
 
