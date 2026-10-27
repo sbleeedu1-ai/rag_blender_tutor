@@ -9,7 +9,7 @@
 1. **2단계 번역**(티켓 31, 유료): luna, 50청크로 생각 수준 none/medium을 견줌 → **비용을 보이고 확인받은 뒤** 실행. 번역은 따로 둔 원본에서 청크 안으로 합침
    - 메뉴 이름은 사전의 고정 짝 글자를 따른다. **짝이 없는 여러 번역 이름(Smart UV Project)은 영어 그대로 두는지 시험을 넣는다**(검토 P1, HISTORY [67])
 2. 3단계 번역 검수(코드 + 사용자 50개) → 4단계 임베딩(유료, large 한 벡터/두 벡터 + bge-m3 한 번 비교, 개발용 한국어 질문 20개)
-3. 사용자: `data\beginner_scope\`와 `data\menu_names\`를 드라이브에 올린다(검수 자료는 다시 만들 수 없음, 검토 S5). 티켓 34는 사용자가 집에서(HISTORY [62], 34 Comments)
+3. 티켓 34는 사용자가 집에서(HISTORY [62], 34 Comments). `data\beginner_scope\`·`data\menu_names\`는 2026-10-27 드라이브에 올림(`data\snapshots\`는 시험용이라 뺌)
 
 - **검토 결과는 하나도 빼지 말고 한 항목씩** 보여 주고 사용자 판단을 받는다(`AGENTS.md` "지킬 것").
 
@@ -80,7 +80,7 @@
 
 1. `git pull` 뒤 (처음이면) `python -m venv .venv`, `.venv\Scripts\python -m pip install -e ".[dev]"`
 2. 드라이브에서 가져와 이 자리에 둔다
-   - `data\manual_en_5.2\blender_manual_html.zip` (설명서)
+   - `data\manual_en_5.2\blender_manual_html.zip` (설명서. 드라이브에는 `data` 바로 아래에 있으니 `manual_en_5.2` 폴더를 만들어 넣는다)
    - `data\ui_ko_5.2\ko.po`, `data\ui_ko_5.2\fr.po` (Blender 화면 번역)
 3. 프로젝트 폴더에서 차례로 실행
    - 설명서 풀기: `.venv\Scripts\python -m zipfile -e data\manual_en_5.2\blender_manual_html.zip data\manual_en_5.2\html`
