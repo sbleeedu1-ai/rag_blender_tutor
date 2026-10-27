@@ -1,14 +1,15 @@
 # 인수인계
 
-마지막 갱신: 2026-10-26(티켓 30 중간) · Claude · DESKTOP-J9LV5HK(강의실 PC) · **PR 없음, 브랜치 `feat/30-beginner-scope`는 이 PC에만 있고 푸시 안 함**(사용자 지시 "PR 하지마 기록 커밋만")
+마지막 갱신: 2026-10-27(티켓 30 닫음) · Claude · DESKTOP-J9LV5HK(강의실 PC) · **PR #27 병합 전에 씀**(브랜치 `feat/30-beginner-scope`). 이어받을 때 PR #27이 main에 병합됐는지 git으로 먼저 본다
 
 ## 다음 할 일
 
-순서(사용자 결정, HISTORY [62]): **30 → 31 → 34 → 33 → 32 → 35 → 36·37**. 38(메뉴 이름 비슷한 말 표)은 needs-triage, 30 뒤.
+순서(사용자 결정, HISTORY [62]): 30(끝남) → **31 → 34 → 33 → 32 → 35 → 36·37**. 38(메뉴 이름 비슷한 말 표)은 needs-triage, 30 뒤.
 
-1. **티켓 34는 사용자가 집에서**: 초보자 영상을 따라 하다 막힌 곳을 Ctrl+F10 + 메모로 모은다(34 Comments). Ctrl+F10은 `data\snapshots\`(JSON + PNG)에 저장되니 메모에 그 파일 이름을 적고, 메모는 `data\holdout_raw\`에 두어 AI에 보여 주지 않는다. 드라이브에는 `holdout_raw`·`snapshots`를 함께 올린다(`.env`는 올리지 않음). 집 PC 준비: main `git pull` → `pip install -e ".[dev]"` → `install_addon` + 애드온 켜기 → new-setup `install.cmd -SkipMatt`. 34에는 이 브랜치도 `data/chunks`도 필요 없다(자료가 없으면 도우미가 안내만 함).
-2. **티켓 30 이어서(강의실 PC에서, 브랜치 `feat/30-beginner-scope`)**: 전체 분류가 1,625/2,053쪽에서 멈춤(HISTORY [63]). 같은 명령을 다시 돌리면 받은 쪽은 건너뛴다(남은 약 430쪽, 약 $0.015, 확인받고): `.venv\Scripts\python -m blender_tutor.beginner_scope classify --out data/beginner_scope/all_luna_low.jsonl --model gpt-6-luna --effort low`. 그다음 바로 넣는 32 + 50쪽 결정(`trial_decided.jsonl`) + luna 결과를 합친 최종 범위 파일 → `/code-review`(검토 결과는 한 항목씩 사용자 판단) → 푸시·PR → 닫을 때 메뉴 이름 검수 자리를 묻는다(30 Comments). 결과 폴더 `data\beginner_scope\`는 다 돈 뒤 드라이브에 올린다.
-   - 이 브랜치는 푸시하지 않아 다른 PC에는 없다. 다른 PC에서 이으려면 강의실 PC에서 먼저 푸시해야 한다.
+1. **PR #27 main 병합**(사용자 확인 뒤). 병합하면 브랜치를 로컬·원격 모두 지운다.
+2. **`data\beginner_scope\`를 드라이브에 올린다**(사용자). 최종 범위 `scope.jsonl`은 31이 읽는다. 다시 만들려면 돈이 드는 분류 결과(`all_luna_low.jsonl`, `trial_*`)가 들어 있다.
+3. **티켓 34는 사용자가 집에서**: 초보자 영상을 따라 하다 막힌 곳을 Ctrl+F10 + 메모로 모은다(34 Comments). Ctrl+F10은 `data\snapshots\`(JSON + PNG)에 저장되니 메모에 그 파일 이름을 적고, 메모는 `data\holdout_raw\`에 두어 AI에 보여 주지 않는다. 드라이브에는 `holdout_raw`·`snapshots`를 함께 올린다(`.env`는 올리지 않음). 집 PC 준비: main `git pull` → `pip install -e ".[dev]"` → `install_addon` + 애드온 켜기 → new-setup `install.cmd -SkipMatt`. 34에는 `data/chunks`가 필요 없다(자료가 없으면 도우미가 안내만 함).
+4. **티켓 31(유료)**: 메뉴 이름 검수가 들어감(HISTORY [64], 사용자 결정). 차례는 메뉴 이름 검수 → AI 초벌 번역 → AI·사람 검수 → 임베딩·저장 방식(31 Comments). 범위는 `data/beginner_scope/scope.jsonl`에서 `include`가 참인 218쪽. 다른 PC에서 하려면 드라이브의 `beginner_scope`를 가져온다.
    - `data/.env`에 OpenAI 키가 있다(강의실 PC). 프로그램은 환경 변수 → `data/.env` 순서로 읽는다.
 
 - **검토 결과는 하나도 빼지 말고 한 항목씩** 보여 주고 사용자 판단을 받은 뒤 다음으로. 자세한 규칙은 `AGENTS.md` "지킬 것"(HISTORY [52]·[56]·[59]).
@@ -49,7 +50,7 @@
     - `[[[`처럼 대괄호가 겹칠 때의 처리는 지어낸 경계 사례라 지금대로 두고, 실제 모델 결과(티켓 33)를 보고 다시 본다
   - 아직 가짜 모델만 끼운다. 실제 OpenAI 연결은 유료 티켓 31(임베딩)·33(답변)에서.
   - 넘긴 것: 작업 상태 모양(25), 창의 오류 받기·엔진에 단계 넘기기(26·27, 끝남), 번역을 BM25에도 넣을지·연습 과정 벡터(31), 검 파일 용어를 화면 글자로(32), 제목에서만 뽑은 이름 검수 뒤 더하기(30). 각 티켓 Comments.
-- 테스트: `.venv\Scripts\python -m pytest` 432개 통과(티켓 30 브랜치, main은 423개)(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
+- 테스트: `.venv\Scripts\python -m pytest` 435개 통과(티켓 30 브랜치, main은 423개)(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
 - 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
 
 ## 다른 PC에서 data/ 다시 만들기
@@ -113,7 +114,7 @@
 
 ## 사용자가 정해야 할 것
 
-- 메뉴 이름 검수(여러 개 291, 제목에서만 1,055): 초보자 범위 분류(티켓 30) 뒤 범위 안 것만. 고른 짝은 `menu_choices.json`에 영어 이름 → 문맥으로 적는다(티켓 23).
+- 메뉴 이름 검수(여러 개 291, 제목에서만 1,055): 티켓 31에서 초보자 범위 안 것만(HISTORY [64]). 고른 짝은 `menu_choices.json`에 영어 이름 → 문맥으로 적는다(티켓 23).
 - 강사님 중간 확인 때 물어볼 것: GPT에게 연습 과정 정보를 주지 않는 조건이 괜찮은지.
 
 ## 추천 스킬
