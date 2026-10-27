@@ -7,7 +7,7 @@
 티켓 순서(HISTORY [62]): 30(끝남) → **31(진행 중)** → 34 → 33 → 32 → 35 → 36·37. 38은 needs-triage.
 
 1. **티켓 31 3단계: 번역 문장 뜻 검수(표본, 무료)**. 이름 검수는 끝났다(HISTORY [72]-[75]). 이름이 아닌 문장의 뜻이 틀린 곳은 코드로 못 잡아서 Claude가 읽는다
-   - 1,379개 전부 읽기(약 60만 토큰)는 세션 한도에 안 맞아 **무작위 50-100개 표본**으로 틀린 종류·비율을 어림한다(사용자와 정한 A안)
+   - **방법은 미정**: 1,379개를 Opus로 전부 읽기(약 60만 토큰)는 구독 한도(2026-10-27 밤 5시간 58%·주간 68% 사용, 한도는 세션이 아니라 계정 전체)에 안 맞음. 후보는 A(무작위 50-100개 표본, Opus) / B(아래, 구독 한도 안 씀) / 둘 다. 표본 세션을 한 번 열었다가 사용자 요청으로 멈추고 지움(바뀐 것 없음)
    - 번역은 `translation_check.reviewed(Path("data/translations/ko_none.jsonl"))`로 읽는다(모델 원본 위에 고친 줄을 덮음). 원문은 `translate._in_scope(...)`의 `Piece.chunk.text`. 원문과 번역은 줄 나눔이 같아 줄 번호로 맞댈 수 있다
    - 고칠 것은 `data/translations/apply_fixes_ko_none.py`의 `FIXES`에 더하고 그 스크립트를 다시 돌린다(바꿀 글자가 없으면 멈춤). 그다음 `.venv\Scripts\python -m blender_tutor.translation_check data\translations\ko_none.jsonl`로 다시 검사
    - 판단 기준: 원문과 화면이 **같은 것을 가리킬 때** 어색하거나 오타가 있어도 화면 글자를 따른다([66] 146 Unlink, [75]). LMB → 마우스 왼쪽 버튼처럼 풀어 쓴 것은 둔다([71])
