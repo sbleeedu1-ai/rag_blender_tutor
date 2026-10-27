@@ -1,31 +1,36 @@
 # 인수인계
 
-마지막 갱신: 2026-10-27 저녁 · Claude · DESKTOP-J9LV5HK(강의실 PC) · 브랜치 `feat/31-translate-embed`(원격에 올림, PR 아직 없음). 다음은 집 PC에서 이어 감
+마지막 갱신: 2026-10-27 밤 · Claude · B783D5080(집 PC) · 브랜치 `feat/31-translate-embed`(원격에 올림, PR 아직 없음). 앞 세션이 세션 한도 때문에 문장 뜻 검수를 새 세션으로 넘김
 
 ## 다음 할 일
 
 티켓 순서(HISTORY [62]): 30(끝남) → **31(진행 중)** → 34 → 33 → 32 → 35 → 36·37. 38은 needs-triage.
 
-1. **티켓 31 2단계 번역**(유료, luna): 먼저 50청크로 생각 수준 none/medium을 견주는 **비용을 계산해 보이고 확인받은 뒤** 실행. 번역은 따로 둔 원본에서 청크 안으로 합친다
-   - 메뉴 이름은 사전의 고정 짝 글자를 따른다. **짝이 없는 여러 번역 이름(Smart UV Project)은 영어 그대로인지 시험을 넣는다**(HISTORY [67] P1)
-   - 번역 스크립트는 아직 없다. `/tdd`로 시험부터
-2. 3단계 번역 검수(코드 + 사용자 50개) → 4단계 임베딩(유료, large 한 벡터/두 벡터 + bge-m3 한 번 비교, 개발용 한국어 질문 20개)
-3. 티켓 34는 사용자가 집에서(HISTORY [62], 34 Comments)
+1. **티켓 31 3단계: 번역 문장 뜻 검수(표본, 무료)**. 이름 검수는 끝났다(HISTORY [72]-[75]). 이름이 아닌 문장의 뜻이 틀린 곳은 코드로 못 잡아서 Claude가 읽는다
+   - 1,379개 전부 읽기(약 60만 토큰)는 세션 한도에 안 맞아 **무작위 50-100개 표본**으로 틀린 종류·비율을 어림한다(사용자와 정한 A안)
+   - 번역은 `translation_check.reviewed(Path("data/translations/ko_none.jsonl"))`로 읽는다(모델 원본 위에 고친 줄을 덮음). 원문은 `translate._in_scope(...)`의 `Piece.chunk.text`. 원문과 번역은 줄 나눔이 같아 줄 번호로 맞댈 수 있다
+   - 고칠 것은 `data/translations/apply_fixes_ko_none.py`의 `FIXES`에 더하고 그 스크립트를 다시 돌린다(바꿀 글자가 없으면 멈춤). 그다음 `.venv\Scripts\python -m blender_tutor.translation_check data\translations\ko_none.jsonl`로 다시 검사
+   - 판단 기준: 원문과 화면이 **같은 것을 가리킬 때** 어색하거나 오타가 있어도 화면 글자를 따른다([66] 146 Unlink, [75]). LMB → 마우스 왼쪽 버튼처럼 풀어 쓴 것은 둔다([71])
+   - 틀린 곳이 많으면 B안(번역 모델에 원문 + 번역을 주고 뜻이 다른 문장만 표시하게 함, 유료 약 $0.1-0.2 어림)을 **비용을 다시 계산해 보이고 확인받은 뒤**
+2. PR 전에 `STRUCTURE.md`에 `blender_tutor/translate.py`·`translation_check.py`와 `data/translations/` 파일 모양을 넣는다
+3. 마지막 사용자 검수 목록: 무작위 50개 + ko.po에서 온 소문자 섞인 이름(설명 글 같은 것)이 든 청크([71])
+4. 4단계 임베딩(유료, large 한 벡터/두 벡터 + bge-m3 한 번 비교, 개발용 한국어 질문 20개). 번역을 청크 파일 안으로 합치는 것도 이때(C3: 저장 형식을 읽는 규칙을 한곳에)
+5. 티켓 34는 사용자가 집에서(HISTORY [62], 34 Comments)
 
 - 검토 결과는 **하나도 빼지 말고 한 항목씩** 사용자 판단을 받는다(`AGENTS.md` "지킬 것").
 
 ## 지금 상태
 
-- 테스트 **454개 통과**(main은 435개). 브랜치 커밋 5개, 마지막 `7649e11`
-- 티켓 31 **1단계(메뉴 이름 검수) 끝**: 화면 검수 197줄(HISTORY [66]), 코드 검토 9개 판단(HISTORY [67])
-  - 저장소: `menu_choices.json`(고정 짝 112 + 경로 열쇠 6), `menu_titles.json`(통과 제목 80), `menu_aliases.json`(철자 3). 모양은 `STRUCTURE.md`, 용어는 `CONTEXT.md`
-  - `data/menu_names/`: 검수 기록 `remaining_review.json`, 한 번 돌린 합치기 `merge_menu_review.py`, 사전 `menu_names.json`(이전 것 `_v1`·`_v2`)
-- **개발 평가 숫자가 지난번과 달라질 수 있다**: 평가도 같은 엔진이라 이제 통과 제목이 검색어에 붙는다
-- 쉬운 말 풀이는 잠시 뺌(사용자). 모델 조사 `.scratch/mvp-roundtrip/research/31-번역-모델-조사.md`
+- 테스트 **490개 통과**(main은 435개). 마지막 커밋 `d837541`
+- 티켓 31 1단계(메뉴 이름 검수) 끝([66]·[67])
+- 2단계 번역 끝([68]-[71]): `blender_tutor/translate.py`. gpt-6-luna, 생각 수준 none, 5청크씩, 이름표 = 사전 표시 이름 + 본문 속 사전 이름(A) + ko.po 번역 하나뿐인 이름(B). 전체 1,379청크 약 $0.18(시험 포함 약 $0.20)
+- 3단계 이름 검수 끝([72]-[75]): `blender_tutor/translation_check.py`. 고침 71건 / 청크 63개, 다시 검사 걸린 곳 90개는 모두 일부러 둔 것([72]에 종류)
+- `data/translations/`(커밋 안 함): `ko_none.jsonl`(모델 원본, 덮어쓰지 않음), `ko_none_fixes.jsonl`(고친 줄·까닭), `apply_fixes_ko_none.py`(고침 목록), `check_ko_none.md`(검사 결과), `trial50_*.jsonl`(50청크 시험 셋)
+- 발견: 옵션 이름이 이어 붙은 청크(Absolute Increment Snap Increment 등). 티켓 31을 닫을 때 Comments에
 
 ## 사용자가 정해야 할 것
 
-- 번역 생각 수준(50청크 none/medium 결과를 보고), 번역·임베딩 비용
+- 표본 검수 결과를 보고 B안(유료)을 할지
 - 강사님 중간 확인 때 물을 것: GPT에게 연습 과정 정보를 주지 않는 조건이 괜찮은지
 
 ## 모르면 실수할 것
@@ -61,7 +66,9 @@
 2. 드라이브에서 받아 이 자리에 둔다
    - `data\manual_en_5.2\blender_manual_html.zip`: 드라이브에는 `data` 바로 아래에 있으니 `manual_en_5.2` 폴더를 만들어 넣는다
    - `data\ui_ko_5.2\ko.po`, `fr.po`
-   - **다시 만들 수 없는 것**: `data\beginner_scope\`(번역할 218쪽, luna 분류), `data\menu_names\`(검수 기록·Haiku 판단), `data\강사님의 기준.txt`
+   - **다시 만들 수 없는 것**: `data\beginner_scope\`(번역할 218쪽, luna 분류), `data\menu_names\`(검수 기록·Haiku 판단, `menu_names.json`도 다시 만들면 검수 전 판으로 바뀜), `data\translations\`(유료 번역과 Claude 검수), `data\강사님의 기준.txt`
+   - 드라이브에서 받을 때 `data\.env`가 `data\env`로 점이 빠질 수 있다. 이름을 `.env`로 바꾼다
+   - **이미 있는 파일은 다시 만들지 않는다**: 아래 3번은 `data\chunks\`·`data\menu_names\`가 없을 때만. 있는 채로 돌리면 덮어쓴다(2026-10-27 집 PC에서 한 번 덮어써 드라이브에서 되살림)
 3. 프로젝트 폴더에서 차례로
    - `.venv\Scripts\python -m zipfile -e data\manual_en_5.2\blender_manual_html.zip data\manual_en_5.2\html`
    - `.venv\Scripts\python -m blender_tutor.manual_chunks data\manual_en_5.2\html\blender_manual_v520_en.html data\chunks\manual_chunks.jsonl`
