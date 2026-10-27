@@ -1,76 +1,42 @@
 # 인수인계
 
-마지막 갱신: 2026-10-27(티켓 30 닫음) · Claude · DESKTOP-J9LV5HK(강의실 PC) · **PR #27 병합 전에 씀**(브랜치 `feat/30-beginner-scope`). 이어받을 때 PR #27이 main에 병합됐는지 git으로 먼저 본다
+마지막 갱신: 2026-10-27 점심(티켓 31 진행 중) · Claude · DESKTOP-J9LV5HK(강의실 PC) · 브랜치 `feat/31-translate-embed`(PR 아직 없음). PR #27은 main에 병합됨
 
 ## 다음 할 일
 
-순서(사용자 결정, HISTORY [62]): 30(끝남) → **31 → 34 → 33 → 32 → 35 → 36·37**. 38(메뉴 이름 비슷한 말 표)은 needs-triage, 30 뒤.
+순서(사용자 결정, HISTORY [62]): 30(끝남) → **31(진행 중)** → 34 → 33 → 32 → 35 → 36·37. 38은 needs-triage.
 
-1. **PR #27 main 병합**(사용자 확인 뒤). 병합하면 브랜치를 로컬·원격 모두 지운다.
-2. **`data\beginner_scope\`를 드라이브에 올린다**(사용자). 최종 범위 `scope.jsonl`은 31이 읽는다. 다시 만들려면 돈이 드는 분류 결과(`all_luna_low.jsonl`, `trial_*`)가 들어 있다.
-3. **티켓 34는 사용자가 집에서**: 초보자 영상을 따라 하다 막힌 곳을 Ctrl+F10 + 메모로 모은다(34 Comments). Ctrl+F10은 `data\snapshots\`(JSON + PNG)에 저장되니 메모에 그 파일 이름을 적고, 메모는 `data\holdout_raw\`에 두어 AI에 보여 주지 않는다. 드라이브에는 `holdout_raw`·`snapshots`를 함께 올린다(`.env`는 올리지 않음). 집 PC 준비: main `git pull` → `pip install -e ".[dev]"` → `install_addon` + 애드온 켜기 → new-setup `install.cmd -SkipMatt`. 34에는 `data/chunks`가 필요 없다(자료가 없으면 도우미가 안내만 함).
-4. **티켓 31(유료)**: 메뉴 이름 검수가 들어감(HISTORY [64], 사용자 결정). 차례는 메뉴 이름 검수 → AI 초벌 번역 → AI·사람 검수 → 임베딩·저장 방식(31 Comments). 범위는 `data/beginner_scope/scope.jsonl`에서 `include`가 참인 218쪽. 다른 PC에서 하려면 드라이브의 `beginner_scope`를 가져온다.
-   - `data/.env`에 OpenAI 키가 있다(강의실 PC). 프로그램은 환경 변수 → `data/.env` 순서로 읽는다.
+1. **메뉴 이름 화면 검수를 이어 간다**(티켓 31 1단계, HISTORY [65]). 같은 PC에서만 된다(`data/`에 있음).
+   - 볼 파일: `data/menu_names/remaining_route.md`(197줄). **1번 묶음(1-11번)은 끝남**, **2번 묶음(12번)부터**. 10번 묶음(187-197)은 철자 확인
+   - 사용자가 화면 글자를 알려 주면 `data/menu_names/remaining_review.json`에 번호 → {english, screen, result}로 적는다. 갈래가 "제목"이면 Haiku 판단과 같을 때 사용자는 말하지 않음(= Haiku대로)
+   - 두 갈래의 뜻: **여러 번역**은 그 자리에 어느 한국어가 보이나(답에 보일 글자), **제목**은 화면에 그 글자가 있나 + 질문 속 그 말을 메뉴 이름으로 알아볼까(통과/탈락)
+   - 사용자는 Blender 초보라 찾아가는 길이 자세해야 한다. 화면 글자로 말한다(편집 모드 → 에디트 모드, 면 → 페이스, 제어점 → 컨트롤 포인트). 3D 화면 오른쪽 위 단추 줄은 왼쪽부터 눈 · 기즈모 · 오버레이(겹친 원) · 네모 · 셰이딩(공 넷)
+2. **검수가 끝나면 저장**: 아래 네 곳을 합쳐 `menu_choices.json`(이름·경로 열쇠 → 문맥), `menu_aliases.json`(철자 표), 새 `menu_titles.json`(통과한 제목 이름 목록, 사용자 권함에 동의 전 — 만들 때 확인)을 쓰고, `MenuNames`가 통과 제목을 질문 찾기에 넣게 한다(지금 `english_in`은 제목에서만 뽑은 이름을 뺌)
+   - `data/menu_names/claude_refilter.json`: Claude가 바꾼 문맥(`changed`), 경로 열쇠(`paths`), 사용자가 화면으로 확인한 것(`confirmed_by_user`), 메모(`notes`)
+   - `data/menu_names/haiku/*_out.json`: Haiku 판단(choices 73, titles 143). `scope_review_route.md`(첫 49줄 결과), `remaining_review.json`(남은 것 결과)
+   - 고른 문맥은 `data/menu_names/scope_review.json`의 후보 문맥 안에 있어야 한다(아니면 `MenuNames`가 바로 멈춤)
+3. 1단계 커밋을 정리하고 `/code-review` → 검토 결과는 한 항목씩 사용자 판단(AGENTS.md). 그다음 2단계 번역(유료, luna, 50청크로 생각 수준 none/medium 견줌 → 비용 보이고 확인) → 3단계 번역 검수(코드 + 사용자 50개) → 4단계 임베딩(유료, large 한 벡터/두 벡터 + bge-m3 한 번 비교, 개발용 한국어 질문 20개)
+4. `data\beginner_scope\`를 드라이브에 올린다(사용자). 티켓 34는 사용자가 집에서(HISTORY [62], 34 Comments).
 
-- **검토 결과는 하나도 빼지 말고 한 항목씩** 보여 주고 사용자 판단을 받은 뒤 다음으로. 자세한 규칙은 `AGENTS.md` "지킬 것"(HISTORY [52]·[56]·[59]).
+- **검토 결과는 하나도 빼지 말고 한 항목씩** 보여 주고 사용자 판단을 받는다(`AGENTS.md` "지킬 것").
 
-## 지금 상태
+## 지금 상태 (티켓 31)
 
-- **구조 한눈에: `STRUCTURE.md`**(사용자가 켜 두고 보는 문서, 2026-10-22 사용자 요청). 프로그램·파일·주고받는 모양이 바뀌면 같은 PR에서 고친다.
-- 애드온(티켓 25, HISTORY [44]): `addon/blender_tutor_addon/`가 작업 상태 14칸(`blender_tutor/work_state.py`의 `WorkState`, 3D 화면 시점·활성 물체 위치·진행 중인 조작은 티켓 27)을 0.5초마다 읽어 바뀌면, F10이면 바로, 파일 열기·저장이면 사건과 함께 도우미 프로그램에 내 PC 안 HTTP(127.0.0.1:8766, 비밀 글자)로 보낸다. 받는 쪽 `blender_tutor/receiver.py`는 창 번호마다 최신 상태를 들고, 마지막 Blender가 닫히면 끝난다.
-  - 사용자가 2026-10-22 직접 확인: Blender를 켜면 도우미가 켜지고 닫으면 꺼짐, 메뉴로 한 glTF 내보내기가 `export_scene.gltf`로 잡힘.
-  - 진행 관리·답 엔진은 이제 사전 대신 `WorkState`를 받는다(답 엔진의 임시 칸 이름 `language`·`translate_interface`는 그대로 확정).
-- 도우미 창(티켓 26, HISTORY [45]): 입구 `blender_tutor/helper.py`(애드온 `config.json` 명령이 `-m blender_tutor.helper`)가 받는 쪽·PySide6 위젯 창(`helper_window.py`)·답 엔진을 잇는다. 질문 한 번의 순서는 `question_flow.py`(티켓 39, 화면 없이 시험함, 창 쪽 연결 `WindowSide`만 바꿔 끼움). 창 자리 판단은 `window_rules.py`(시험함), Windows 조작은 `winapi.py`(눈 확인), 최근 대화 3쌍은 `conversation.py`.
-  - **답은 아직 임시 엔진**(`stand_in.py`, 사용자 결정): 실제 `data/` 청크·검색 + 낱말 세기 임베딩 + 1.5초 쉬고 정해 둔 글을 흘리는 가짜 답변. 창 동작 확인용이라 답·근거의 질은 의미 없다. 티켓 31·33에서 갈아 끼운다.
-  - 기록 파일 `%TEMP%\blender_tutor_receiver.log`에 엔진 준비 시간, F10 → 입력 가능 ms, 엔진 버그 내용이 남는다.
-  - 사용자가 2026-10-22 강의실 PC에서 확인: 한글 입력·F10·Esc·최소화 연동·X·트레이·크기 조절·Alt+Tab 모두 정상(HISTORY [46]·[47]). 창을 옮기면 F10에도 그 자리에서 나온다(사용자 결정).
+- 테스트: `.venv\Scripts\python -m pytest` **450개 통과**(main은 435개). 브랜치 커밋은 이번 인계 커밋 하나(코드·기록 함께)
+- 새로 만든 것: `blender_tutor/menu_review.py`(검수 초안, `python -m blender_tutor.menu_review data`), `blender_tutor/blender_ui_labels.py`(Blender 안에서 화면 글자·문맥 뽑기), `menu_aliases.json`(지금 `Icosphere → Ico Sphere` 하나). 고친 것: `menu_names.py`(경로 열쇠, 철자 표), `answer_engine.py`(단마다 앞 단을 넘김). 모양은 `STRUCTURE.md`
+- `data/menu_names/menu_names.json`은 철자 표로 다시 만듦(이전 것 `menu_names_v1.json`). `scope_review.json`·`ui_labels.json`은 v4(이전 v1-v3 남김)
+- 결정 기록: HISTORY [65]. 모델 조사: `.scratch/mvp-roundtrip/research/31-번역-모델-조사.md`
+- 쉬운 말 풀이는 잠시 뺌(사용자). 번역은 따로 둔 원본에서 청크 안으로 합침
+- 이전 티켓들의 상태(애드온·도우미 창·연습 과정·평가·답 엔진)는 `STRUCTURE.md`와 HISTORY [44]-[64]
 
-- 연습 과정 연결(티켓 27, HISTORY [51]-[53]): 창 맨 위 카드(연습 과정 · n단계 / 단계 이름 / 버튼 줄)와 대화의 조작 안내. 판단은 `course_desk.py`(Blender 창 번호마다 진행 관리 하나, 대화에 붙일 말, 카드 모양)에 모으고 `helper.py`는 잇기만 한다.
-  - 카드 버튼(2026-10-26 바꿈, HISTORY [55]): `[◀ 뒤로] [다음 ▶] ··· [단계 ▼]`. '다음'은 조작 하나씩, 다 끝내면 '다음 단계 ▶'. '뒤로'는 앞 조작, 첫 조작에서는 앞 단계의 다 끝낸 자리. '단계 ▼'는 다섯 줄 스크롤 목록(지금 단계 ▶) + 연습 과정 바꾸기. [했어요]는 없앰. 다음·뒤로·단계 고르기·[네]·[아니요]를 누르면 Blender로 초점을 돌림
-  - 연습 과정 파일의 조작마다 `안내`(선생님 말투, Claude 초안, 티켓 32에서 사용자 검수)와 `감지`(선택). 감지가 맞거나 '다음'이면 다음 조작. 감지 없는 조작(검에서 44개 중 11개)은 안내 말 끝에 "다 되면 '다음'을 눌러 주세요."가 붙는다
-  - 감지는 그 조작 안내를 시작할 때의 작업 상태와 견주고, S·G·화면 끌기가 진행 중이면(확정 전) 기다린다. 화면 조작은 3D 화면 시점(`화면: 돌림·확대·축소·옮김·전체`), 크기·옮기기는 방향만(`배율/위치 늘어남·줄어듦`, 얼마나는 안 봄, 사용자 결정)
-  - 진행 기록은 이중: 바뀔 때마다(끝낸 조작 수 포함) + 저장할 때의 자리 `저장 때`. 다르면 다시 열 때 묻는다
-  - 기록 폴더는 `%APPDATA%\blender_tutor\progress`, 쓸 수 없으면 사용자 폴더, 둘 다 안 되면 메모리에만
-- 시간·상태·흐름 기록(티켓 28, HISTORY [56], 모양은 `STRUCTURE.md` 5절)
-  - 시간 기록 `blender_tutor/timing.py` → `%APPDATA%\blender_tutor\timings.jsonl`(질문마다 한 줄, 늘 남김). F10 시각은 입력 가능 뒤 60초 안에 보낸 질문에만 붙고, 줄마다 `engine`(지금 `stand_in`)과 `settings`가 있다
-  - 상태 저장: Blender에서 Ctrl+F10 → 프로젝트 `data\snapshots\<시각>.json` + `.png`(커밋 안 함)
-  - 흐름 기록 `blender_tutor/state_stream.py` → `%APPDATA%\blender_tutor\streams\<켠 시각>.jsonl`(도우미를 켤 때마다 새 파일, 받은 상태 + 카드 버튼 + 파일을 열 때의 진행 기록). 다시 돌리기는 `replay(흐름 파일, 새 CourseDesk, 빈 임시 폴더)`. 2026-10-26 사용자 눈 확인 흐름 `20261026-112137.jsonl` 하나가 남아 있다(검수 흐름이 아니라 시험용)
-- 평가 프로그램(티켓 29, HISTORY [57], 쓰는 법·모양은 `STRUCTURE.md` 6절): `blender_tutor/evaluate.py`. `run`은 문항 파일 → 답 엔진(지금은 임시 엔진만) → `results/<YYYYMMDD>_<이름>/` 설정.json(커밋 번호 포함)·답.jsonl·요약.md(검색 적중, 연습 과정을 권한 차례, 엔진만 잰 시간). `times`는 도우미 창 시간 기록 → PC·엔진·설정 묶음마다 창 뜨기·질문 준비(F10 → 보냄)·첫 글자·답 끝·F10 → 답 끝. 시나리오형은 실제로 이어 묻고 차례마다 채점(모든 차례에 핵심 필수). 평가 문항(`eval/`)은 아직 없음(34·35)
-- 답 엔진(`blender_tutor/answer_engine.py`): 티켓 21에서 질문 → 임베딩 1번 → 뜻 + 낱말(BM25) 검색 RRF 상위 6개 → 답변 모델 1번 → 답 조각 + 근거 목록(HISTORY [37]).
-  - 티켓 22에서 검색어와 넘기는 글을 보탰다(PR #13 main 병합, HISTORY [38]-[41]). 호출은 그대로 2번.
-    - 검색어 = 질문(+ 질문 속 한국어 메뉴 이름의 영어) + 직전 질문 + 단계 이름 + 먼저 볼 소제목 경로 + 방금 조작
-    - 모델에: 먼저 볼 소제목(검색 상위 위에 덧붙임, 넓히지 않음), 50단어 미만 청크는 아래 소제목(없으면 형제)을 400단어까지(쪽 첫머리 글이면 그 쪽 앞 소제목들, 사용자 확인), 연습 과정 밖이면 비슷한 연습 과정 3개, 진행 중이면 지금 단계 내용만
-    - 임베딩은 글 목록 → 벡터 목록. 연습 과정 밖이면 같은 호출에 질문만을 하나 더 실어 비슷한 연습 과정을 고른다(비용은 티켓 31에서 잼)
-    - 메뉴 이름 찾기(`MenuNames.english_in`)는 검색 보조라 예외를 더 두지 않았다. 알려진 한계는 티켓 22 Comments
-    - 용어집 `CONTEXT.md`에 설명서 갈래(분야·묶음·쪽·소제목·옵션·청크)를 넣었다. 사용자가 헷갈리면 말하기로 함
-  - 티켓 23에서 메뉴 이름 표기를 더했다(HISTORY [42]). 답변 모델은 `[[Add > Mesh]]`처럼 영어로 표시해 쓰고, 엔진이 답이 흐르는 동안 한국어 화면 + 번역 켜짐이면 "추가(Add) > 메시(Mesh)", 아니면 영어만으로 바꾼다.
-    - 여러 번역의 고정 짝은 저장소 `menu_choices.json`(영어 이름 → 문맥). 지금은 비어 있어 Edit Mode·Modifiers·Cube 같은 이름은 영어로 보인다(검수는 티켓 30 뒤)
-    - 작업 상태 칸은 시제품 이름 `language`·`translate_interface`를 임시로 쓴다(티켓 25에서 확정)
-    - 답 엔진 파일 나누기(HISTORY [41], [43]): 2026-10-26 Codex 구조 점검(저장소 전체)에서 줄 수만으로 나누지 않기로 하고 닫았다(HISTORY [58]). 대신 바깥 경계 C1(티켓 39)·C2(티켓 31·33)·C3(티켓 31)를 정리한다
-    - `[[[`처럼 대괄호가 겹칠 때의 처리는 지어낸 경계 사례라 지금대로 두고, 실제 모델 결과(티켓 33)를 보고 다시 본다
-  - 아직 가짜 모델만 끼운다. 실제 OpenAI 연결은 유료 티켓 31(임베딩)·33(답변)에서.
-  - 넘긴 것: 작업 상태 모양(25), 창의 오류 받기·엔진에 단계 넘기기(26·27, 끝남), 번역을 BM25에도 넣을지·연습 과정 벡터(31), 검 파일 용어를 화면 글자로(32), 제목에서만 뽑은 이름 검수 뒤 더하기(30). 각 티켓 Comments.
-- 테스트: `.venv\Scripts\python -m pytest` 435개 통과(티켓 30 브랜치, main은 423개)(`data/`가 없으면 1개 건너뜀). 애드온 자체 시험 `.venv\Scripts\python addon\selftest.py`(Blender를 화면 없이 띄움, 약 20초, 이제 진짜 도우미를 켜서 트레이 아이콘이 잠깐 보임) 전체 통과.
-- 남은 다른 브랜치: `prototype/01-addon-roundtrip`, `prototype/02-helper-window-ui`(참고용 시제품, main에 합치지 않음).
+## 모르면 실수할 것 (이번에 새로)
 
-## 다른 PC에서 data/ 다시 만들기
+- **Blender에서 뽑은 화면 글자는 빈틈이 있다.** C 코드가 그리는 메뉴·패널 글자(예: 미러 모디파이어의 Bisect "분할")는 안 잡힌다. 그래서 "자동"도 틀릴 수 있고, 사람이 화면으로 보는 검수가 필요했다
+- **조작 단추에 붙인 글자(`layout.operator(..., text="Overlap")`)는 조작 문맥(보통 Operator)으로 번역된다.** 이 규칙을 넣기 전 판단(Haiku 입력)은 이 점이 틀린 자료로 했다
+- **하위 에이전트는 띄울 때마다 기본 토큰이 크다**(조사 하나 약 19만, Haiku 판단 셋 합쳐 약 30만). 번역처럼 큰 일은 API 스크립트로(조사 결론)
+- **사용자에게 Blender 위치를 말할 때 일상 말이 아니라 화면 글자로.** 이번에 "면", "제어점", "화살표 단추"로 말했다가 헷갈리게 했다
 
-`data/`는 커밋하지 않는다. 다른 PC에서 실제 자료 검사·테스트를 돌리려면, 구글 드라이브에 둔 두 가지만 가져와 나머지를 만든다(2026-10-20 빈 폴더에서 해 보니 지금 것과 똑같이 나옴, 약 2분).
-
-1. `git pull` 뒤 (처음이면) `python -m venv .venv`, `.venv\Scripts\python -m pip install -e ".[dev]"`
-2. 드라이브에서 가져와 이 자리에 둔다
-   - `data\manual_en_5.2\blender_manual_html.zip` (설명서)
-   - `data\ui_ko_5.2\ko.po`, `data\ui_ko_5.2\fr.po` (Blender 화면 번역)
-3. 프로젝트 폴더에서 차례로 실행
-   - 설명서 풀기: `.venv\Scripts\python -m zipfile -e data\manual_en_5.2\blender_manual_html.zip data\manual_en_5.2\html`
-   - 청크 만들기: `.venv\Scripts\python -m blender_tutor.manual_chunks data\manual_en_5.2\html\blender_manual_v520_en.html data\chunks\manual_chunks.jsonl`
-   - 메뉴 이름 사전: `.venv\Scripts\python -m blender_tutor.menu_names data\manual_en_5.2\html\blender_manual_v520_en.html data\ui_ko_5.2\ko.po data\ui_ko_5.2\fr.po data\menu_names`
-4. 확인: `.venv\Scripts\python -m blender_tutor.course_check courses` → "문제 0개"(건너뛴다는 줄이 없어야 함), `.venv\Scripts\python -m pytest` → 건너뜀 없이 모두 통과
-
-- 프로젝트 폴더 경로가 길면(예: 바탕화면 깊은 곳) 설명서 풀기가 Windows 경로 길이 제한(260자)에 걸려 멈춘다. `C:\WORK\rag_blender_tutor`처럼 짧은 곳에 둔다.
-- `data\강사님의 기준.txt`는 다시 만들 수 없으니 드라이브에도 따로 둔다.
-
-## 모르면 실수할 것
+## 모르면 실수할 것 (전부터)
 
 - **애드온은 설치 명령으로 Blender 폴더에 복사된 것이 돈다.** 애드온 코드를 고치면 `.venv\Scripts\python -m blender_tutor.install_addon`을 다시 돌리고 Blender를 다시 켠다. 다른 PC에서는 처음 한 번 설치 + Blender 환경 설정 > 애드온에서 "Blender 첫걸음 도우미" 켜기.
 - **사용자에게 `!` 명령을 줄 때는 `/`로 쓴다**(`! .venv/Scripts/python ...`). `!`는 Git Bash라 `\`가 지워진다. 그리고 사용자가 이 창에 무엇이든 입력하면 진행 중인 작업이 끊긴다. 사용자 확인 작업은 Claude 작업과 순서를 나눈다.
@@ -112,14 +78,32 @@
   - 코드 이름·전문 용어를 줄이고, 예시(파일 A·B처럼)로 설명하면 잘 통했다.
 - 비용이 드는 작업(분류·번역·임베딩·생각 수준 실측·평가 실행)은 실행 전에 사용자 확인.
 
+## 다른 PC에서 data/ 다시 만들기
+
+`data/`는 커밋하지 않는다. 다른 PC에서 실제 자료 검사·테스트를 돌리려면, 구글 드라이브에 둔 두 가지만 가져와 나머지를 만든다(2026-10-20 빈 폴더에서 해 보니 지금 것과 똑같이 나옴, 약 2분).
+
+1. `git pull` 뒤 (처음이면) `python -m venv .venv`, `.venv\Scripts\python -m pip install -e ".[dev]"`
+2. 드라이브에서 가져와 이 자리에 둔다
+   - `data\manual_en_5.2\blender_manual_html.zip` (설명서)
+   - `data\ui_ko_5.2\ko.po`, `data\ui_ko_5.2\fr.po` (Blender 화면 번역)
+3. 프로젝트 폴더에서 차례로 실행
+   - 설명서 풀기: `.venv\Scripts\python -m zipfile -e data\manual_en_5.2\blender_manual_html.zip data\manual_en_5.2\html`
+   - 청크 만들기: `.venv\Scripts\python -m blender_tutor.manual_chunks data\manual_en_5.2\html\blender_manual_v520_en.html data\chunks\manual_chunks.jsonl`
+   - 메뉴 이름 사전: `.venv\Scripts\python -m blender_tutor.menu_names data\manual_en_5.2\html\blender_manual_v520_en.html data\ui_ko_5.2\ko.po data\ui_ko_5.2\fr.po data\menu_names`
+4. 확인: `.venv\Scripts\python -m blender_tutor.course_check courses` → "문제 0개"(건너뛴다는 줄이 없어야 함), `.venv\Scripts\python -m pytest` → 건너뜀 없이 모두 통과
+
+- 프로젝트 폴더 경로가 길면(예: 바탕화면 깊은 곳) 설명서 풀기가 Windows 경로 길이 제한(260자)에 걸려 멈춘다. `C:\WORK\rag_blender_tutor`처럼 짧은 곳에 둔다.
+- `data\강사님의 기준.txt`는 다시 만들 수 없으니 드라이브에도 따로 둔다.
+
 ## 사용자가 정해야 할 것
 
-- 메뉴 이름 검수(여러 개 291, 제목에서만 1,055): 티켓 31에서 초보자 범위 안 것만(HISTORY [64]). 고른 짝은 `menu_choices.json`에 영어 이름 → 문맥으로 적는다(티켓 23).
-- 강사님 중간 확인 때 물어볼 것: GPT에게 연습 과정 정보를 주지 않는 조건이 괜찮은지.
+- 남은 메뉴 이름 화면 검수(위 1번), 통과 제목을 `menu_titles.json`에 따로 둘지(Claude 권함)
+- 번역 생각 수준(50청크 none/medium 결과를 보고), 번역·임베딩 비용 확인
+- 강사님 중간 확인 때 물어볼 것: GPT에게 연습 과정 정보를 주지 않는 조건이 괜찮은지
 
 ## 추천 스킬
 
-- `/implement <티켓 경로>`: 티켓을 읽고 `/tdd`로 구현한 뒤 `/code-review`로 검토하고 커밋한다.
+- `/implement .scratch/mvp-roundtrip/issues/31-유료-번역과-임베딩.md`: 1단계 검수 저장 뒤 `/tdd`로 구현, `/code-review`로 검토. 스킬 없이: 위 "다음 할 일" 1-3번 차례대로
 
 ## 참고 문서
 

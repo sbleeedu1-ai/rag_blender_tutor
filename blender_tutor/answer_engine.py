@@ -344,7 +344,11 @@ class _MenuMarks:
     def _screen(self, path: str) -> str:
         parts = [part.strip() for part in re.split(r"[>‣]", path)]
         if self._names:
-            parts = [f"{korean}({part})" if (korean := self._names.korean(part)) else part for part in parts]
+            parents = ["", *parts[:-1]]  # 단마다 바로 앞 단(같은 이름도 메뉴마다 글자가 달라서, 티켓 31)
+            parts = [
+                f"{korean}({part})" if (korean := self._names.korean(part, parent)) else part
+                for part, parent in zip(parts, parents)
+            ]
         return " > ".join(parts)
 
 

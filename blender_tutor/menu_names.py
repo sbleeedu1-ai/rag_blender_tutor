@@ -16,6 +16,7 @@ from blender_tutor.manual_chunks import Chunk, chunk_manual
 
 DEFAULT_CONTEXT = "*"  # 문맥 없는 일반 문구. Blender Python도 이렇게 적는다(bpy.app.translations.contexts.default)
 _PATH_SEP = "‣"  # 설명서 메뉴 경로의 구분 글자(Add ‣ Mesh)
+ALIASES = Path(__file__).resolve().parents[1] / "menu_aliases.json"  # 설명서 철자 → 화면 철자 표(티켓 31)
 _TITLE_TAIL = re.compile(r" (Modifier|Node|Tool|Constraint)$")  # 쪽 제목 "Array Modifier"의 블렌더 표기는 "Array"
 
 
@@ -64,15 +65,23 @@ class MenuNames:
     """메뉴 이름 사전: 영어 이름 → 번역들, 한국어 이름 → 영어 이름들."""
 
     def __init__(self, names: Iterable[MenuName], choices: Mapping[str, str] = {}):
-        """choices는 번역이 여러 개인 이름에 고정한 짝: 영어 이름 → 화면이 쓰는 문맥(사용자 검수, 티켓 23)."""
+        """choices는 번역이 여러 개인 이름에 고정한 짝: 영어 이름 → 화면이 쓰는 문맥(사용자 검수, 티켓 23).
+
+        열쇠에 바로 앞 단을 붙이면("Add > Empty") 그 메뉴 아래서만 쓰는 짝이다. 같은 이름도 메뉴·패널마다
+        문맥이 달라 글자가 다르게 보이기 때문이다(Empty: 추가 메뉴 "비어 있음", 속성 창 "엠프티", 티켓 31).
+        """
         self._by_english = {_english_key(name.english): name for name in names}
-        self._choices = {_english_key(english): context for english, context in choices.items()}
-        for english, context in choices.items():  # 틀린 짝이 조용히 영어로 보이지 않게 바로 멈춘다(오타·사전 다시 만든 뒤 어긋남)
+        self._choices: dict[tuple[str, str], str] = {}  # (앞 단, 이름) → 문맥. 앞 단이 ""이면 이름 하나의 짝
+        for key, context in choices.items():  # 틀린 짝이 조용히 영어로 보이지 않게 바로 멈춘다(오타·사전 다시 만든 뒤 어긋남)
+            *parents, english = [part.strip() for part in re.split(r"[>‣]", key)]
+            if len(parents) > 1 or parents == [""]:
+                raise ValueError(f"고정 짝 {key!r}: 열쇠는 '이름'이나 '앞 단 > 이름'")
             name = self.get(english)
             if name is None or name.status != Status.MANY:
-                raise ValueError(f"고정 짝 {english!r}: 사전에 번역이 여러 개인 이름으로 없음")
+                raise ValueError(f"고정 짝 {key!r}: 사전에 번역이 여러 개인 이름으로 없음")
             if not any(context in t.contexts for t in name.translations):
-                raise ValueError(f"고정 짝 {english!r}: 문맥 {context!r}가 사전에 없음")
+                raise ValueError(f"고정 짝 {key!r}: 문맥 {context!r}가 사전에 없음")
+            self._choices[("".join(parents), _english_key(english))] = context
         self._by_korean: dict[str, dict[str, None]] = {}  # 차례를 지키며 겹친 영어는 한 번만
         for name in self._by_english.values():
             for translation in name.translations:
@@ -85,17 +94,19 @@ class MenuNames:
     def get(self, english: str) -> MenuName | None:
         return self._by_english.get(_english_key(english))
 
-    def korean(self, english: str) -> str | None:
+    def korean(self, english: str, parent: str = "") -> str | None:
         """한국어 화면에 보이는 글자. 영어 그대로 보이면 None.
 
         번역 없음·사전에 없음은 영어 그대로, 하나면 그 번역, 여러 개면 고정한 짝(고정 전이면 영어 그대로)이다.
+        parent는 메뉴 경로에서 바로 앞 단의 영어다. 그 메뉴 아래 짝이 있으면 그것을, 없으면 이름 하나의 짝을 쓴다.
         """
         name = self.get(english)
         if name is None or name.status == Status.NONE:
             return None
         if name.status == Status.ONE:
             return name.translations[0].korean
-        context = self._choices.get(_english_key(english))
+        key = _english_key(english)
+        context = self._choices.get((parent.strip(), key)) or self._choices.get(("", key))
         korean = next((t.korean for t in name.translations if context in t.contexts), None)
         return None if korean == name.english else korean  # 고른 문맥에 번역이 없으면 화면은 영어
 
@@ -156,6 +167,11 @@ class MenuNames:
         """고정 짝 파일(영어 이름 → 문맥 JSON). 번역 글자가 없어 저장소에 커밋한다(menu_choices.json)."""
         return json.loads(path.read_text(encoding="utf-8"))
 
+    @staticmethod
+    def load_aliases(path: Path) -> dict[str, str]:
+        """철자 표 파일(설명서 철자 → 화면 철자 JSON). 번역 글자가 없어 저장소에 커밋한다(menu_aliases.json)."""
+        return json.loads(path.read_text(encoding="utf-8"))
+
     @classmethod
     def load(cls, path: Path, choices: Mapping[str, str] = {}) -> "MenuNames":
         rows = json.loads(path.read_text(encoding="utf-8"))
@@ -194,12 +210,17 @@ def _by_count(names: Iterable[MenuName]) -> list[MenuName]:
 _Catalog = dict[str, dict[str, list[str]]]  # ko.po: 영어 → 한국어 → 문맥들
 
 
-def build_menu_names(chunks: Iterable[Chunk], po_text: str, full_po_text: str = "") -> MenuNames:
+def build_menu_names(
+    chunks: Iterable[Chunk], po_text: str, full_po_text: str = "", aliases: Mapping[str, str] = {}
+) -> MenuNames:
     """청크들의 블렌더 표기를 ko.po 글과 짝지어 사전을 만든다.
 
     full_po_text는 번역률 100%인 다른 언어 사전(fr.po) 글이다. Blender가 쓰는 (문맥, 영어) 전체 목록으로 써서,
     한국어 번역이 빠진 문맥은 '영어 그대로'를 후보로 더한다. At Center는 Operator 문맥에만 "센터에서"가 있고
     병합 메뉴가 쓰는 Mesh 문맥에는 번역이 없어 화면에 영어로 보이기 때문이다(티켓 12·20).
+
+    aliases는 설명서 철자 → 화면 철자 표다(menu_aliases.json). 설명서는 "Icosphere", 화면 추가 메뉴는 "Ico Sphere"처럼
+    철자가 달라 ko.po의 다른 줄과 짝지어지는 이름만 적는다. 이름은 설명서 철자로 두고 번역은 화면 철자로 찾는다(티켓 31).
     """
     catalog: _Catalog = {}
     for context, english, korean in read_po(po_text):
@@ -208,6 +229,8 @@ def build_menu_names(chunks: Iterable[Chunk], po_text: str, full_po_text: str = 
         translations = catalog.get(_english_key(english))
         if translations and all(context not in contexts for contexts in translations.values()):
             translations.setdefault(english, []).append(context)
+    for manual, screen in aliases.items():  # 설명서 철자의 번역 자리를 화면 철자의 것으로 바꾼다
+        catalog[_english_key(manual)] = catalog.get(_english_key(screen), {})
     seen: dict[str, _Seen] = {}
     for chunk in chunks:
         in_chunk: dict[str, set[Source]] = {}  # 한 청크에 같은 이름이 여러 번 나와도 한 번으로 센다
@@ -342,7 +365,10 @@ def main(argv: list[str]) -> int:
         print(main.__doc__)
         return 2
     root, po, full_po, out = Path(argv[0]), Path(argv[1]), Path(argv[2]), Path(argv[3])
-    names = build_menu_names(chunk_manual(root), po.read_text(encoding="utf-8"), full_po.read_text(encoding="utf-8"))
+    aliases = MenuNames.load_aliases(ALIASES)
+    names = build_menu_names(
+        chunk_manual(root), po.read_text(encoding="utf-8"), full_po.read_text(encoding="utf-8"), aliases
+    )
     out.mkdir(parents=True, exist_ok=True)
     names.save(out / "menu_names.json")
     review = names.to_review()

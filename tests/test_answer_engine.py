@@ -591,6 +591,9 @@ def test_영어_화면이거나_번역이_꺼져_있으면_메뉴_이름은_영�
         (("[[Edit Mode]]로",), {"Edit Mode": "Operator"}, "편집 모드(Edit Mode)로"),  # 고정한 짝
         # 병합 메뉴의 At Center는 Mesh 문맥이라 번역이 없다. 그 문맥을 고르면 화면처럼 영어 그대로
         (("[[Mesh > Merge > At Center]]",), {"At Center": "Mesh"}, "메시(Mesh) > Merge > At Center"),
+        # 바로 앞 단을 붙인 짝(지어낸 예): Mesh 아래 Apply만 다른 글자, 혼자 쓰면 이름 하나의 짝
+        (("[[Mesh > Apply]], [[Apply]]",), {"Apply": "*", "Mesh > Apply": "WindowManager"},
+         "메시(Mesh) > 신청하기(Apply), 적용(Apply)"),
     ],
 )
 def test_번역이_없거나_고정_전이면_영어_그대로이고_여러_번역은_고정한_짝을_쓴다(pieces, choices, expected):
