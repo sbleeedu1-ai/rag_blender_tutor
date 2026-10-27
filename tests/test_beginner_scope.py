@@ -13,6 +13,7 @@ from blender_tutor.beginner_scope import (
     Estimate,
     Label,
     Page,
+    _write_new,
     classify,
     estimate,
     fixed_labels,
@@ -171,3 +172,16 @@ def test_분류가_없는_쪽이나_설명서에_없는_쪽이_있으면_멈춘�
         merge([("luna", [Label(p, True, "이유") for p in PATHS if p != "physics/fluid"])], pages)
     with pytest.raises(ValueError, match="modeling/gone"):
         merge([("luna", [Label(p, True, "이유") for p in (*PATHS, "modeling/gone")])], pages)
+
+
+def test_결과_파일은_없는_폴더에도_한_줄에_쪽_하나씩_쓰고_이미_있으면_건드리지_않고_멈춘다(tmp_path):
+    out = tmp_path / "새 폴더" / "scope.jsonl"
+    _write_new(out, [Label("modeling/array", True, "반복"), Label("physics/fluid", False, "물리")])
+    assert [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines()] == [
+        {"path": "modeling/array", "include": True, "reason": "반복"},
+        {"path": "physics/fluid", "include": False, "reason": "물리"},
+    ]
+    before = out.read_text(encoding="utf-8")
+    with pytest.raises(SystemExit, match="덮어쓰지 않습니다"):
+        _write_new(out, [Label("modeling/uv", True, "새것")])
+    assert out.read_text(encoding="utf-8") == before

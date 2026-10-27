@@ -166,7 +166,7 @@ class ScopedLabel:
     path: str
     include: bool
     reason: str
-    source: str  # 묶음 이름(fixed·decided·luna)
+    source: str  # 가져온 분류 파일 이름(확장자 뺀 것, 예: trial_decided)
 
 
 def merge(sources: Sequence[tuple[str, Iterable[Label]]], pages: Sequence[Page]) -> list[ScopedLabel]:
@@ -267,6 +267,14 @@ def _chosen(pages: list[Page], only: Path | None) -> list[Page]:
     return [by_path[path] for path in paths if path]
 
 
+def _write_new(out: Path, labels: Iterable[Label | ScopedLabel]) -> None:
+    """분류를 한 줄에 쪽 하나(JSON)로 새 파일에 쓴다. 폴더가 없으면 만들고, 파일이 이미 있으면 덮어쓰지 않고 멈춘다."""
+    if out.exists():
+        raise SystemExit(f"{out}가 이미 있습니다. 덮어쓰지 않습니다.")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("".join(json.dumps(asdict(label), ensure_ascii=False) + "\n" for label in labels), encoding="utf-8")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """명령 줄 입구. 돈이 드는 것은 classify뿐이다."""
     parser = argparse.ArgumentParser(description="설명서 쪽을 초보자 범위로 분류합니다.")
@@ -289,21 +297,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     pages = pages_of(load_chunks(args.chunks))
     if args.command == "merge":
-        if args.out.exists():
-            raise SystemExit(f"{args.out}가 이미 있습니다. 덮어쓰지 않습니다.")
         scope = merge([(path.stem, load_labels(path)) for path in args.labels], pages)
-        args.out.write_text("".join(json.dumps(asdict(label), ensure_ascii=False) + "\n" for label in scope), encoding="utf-8")
+        _write_new(args.out, scope)
         for path in args.labels:
             used = [label for label in scope if label.source == path.stem]
             print(f"{path.stem}: {len(used)}쪽 가져옴, 그중 넣음 {sum(label.include for label in used)}")
         print(f"넣음 {sum(label.include for label in scope)}쪽 / 전체 {len(scope)}쪽 → {args.out}")
         return 0
     if args.command == "fixed":
-        if args.out.exists():
-            raise SystemExit(f"{args.out}가 이미 있습니다. 덮어쓰지 않습니다.")
-        args.out.parent.mkdir(parents=True, exist_ok=True)
         labels = fixed_labels(pages, load_courses(COURSES))
-        args.out.write_text("".join(json.dumps(asdict(label), ensure_ascii=False) + "\n" for label in labels), encoding="utf-8")
+        _write_new(args.out, labels)
         print(f"바로 넣는 쪽 {len(labels)}개 → {args.out}")
         return 0
     chosen = _chosen(pages, args.only)
