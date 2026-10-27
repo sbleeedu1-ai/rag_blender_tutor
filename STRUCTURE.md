@@ -106,7 +106,7 @@
 | 도우미 | `blender_tutor/answer_engine.py` | 답 엔진: 질문 + 작업 상태 + 지금 단계 → 설명서 검색 → 답 글 흐름 + 근거 목록(+ 평가용 검색 결과·붙인 연습 과정) | 21-23, 29 |
 | 도우미(임시) | `blender_tutor/stand_in.py` | 진짜 모델 전 무료 임시 엔진: `data/`로 엔진 만들기, 낱말 세기 임베딩, 1.5초 쉬고 정해 둔 글을 흘리는 가짜 답변. 엔진 설정을 받음(평가 프로그램이 바꿔 넘김). 티켓 31·33 뒤 `archive/`로 | 26, 29 |
 | 자료 만들기 + 읽기 | `blender_tutor/manual_chunks.py` | 만들기: 설명서 HTML → 소제목 단위 청크(`data/chunks/`, 한 번 돌림, `save_chunks`). 읽기: 청크 파일(`load_chunks`)과 청크 서식 `Chunk`(답 엔진이 씀) | 19 |
-| 자료 만들기 + 읽기 | `blender_tutor/menu_names.py` | 만들기: 설명서의 블렌더 표기 ↔ 화면 한국어 번역 사전(`data/menu_names/`, 한 번 돌림). 읽기: 사전 `MenuNames`(답 엔진이 씀) | 20 |
+| 자료 만들기 + 읽기 | `blender_tutor/menu_names.py` | 만들기: 설명서의 블렌더 표기 ↔ 화면 한국어 번역 사전(`data/menu_names/`, 한 번 돌림). 읽기: 사전 `MenuNames(이름들, 고정 짝, 통과 제목)`(답 엔진이 씀). 고정 짝·통과 제목이 사전과 어긋나면 바로 멈춤 | 20, 31 |
 | 자료 만들기 | `blender_tutor/menu_review.py` | 메뉴 이름 검수 초안: 초보자 범위 안 "번역 여러 개"·"제목에서만" 이름을 Blender가 실제로 쓰는 문맥과 맞대 자동/갈림/못 찾음으로 나눔(`data/menu_names/scope_review.json`, 한 번 돌림) | 31 |
 | 자료 만들기 | `blender_tutor/blender_ui_labels.py` | Blender 안에서 돈다(`menu_review`가 화면 없이 띄움): 조작·속성·고르는 값·메뉴·패널 이름과 화면 파이썬 코드의 `text=`가 쓰는 번역 문맥을 모두 뽑음(`data/menu_names/ui_labels.json`). 조작 단추 글자는 조작 문맥, C 코드 메뉴 4개는 손으로 적음 | 31 |
 | 자료 만들기 | `blender_tutor/beginner_scope.py` | 설명서 쪽을 초보자 범위로 나눔(한 번 돌림, 손으로). `fixed`: 바로 넣는 쪽, `estimate`: 비용 어림, `classify`: 모델에게 물음(유료), `merge`: 분류 파일들 → 최종 범위. 모양은 6절 아래 | 30 |
@@ -117,7 +117,8 @@
 | 공통 | `blender_tutor/paths.py` | 프로젝트 폴더 위치(`PROJECT`), 연습 과정 폴더, 진행 기록 폴더 고르기(설정 폴더에 쓸 수 없으면 사용자 폴더). 함께 쓰는 경로가 늘면 여기에 | 26 뒤, 27 |
 | 시험 | `tests/` | 기본 테스트(API 키·Blender 없이) | 각 티켓 |
 | 시험 | `addon/selftest.py` | Blender를 화면 없이 띄워 애드온을 확인(기본 테스트 밖) | 25 |
-| 저장소 | `menu_choices.json` | 번역이 여러 개인 메뉴 이름의 고정 짝: `"영어 이름": "문맥"`, 메뉴마다 다르면 `"앞 단 > 이름": "문맥"`(예: `"Add > Empty": "Operator"` → 추가 메뉴에서만 "비어 있음"). 지금은 비어 있음(티켓 31 검수 뒤 적음) | 23, 31 |
+| 저장소 | `menu_choices.json` | 번역이 여러 개인 메뉴 이름의 고정 짝: `"영어 이름": "문맥"`, 메뉴마다 다르면 `"앞 단 > 이름": "문맥"`(예: `"Add > Empty": "Operator"` → 추가 메뉴에서만 "비어 있음"). 초보자 범위 113개 중 112개 + 경로 열쇠 6개(티켓 31 화면 검수). 화면이 영어인데 후보에 영어가 없는 이름(Smart UV Project)은 적지 않음 → 영어 그대로 | 23, 31 |
+| 저장소 | `menu_titles.json` | 제목에서만 뽑은 이름 가운데 검수를 통과한 영어 이름 목록(`["Solidify", …]`, 80개). 질문 속 메뉴 이름 찾기(`english_in`)는 이것만 씀. 탈락·미검수 제목은 뺌 | 31 |
 | 저장소 | `menu_aliases.json` | 설명서 철자 → 화면 철자 표(예: `"Icosphere": "Ico Sphere"`). 사전을 만들 때 번역을 화면 철자로 찾음 | 31 |
 | 프로젝트 설정 | `pyproject.toml` | 프로젝트 신분증 겸 설정(TOML 형식): 필요한 파이썬(3.12 이상), 부품 목록(PyYAML·beautifulsoup4·numpy·rank-bm25·PySide6-Essentials, 개발용 pytest), 설치할 폴더(`blender_tutor`), 테스트 설정. `pip install -e ".[dev]"`·pytest·GitHub 자동 테스트가 읽는다. 부품을 더하면 다른 PC에서 설치 명령을 다시 돌린다. `addon/`은 여기 없다(설치 명령이 Blender 폴더에 복사) | 15 |
 
@@ -240,6 +241,7 @@
 Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_chunks.jsonl (소제목 단위 청크)
 설명서 HTML + 화면 번역 ko.po·fr.po (+ menu_aliases.json) ──menu_names──▶ data/menu_names/menu_names.json (메뉴 이름 사전)
 사전 + 초보자 범위 + Blender(화면 없이) ──menu_review──▶ data/menu_names/scope_review.json (검수 초안, 티켓 31)
+검수 초안 + Haiku 판단 + 사용자 화면 검수 ──(한 번 합침)──▶ menu_choices.json · menu_titles.json (저장소, 티켓 31)
 청크 ──임베딩(유료, 티켓 31)──▶ 청크 벡터 (예정)
 ```
 

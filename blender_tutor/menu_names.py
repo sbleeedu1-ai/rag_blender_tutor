@@ -64,11 +64,13 @@ class MenuName:
 class MenuNames:
     """메뉴 이름 사전: 영어 이름 → 번역들, 한국어 이름 → 영어 이름들."""
 
-    def __init__(self, names: Iterable[MenuName], choices: Mapping[str, str] = {}):
+    def __init__(self, names: Iterable[MenuName], choices: Mapping[str, str] = {}, titles: Iterable[str] = ()):
         """choices는 번역이 여러 개인 이름에 고정한 짝: 영어 이름 → 화면이 쓰는 문맥(사용자 검수, 티켓 23).
 
         열쇠에 바로 앞 단을 붙이면("Add > Empty") 그 메뉴 아래서만 쓰는 짝이다. 같은 이름도 메뉴·패널마다
         문맥이 달라 글자가 다르게 보이기 때문이다(Empty: 추가 메뉴 "비어 있음", 속성 창 "엠프티", 티켓 31).
+
+        titles는 제목에서만 뽑은 이름 가운데 검수를 통과한 영어 이름들이다(티켓 31). 이것만 질문 찾기에 쓴다.
         """
         self._by_english = {_english_key(name.english): name for name in names}
         self._choices: dict[tuple[str, str], str] = {}  # (앞 단, 이름) → 문맥. 앞 단이 ""이면 이름 하나의 짝
@@ -86,7 +88,13 @@ class MenuNames:
         for name in self._by_english.values():
             for translation in name.translations:
                 self._by_korean.setdefault(_korean_key(translation.korean), {})[name.english] = None
-        self._in_questions = _question_index(self._by_english.values())  # english_in이 쓰는 표
+        titles = tuple(titles)
+        passed = {_english_key(english) for english in titles}
+        for english in titles:  # 고정 짝처럼 틀린 이름은 바로 멈춘다(오타·사전 다시 만든 뒤 어긋남)
+            name = self.get(english)
+            if name is None or name.sources != (Source.TITLE,):
+                raise ValueError(f"통과 제목 {english!r}: 사전에 제목에서만 뽑은 이름으로 없음")
+        self._in_questions = _question_index(self._by_english.values(), passed)  # english_in이 쓰는 표
 
     def __iter__(self):
         return iter(self._by_english.values())
@@ -120,7 +128,7 @@ class MenuNames:
         띄어쓰기는 무시하고 왼쪽부터, 자리마다 가장 긴 이름 하나를 고른다(중심을 찾으면 그 안의 심은 보지 않는다).
         한 글자 이름(면·폭 등)은 낱말 시작이나 앞 이름 바로 뒤에서만 인정한다(하려면의 면을 거르려고).
         '기'로 끝나는 이름은 '기'를 뗀 꼴로도 찾는다(합치기 → 합치려면).
-        제목에서만 뽑은 이름은 검수 전이라 쓰지 않는다(티켓 30 뒤 검수).
+        제목에서만 뽑은 이름은 검수를 통과한 것(titles)만 쓴다(티켓 31).
 
         검색어 보조일 뿐이라 예외를 더 두지 않는다. 알려진 한계(지어낸 질문으로 확인, 티켓 22 Comments):
         - 모양이 바뀐 동사 꼴(합쳤는데·숨긴)은 못 찾는다
@@ -172,8 +180,13 @@ class MenuNames:
         """철자 표 파일(설명서 철자 → 화면 철자 JSON). 번역 글자가 없어 저장소에 커밋한다(menu_aliases.json)."""
         return json.loads(path.read_text(encoding="utf-8"))
 
+    @staticmethod
+    def load_titles(path: Path) -> list[str]:
+        """통과 제목 파일(영어 이름 목록 JSON). 번역 글자가 없어 저장소에 커밋한다(menu_titles.json)."""
+        return json.loads(path.read_text(encoding="utf-8"))
+
     @classmethod
-    def load(cls, path: Path, choices: Mapping[str, str] = {}) -> "MenuNames":
+    def load(cls, path: Path, choices: Mapping[str, str] = {}, titles: Iterable[str] = ()) -> "MenuNames":
         rows = json.loads(path.read_text(encoding="utf-8"))
         names = [
             MenuName(
@@ -185,14 +198,17 @@ class MenuNames:
             )
             for row in rows
         ]
-        return cls(names, choices)
+        return cls(names, choices, titles)
 
 
-def _question_index(names: Iterable[MenuName]) -> dict[str, tuple[str, ...]]:
-    """질문 찾기용 표: 한국어(띄어쓰기 뺀 것, '기'를 뗀 꼴 포함) → 영어 이름들. 제목에서만 뽑은 이름은 뺀다."""
+def _question_index(names: Iterable[MenuName], passed: set[str] = set()) -> dict[str, tuple[str, ...]]:
+    """질문 찾기용 표: 한국어(띄어쓰기 뺀 것, '기'를 뗀 꼴 포함) → 영어 이름들.
+
+    제목에서만 뽑은 이름은 통과 목록(passed, 영어 열쇠)에 있는 것만 넣는다.
+    """
     index: dict[str, dict[str, None]] = {}
     for name in names:
-        if name.sources == (Source.TITLE,):
+        if name.sources == (Source.TITLE,) and _english_key(name.english) not in passed:
             continue
         for translation in name.translations:
             index.setdefault(_korean_key(translation.korean), {})[name.english] = None

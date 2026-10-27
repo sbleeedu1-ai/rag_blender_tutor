@@ -1,3 +1,5 @@
 {
- "Icosphere": "Ico Sphere"
+ "Icosphere": "Ico Sphere",
+ "Snap To": "Snap to",
+ "Omitting Sparse Accessor if data is empty": "Omitting Sparse Accessor if Data is Empty"
 }

@@ -61,6 +61,7 @@ def build_engine(
     data_dir: Path,
     model: AnswerModel | None = None,
     menu_choices: Path = PROJECT / "menu_choices.json",
+    menu_titles: Path = PROJECT / "menu_titles.json",
     courses: Sequence[Course] = (),
     settings: Settings = Settings(),
 ) -> AnswerEngine:
@@ -74,7 +75,11 @@ def build_engine(
     chunks = load_chunks(data_dir / "chunks" / "manual_chunks.jsonl")
     embedder = WordEmbedder()
     names_path = data_dir / "menu_names" / "menu_names.json"
-    names = MenuNames.load(names_path, MenuNames.load_choices(menu_choices)) if names_path.exists() else None
+    names = (
+        MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles))
+        if names_path.exists()
+        else None
+    )
     vectors = embedder.embed([chunk.text for chunk in chunks], timeout=0)
     course_vectors = embedder.embed([f"{course.name} {course.summary}" for course in courses], timeout=0)
     return AnswerEngine(

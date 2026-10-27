@@ -651,3 +651,21 @@
   - 화면 확인 49줄: 처음 그대로 맞음 35, Claude가 다시 거른 것이 맞음 10, 화면을 보고 틀린 줄 안 것 4(Link to Collection·Strength·Bisect·Overlap). 틀린 원인은 주로 뽑은 자료의 빈틈(C 코드, 조작 단추 규칙)
   - 자리마다 글자가 다른 이름 6개(Empty·New·Normal·Crease·Bisect·Randomize)
   - 테스트 450개 통과. 비용 0(Haiku 하위 에이전트 3개 약 30만 토큰, 조사 하위 에이전트 약 19만 토큰, 구독 한도 안)
+
+### [66] 2026-10-27 · 메뉴 이름 화면 검수를 마치고 고정 짝·통과 제목 파일로 저장 (티켓 31, 진행 중)
+
+- 제안: Claude가 남은 197줄(`data/menu_names/remaining_route.md`)을 묶음마다 길과 함께 보이고, 길이 확실하지 않은 줄은 설명서 쪽과 화면 글자 뽑기 결과로 먼저 확인. 제목은 ko.po에서 같은 글자로 번역된 영어 수·그 글자가 든 번역 수를 세어 근거로 냄. 저장은 통과 제목을 새 파일 `menu_titles.json`에 두자고 권함
+- 사용자 선택
+  - 길 안내: "아니 길이 확실하지 않으면 설명서 찾아보고 얘기해"(그 뒤 불확실한 줄은 설명서 원문을 붙여 안내)
+  - 제목 판단 기준: "단 하나도 없으면 통과고 뭐라도 있으면 탈락으로"(89 Exporters), 일상 낱말은 탈락("다른 메뉴에서도 쓰이고 좀 보통명사 느낌이니", 47 Canvas). 같은 글자가 같은 기능의 다른 문맥·꼴뿐이면 통과(112 노드 에디터, 183·184 스냅)
+  - 146 Unlink: 처음엔 공식 글자(연결를 해제)로 정했다가 머티리얼 줄이 "연결을 해제"인 것을 보고 "그래도 연결을 해제로 가자 사용자가 그정도 오타는 알아서 보겠지"
+  - 154 Single: 한 메뉴 안에서 싱글 1줄·단일 3줄 → "단일로 가자"
+  - 저장 방식: 통과 제목 파일 따로 둠("ㅇㅇ ㄱㄱㄱ")
+- 결과
+  - 197줄 모두 판단(`data/menu_names/remaining_review.json`). 여러 번역 50개 중 화면과 달라 문맥을 바꾼 것 8개(13 None 없음, 39 Smart UV Project 영어, 65 Clipping 클립핑, 75 Projection 프로젝션, 76 Extension 확장, 121 Translate 번역, 145 Isolate 분리, 154 Single 단일). 제목 136개 통과 74·탈락 62, Haiku와 다르게 정한 것 27개(통과로 15: 2·12·52·61·71·89·99·100·103·107·116·149·152·183·184, 탈락으로 12: 10·15·38·41·47·83·137·138·151·153·157·180)
+  - 철자 11개: 화면이 설명서 철자와 다른 것 2개를 철자 표에 더함(Snap To → Snap to, Omitting Sparse Accessor if data is empty → …if Data is Empty). 196 Save as Render는 5.2 저장 창에 그 칸이 없어 그대로
+  - 저장: 자동 → Haiku → Claude 재검토 → 첫 검수 → 오늘 검수 차례로 합쳐(`data/menu_names/merge_menu_review.py`, 한 번 돌림) `menu_choices.json` 짝 112개 + 경로 열쇠 6개, `menu_titles.json` 통과 80개(오늘 74 + 첫 검수 6). Smart UV Project는 후보에 영어가 없어 짝을 적지 않음(고정 전이면 영어 그대로). 자동·Haiku에 없던 Edge·Selected Objects는 첫 검수 화면 글자(엣지, 선택된 오브젝트)로
+  - `MenuNames`가 통과 제목을 받아 질문 찾기에 넣고, 사전에 없거나 제목에서만 뽑은 이름이 아니면 바로 멈춤. 사전은 철자 표로 다시 만듦(이전 것 `menu_names_v2.json`)
+  - 실제 사전 예: "솔리디파이 두께 제한을 바꾸려면" 전 Phi·Thickness·Limit·Limits·Restrict·Replace → 후 Solidify·Thickness Clamp·Replace
+  - Claude 실수: 74번 때 "셰인함"을 "세인함"으로 잘못 읽음(사용자가 확대해 바로잡음), 79번 "출력"이 화면에 없다고 했다가 노드 추가 메뉴에 있었음, 47·154번 길을 짐작으로 냄
+  - 테스트 454개 통과. 비용 0

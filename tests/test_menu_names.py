@@ -296,8 +296,36 @@ def test_고정_짝_파일을_읽는다(tmp_path):
     assert MenuNames.load_choices(path) == {"Apply": "WindowManager"}
 
 
-def test_저장소의_고정_짝은_실제_사전과_맞는다():
+# 제목에서만 뽑은 이름의 통과 목록(티켓 31 검수): 통과한 것만 질문 찾기에 쓴다. 저장소의 menu_titles.json에 커밋한다
+TITLE_NAMES = [
+    MenuName("Join", (Translation("합치기", ("*",)),), 1, "", (Source.UI,)),
+    MenuName("Solidify", (Translation("솔리디파이", ("*",)),), 1, "", (Source.TITLE,)),
+    MenuName("Recent", (Translation("최근", ("*",)),), 1, "", (Source.TITLE,)),
+]
+
+
+def test_통과한_제목만_질문에서_찾는다():
+    question = "최근에 솔리디파이를 합치려면"
+    assert MenuNames(TITLE_NAMES, titles=["Solidify"]).english_in(question) == ("Solidify", "Join")
+    assert MenuNames(TITLE_NAMES).english_in(question) == ("Join",)  # 통과 목록이 없으면 제목은 모두 뺀다
+
+
+@pytest.mark.parametrize("titles", [["Solidfy"], ["Join"]])  # 사전에 없는 이름(오타), 제목에서만 뽑은 이름이 아님
+def test_잘못된_통과_목록은_바로_알린다(titles):
+    with pytest.raises(ValueError):
+        MenuNames(TITLE_NAMES, titles=titles)
+
+
+def test_통과_제목_파일을_읽는다(tmp_path):
+    path = tmp_path / "menu_titles.json"
+    path.write_text('["Solidify"]', encoding="utf-8")
+    assert MenuNames.load_titles(path) == ["Solidify"]
+
+
+def test_저장소의_고정_짝과_통과_제목은_실제_사전과_맞는다():
     dictionary = REPO / "data" / "menu_names" / "menu_names.json"
     if not dictionary.exists():
         pytest.skip("data/에 메뉴 이름 사전이 없음(커밋하지 않는 자료)")
-    MenuNames.load(dictionary, MenuNames.load_choices(REPO / "menu_choices.json"))  # 틀리면 ValueError
+    choices = MenuNames.load_choices(REPO / "menu_choices.json")
+    titles = MenuNames.load_titles(REPO / "menu_titles.json")
+    MenuNames.load(dictionary, choices, titles)  # 틀리면 ValueError
