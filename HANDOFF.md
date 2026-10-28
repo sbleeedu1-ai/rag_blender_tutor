@@ -1,26 +1,16 @@
 # 인수인계
 
-마지막 갱신: 2026-10-27 밤 · Claude · B783D5080(집 PC) · 브랜치 `feat/31-translate-embed`(원격에 올림, PR 아직 없음). 앞 세션이 세션 한도 때문에 문장 뜻 검수를 새 세션으로 넘김
+마지막 갱신: 2026-10-28 · Claude · 강의실 PC · 브랜치 `feat/31-translate-embed`(원격에 올림, PR 아직 없음). 번역 뜻 검수를 모두 끝내고 5시간 한도 때문에 멈춤
 
 ## 다음 할 일
 
 티켓 순서(HISTORY [62]): 30(끝남) → **31(진행 중)** → 34 → 33 → 32 → 35 → 36·37. 38은 needs-triage.
 
-1. **티켓 31 3단계: 번역 문장 뜻 검수(표본, 무료)**. 이름 검수는 끝났다(HISTORY [72]-[75]). 이름이 아닌 문장의 뜻이 틀린 곳은 코드로 못 잡아서 Claude가 읽는다
-   - **방법: Sonnet(노력치 medium)으로 나머지 전부**(HISTORY [76], 100개 시험에서 5시간 약 3%·주간 약 1%, 진짜 지적 4/8, 놓침 없음 5/5). 주간 한도는 2026-10-30 0시에 다시 참
-     1. `data/translations/make_meaning_sample.py`를 고쳐 **청크마다 이름표(`translate.glossary(..., body)`)를 함께 적고**, 이미 본 100개(씨앗 2027)를 뺀 1,279개를 100개씩 파일 13개로 나눈다
-     2. Sonnet 세션(Claude 데스크톱이면 새 세션, VS Code 터미널이면 `claude --model sonnet`)이 파일마다 읽고 `meaning_review_sonnet_<n>.md`에 적는다. 지시문은 [76] 시험 때와 같게 하되 "이름표의 글자는 공식 화면 글자라 지적하지 않는다"를 더한다
-     3. Opus가 지적만 읽고 확인해 `apply_fixes_ko_none.py`에 더한다(긴 Opus 대화는 한 번 답할 때 5시간 한도 약 1%를 쓰니 새 세션에서)
-   - **VS Code 터미널(CLI)에서 할 때**: 구독 한도는 데스크톱 앱과 같은 계정이라 함께 쓴다. 다른 점은 세션을 직접 열고, 끝난 알림이 없다는 것
-     1. 터미널 1(Opus): `cd C:\WORK\rag_blender_tutor` → `claude` → "AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번의 1단계(표본 파일 13개 만들기)까지 해"
-     2. 터미널 2(Sonnet): `cd C:\WORK\rag_blender_tutor` → `claude --model sonnet` → 노력치는 `/model` 메뉴에서 medium(정확한 방법은 `/help`로 확인) → 파일마다 "`data/translations/meaning_sample_<n>.md` 하나만 읽고 뜻을 검수해 `meaning_review_sonnet_<n>.md`에 써. 규칙은 HISTORY [76] 시험 지시문과 같고, 이름표의 글자는 지적하지 않는다. git·API·다른 파일 고치기는 하지 마"
-     3. 사용량은 각 터미널에서 `/usage`. 한 파일이 끝날 때마다 늘어난 %를 보고, 주간 한도가 모자라 보이면 멈춘다
-     4. 다 끝나면 터미널 1에 "meaning_review_sonnet_*.md 지적을 확인해 반영해"라고 알린다(자동 알림 없음)
-   - 두 터미널이 같은 폴더를 쓰므로 Sonnet 쪽은 결과 파일 쓰기 외에 아무것도 하지 않게 한다
-   - 번역은 `translation_check.reviewed(Path("data/translations/ko_none.jsonl"))`로 읽는다(모델 원본 위에 고친 줄을 덮음). 원문은 `translate._in_scope(...)`의 `Piece.chunk.text`. 원문과 번역은 줄 나눔이 같아 줄 번호로 맞댈 수 있다
-   - 고칠 것은 `data/translations/apply_fixes_ko_none.py`의 `FIXES`에 더하고 그 스크립트를 다시 돌린다(바꿀 글자가 없으면 멈춤). 그다음 `.venv\Scripts\python -m blender_tutor.translation_check data\translations\ko_none.jsonl`로 다시 검사
-   - 판단 기준: 원문과 화면이 **같은 것을 가리킬 때** 어색하거나 오타가 있어도 화면 글자를 따른다([66] 146 Unlink, [75]). LMB → 마우스 왼쪽 버튼처럼 풀어 쓴 것은 둔다([71])
-   - 틀린 곳이 많으면 B안(번역 모델에 원문 + 번역을 주고 뜻이 다른 문장만 표시하게 함, 유료 약 $0.1-0.2 어림)을 **비용을 다시 계산해 보이고 확인받은 뒤**
+1. **티켓 31 3단계 뜻 검수: 끝남**(HISTORY [76]-[92]). 1,379청크 모두 Sonnet이 지금 지시문으로 봤고, 지적은 Opus가 원문·ko.po·코드 후보와 맞대어 확인한 뒤 사용자 판단을 받아 반영했다
+   - 고침은 모두 `data/translations/apply_fixes_ko_none.py` 한 곳: `FIXES`(한 곳 고침 175건) + 아래쪽 낱말 맞추기 규칙(정점→버텍스, 모서리→에지, 면→페이스(줄 목록), 본→뼈대, 재질→머티리얼, 연산자→작업자, 압축→포장, 편집 모드→에디트 모드, 법선→노멀, 빈 오브젝트→엠프티, 메쉬→메시, 커스텀 노멀, 셰인함, 지오메트리, 수정자→모디파이어, 초점의 길이 등, 영어 괄호 규칙 [83], 같은 원문 줄 하나로 `SAME_SOURCE`). 다시 돌리면 `ko_none_fixes.jsonl`을 새로 씀
+   - 규칙: 원문 같은 줄에 그 영어가 있을 때만 바꾸고, 청크 이름표의 화면 이름은 지킨다(ko.po 오타 "슬롯를"도 따름). 바꾼 뒤 늘 `translation_check`로 걸린 곳 수를 본다(지금 94, 늘면 원인부터)
+   - 결과: 고친 청크 481개, 번역 검사 94곳(모두 일부러 둔 것). 표본·Sonnet 결과는 `data/translations/meaning_sample_*.md`·`meaning_review_sonnet_*.md`, 옛 판은 `archive/`
+   - 티켓 31을 닫을 때 Comments에: 청크 옵션 이름이 붙어 뽑힘(Clamp or, Boundary Complex Mode 등), 그림 경로를 청크에 안 남김([77] 사용자 결정), 남은 번역투(어색함)는 4단계 평가 때 보기로 함
 2. PR 전에 `STRUCTURE.md`에 `blender_tutor/translate.py`·`translation_check.py`와 `data/translations/` 파일 모양을 넣는다
 3. 마지막 사용자 검수 목록: 무작위 50개 + ko.po에서 온 소문자 섞인 이름(설명 글 같은 것)이 든 청크([71])
 4. 4단계 임베딩(유료, large 한 벡터/두 벡터 + bge-m3 한 번 비교, 개발용 한국어 질문 20개). 번역을 청크 파일 안으로 합치는 것도 이때(C3: 저장 형식을 읽는 규칙을 한곳에)
