@@ -4,13 +4,13 @@
 
 ## 다음 할 일
 
-1. [40번 소규모 검색 비교](.scratch/mvp-roundtrip/issues/40-소규모-검색-비교.md)의 **약 200청크 검색 묶음**부터 한다. 질문 20개(웹 10 + AI 10)와 정답 청크는 확정했다(HISTORY [94]-[97]). 정답 청크에 헷갈릴 청크와 다른 분야 청크를 더해 200개를 목표로 한다. 필요한 정답·경쟁 후보를 빼서 개수를 맞추지 않는다.
-2. 그다음 비교 프로그램(18개 조합, 상위 4·6·8개, 시간 측정)을 만든다. 자동 시험은 가짜 임베딩으로. 유료 실행 전 추정 비용을 보여 주고 확인받는다(조각 약 200개 임베딩 + 질문 처리 1,080회 중 large 540회).
+1. [40번 소규모 검색 비교](.scratch/mvp-roundtrip/issues/40-소규모-검색-비교.md)의 질문 20개와 **200청크 검색 묶음은 확정**했다(HISTORY [94]-[98]). 묶음은 `data/search_compare/pool/pool_v1.jsonl`(정답 46·헷갈릴 청크 92·다른 분야 62, 번역 45%).
+2. 다음은 비교 프로그램(18개 조합, 상위 4·6·8개, 시간 측정)을 만든다. 자동 시험은 가짜 임베딩으로. 유료 실행 전 추정 비용을 보여 주고 확인받는다(조각 약 200개 임베딩 + 질문 처리 1,080회 중 large 540회).
 3. 40번 결과로 31번 검색 방식 선택을 이어 간다. 이후 34 → 33 → 32 → 35 → 36·37(HISTORY [62]).
 
 ## 지금 상태와 검증
 
-- 이번 세션 커밋: HISTORY [94]-[97](`4044bbe`·`852d9d0`·`1f2577a`·`d1db53f`), 모두 푸시. 코드는 바꾸지 않았다.
+- 이번 세션 커밋: HISTORY [94]-[98], 모두 푸시. 저장소 코드는 바꾸지 않았다(만든 프로그램은 모두 data/ 안).
 - 강의실 PC .venv에 PyTorch 2.15.0 CPU판·sentence-transformers·openai를 설치하고 BGE-M3를 받았다(`C:\Users\201\.cache\huggingface\hub\models--BAAI--bge-m3`, 4.3GB). 첫 불러오기 24.5초, 문장 2개 0.39초. 그래픽카드 GTX 950(2GB)은 쓰지 않음. **pyproject.toml에는 아직 안 적음**(40번 구현 때 별도 설치 묶음으로, 티켓 Comments에 남김).
 - 마지막 pytest는 어제 490개 통과. 오늘은 코드 변경이 없어 다시 돌리지 않았다.
 
@@ -19,7 +19,7 @@
 - `data/search_compare/questions/web_questions.jsonl`: 웹 질문 W1-W10. 원문 말투, 만든 방식(`written_from`)·확인한 것(`checked`)·근거 글 주소·조회수·정답 묶음(`answer_groups`: 묶음 안은 서로 대신, 묶음이 둘이면 둘 다 필요).
 - `data/search_compare/questions/ai_questions.jsonl`: AI 질문 A1-A7·A9-A11(A8·A12는 뺀 이유와 함께 기록).
 - `data/search_compare/web_questions/v1_대조용_2026-10-29/`(1판, 대조용)·`v2_사이트별_2026-10-29/`(SE·BA·DC·인프런 원자료 raw/와 README.md).
-- `data/search_compare/scripts/`: 위 두 질문 파일을 만드는 프로그램과 정답 후보 찾기 프로그램. 다시 만들 때 `.venv\Scripts\python -I data\search_compare\scripts\build_web_questions.py` 뒤 `build_ai_questions.py`(겹침 검사 포함).
+- `data/search_compare/scripts/`: 위 두 질문 파일을 만드는 프로그램과 정답 후보 찾기 프로그램. 다시 만들 때 `.venv\Scripts\python -I data\search_compare\scripts\build_web_questions.py` 뒤 `build_ai_questions.py`(겹침 검사 포함), 그다음 `build_pool.py`(묶음)와 `check_hidden_answers.py`(숨은 정답 후보를 사람이 읽고 판단).
 - **data/search_compare/(약 7.8MB)는 아직 드라이브 백업 전**이다. 다른 PC로 가기 전에 백업한다.
 
 ## 모르면 실수할 것
