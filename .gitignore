@@ -17,3 +17,6 @@ docs/산출물/
 __pycache__/
 *.egg-info/
 .pytest_cache/
+
+# 실험 결과(웹 질문 원문 포함, 커밋하지 않음 — HISTORY [102])
+results/
