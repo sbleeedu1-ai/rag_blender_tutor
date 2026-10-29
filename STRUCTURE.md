@@ -99,7 +99,7 @@
 | 도우미 | `blender_tutor/course_desk.py` | 창마다 진행: Blender 창 번호마다 진행 관리 하나, 대화에 붙일 말, 카드에 보일 모양, 뒤에 있는 Blender의 알림 모아 두기 | 27 |
 | 도우미 | `blender_tutor/state_stream.py` | 흐름 기록: 창마다 진행에 들어간 봉투·카드 단추를 차례대로 파일에 남기고(`RecordingDesk`), 그 파일을 새 진행 관리에 다시 넣는다(`replay`, 회귀 테스트용) | 28 |
 | 도우미 | `blender_tutor/progress_record.py` | 진행 관리 창구: 파일마다 진행 기록(바뀔 때마다 + 저장 때 자리)·이어 하기, 연습 과정 고르기·바꾸기(덮어쓸지 확인), 떠 있는 물음과 [네]/[아니요] | 18, 27 |
-| 도우미 | `blender_tutor/progress.py` | 담당자: 연습 과정 파일 읽기, 연습 과정 하나의 진행. 조작을 차례로 안내하고 감지 조건이 맞으면 다음 조작, 끝난 조건이 맞으면 묻고 깨지면 거두기, 단계 옮기기 | 17, 27 |
+| 도우미 | `blender_tutor/progress.py` | 담당자: 연습 과정 파일 읽기(이름·한 줄 설명·비슷한 말 → `Course.search_text`, 비슷한 연습 과정 고르기에 임베딩), 연습 과정 하나의 진행. 조작을 차례로 안내하고 감지 조건이 맞으면 다음 조작, 끝난 조건이 맞으면 묻고 깨지면 거두기, 단계 옮기기 | 17, 27 |
 | 도우미 | `blender_tutor/conditions.py` | 판정표: 끝난 조건·감지 조건 13종류의 "값의 꼴"과 "맞는지 판정"(지금 상태와 기준 상태를 견줌) | 17, 27 |
 | 도우미 | `blender_tutor/korean_particles.py` | 한국어 조사 고르기: 이름 끝 받침에 따라 "이에요/예요", "으로/로" | 27 |
 | 도우미 | `blender_tutor/timing.py` | 시간 기록: 질문마다 F10 누름·받음·입력 가능·보냄·첫 글자·답 끝 시각, PC 이름, 그때의 엔진 이름·설정(생각 수준 등)을 한 줄로 | 28 |
@@ -113,7 +113,7 @@
 | 평가 | `blender_tutor/evaluate.py` | 평가 프로그램(도우미 밖에서 손으로 돌림). `run`: 문항 파일 → 답 엔진에 바로 넣어 답·검색 결과·검색 적중. `times`: 시간 기록 → PC·엔진·설정 묶음마다 중앙값·최대값. 결과는 `results/<날짜>_<이름>/`에 새로(있으면 멈춤). 모양은 6절 아래 | 29 |
 | 자료 만들기 + 읽기 | `blender_tutor/manual_vectors.py` | 만들기(손으로 한 번, 유료라 `--yes` 필요): 설명서 전체 청크 영어 원문 → text-embedding-3-large 벡터 → `data/vectors/manual_text-embedding-3-large.npz`(vectors 3,072차원·keys 청크 열쇠·digests 글 해시, 있으면 멈춤) + 같은 이름 .json(실제 토큰·비용). 읽기: `load(파일, 청크)`가 지금 청크와 열쇠·글이 다르면 멈춤. OpenAI 임베딩 연결 `OpenAIEmbedder`(응답 없음 → TimeoutError)도 여기 있고 검색 비교가 함께 씀 | 31 |
 | 평가 | `blender_tutor/search_compare.py` | 소규모 검색 비교(손으로 돌림). 같은 질문 20개·200청크 묶음으로 임베딩 모델 2 × 뜻 검색에 넣는 글 3 × BM25 3 = 18조건의 정답 근거 적중(상위 4·6·8개)과 질문 처리 시간을 잰다. 검색용 DB는 `data/search_compare/db/`에 만들고 재사용. 결과는 `results/<날짜>_<이름>/`에 새로(있으면 멈춤). 모양은 6절 아래. 답 엔진은 바꾸지 않는다 | 40 |
-| 만드는 사람 | `blender_tutor/course_check.py` | 연습 과정 파일 검사 | 15, 24 |
+| 만드는 사람 | `blender_tutor/course_check.py` | 연습 과정 파일 검사. 설명서 자료와 맞댈 때 청크 파일은 답 엔진과 같은 `manual_chunks.load_chunks`로 읽는다 | 15, 24, 31 |
 | 만드는 사람 | `courses/*.yaml` | 연습 과정(검 `sword.yaml`, 공통 준비 `_common.yaml`) | 16 |
 | 설치 | `blender_tutor/install_addon.py` | 애드온을 Blender 애드온 폴더에 복사하고 `config.json`(도우미 켜는 법·비밀 글자)을 적음 | 25 |
 | 공통 | `blender_tutor/paths.py` | 프로젝트 폴더 위치(`PROJECT`), 연습 과정 폴더, 진행 기록 폴더 고르기(설정 폴더에 쓸 수 없으면 사용자 폴더). 함께 쓰는 경로가 늘면 여기에 | 26 뒤, 27 |

@@ -3,7 +3,6 @@
 일부러 틀린 작은 YAML을 임시 폴더에 써 넣고, 검사가 돌려준 문제의 종류만 본다.
 """
 
-import json
 from pathlib import Path
 
 import pytest
@@ -11,6 +10,7 @@ import pytest
 from unittest.mock import ANY
 
 from blender_tutor.course_check import Problem, check_folder, load_manual
+from blender_tutor.manual_chunks import Chunk, save_chunks
 
 # 검사를 통과하는 가장 작은 공통 준비 파일과 연습 과정 파일.
 # 테스트마다 한 군데만 바꿔서 틀리게 만든다.
@@ -266,18 +266,15 @@ def test_끝난_조건_값의_꼴이_틀리면_잡는다(tmp_path, condition):
 MANUAL_BODY = "Merge combines the selected vertices into one single vertex placed at their center point."
 
 
-def write_data(tmp_path: Path, chunks: list[dict] | None = None, ko: str = "", fr: str = "") -> Path:
-    """가짜 data/ 폴더: 청크 파일, ko.po, fr.po."""
+ORBIT = Chunk("editors/3dview/navigate/navigation", "orbit", "editors", "editors/3dview/navigate", "Navigation", ("Orbit",), "Orbit.")
+MERGE = Chunk("modeling/meshes/editing/mesh/merge", "merge", "modeling", "modeling/meshes/editing/mesh", "Merge", ("Merge",), MANUAL_BODY)
+
+
+def write_data(tmp_path: Path, ko: str = "", fr: str = "") -> Path:
+    """가짜 data/ 폴더: 청크 파일(실제 저장 함수 save_chunks로 써서 답 엔진과 같은 모양), ko.po, fr.po."""
     data = tmp_path / "data"
-    (data / "chunks").mkdir(parents=True)
-    (data / "ui_ko_5.2").mkdir()
-    if chunks is None:
-        chunks = [
-            {"page_path": "editors/3dview/navigate/navigation", "anchor": "orbit", "url": "https://x/orbit", "body": "Orbit."},
-            {"page_path": "modeling/meshes/editing/mesh/merge", "anchor": "merge", "url": "https://x/merge", "body": MANUAL_BODY},
-        ]  # fmt: skip
-    lines = "".join(json.dumps(chunk) + "\n" for chunk in chunks)
-    (data / "chunks" / "manual_chunks.jsonl").write_text(lines, encoding="utf-8")
+    (data / "ui_ko_5.2").mkdir(parents=True)
+    save_chunks([ORBIT, MERGE], data / "chunks" / "manual_chunks.jsonl")
     (data / "ui_ko_5.2" / "ko.po").write_text(ko or KO_PO, encoding="utf-8")
     (data / "ui_ko_5.2" / "fr.po").write_text(fr or FR_PO, encoding="utf-8")
     return data
@@ -334,7 +331,7 @@ def test_설명서와_8단어_이상_똑같이_겹치면_잡는다(tmp_path):
     course = COURSE.replace("편집 모드에서 끝 모서리를 골라 한 점으로 모은다.", copied)
     problems = check_folder(write_folder(tmp_path, course=course), load_manual(write_data(tmp_path)))
     assert [(p.kind, p.where) for p in problems] == [("copied", "구간[1].단계[1].쉬운 설명")]
-    assert "https://x/merge" in problems[0].message  # 어느 청크와 겹쳤는지 링크를 보여 준다
+    assert MERGE.url in problems[0].message  # 어느 청크와 겹쳤는지 링크를 보여 준다
 
 
 def test_설명서와_7단어까지_겹치는_것은_받아들인다(tmp_path):

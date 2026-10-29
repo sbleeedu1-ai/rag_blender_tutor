@@ -101,3 +101,20 @@ def test_진짜_임베딩인데_설명서_벡터_파일이_없으면_FileNotFoun
     save_chunks([Chunk("modeling/bevel", "options", "modeling", "modeling", "Bevel", ("Options",), "Width.")], tmp_path / "chunks" / "manual_chunks.jsonl")
     with pytest.raises(FileNotFoundError):  # 도우미 창은 이것을 '설명서 자료가 없어요'로 보인다
         build_engine(tmp_path, embedding="text-embedding-3-large")
+
+
+def test_연습_과정은_이름_한_줄_설명_비슷한_말을_합친_글로_엔진을_만들_때_한_번_임베딩한다(tmp_path, monkeypatch):
+    bevel = Chunk("modeling/bevel", "options", "modeling", "modeling", "Bevel", ("Options",), "Width sets the size.")
+    save_chunks([bevel], tmp_path / "chunks" / "manual_chunks.jsonl")
+
+    class Stored:
+        def embed(self, texts, timeout):
+            return [[1.0, 0.0]]
+
+    manual_vectors.build([bevel], Stored(), manual_vectors.path_for("text-embedding-3-large", tmp_path), "fake")
+    made = []
+    monkeypatch.setattr(stand_in, "openai_key", lambda: "가짜 키")
+    monkeypatch.setattr(manual_vectors, "OpenAIEmbedder", lambda model, key: made.append(QuestionEmbedder(model, key)) or made[-1])
+    sword = Course("sword", "단순한 검", (Step("view", "화면 돌려 보기"),), "정육면체로 검을 만든다.", ("장검", "blade"))
+    build_engine(tmp_path, courses=[sword], embedding="text-embedding-3-large")
+    assert made[0].texts == ["단순한 검 정육면체로 검을 만든다. 장검 blade"]
