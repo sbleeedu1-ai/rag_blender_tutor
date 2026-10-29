@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 
-from blender_tutor.answer_engine import AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source
+from blender_tutor.answer_engine import TERMS, AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source
 from blender_tutor.manual_chunks import Chunk, Example, MediaKind
 from blender_tutor.menu_names import MenuName, MenuNames, Translation
 from blender_tutor.menu_names import Source as MenuSource
@@ -447,6 +447,14 @@ def test_질문_하나에_임베딩_한_번_답변_한_번만_부른다():
     embedder, model = FakeEmbedder(), FakeModel()
     ask(embedder=embedder, model=model, recent=[("배열은요?", "배열 모디파이어를 쓰세요.")])
     assert (len(embedder.calls), len(model.calls)) == (1, 1)
+
+
+def test_지시에_문장_속_낱말_용어표를_넣는다():
+    model = FakeModel()
+    ask(model=model)
+    system = model.calls[0][0]["content"]
+    assert all(f"{english} → {korean}" in system for english, korean in TERMS)
+    assert "vertex → 버텍스" in system  # 표가 비어도 위 줄은 통과하므로, 실제 한 줄을 따로 본다
 
 
 def test_모델에_검색_청크_글과_작업_상태와_질문을_넘긴다():
