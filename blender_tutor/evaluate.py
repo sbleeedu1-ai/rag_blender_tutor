@@ -37,7 +37,7 @@ from blender_tutor.work_state import WorkState
 
 # 지금 고를 수 있는 임베딩 종류·리랭커. 리랭커와 bge-m3 같은 다른 임베딩은 아직 없어서, 켠 척하지 않게 고를 수 없게 막는다.
 # 생기는 티켓(임베딩은 31, 리랭커는 개발 평가에서 켜 보기로 할 때)에서 값을 더하고 엔진에 실제로 넘긴다
-EMBEDDINGS = (stand_in.NAME,)
+EMBEDDINGS = stand_in.EMBEDDINGS
 RERANKERS = ("끔",)
 
 # 칸 이름 → 꼭 있어야 하나. 연습 과정 밖 질문이면 연습 과정·단계를 빼거나 null로 둔다
@@ -328,7 +328,7 @@ def main(argv: Sequence[str] | None = None, today: date | None = None) -> int:
     run_command.add_argument("--reasoning", choices=[level.value for level in Reasoning], default=defaults.reasoning.value, help="생각 수준")
     run_command.add_argument("--recent", type=_at_least(0), default=RECENT_PAIRS, help="최근 대화 쌍 수")
     run_command.add_argument("--top-k", type=_at_least(1), default=defaults.top_k, help="답변 모델에 넘길 검색 결과 수")
-    run_command.add_argument("--no-bm25", action="store_true", help="낱말 검색(BM25)을 끄고 뜻 검색만")
+    run_command.add_argument("--bm25", action="store_true", help="낱말 검색(BM25)을 섞는다(기본은 끄고 뜻 검색만)")
     run_command.add_argument("--embedding", choices=EMBEDDINGS, default=EMBEDDINGS[0], help="임베딩 종류")
     run_command.add_argument("--reranker", choices=RERANKERS, default=RERANKERS[0], help="리랭커")
     times_command.add_argument("--timings", type=Path, help="도우미 창의 시간 기록 파일(기본: 설정 폴더의 timings.jsonl)")
@@ -339,9 +339,11 @@ def main(argv: Sequence[str] | None = None, today: date | None = None) -> int:
     folder = args.results / f"{today or date.today():%Y%m%d}_{args.name}"
     # 실패할 수 있는 읽기(엔진 만들기·시간 기록)는 폴더를 만들기 전에 한다. 빈 폴더가 남으면 같은 이름으로 다시 돌릴 수 없어서
     if args.command == "run":
-        settings = Settings(top_k=args.top_k, use_bm25=not args.no_bm25, reasoning=args.reasoning)
+        settings = Settings(top_k=args.top_k, use_bm25=args.bm25, reasoning=args.reasoning)
         # 평가에서는 가짜 답의 쉼(창 동작 확인용)이 필요 없어 0으로 둔다
-        engine = stand_in.build_engine(args.data, stand_in.StandInModel(0, 0), courses=courses, settings=settings)
+        engine = stand_in.build_engine(
+            args.data, stand_in.StandInModel(0, 0), courses=courses, settings=settings, embedding=args.embedding
+        )
     else:
         timings = args.timings or default_progress_records().parent / "timings.jsonl"
         lines = [json.loads(text) for text in timings.read_text(encoding="utf-8").splitlines() if text.strip()]
@@ -352,7 +354,7 @@ def main(argv: Sequence[str] | None = None, today: date | None = None) -> int:
         return 1
     if args.command == "run":
         about = {  # 설정.json: 무엇으로 돌렸나. 시각은 돌리기 시작한 때
-            "문항 파일": str(args.questions), "engine": stand_in.NAME, "임베딩": args.embedding, "리랭커": args.reranker,
+            "문항 파일": str(args.questions), "engine": engine.name, "임베딩": args.embedding, "리랭커": args.reranker,
             "settings": settings_record(settings, args.recent),
             "pc": platform.node(), "시각": datetime.now().isoformat(timespec="seconds"), "커밋": _commit(),
         }

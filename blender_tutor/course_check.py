@@ -1,7 +1,6 @@
 """연습 과정 파일(courses/*.yaml) 검사."""
 
 import datetime
-import json
 import re
 import sys
 from collections.abc import Callable, Hashable
@@ -12,6 +11,7 @@ from pathlib import Path
 import yaml
 
 from blender_tutor.conditions import CONDITIONS
+from blender_tutor.manual_chunks import load_chunks
 from blender_tutor.menu_names import read_po
 
 
@@ -262,13 +262,13 @@ def load_manual(data: Path) -> Manual | None:
     po_files = [data / "ui_ko_5.2" / "ko.po", data / "ui_ko_5.2" / "fr.po"]
     if not all(path.is_file() for path in [chunks_file, *po_files]):
         return None
-    chunks = [json.loads(line) for line in chunks_file.read_text(encoding="utf-8").splitlines() if line]
+    chunks = load_chunks(chunks_file)  # 청크 파일 모양은 manual_chunks 한곳에서 읽는다(답 엔진과 같은 규칙, 티켓 31 C3)
     # ko.po에는 번역된 글자만 있어서, 번역이 없어 화면에 영어로 보이는 글자(At Center 등)는 fr.po에서 찾는다(티켓 20).
     screen_names = {english for path in po_files for _, english, _ in read_po(path.read_text(encoding="utf-8"))}
     return Manual(
-        addresses=frozenset(f"{chunk['page_path']}.html#{chunk['anchor']}" for chunk in chunks),
+        addresses=frozenset(chunk.address for chunk in chunks),
         screen_names=frozenset(screen_names),
-        bodies=tuple((chunk["url"], chunk["body"]) for chunk in chunks),
+        bodies=tuple((chunk.url, chunk.body) for chunk in chunks),
     )
 
 

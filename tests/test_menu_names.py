@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from blender_tutor.manual_chunks import Chunk
-from blender_tutor.menu_names import MenuName, MenuNames, Source, Status, Translation, build_menu_names
+from blender_tutor.menu_names import MenuName, MenuNames, Source, Status, Translation, build_menu_names, read_po
 
 PO = r'''
 msgid ""
@@ -175,6 +175,33 @@ def test_쪽_제목_소제목은_ko_po에_있을_때만_담고_뒤의_Modifier_�
     ]
 
 
+def test_철자_표에_있는_이름은_화면_철자로_ko_po를_찾는다():
+    # 지어낸 사전: 설명서는 "Wandsphere", 화면 메뉴는 "Wand Sphere"(Operator 문맥)를 쓴다고 치고
+    po = PO + (
+        '\nmsgctxt "Mesh"\nmsgid "Wandsphere"\nmsgstr "완드구슬"\n'
+        '\nmsgid "Wand Sphere"\nmsgstr "완드 스피어"\n'
+        '\nmsgctxt "Operator"\nmsgid "Wand Sphere"\nmsgstr "완드 구체"\n'
+    )
+    page = chunk("first", ui_names=("Add ‣ Wandsphere",))
+
+    names = build_menu_names([page], po, aliases={"Wandsphere": "Wand Sphere"})
+
+    name = names.get("Wandsphere")  # 이름은 설명서 철자 그대로(모델이 설명서 영어를 옮겨 쓰므로)
+    assert name.translations == (Translation("완드 스피어", ("*",)), Translation("완드 구체", ("Operator",)))
+    assert names.english_for("완드 구체") == ("Wandsphere",)
+    assert names.english_for("완드구슬") == ()  # 화면이 쓰지 않는 철자의 번역은 버린다
+    assert build_menu_names([page], po).get("Wandsphere").translations == (Translation("완드구슬", ("Mesh",)),)
+
+
+def test_철자_표_파일을_읽고_저장소의_표는_실제_ko_po에_있다():
+    aliases = MenuNames.load_aliases(REPO / "menu_aliases.json")
+    po = REPO / "data" / "ui_ko_5.2" / "ko.po"
+    if not po.exists():
+        pytest.skip("data/에 ko.po가 없음(커밋하지 않는 자료)")
+    spellings = {english for _, english, _ in read_po(po.read_text(encoding="utf-8"))}
+    assert all(screen in spellings for screen in aliases.values())
+
+
 def test_옵션_이름은_출처를_옵션으로_적는다():
     names = build_menu_names([chunk("first", ui_names=("Mesh",), options=("Mesh", "Apply"))], PO)
 
@@ -232,12 +259,30 @@ def test_고정한_짝의_문맥으로_화면_한국어를_고른다():
     assert MenuNames(CHOICE_NAMES).korean("Apply") is None  # 고정 전은 영어 그대로
 
 
+def test_바로_앞_단을_붙인_고정_짝이_있으면_그_메뉴_아래서는_그_문맥을_쓴다():
+    # 지어낸 예: 같은 Apply가 Object 메뉴 아래에서는 WindowManager 문맥 글자로 보인다고 치고
+    names = MenuNames(CHOICE_NAMES, {"Apply": "*", "Object > Apply": "WindowManager"})
+    assert names.korean("Apply", parent="Object") == "신청하기"
+    assert names.korean("Apply", parent="Mesh") == "적용"  # 다른 메뉴 아래는 이름 하나의 짝
+    assert names.korean("Apply") == "적용"
+    assert names.korean("Apply", parent=" object ") == "적용"  # 대소문자가 다르면 다른 메뉴(설명서 영어 그대로 적음)
+
+
+def test_경로_열쇠는_설명서의_경로_글자와_띄어쓰기를_가리지_않는다():
+    names = MenuNames(CHOICE_NAMES, {"Object‣Apply": "WindowManager"})
+    assert names.korean("Apply", parent=" Object ") == "신청하기"
+    assert names.korean("Apply") is None  # 이름 하나의 짝이 없으면 영어 그대로
+
+
 @pytest.mark.parametrize(
     "choices",
     [
         {"Aply": "Operator"},  # 사전에 없는 이름(오타)
         {"Apply": "Mesh"},  # 그 이름에 없는 문맥
         {"Mesh": "*"},  # 번역이 하나라 고를 것이 없음
+        {"Object > Aply": "Operator"},  # 경로 열쇠도 같은 검사
+        {"Object > Apply": "Mesh"},
+        {" > Apply": "Operator"},  # 앞 단이 빈 경로
     ],
 )
 def test_잘못된_고정_짝은_바로_알린다(choices):
@@ -251,8 +296,36 @@ def test_고정_짝_파일을_읽는다(tmp_path):
     assert MenuNames.load_choices(path) == {"Apply": "WindowManager"}
 
 
-def test_저장소의_고정_짝은_실제_사전과_맞는다():
+# 제목에서만 뽑은 이름의 통과 목록(티켓 31 검수): 통과한 것만 질문 찾기에 쓴다. 저장소의 menu_titles.json에 커밋한다
+TITLE_NAMES = [
+    MenuName("Join", (Translation("합치기", ("*",)),), 1, "", (Source.UI,)),
+    MenuName("Solidify", (Translation("솔리디파이", ("*",)),), 1, "", (Source.TITLE,)),
+    MenuName("Recent", (Translation("최근", ("*",)),), 1, "", (Source.TITLE,)),
+]
+
+
+def test_통과한_제목만_질문에서_찾는다():
+    question = "최근에 솔리디파이를 합치려면"
+    assert MenuNames(TITLE_NAMES, titles=["Solidify"]).english_in(question) == ("Solidify", "Join")
+    assert MenuNames(TITLE_NAMES).english_in(question) == ("Join",)  # 통과 목록이 없으면 제목은 모두 뺀다
+
+
+@pytest.mark.parametrize("titles", [["Solidfy"], ["Join"]])  # 사전에 없는 이름(오타), 제목에서만 뽑은 이름이 아님
+def test_잘못된_통과_목록은_바로_알린다(titles):
+    with pytest.raises(ValueError):
+        MenuNames(TITLE_NAMES, titles=titles)
+
+
+def test_통과_제목_파일을_읽는다(tmp_path):
+    path = tmp_path / "menu_titles.json"
+    path.write_text('["Solidify"]', encoding="utf-8")
+    assert MenuNames.load_titles(path) == ["Solidify"]
+
+
+def test_저장소의_고정_짝과_통과_제목은_실제_사전과_맞는다():
     dictionary = REPO / "data" / "menu_names" / "menu_names.json"
     if not dictionary.exists():
         pytest.skip("data/에 메뉴 이름 사전이 없음(커밋하지 않는 자료)")
-    MenuNames.load(dictionary, MenuNames.load_choices(REPO / "menu_choices.json"))  # 틀리면 ValueError
+    choices = MenuNames.load_choices(REPO / "menu_choices.json")
+    titles = MenuNames.load_titles(REPO / "menu_titles.json")
+    MenuNames.load(dictionary, choices, titles)  # 틀리면 ValueError

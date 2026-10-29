@@ -50,6 +50,12 @@ class Course:
     name: str
     steps: tuple[Step, ...]
     summary: str = ""  # 한 줄 설명. 답 엔진이 비슷한 연습 과정을 권할 때 이름과 함께 넘긴다
+    similar: tuple[str, ...] = ()  # 비슷한 말(예: 칼, 장검, blade). 비슷한 연습 과정을 고를 때만 쓴다
+
+    @property
+    def search_text(self) -> str:
+        """비슷한 연습 과정을 고를 때 임베딩하는 글: 이름 + 한 줄 설명 + 비슷한 말(티켓 14·31)."""
+        return " ".join((self.name, self.summary, *self.similar))
 
 
 @dataclass(frozen=True)
@@ -81,7 +87,10 @@ def load_steps(course: Path) -> list[Step]:
 def load_course(course: Path) -> Course:
     """연습 과정 파일 하나를 읽는다. 단계는 load_steps와 같이 공통 준비부터."""
     data = yaml.safe_load(course.read_text(encoding="utf-8"))
-    return Course(data["이름표"], data["이름"], tuple(_steps_of(data, course.parent)), data.get("한 줄 설명", ""))
+    return Course(
+        data["이름표"], data["이름"], tuple(_steps_of(data, course.parent)), data.get("한 줄 설명", ""),
+        tuple(str(word) for word in data.get("비슷한 말", [])),
+    )
 
 
 def load_courses(folder: Path) -> list[Course]:

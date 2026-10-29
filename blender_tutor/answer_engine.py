@@ -32,6 +32,56 @@ MARK_LIMIT = 80  # 표시가 열린 뒤 이만큼(글자) 닫히지 않으면 �
 TIMEOUT_MESSAGE = "답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
 ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물어봐 주세요."
 
+# 문장 속 Blender 낱말의 한국어 표기(영어 → 한국어). 번역 검수에서 화면 글자(ko.po)에 맞춰 정한 것(HISTORY [78]-[92], [104]).
+# 메뉴·버튼·옵션 이름은 [[ ]] 표시로 프로그램이 바꾸므로 여기에는 문장 속에 일반 낱말로 나오는 것만 둔다.
+# 괄호: 영어 발음을 옮긴 낱말은 붙이지 않고, 한국어로 바꿔 영어가 안 보이는 낱말과 여러 낱말 이름은 처음 한 번 붙인다([83]).
+# 표 전체(약 360토큰)를 늘 넘기지 않고, 넘기는 청크 글에 나온 낱말의 줄만 지시에 붙인다(HISTORY [105]).
+TERMS = (
+    ("vertex", "버텍스"),  # 정점·꼭짓점 아님 [78]
+    ("edge", "에지"),  # 모서리 아님. 선택 모드 버튼 이름은 화면 글자가 '엣지'라 [[Edge]]로 [78][80]
+    ("face", "페이스"),  # 면 아님 [78]
+    ("face corner", "페이스 코너(Face Corner)"),  # [78]
+    ("mesh", "메시"),  # 메쉬 아님 [85]
+    ("normal", "노멀"),  # 법선 아님 [83]
+    ("custom normal", "커스텀 노멀"),  # [85]
+    ("custom split normals", "커스텀 분할 노멀(Custom Split Normals)"),  # [85]
+    ("geometry", "지오메트리"),  # 기하 아님 [88]
+    ("empty", "엠프티"),  # 빈 오브젝트 아님 [83]
+    ("material", "머티리얼"),  # 재질 아님 [81]
+    ("armature", "아마츄어"),  # [79]
+    ("bone", "뼈대(Bone)"),  # 본 아님 [79]
+    ("modifier", "모디파이어"),  # 수정자 아님 [90]
+    ("modifier key", "보조 키(Modifier)"),  # Ctrl·Shift처럼 함께 누르는 키 [80][82]
+    ("operator", "작업자(Operator)"),  # 연산자 아님 [81]
+    ("pack / unpack", "포장(Pack) / 포장 해제(Unpack)"),  # 압축 아님 [81]
+    ("unwrap", "포장 해제(Unwrap)"),  # 사용자가 화면에서 확인한 글자 [84]
+    ("mirror", "미러, 미러링"),  # [86]
+    ("edit mode", "에디트 모드(Edit Mode)"),  # 편집 모드 아님 [82]
+    ("sculpt mode", "스컬프트 모드(Sculpt Mode)"),  # 조각 모드 아님 [92]
+    ("orbit", "오비트(Orbit)"),  # 궤도 아님 [80]
+    ("median point", "평균 포인트(Median Point)"),  # 중앙점 아님 [88]
+    ("offset", "오프셋(Offset)"),  # 간격 아님 [84]
+    ("pole", "폴(Pole)"),  # 극점 아님 [85]
+    ("emitter", "이미터(Emitter)"),  # 발광체 아님 [84]
+    ("sheen", "셰인함(Sheen)"),  # 광택 아님 [87]
+    ("attribute", "속성(Attributes)"),  # 특성 아님 [84]
+    ("properties", "속성(Properties)"),  # [81]
+    ("preferences", "환경 설정(Preferences)"),  # [85]
+    ("file browser", "파일 브라우져(File Browser)"),  # 화면 글자 그대로 [83]
+    ("rest position", "휴식 위치(Rest Position)"),  # [91]
+    ("focal length", "초점의 길이(Focal Length)"),  # 초점 거리는 Focus Distance의 화면 글자 [91]
+    ("legacy", "레거시(Legacy)"),  # 기존 아님 [92]
+)
+# 청크 글에서 낱말을 찾는 꼴. 기본은 영어 낱말로 시작하는 말(faces·unwrapping 등)이고, 꼴이 바뀌는 것만 따로 적는다.
+# 비슷한 다른 말(normalize 등)이 걸려 줄이 하나 더 붙는 것은 괜찮다
+TERM_PATTERNS = {
+    "vertex": r"vert(?:ex|ices)",
+    "empty": r"empt(?:y|ies)",
+    "properties": r"propert(?:y|ies)",
+    "custom split normals": r"custom split normal",
+    "pack / unpack": r"(?:un)?pack",
+}
+
 INSTRUCTIONS = """너는 Blender 5.2를 처음 쓰는 사람을 돕는 도우미다.
 - 쉬운 한국어로 짧게 답하고, 처음 나오는 용어는 한 줄로 풀어 준다.
 - Blender 5.2 기준으로 답한다. 아래 '설명서 내용'에 있는 것만 근거로 쓴다.
@@ -39,6 +89,7 @@ INSTRUCTIONS = """너는 Blender 5.2를 처음 쓰는 사람을 돕는 도우미
 - 그림은 캡션 글만 쓴다. [그림] 자리가 중요해 보이면 "설명서 그림을 함께 보세요"라고 안내한다.
 - '작업 상태'는 사용자의 Blender 화면에서 지금 읽은 값이다. 사용자가 설명하지 않아도 이것을 보고 답한다.
 - Blender 화면의 메뉴·버튼·옵션 이름은 설명서의 영어 그대로 [[ ]]로 감싼다. 메뉴 경로는 통째로 감싸고 단 사이를 >로 가른다(예: [[Add > Mesh]]). 한국어로 옮기지 않는다(프로그램이 사용자 화면 언어에 맞춰 바꾼다)."""
+TERMS_NOTE = "- [[ ]] 밖 문장에 나오는 Blender 낱말은 아래 표기를 쓴다(Blender 한국어 화면 글자에 맞춘 것). 괄호 속 영어는 답에서 처음 한 번만 붙인다."
 
 SIMILAR_NOTE = (
     "사용자가 연습 과정을 진행하지 않고 있다. 아래는 질문과 가까운 연습 과정이다(가까운 차례). "
@@ -78,7 +129,7 @@ class Settings:
 
     top_k: int = 6  # 답변 모델에 넘길 검색 결과 수(명세 6-8개, 22번의 먼저 볼 소제목이 이 위에 더 붙는다)
     timeout: float = 10.0  # 모델이 이만큼(초) 아무것도 보내지 않으면 멈춘 것으로 본다(사용자 결정, 2026-10-21)
-    use_bm25: bool = True  # 낱말 검색(BM25)을 섞을지. 끄면 뜻 검색만(평가에서 견줄 스위치)
+    use_bm25: bool = False  # 낱말 검색(BM25)을 섞을지. 끄면 뜻 검색만(티켓 40 결과로 끔, HISTORY [102])
     # 답변 모델의 생각 수준(명세 기본 none). 시간 기록에 남긴다. 실제 모델에 넘기는 일은 티켓 33
     reasoning: Reasoning = Reasoning.NONE
 
@@ -142,9 +193,12 @@ class AnswerEngine:
         menu_names: MenuNames | None = None,
         courses: Sequence[Course] = (),
         course_vectors: Sequence[Sequence[float]] = (),
+        name: str = "",
     ):
-        """menu_names는 질문 속 한국어 메뉴 이름에 영어를 덧붙일 사전(없으면 덧붙이지 않음).
+        """name은 시간 기록·평가 결과에 남길 엔진 이름(어떤 임베딩·답변 모델인지, 엔진을 만드는 곳이 정한다).
+        menu_names는 질문 속 한국어 메뉴 이름에 영어를 덧붙일 사전(없으면 덧붙이지 않음).
         courses·course_vectors는 비슷한 연습 과정을 권할 연습 과정과 그 벡터(이름 + 한 줄 설명 + 비슷한 말, 티켓 31)."""
+        self.name = name
         self._chunks = list(chunks)
         self._menu_names = menu_names
         self._courses = list(courses)
@@ -344,7 +398,11 @@ class _MenuMarks:
     def _screen(self, path: str) -> str:
         parts = [part.strip() for part in re.split(r"[>‣]", path)]
         if self._names:
-            parts = [f"{korean}({part})" if (korean := self._names.korean(part)) else part for part in parts]
+            parents = ["", *parts[:-1]]  # 단마다 바로 앞 단(같은 이름도 메뉴마다 글자가 달라서, 티켓 31)
+            parts = [
+                f"{korean}({part})" if (korean := self._names.korean(part, parent)) else part
+                for part, parent in zip(parts, parents)
+            ]
         return " > ".join(parts)
 
 
@@ -372,10 +430,10 @@ def _messages(
     groups는 넘길 청크마다 함께 읽을 묶음(찾은 청크와 그 형제 소제목). 묶음 사이를 ---로 가른다.
     similar는 연습 과정을 진행하지 않을 때만 붙이는 비슷한 연습 과정, step은 지금 단계(그 단계 내용만 넘긴다).
     """
-    messages = [{"role": "system", "content": INSTRUCTIONS}]
+    manual = "\n\n---\n\n".join("\n\n".join(chunk.text for chunk in group) for group in groups)
+    messages = [{"role": "system", "content": INSTRUCTIONS + _terms_for(manual)}]
     for asked, answered in recent:
         messages += [{"role": "user", "content": asked}, {"role": "assistant", "content": answered}]
-    manual = "\n\n---\n\n".join("\n\n".join(chunk.text for chunk in group) for group in groups)
     content = f"# 설명서 내용\n\n{manual}\n\n"
     if similar:
         courses = "\n".join(f"- {course.name}: {course.summary}" for course in similar)
@@ -387,6 +445,16 @@ def _messages(
         f"# 질문\n\n{question}"
     )
     return messages + [{"role": "user", "content": content}]
+
+
+def _terms_for(manual: str) -> str:
+    """넘기는 설명서 글에 나온 낱말의 용어표 줄(지시 끝에 붙임). 하나도 없으면 빈 글."""
+    found = [
+        f"  - {english} → {korean}"
+        for english, korean in TERMS
+        if re.search(rf"\b{TERM_PATTERNS.get(english, re.escape(english))}", manual, re.IGNORECASE)
+    ]
+    return "\n".join(["", TERMS_NOTE, *found]) if found else ""
 
 
 def _sources(results: list[Chunk]) -> tuple[Source, ...]:

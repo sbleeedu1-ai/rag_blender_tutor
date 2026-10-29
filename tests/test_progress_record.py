@@ -276,6 +276,7 @@ def test_저장소의_검_연습_과정으로_저장하고_이어_할_수_있다
     sword = load_course(COURSES / "sword.yaml")
     assert (sword.label, sword.name) == ("sword", "단순한 검")
     assert sword.summary.startswith("기본 정육면체를 늘려 칼날을 만들고")  # 비슷한 연습 과정 권하기에 쓰는 한 줄 설명
+    assert "장검" in sword.similar and "blade" in sword.search_text  # 비슷한 말도 읽어 고르는 글에 넣는다
     manager = ProgressManager([sword], tmp_path)
     manager.choose_course("sword")
     manager.on_file_saved(BLEND)

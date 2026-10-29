@@ -34,7 +34,7 @@
           답 엔진이 쓰는 것
             · 설명서 청크 (data/, 미리 만듦)
             · 메뉴 이름 사전 (data/, 미리 만듦)
-            · 임베딩·답변 모델: 지금은 무료 임시 부품(stand_in), 진짜 OpenAI는 티켓 31·33
+            · 임베딩: 진짜(text-embedding-3-large, 질문마다 아주 적은 돈). 답변 모델: 아직 무료 가짜(stand_in), 진짜는 티켓 33
 ```
 
 - **프로그램은 둘**이다. Blender 안의 **애드온**과, Blender 밖에 따로 도는 **도우미 프로그램**.
@@ -69,7 +69,7 @@
   └─▶ 답 엔진 (answer_engine)
         검색어 만들기 → 뜻·낱말 검색 → 모델에 넘길 글 → 메뉴 이름 한국어로 → 근거 목록
         읽는 것: 청크 서식(manual_chunks의 Chunk) · 메뉴 이름 사전(menu_names의 MenuNames)
-        만드는 곳: 임시 엔진 (stand_in) 낱말 세기 임베딩 + 정해 둔 글을 흘리는 가짜 답변(티켓 31·33에서 진짜로)
+        만드는 곳: stand_in.build_engine — 도우미 창은 진짜 임베딩(미리 만든 설명서 벡터 + 질문마다 OpenAI) + 정해 둔 글을 흘리는 가짜 답변(티켓 33에서 진짜로)
 ```
 
 - **서식**(`work_state`의 `WorkState`, `manual_chunks`의 `Chunk`)은 처리하는 단계가 아니라 여러 곳이 함께 쓰는 양식이다. 서식이 한 파일 안에 있으면 다른 곳이 그 파일 전체에 기대게 되어 따로 둔다.
@@ -99,24 +99,30 @@
 | 도우미 | `blender_tutor/course_desk.py` | 창마다 진행: Blender 창 번호마다 진행 관리 하나, 대화에 붙일 말, 카드에 보일 모양, 뒤에 있는 Blender의 알림 모아 두기 | 27 |
 | 도우미 | `blender_tutor/state_stream.py` | 흐름 기록: 창마다 진행에 들어간 봉투·카드 단추를 차례대로 파일에 남기고(`RecordingDesk`), 그 파일을 새 진행 관리에 다시 넣는다(`replay`, 회귀 테스트용) | 28 |
 | 도우미 | `blender_tutor/progress_record.py` | 진행 관리 창구: 파일마다 진행 기록(바뀔 때마다 + 저장 때 자리)·이어 하기, 연습 과정 고르기·바꾸기(덮어쓸지 확인), 떠 있는 물음과 [네]/[아니요] | 18, 27 |
-| 도우미 | `blender_tutor/progress.py` | 담당자: 연습 과정 파일 읽기, 연습 과정 하나의 진행. 조작을 차례로 안내하고 감지 조건이 맞으면 다음 조작, 끝난 조건이 맞으면 묻고 깨지면 거두기, 단계 옮기기 | 17, 27 |
+| 도우미 | `blender_tutor/progress.py` | 담당자: 연습 과정 파일 읽기(이름·한 줄 설명·비슷한 말 → `Course.search_text`, 비슷한 연습 과정 고르기에 임베딩), 연습 과정 하나의 진행. 조작을 차례로 안내하고 감지 조건이 맞으면 다음 조작, 끝난 조건이 맞으면 묻고 깨지면 거두기, 단계 옮기기 | 17, 27 |
 | 도우미 | `blender_tutor/conditions.py` | 판정표: 끝난 조건·감지 조건 13종류의 "값의 꼴"과 "맞는지 판정"(지금 상태와 기준 상태를 견줌) | 17, 27 |
 | 도우미 | `blender_tutor/korean_particles.py` | 한국어 조사 고르기: 이름 끝 받침에 따라 "이에요/예요", "으로/로" | 27 |
 | 도우미 | `blender_tutor/timing.py` | 시간 기록: 질문마다 F10 누름·받음·입력 가능·보냄·첫 글자·답 끝 시각, PC 이름, 그때의 엔진 이름·설정(생각 수준 등)을 한 줄로 | 28 |
-| 도우미 | `blender_tutor/answer_engine.py` | 답 엔진: 질문 + 작업 상태 + 지금 단계 → 설명서 검색 → 답 글 흐름 + 근거 목록(+ 평가용 검색 결과·붙인 연습 과정) | 21-23, 29 |
-| 도우미(임시) | `blender_tutor/stand_in.py` | 진짜 모델 전 무료 임시 엔진: `data/`로 엔진 만들기, 낱말 세기 임베딩, 1.5초 쉬고 정해 둔 글을 흘리는 가짜 답변. 엔진 설정을 받음(평가 프로그램이 바꿔 넘김). 티켓 31·33 뒤 `archive/`로 | 26, 29 |
+| 도우미 | `blender_tutor/answer_engine.py` | 답 엔진: 질문 + 작업 상태 + 지금 단계 → 설명서 검색 → 답 글 흐름 + 근거 목록(+ 평가용 검색 결과·붙인 연습 과정). 답변 모델에는 청크 영어 원문과, 지시 끝에 넘기는 청크에 나온 낱말의 용어표 줄(`TERMS`, 예: vertex → 버텍스)만 붙인다 | 21-23, 29, 31 |
+| 도우미(임시) | `blender_tutor/stand_in.py` | 엔진 만들기 `build_engine(data/, …, embedding=)`: 임베딩은 낱말 세기(`stand_in`, 무료) 또는 진짜(`text-embedding-3-large`: `data/vectors/` 설명서 벡터를 읽고 질문·연습 과정만 OpenAI로). 엔진 이름(`engine.name`, 예: `text-embedding-3-large+stand_in`)도 여기서 정해 시간 기록·평가가 그대로 남김. 답변은 1.5초 쉬고 정해 둔 글을 흘리는 가짜. 티켓 33 뒤 엔진 만들기는 밖으로, 이 파일은 `archive/`로 | 26, 29, 31 |
 | 자료 만들기 + 읽기 | `blender_tutor/manual_chunks.py` | 만들기: 설명서 HTML → 소제목 단위 청크(`data/chunks/`, 한 번 돌림, `save_chunks`). 읽기: 청크 파일(`load_chunks`)과 청크 서식 `Chunk`(답 엔진이 씀) | 19 |
-| 자료 만들기 + 읽기 | `blender_tutor/menu_names.py` | 만들기: 설명서의 블렌더 표기 ↔ 화면 한국어 번역 사전(`data/menu_names/`, 한 번 돌림). 읽기: 사전 `MenuNames`(답 엔진이 씀) | 20 |
+| 자료 만들기 + 읽기 | `blender_tutor/menu_names.py` | 만들기: 설명서의 블렌더 표기 ↔ 화면 한국어 번역 사전(`data/menu_names/`, 한 번 돌림). 읽기: 사전 `MenuNames(이름들, 고정 짝, 통과 제목)`(답 엔진이 씀). 고정 짝·통과 제목이 사전과 어긋나면 바로 멈춤 | 20, 31 |
+| 자료 만들기 | `blender_tutor/menu_review.py` | 메뉴 이름 검수 초안: 초보자 범위 안 "번역 여러 개"·"제목에서만" 이름을 Blender가 실제로 쓰는 문맥과 맞대 자동/갈림/못 찾음으로 나눔(`data/menu_names/scope_review.json`, 한 번 돌림) | 31 |
+| 자료 만들기 | `blender_tutor/blender_ui_labels.py` | Blender 안에서 돈다(`menu_review`가 화면 없이 띄움): 조작·속성·고르는 값·메뉴·패널 이름과 화면 파이썬 코드의 `text=`가 쓰는 번역 문맥을 모두 뽑음(`data/menu_names/ui_labels.json`). 조작 단추 글자는 조작 문맥, C 코드 메뉴 4개는 손으로 적음 | 31 |
 | 자료 만들기 | `blender_tutor/beginner_scope.py` | 설명서 쪽을 초보자 범위로 나눔(한 번 돌림, 손으로). `fixed`: 바로 넣는 쪽, `estimate`: 비용 어림, `classify`: 모델에게 물음(유료), `merge`: 분류 파일들 → 최종 범위. 모양은 6절 아래 | 30 |
 | 평가 | `blender_tutor/evaluate.py` | 평가 프로그램(도우미 밖에서 손으로 돌림). `run`: 문항 파일 → 답 엔진에 바로 넣어 답·검색 결과·검색 적중. `times`: 시간 기록 → PC·엔진·설정 묶음마다 중앙값·최대값. 결과는 `results/<날짜>_<이름>/`에 새로(있으면 멈춤). 모양은 6절 아래 | 29 |
-| 만드는 사람 | `blender_tutor/course_check.py` | 연습 과정 파일 검사 | 15, 24 |
+| 자료 만들기 + 읽기 | `blender_tutor/manual_vectors.py` | 만들기(손으로 한 번, 유료라 `--yes` 필요): 설명서 전체 청크 영어 원문 → text-embedding-3-large 벡터 → `data/vectors/manual_text-embedding-3-large.npz`(vectors 3,072차원·keys 청크 열쇠·digests 글 해시, 있으면 멈춤) + 같은 이름 .json(실제 토큰·비용). 읽기: `load(파일, 청크)`가 지금 청크와 열쇠·글이 다르면 멈춤. 연습 과정 벡터 `cached`: `data/vectors/courses_<모델>.npz`에 글 해시와 함께 저장, 새로 생기거나 바뀐 글만 임베딩하고 없어진 것은 지움(엔진을 만들 때 부름). OpenAI 임베딩 연결 `OpenAIEmbedder`(응답 없음 → TimeoutError)도 여기 있고 검색 비교가 함께 씀 | 31 |
+| 평가 | `blender_tutor/search_compare.py` | 소규모 검색 비교(손으로 돌림). 같은 질문 20개·200청크 묶음으로 임베딩 모델 2 × 뜻 검색에 넣는 글 3 × BM25 3 = 18조건의 정답 근거 적중(상위 4·6·8개)과 질문 처리 시간을 잰다. 검색용 DB는 `data/search_compare/db/`에 만들고 재사용. 결과는 `results/<날짜>_<이름>/`에 새로(있으면 멈춤). 모양은 6절 아래. 답 엔진은 바꾸지 않는다 | 40 |
+| 만드는 사람 | `blender_tutor/course_check.py` | 연습 과정 파일 검사. 설명서 자료와 맞댈 때 청크 파일은 답 엔진과 같은 `manual_chunks.load_chunks`로 읽는다 | 15, 24, 31 |
 | 만드는 사람 | `courses/*.yaml` | 연습 과정(검 `sword.yaml`, 공통 준비 `_common.yaml`) | 16 |
 | 설치 | `blender_tutor/install_addon.py` | 애드온을 Blender 애드온 폴더에 복사하고 `config.json`(도우미 켜는 법·비밀 글자)을 적음 | 25 |
 | 공통 | `blender_tutor/paths.py` | 프로젝트 폴더 위치(`PROJECT`), 연습 과정 폴더, 진행 기록 폴더 고르기(설정 폴더에 쓸 수 없으면 사용자 폴더). 함께 쓰는 경로가 늘면 여기에 | 26 뒤, 27 |
 | 시험 | `tests/` | 기본 테스트(API 키·Blender 없이) | 각 티켓 |
 | 시험 | `addon/selftest.py` | Blender를 화면 없이 띄워 애드온을 확인(기본 테스트 밖) | 25 |
-| 저장소 | `menu_choices.json` | 번역이 여러 개인 메뉴 이름의 고정 짝(지금은 비어 있음) | 23 |
-| 프로젝트 설정 | `pyproject.toml` | 프로젝트 신분증 겸 설정(TOML 형식): 필요한 파이썬(3.12 이상), 부품 목록(PyYAML·beautifulsoup4·numpy·rank-bm25·PySide6-Essentials, 개발용 pytest), 설치할 폴더(`blender_tutor`), 테스트 설정. `pip install -e ".[dev]"`·pytest·GitHub 자동 테스트가 읽는다. 부품을 더하면 다른 PC에서 설치 명령을 다시 돌린다. `addon/`은 여기 없다(설치 명령이 Blender 폴더에 복사) | 15 |
+| 저장소 | `menu_choices.json` | 번역이 여러 개인 메뉴 이름의 고정 짝: `"영어 이름": "문맥"`, 메뉴마다 다르면 `"앞 단 > 이름": "문맥"`(예: `"Add > Empty": "Operator"` → 추가 메뉴에서만 "비어 있음"). 초보자 범위 113개 중 112개 + 경로 열쇠 6개(티켓 31 화면 검수). 화면이 영어인데 후보에 영어가 없는 이름(Smart UV Project)은 적지 않음 → 영어 그대로 | 23, 31 |
+| 저장소 | `menu_titles.json` | 제목에서만 뽑은 이름 가운데 검수를 통과한 영어 이름 목록(`["Solidify", …]`, 80개). 질문 속 메뉴 이름 찾기(`english_in`)는 이것만 씀. 탈락·미검수 제목은 뺌 | 31 |
+| 저장소 | `menu_aliases.json` | 설명서 철자 → 화면 철자 표(예: `"Icosphere": "Ico Sphere"`). 사전을 만들 때 번역을 화면 철자로 찾음 | 31 |
+| 프로젝트 설정 | `pyproject.toml` | 프로젝트 신분증 겸 설정(TOML 형식): 필요한 파이썬(3.12 이상), 부품 목록(PyYAML·beautifulsoup4·numpy·rank-bm25·PySide6-Essentials, 개발용 pytest, 검색 비교용 `compare`: sentence-transformers. 무거워서 `pip install -e ".[dev,compare]"`로 따로 설치), 설치할 폴더(`blender_tutor`), 테스트 설정. `pip install -e ".[dev]"`·pytest·GitHub 자동 테스트가 읽는다. 부품을 더하면 다른 PC에서 설치 명령을 다시 돌린다. `addon/`은 여기 없다(설치 명령이 Blender 폴더에 복사) | 15 |
 
 `data/`는 커밋하지 않는다(설명서 원문·번역). 다시 만드는 법은 `HANDOFF.md`.
 
@@ -215,11 +221,11 @@
 
   ```json
   {"pc": "DESKTOP-J9LV5HK", "engine": "stand_in",
-   "settings": {"top_k": 6, "timeout": 10.0, "use_bm25": true, "reasoning": "none", "recent_pairs": 3},
+   "settings": {"top_k": 6, "timeout": 10.0, "use_bm25": false, "reasoning": "none", "recent_pairs": 3},
    "question": "칼끝은 어떻게 모아요?", "f10_pressed": 1792977551.65, "f10_received": 1792977551.70,
    "ready": 1792977551.95, "sent": 1792977556.0, "first_piece": 1792977557.5, "done": 1792977559.0, "outcome": "done"}
   ```
-  F10 시각 셋은 F10 뒤 첫 질문에만, 입력 가능 뒤 60초 안에 보냈을 때만 있다. 창이 떠 있는 채 이어 물었거나 F10을 누르고 떠났다 한참 뒤 창을 눌러 물으면 `null`(창을 눌러 묻는 경로는 따로 재지 않음, 보냄 → 답 끝은 모든 질문에 남음). 실패로 끝나면 `outcome`이 `failure`이고 `first_piece`는 `null`일 수 있다. `engine`(지금은 임시 엔진 `stand_in`)과 `settings`(답 엔진 설정 + 최근 대화 쌍 수)로 평가 프로그램이 줄을 가른다. 엔진 준비 전에 물은 줄은 둘 다 `null`. 리랭커·임베딩 종류 설정은 생기는 티켓에서 `settings`에 더한다.
+  F10 시각 셋은 F10 뒤 첫 질문에만, 입력 가능 뒤 60초 안에 보냈을 때만 있다. 창이 떠 있는 채 이어 물었거나 F10을 누르고 떠났다 한참 뒤 창을 눌러 물으면 `null`(창을 눌러 묻는 경로는 따로 재지 않음, 보냄 → 답 끝은 모든 질문에 남음). 실패로 끝나면 `outcome`이 `failure`이고 `first_piece`는 `null`일 수 있다. `engine`(엔진 이름, 도우미 창은 지금 `text-embedding-3-large+stand_in`)과 `settings`(답 엔진 설정 + 최근 대화 쌍 수)로 평가 프로그램이 줄을 가른다. 엔진 준비 전에 물은 줄은 둘 다 `null`. 리랭커·임베딩 종류 설정은 생기는 티켓에서 `settings`에 더한다.
 - 흐름 기록(티켓 28): `%APPDATA%\blender_tutor\streams\<켠 시각>.jsonl`. 도우미를 켤 때마다 새 파일, 지우지 않는다. 검수 동안 늘 켜 두고 코드 동결 전에 끈다(`helper.py`의 `RECORD_STREAM`, 티켓 37). 한 줄이 창마다 진행에 넣은 부름 하나(지어낸 예):
 
   ```json
@@ -235,7 +241,9 @@
 
 ```
 Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_chunks.jsonl (소제목 단위 청크)
-설명서 HTML + 화면 번역 ko.po·fr.po ──menu_names──▶ data/menu_names/menu_names.json (메뉴 이름 사전)
+설명서 HTML + 화면 번역 ko.po·fr.po (+ menu_aliases.json) ──menu_names──▶ data/menu_names/menu_names.json (메뉴 이름 사전)
+사전 + 초보자 범위 + Blender(화면 없이) ──menu_review──▶ data/menu_names/scope_review.json (검수 초안, 티켓 31)
+검수 초안 + Haiku 판단 + 사용자 화면 검수 ──(한 번 합침)──▶ menu_choices.json · menu_titles.json (저장소, 티켓 31)
 청크 ──임베딩(유료, 티켓 31)──▶ 청크 벡터 (예정)
 ```
 
@@ -260,7 +268,7 @@ Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_
 문항 파일 + 시간 기록(%APPDATA%\blender_tutor\timings.jsonl) ──evaluate times──▶ results/<날짜>_<이름>/ 시간.md
 ```
 
-- 실행: `.venv\Scripts\python -m blender_tutor.evaluate run <문항 파일> --name <이름> [--reasoning low] [--recent 5] [--top-k 8] [--no-bm25]`, `... evaluate times <문항 파일> --name <이름>`. 지금 끼우는 엔진은 임시 엔진(무료)뿐이다. 진짜 모델을 끼우면 돌릴 때마다 비용이 든다
+- 실행: `.venv\Scripts\python -m blender_tutor.evaluate run <문항 파일> --name <이름> [--reasoning low] [--recent 5] [--top-k 8] [--bm25] [--embedding text-embedding-3-large]`, `... evaluate times <문항 파일> --name <이름>`. 기본 임베딩은 낱말 세기(무료), `--embedding text-embedding-3-large`는 질문마다 아주 적은 돈이 든다. 답변은 아직 가짜
 - 문항 파일은 목록 하나. 한 항목이 대화 하나이고, 시나리오형은 `차례` 목록을 가진다. 지어낸 예:
 
   ```json
@@ -275,9 +283,26 @@ Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_
 - 대화마다 새로 시작한다. 시나리오형은 앞 차례부터 실제로 묻고 엔진이 낸 답을 최근 대화로 넘기며(도우미 창처럼 끝까지 나온 답만), **차례마다 문항 하나**로 채점한다(이전 프로젝트 방식, 사용자 결정). 그래서 모든 차례에 핵심이 1개 이상 있어야 한다
 - 검색 적중 = 정답 위치가 검색 결과(상위 top_k개) 몇 위에 처음 들었나. 연습 과정 파일의 '먼저 볼 소제목'은 검색이 찾은 게 아니라 세지 않는다(근거 목록에는 보임). 분모는 정답 위치가 있는 차례(문서에 없는 질문은 빠짐)
 - `답.jsonl` 한 줄(지어낸 예): `{"대화": "D01", "번호": "D01", "분류": "…", "질문": "…", "답": "…", "실패": null, "근거": [링크…], "검색 결과": [{"순위": 1, "주소": "경로.html#앵커", "경로": "쪽 > 소제목"}…], "정답 위치": […], "적중 순위": 2, "핵심": […], "붙인 연습 과정": ["단순한 검"], "답에 나온 연습 과정": [], "첫 글자(초)": 0.4, "답 끝(초)": 1.2}`. 시간은 엔진만 잰 것(창·F10 없음, `요약.md`에 중앙값·최대값). 연습 과정 밖에서 물은 차례에 엔진이 붙인 비슷한 연습 과정과 그중 답에 이름이 나온 것(단순한 질문에 권했으면 채점 때 틀림, `요약.md`에 그런 차례 번호)
-- `설정.json`: 문항 파일, 엔진, 임베딩, 리랭커, `settings`, PC, 시작 시각, 커밋 번호(커밋 안 한 변경이 있으면 표시). `settings`는 시간 기록 줄의 `settings`와 같은 모양이다(`conversation.settings_record`: 답 엔진 설정 + `recent_pairs`). 리랭커·임베딩 종류는 지금 `끔`·`stand_in`만 고를 수 있다
+- `설정.json`: 문항 파일, 엔진, 임베딩, 리랭커, `settings`, PC, 시작 시각, 커밋 번호(커밋 안 한 변경이 있으면 표시). `settings`는 시간 기록 줄의 `settings`와 같은 모양이다(`conversation.settings_record`: 답 엔진 설정 + `recent_pairs`). 리랭커는 지금 `끔`만, 임베딩은 `stand_in`·`text-embedding-3-large`를 고를 수 있다
 - 실패하면(청크·시간 기록 파일 없음, 잘못된 옵션) 결과 폴더를 만들지 않는다. `--recent`는 0 이상, `--top-k`는 1 이상
 - 시간 맞추기: 질문 글의 공백을 무시해 문항과 맞추고, PC·엔진·설정이 같은 줄끼리 묶는다(다른 PC의 기록을 합쳐 돌려도 섞이지 않게). 같은 문항을 여러 번 물었으면 마지막 줄, 실패로 끝난 줄은 빼고 번호를 적는다. 잰 것: 창 뜨기(F10 → 입력 가능, 명세의 '질문 준비' 0.5초 목표), 질문 준비(F10 → 보냄, GPT의 스크린샷 키 → 엔터와 맞댐), 첫 글자·답 끝(보냄부터), F10 → 답 끝. F10 칸이 빈 줄은 F10이 드는 것에서만 빠져 분모가 다를 수 있다. 질문 글이 같은 문항이 여럿이면(시나리오의 "그다음은요?" 등) 같은 PC에서 바로 앞에 물은 질문이 그 문항의 앞 차례인 쪽으로 가른다(시나리오는 차례대로 물으므로 빼는 문항이 없음). 앞 차례까지 같은 문항은 잘못 만든 것이라 문항 파일을 읽을 때 멈춘다
+
+### 소규모 검색 비교 (티켓 40, 측정할 때 손으로 돌림)
+
+```
+묶음(data/search_compare/pool/pool_v1.jsonl) + 청크 파일 + 번역(ko_none.jsonl 위에 _fixes 덮어 읽기)
+  + 질문(data/search_compare/questions/web·ai_questions.jsonl)
+  ──search_compare build-db──▶ data/search_compare/db/<모델>_<original|translation|combined>_<해시>.npz + 같은 이름 .json
+  ──search_compare run──▶ results/<날짜>_<이름>/ 설정.json · 실행.jsonl · 요약.md
+```
+
+- 실행: `.venv\Scripts\python -m blender_tutor.search_compare estimate`(유료 어림, 돈 안 듦), `... build-db [--models bge-m3]`, `... run --name <이름> --note "<PC·Blender에 연 파일·함께 켠 프로그램>" --yes`. 유료 모델(text-embedding-3-large)이 들면 `--yes` 없이는 멈춘다(종료 코드 2). BGE-M3는 `compare` 설치 묶음과 내려받은 모델이 필요하다
+- DB: 글 종류마다 모델·글의 해시를 파일 이름에 넣어, 같으면 다시 부르지 않고 읽고 글이 바뀌면 새 파일을 만든다(이전 파일은 그대로). 번역 없는 청크는 합침·분리 조건에서도 원문 벡터를 쓴다(다시 임베딩하지 않음)
+- 검색어: 질문 + 사전으로 찾은 영어 메뉴 이름(도우미 검색어 첫 줄과 같음). BM25는 한글을 두 글자씩 겹쳐, 나머지는 낱말로 자른다(`bm25_words`, 도우미의 자르기는 그대로). BM25를 켜면 뜻 순위·BM25 순위를 RRF로 합친다(`RRF_K`·`RRF_DEPTH`는 답 엔진 값). 분리 검색은 같은 청크의 원문·번역 점수 중 높은 것 하나로 뜻 순위를 만든다
+- 측정: 모델마다 준비 운동 1번(따로 기록) → 회차마다 질문 하나에 조건을 모두(질문마다 섞은 순서, 씨앗 고정) 돌리고 다음 질문. 질문 임베딩은 매번 새로. 채점은 1회차 순위, 시간은 모든 회차
+- `실행.jsonl` 한 줄(지어낸 예): `{"회차": 1, "질문": "W1", "조건": "bge-m3 / 원문·번역 분리 / BM25 끔", "원래 질문": "…", "검색어": "… Origin", "시간": {"질문 임베딩": 0.31, "뜻 검색": 0.0004, "BM25": 0.0, "RRF": 0.0, "전체": 0.31}, "결과": [열쇠 상위 50개], "부분": {"원문": [[열쇠, 점수]…], "번역": […], "뜻": […], "BM25": […], "RRF": […]}}`
+- 채점: 질문의 `answer_groups`마다 그 안의 청크 하나라도 상위 k개에 들면 그 근거를 찾은 것. 질문마다 찾은 비율의 평균(질문 비중 같음), 전부 찾은 질문 수, 일부라도 찾은 질문 수, 번역 있음/없음 10개씩, 질문별 찾은 근거·처음 정답 순위, 회차마다 순위가 달랐던 질문
+- `설정.json`: 조건, 묶음 파일·해시, 청크 수, 질문 파일, 회차·씨앗, RRF 값, DB 기록(새로 만듦/재사용, 걸린 초), BGE-M3 불러오기 초, 준비 운동, 유료 토큰·요청·달러, 메모(측정 환경), PC·운영체제·프로세서, 시작 시각, 커밋
 
 ## 7. 어디서 무엇을 시험하나
 
@@ -298,15 +323,17 @@ Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_
 | 질문 한 번 | `test_question_flow.py` | 진짜 받는 쪽(애드온인 척 보냄)·진행·대화·시간 기록 + 가짜 엔진·시험용 창 쪽 연결 → 작업 상태 없을 때 안내와 실패 한 줄, 옛 애드온 안내, F10 누른 Blender의 상태·단계로 답, 중간에 실패한 답은 최근 대화에서 빠짐 |
 | 대화 | `test_conversation.py` | 가짜 엔진 → 엔진이 받은 최근 대화, 실패한 답 빼기, 엔진 버그 문구, 기록에 남기는 설정 모양 |
 | 창 그리기 | `test_helper_window.py`(화면 없이 Qt를 띄움) | Enter → 보낸 질문, 답 조각·근거 카드·오류 문구, X·Esc, 연습 과정 카드(다음/다음 단계, 단계 목록 다섯 줄 스크롤)·물음 줄 |
-| 임시 엔진 | `test_stand_in.py` | 작은 청크 파일 → 엔진이 만들어지고 근거가 붙음 |
+| 임시 엔진 | `test_stand_in.py` | 작은 청크 파일 → 엔진이 만들어지고 근거가 붙음. 진짜 임베딩을 고르면 만들어 둔 벡터를 읽고 질문만 임베딩(가짜 OpenAI), 벡터 파일이 없으면 FileNotFoundError |
 | 초보자 범위 | `test_beginner_scope.py` | 지어낸 청크·연습 과정·가짜 모델 → 쪽 목록, 바로 넣는 쪽, 묶음 분류(이어 받기·다시 묻기·멈춤), 비용 어림, 합치기(앞 파일이 이김, 빠진 쪽·없는 쪽에서 멈춤), 결과 파일 쓰기(없는 폴더에도 씀, 이미 있으면 멈춤) |
 | 평가 프로그램 | `test_evaluate.py` | 문항 파일 → 대화·차례(틀린 칸은 번호와 함께 오류), 가짜 모델 엔진 → 차례별 답·적중 순위·시나리오형의 앞 답 넘기기, 시간 기록 줄 → 묶음별 중앙값·최대값·분모, 명령 줄 → 결과 폴더(덮어쓰지 않음) |
+| 설명서 벡터 | `test_manual_vectors.py` | 가짜 임베딩(글 길이) → 나눠 보내기, 청크 차례대로 읽기, 차례·글·개수가 바뀌면 멈춤, 있으면 덮어쓰지 않음, --yes 없이 멈춤, 연결·읽기 시간 초과 → TimeoutError, 연습 과정 벡터는 바뀐 글만 다시 부르고 없어진 것은 지움 |
+| 검색 비교 | `test_search_compare.py` | 가짜 임베딩(낱말 세기)·지어낸 청크 → 조건 18개, 낱말 자르기, DB 재사용(호출 수)·글이 바뀌면 새로, 분리 검색에서 같은 청크 한 번·원문/번역 점수 남김, BM25+RRF, 회차×질문×조건과 준비 운동 호출 수, 상위 k개 채점(대신하는 근거 한 번만, 일부/전부), 회차마다 다른 순위 표시, 명령 줄 → 결과 폴더(덮어쓰지 않음)·유료 모델은 --yes 없이 멈춤 |
 | 애드온 | `addon/selftest.py`(기본 테스트 밖) | 화면 없는 Blender → 14칸(시점·위치·진행 중인 조작 포함), 바뀐 때만 보내기, F10 봉투의 누른 시각, 지금 상태 저장의 JSON(PNG는 화면이 없어 눈 확인), 도우미 켜기·꺼짐 |
 | 입구·Windows 조작·화면·F10·한글 입력·Blender 둘 오가기 | 사용자 눈 확인(`helper.py`, `winapi.py`) | |
 
 ## 8. 아직 없는 것
 
 - 검 연습 과정 따라 하며 고치기·감지 확인(32), 평가 문항(개발 30은 35, 홀드아웃 10은 34)
-- 리랭커, 임시 엔진 밖의 임베딩 종류(평가 프로그램에서 아직 고를 수 없음)
-- 실제 임베딩·답변 모델 연결(31·33)
+- 리랭커(평가 프로그램에서 아직 고를 수 없음)
+- 실제 답변 모델 연결(33)
 - Windows 전용이다. 맥을 붙일 때 바꿀 곳은 애드온 설명글 맨 위에 모아 적었다

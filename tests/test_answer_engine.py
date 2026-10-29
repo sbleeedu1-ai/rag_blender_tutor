@@ -8,7 +8,9 @@ from dataclasses import replace
 
 import pytest
 
-from blender_tutor.answer_engine import AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source
+from blender_tutor.answer_engine import (
+    INSTRUCTIONS, AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source, _terms_for,
+)
 from blender_tutor.manual_chunks import Chunk, Example, MediaKind
 from blender_tutor.menu_names import MenuName, MenuNames, Translation
 from blender_tutor.menu_names import Source as MenuSource
@@ -185,12 +187,12 @@ def test_겹치는_낱말이_없으면_뜻_검색_순서_그대로():
 def test_뜻과_낱말이_모두_가까운_청크가_한쪽만_가까운_청크보다_위로_온다():
     # 뜻으로는 BEVEL이 1등이고 SAVE는 3등, 낱말("save file")로는 SAVE가 1등이다.
     # SAVE는 두 순위표에 다 높이 있어 뜻 한쪽에서만 1등인 BEVEL보다 위로 온다
-    assert found(ask("save file", settings=Settings(top_k=2)))[0] == SAVE
+    assert found(ask("save file", settings=Settings(top_k=2, use_bm25=True)))[0] == SAVE
 
 
 def test_한국어_질문에_섞인_영어_낱말이_순위를_올린다():
     # 뜻으로는 BEVEL이 1등이지만, 질문 속 "Segments"는 BEVEL_MORE에만 있다
-    assert found(ask("Segments 늘리기", settings=Settings(top_k=2)))[0] == BEVEL_MORE
+    assert found(ask("Segments 늘리기", settings=Settings(top_k=2, use_bm25=True)))[0] == BEVEL_MORE
     assert found(ask("Segments 늘리기", settings=Settings(top_k=2, use_bm25=False)))[0] == BEVEL
 
 
@@ -250,8 +252,8 @@ def test_질문_속_한국어_메뉴_이름에_영어를_덧붙인다(question, 
     assert embedder.calls == [[f"{question} {english}".strip()]]
 
 
-def test_제목에서만_뽑은_이름은_아직_쓰지_않는다():
-    # 검수 전(제목에서만 뽑은 1,055개)이라 흔한 낱말(에서 → At)이 섞인다. 검수는 초보자 범위 분류(티켓 30) 뒤
+def test_통과하지_않은_제목은_질문_찾기에_쓰지_않는다():
+    # 제목에서만 뽑은 이름(1,055개)에는 흔한 낱말(에서 → At)이 섞인다. 검수를 통과한 것만 쓴다(티켓 31, menu_titles.json)
     embedder = FakeEmbedder()
     list(AnswerEngine(CHUNKS, VECTORS, embedder, FakeModel(), menu_names=MENU_NAMES).answer("여기에서", STATE, []))
     assert embedder.calls == [["여기에서"]]
@@ -260,7 +262,7 @@ def test_제목에서만_뽑은_이름은_아직_쓰지_않는다():
 def test_붙인_검색어로_낱말_검색도_한다():
     # 질문은 한국어뿐이지만 단계에 걸린 소제목 경로("Saving > Save")의 낱말이 SAVE를 끌어올린다
     step = Step("save-file", "파일 저장하기", manual=("files/blend/save.html#save",))
-    assert found(ask("어떻게 해요?", step=step, settings=Settings(top_k=2)))[0] == SAVE
+    assert found(ask("어떻게 해요?", step=step, settings=Settings(top_k=2, use_bm25=True)))[0] == SAVE
 
 
 # 모델에 넘기는 것
@@ -449,6 +451,25 @@ def test_질문_하나에_임베딩_한_번_답변_한_번만_부른다():
     assert (len(embedder.calls), len(model.calls)) == (1, 1)
 
 
+def test_넘긴_청크에_나온_낱말의_용어표_줄만_지시에_붙인다():
+    model = FakeModel()
+    ask(model=model, settings=Settings(top_k=len(CHUNKS)))  # SELECT의 "Vertex, edge and face"가 함께 넘어간다
+    system = model.calls[0][0]["content"]
+    assert all(line in system for line in ("vertex → 버텍스", "edge → 에지", "face → 페이스"))
+    assert "bone → 뼈대(Bone)" not in system  # 청크에 없는 낱말의 줄은 붙이지 않는다
+
+
+def test_넘긴_글에_용어표_낱말이_없으면_용어표_안내도_붙이지_않는다():
+    assert _terms_for("Export writes the scene to a file.") == ""
+    assert "Blender 낱말은 아래 표기" not in INSTRUCTIONS  # 안내는 줄이 있을 때만 _terms_for가 붙인다
+
+
+def test_용어표_낱말은_복수형과_꼴이_바뀐_말도_찾는다():
+    found = _terms_for("Select vertices and faces, then unwrapping. Empties have properties.")
+    assert all(line in found for line in ("vertex →", "face →", "unwrap →", "empty →", "properties →"))
+    assert "pack / unpack" not in found  # unwrapping 안의 글자가 pack으로 잘못 잡히지 않는다
+
+
 def test_모델에_검색_청크_글과_작업_상태와_질문을_넘긴다():
     model = FakeModel()
     question = "칼날 모서리를 둥글게 하려면?"  # 청크·작업 상태 어디에도 없는 글이라, 들어 있으면 질문에서 온 것이다
@@ -591,6 +612,9 @@ def test_영어_화면이거나_번역이_꺼져_있으면_메뉴_이름은_영�
         (("[[Edit Mode]]로",), {"Edit Mode": "Operator"}, "편집 모드(Edit Mode)로"),  # 고정한 짝
         # 병합 메뉴의 At Center는 Mesh 문맥이라 번역이 없다. 그 문맥을 고르면 화면처럼 영어 그대로
         (("[[Mesh > Merge > At Center]]",), {"At Center": "Mesh"}, "메시(Mesh) > Merge > At Center"),
+        # 바로 앞 단을 붙인 짝(지어낸 예): Mesh 아래 Apply만 다른 글자, 혼자 쓰면 이름 하나의 짝
+        (("[[Mesh > Apply]], [[Apply]]",), {"Apply": "*", "Mesh > Apply": "WindowManager"},
+         "메시(Mesh) > 신청하기(Apply), 적용(Apply)"),
     ],
 )
 def test_번역이_없거나_고정_전이면_영어_그대로이고_여러_번역은_고정한_짝을_쓴다(pieces, choices, expected):

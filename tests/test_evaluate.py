@@ -297,7 +297,7 @@ def run_options(tmp_path, *more):
 
 
 def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약을_쓴다(tmp_path):
-    assert main(["run", *run_options(tmp_path, "--name", "기준", "--reasoning", "low", "--recent", "5", "--no-bm25")], today=date(2026, 10, 26)) == 0
+    assert main(["run", *run_options(tmp_path, "--name", "기준", "--reasoning", "low", "--recent", "5")], today=date(2026, 10, 26)) == 0
     folder = tmp_path / "results" / "20261026_기준"
     settings = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     assert settings["engine"] == "stand_in" and settings["임베딩"] == "stand_in" and settings["리랭커"] == "끔"
