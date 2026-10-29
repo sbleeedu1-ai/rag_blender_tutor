@@ -31,6 +31,7 @@ from blender_tutor.paths import COURSES, PROJECT, default_progress_records
 from blender_tutor.progress import Course, load_courses
 from blender_tutor.question_flow import QuestionFlow
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
+from blender_tutor.manual_vectors import MODEL as EMBEDDING
 from blender_tutor.stand_in import build_engine
 from blender_tutor.state_stream import RecordingDesk
 from blender_tutor.timing import Stopwatch
@@ -99,7 +100,11 @@ class Helper:
         """설명서를 읽어 엔진을 만든다(약 2초). 창은 먼저 떠 있고, 그동안 물으면 '읽는 중' 문구를 보인다."""
         started = time.perf_counter()
         try:
-            self._conversation.engine = build_engine(PROJECT / "data", courses=self._courses)
+            self._conversation.engine = build_engine(PROJECT / "data", courses=self._courses, embedding=EMBEDDING)
+        except SystemExit as error:  # OpenAI 키가 없음(openai_key). 스레드 안이라 잡지 않으면 '읽는 중'에 머문다
+            log.warning("OpenAI 키 없음: %s", error)
+            self._conversation.waiting_message = str(error)
+            return
         except FileNotFoundError as error:
             log.warning("설명서 자료가 없음: %s", error)
             self._conversation.waiting_message = NO_DATA
@@ -108,7 +113,7 @@ class Helper:
             log.exception("답 엔진을 만들지 못함")
             self._conversation.waiting_message = PROGRAM_ERROR
             return
-        log.info("답 엔진 준비 %.1f초(임시 엔진: 낱말 세기 임베딩 + 가짜 답변, 티켓 31·33에서 진짜로)", time.perf_counter() - started)
+        log.info("답 엔진 준비 %.1f초(%s, 답변 모델은 티켓 33에서 진짜로)", time.perf_counter() - started, self._conversation.engine.name)
 
     # ---- 연습 과정(진행 관리는 창 번호마다 하나, course_desk)
     def _on_message(self, message: Message) -> None:

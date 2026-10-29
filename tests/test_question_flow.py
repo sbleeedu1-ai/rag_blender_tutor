@@ -40,6 +40,7 @@ class FakeEngine:
     """질문마다 정해 둔 사건을 낸다. 받은 작업 상태·최근 대화·단계를 적어 둔다."""
 
     settings = Settings()
+    name = "stand_in"
 
     def __init__(self, events=None):
         self.events = events

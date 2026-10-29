@@ -187,12 +187,12 @@ def test_겹치는_낱말이_없으면_뜻_검색_순서_그대로():
 def test_뜻과_낱말이_모두_가까운_청크가_한쪽만_가까운_청크보다_위로_온다():
     # 뜻으로는 BEVEL이 1등이고 SAVE는 3등, 낱말("save file")로는 SAVE가 1등이다.
     # SAVE는 두 순위표에 다 높이 있어 뜻 한쪽에서만 1등인 BEVEL보다 위로 온다
-    assert found(ask("save file", settings=Settings(top_k=2)))[0] == SAVE
+    assert found(ask("save file", settings=Settings(top_k=2, use_bm25=True)))[0] == SAVE
 
 
 def test_한국어_질문에_섞인_영어_낱말이_순위를_올린다():
     # 뜻으로는 BEVEL이 1등이지만, 질문 속 "Segments"는 BEVEL_MORE에만 있다
-    assert found(ask("Segments 늘리기", settings=Settings(top_k=2)))[0] == BEVEL_MORE
+    assert found(ask("Segments 늘리기", settings=Settings(top_k=2, use_bm25=True)))[0] == BEVEL_MORE
     assert found(ask("Segments 늘리기", settings=Settings(top_k=2, use_bm25=False)))[0] == BEVEL
 
 
@@ -262,7 +262,7 @@ def test_통과하지_않은_제목은_질문_찾기에_쓰지_않는다():
 def test_붙인_검색어로_낱말_검색도_한다():
     # 질문은 한국어뿐이지만 단계에 걸린 소제목 경로("Saving > Save")의 낱말이 SAVE를 끌어올린다
     step = Step("save-file", "파일 저장하기", manual=("files/blend/save.html#save",))
-    assert found(ask("어떻게 해요?", step=step, settings=Settings(top_k=2)))[0] == SAVE
+    assert found(ask("어떻게 해요?", step=step, settings=Settings(top_k=2, use_bm25=True)))[0] == SAVE
 
 
 # 모델에 넘기는 것

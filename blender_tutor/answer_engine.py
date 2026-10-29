@@ -129,7 +129,7 @@ class Settings:
 
     top_k: int = 6  # 답변 모델에 넘길 검색 결과 수(명세 6-8개, 22번의 먼저 볼 소제목이 이 위에 더 붙는다)
     timeout: float = 10.0  # 모델이 이만큼(초) 아무것도 보내지 않으면 멈춘 것으로 본다(사용자 결정, 2026-10-21)
-    use_bm25: bool = True  # 낱말 검색(BM25)을 섞을지. 끄면 뜻 검색만(평가에서 견줄 스위치)
+    use_bm25: bool = False  # 낱말 검색(BM25)을 섞을지. 끄면 뜻 검색만(티켓 40 결과로 끔, HISTORY [102])
     # 답변 모델의 생각 수준(명세 기본 none). 시간 기록에 남긴다. 실제 모델에 넘기는 일은 티켓 33
     reasoning: Reasoning = Reasoning.NONE
 
@@ -193,9 +193,12 @@ class AnswerEngine:
         menu_names: MenuNames | None = None,
         courses: Sequence[Course] = (),
         course_vectors: Sequence[Sequence[float]] = (),
+        name: str = "",
     ):
-        """menu_names는 질문 속 한국어 메뉴 이름에 영어를 덧붙일 사전(없으면 덧붙이지 않음).
+        """name은 시간 기록·평가 결과에 남길 엔진 이름(어떤 임베딩·답변 모델인지, 엔진을 만드는 곳이 정한다).
+        menu_names는 질문 속 한국어 메뉴 이름에 영어를 덧붙일 사전(없으면 덧붙이지 않음).
         courses·course_vectors는 비슷한 연습 과정을 권할 연습 과정과 그 벡터(이름 + 한 줄 설명 + 비슷한 말, 티켓 31)."""
+        self.name = name
         self._chunks = list(chunks)
         self._menu_names = menu_names
         self._courses = list(courses)

@@ -7,7 +7,6 @@
 from collections.abc import Callable
 from typing import Protocol
 
-from blender_tutor import stand_in
 from blender_tutor.answer_engine import Event, Failure
 from blender_tutor.conversation import Conversation, settings_record
 from blender_tutor.course_desk import CourseDesk
@@ -73,4 +72,4 @@ class QuestionFlow:
         engine = self._conversation.engine
         if engine is None:
             return None
-        return {"name": stand_in.NAME, "settings": settings_record(engine.settings, self._conversation.recent_pairs)}
+        return {"name": engine.name, "settings": settings_record(engine.settings, self._conversation.recent_pairs)}
