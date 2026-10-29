@@ -1,45 +1,46 @@
 # 인수인계
 
-마지막 갱신: 2026-10-29 · Claude · 강의실 PC · 브랜치 `feat/31-translate-embed` · PR 없음. 사용자 지시로 PR 생성 금지.
+마지막 갱신: 2026-10-29 · Claude · 강의실 PC · PR #28 병합 전에 씀(브랜치 `feat/31-translate-embed` → main). 이어받을 때 PR #28이 병합됐는지 git으로 먼저 본다.
 
 ## 다음 할 일
 
-1. **본 측정을 돌린다**(유료 승인 받음, 어림 $0.017. 사용자가 "시작"이라고 한 뒤에). 강의실 PC에서 Blender 5.2를 기본 파일로 열어 두고 손대지 않고, 도우미 창은 끄고, 설정·작업 관리자는 닫는다. 측정 중에는 PC·Codex를 쓰지 않는다.
-   ```
-   .venv\Scripts\python -m blender_tutor.search_compare run --name search_compare --yes --note "강의실 PC, Blender 5.2.2 LTS 기본 파일(저장 안 함) 열어 두고 조작 없음, 도우미 창 끔. 함께 켬: VS Code(Claude Code 실행 중, 터미널에 Codex 열어 둠, 측정 중 작업 없음), Chrome(Claude 탭 1개), 알림 영역 상주 프로그램(Copilot·NVIDIA 등)"
-   ```
-   - 메모는 그날 실제로 켠 것에 맞게 고친다. BGE-M3를 불러오는 데 약 25초, 이후 1,080회가 돈다. 백그라운드로 돌리고 끝 알림을 기다린다.
-   - 결과: `results/20261029_search_compare/` (날짜가 바뀌면 그 날짜). 같은 이름이 있으면 멈춘다.
-2. `요약.md`를 읽고 상위 4·6·8개 비교표로 후보(잠정 3개)를 근거와 함께 제안해 사용자 판단을 받는다. 결과를 HISTORY에 남기고, 티켓 40 `## Comments`에 완료 조건 밖에 더한 것을 적는다(아래 "더한 것").
-3. 검토: 사용량을 아끼려고 하위 에이전트 검토(`code-review`)는 쓰지 않기로 했다. Codex에 `17c9dfd` diff 검토를 맡기는 것을 권했다. 검토 결과는 AGENTS.md 규칙대로 한 항목씩 사용자 판단을 받는다.
-4. 40번 결과로 31번 검색 방식 선택을 이어 간다. 이후 34 → 33 → 32 → 35 → 36·37(HISTORY [62]).
+1. **티켓 33: 실제 답변 모델을 붙이고 생각 수준 none/low 속도를 잰다.** [33번](.scratch/mvp-roundtrip/issues/33-유료-생각-수준-실측.md) Comments의 넘겨받은 일을 먼저 읽는다.
+   - 새 브랜치에서 시작한다(main 최신에서).
+   - 답변 모델(명세 기본 `gpt-6-luna`) 연결 코드 → 가짜로 시험 → **어림 비용을 보이고 사용자 확인** → 강의실 PC 도우미 창에서 질문 준비 0.5초 / 첫 글자 2초 / 답 끝 6초를 잰다.
+   - 함께 볼 것(HISTORY [107]·[109]): 첫 질문 검색 0.54초(목표 0.5초 근처), 도우미 창을 실제로 띄워 진짜 임베딩 근거가 나오는지, 용어표를 실제 모델이 지키는지([105]), 원문만 넘겨도 한국어 답이 괜찮은지([104]).
+   - 답변 모델이 진짜가 되면 엔진 만들기를 `stand_in.py` 밖으로 옮기고 `stand_in.py`는 `archive/`로(파일 첫머리 주석).
+2. 로컬 임베딩 후보 3개(granite-embedding-97m-multilingual-r2 / multilingual-e5-small / embeddinggemma-300m) 측정. **사용자가 시작하라고 할 때만.** 처음 불러오기는 처음 설치(내려받은) 직후 한 번 재서 기록([103]). 비교 프로그램에 모델을 더하는 코드가 필요하다. 조사: [로컬 후보](.scratch/mvp-roundtrip/research/2026-10-29-가벼운-로컬-임베딩-후보.md).
+3. 이후 32(검 따라 하기 검수) → 35 → 36·37. 34(홀드아웃)는 나중에 해도 된다([103]).
 
 ## 지금 상태와 검증
 
-- 비교 프로그램 `blender_tutor/search_compare.py`와 시험 `tests/test_search_compare.py`(12개)를 커밋했다(`17c9dfd`). pytest **502개 통과**(2026-10-29 세션 끝).
-- 실제 자료로 확인: 청크 200(번역 90), 질문 20(번역 있음 10), 검색어에 사전 영어 이름이 붙음(W1 → "… Make Origin Floor Rotate …"). `estimate` 결과 large DB 약 104,265토큰 + 질문 541회 약 26,103토큰 → 약 $0.017.
-- 검색용 DB 6개를 만들었다(`data/search_compare/db/`, 커밋 안 함). large는 약 9초, BGE-M3(CPU)는 약 14분. 같은 글이면 run이 다시 만들지 않고 읽는다.
-- 이번 세션 결정은 HISTORY [100].
+- 티켓 31·40 닫음(`Status: resolved`). 검색 방식: text-embedding-3-large · 원문만 · BM25 끔 · 상위 6개([102]).
+- 도우미 창은 진짜 임베딩 + 가짜 답변(엔진 이름 `text-embedding-3-large+stand_in`).
+- pytest **516 passed**(2026-10-29, 이 브랜치 마지막 코드 커밋 `99fe35b` 기준, 강의실 PC). 연습 과정 검사 `courses: 문제 0개`.
+- 실제 확인: 엔진 준비 2.7초, "베벨 어떻게 해요?" 검색 0.20초, "의자 오리진을 바닥으로 내리는 법?" 0.54초(Set Origin 쪽을 못 찾음, 티켓 40 W1과 같은 약점). 도우미 창을 직접 띄워 보지는 않았다(코드로 엔진을 불러 확인).
 
 ## 모르면 실수할 것
 
-- PR은 만들지 않는다. 검토 결과는 빠짐없이 한 항목씩 사용자 판단을 받는다. 질문·채점 차례·시간 표본을 구현 편의로 빼지 않는다.
-- 채점은 1회차 순위, 시간은 모든 회차. 3회차 순위는 모두 남기고 다르면 `요약.md`에 질문 번호로 표시한다(평균 내지 않음).
-- `build-db`는 실제 사용 토큰을 파일에 남기지 않는다(run만 `설정.json`의 "유료"에 남김). large DB를 만든 실제 비용은 OpenAI 사용량 화면에서 본다.
-- BGE-M3는 `pip install -e ".[dev,compare]"`가 필요하다(강의실 PC .venv엔 이미 설치, 모델은 `C:\Users\201\.cache\huggingface\hub\models--BAAI--bge-m3`). 다른 PC에서는 모델 내려받기(4.3GB)와 DB 다시 만들기(약 14분)가 든다.
-- **data/search_compare/(질문·묶음·DB)는 아직 드라이브 백업 전**이다. 다른 PC로 가기 전에 백업한다.
-- 묶음을 바꾸면 모든 조건에 같이 적용하고 새 결과로 다시 비교한다(`check_hidden_answers.py`도 다시 본다). "번역 없음" 질문은 대신할 정답까지 번역이 없어야 한다(HISTORY [95]).
-- 사용자는 Blender 기능을 깊이 모른다. 청크 정답 여부 같은 판단은 Claude가 근거와 권하는 답을 낸다(HISTORY [98]).
+- **유료**: 도우미 창 질문마다 임베딩 약 $0.000005. `manual_vectors build`(약 $0.13), 검색 비교 `run`, 답변 모델은 돌리기 전 어림 비용을 보이고 확인받는다. pytest는 무료(가짜).
+- 도우미 창은 OpenAI 키(환경 변수 `OPENAI_API_KEY` 또는 `data/.env`)가 있어야 답한다. 없으면 키 없음 문구.
+- 청크 파일(`data/chunks/manual_chunks.jsonl`)을 다시 만들면 설명서 벡터가 맞지 않아 도우미가 멈춘다 → `manual_vectors build --yes`로 다시 만든다(옛 파일은 `archive/`로 옮긴 뒤, 있으면 멈춤).
+- 평가 프로그램은 `--no-bm25`가 없어지고 `--bm25`(켤 때만)로 바뀌었다. 진짜 임베딩은 `--embedding text-embedding-3-large`.
+- 검토 결과는 한 항목씩 사용자 판단(AGENTS.md). 하위 에이전트 검토(`code-review`)·Codex 검토는 사용량 때문에 쓰지 않기로 했다 — Claude가 직접 보고 판단을 받는다.
+- 사용자는 Blender 기능을 깊이 모른다. 청크 정답 여부 같은 판단은 Claude가 근거와 권하는 답을 낸다.
 - 강사님에게 물을 것: GPT 비교에서 연습 과정 정보를 GPT에 주지 않는 조건이 괜찮은지.
 
-## 더한 것 (티켓을 닫을 때 Comments에 옮긴다)
+## Git 제외 자료 (`data/`·`results/`, 커밋 안 함)
 
-- `estimate`·`build-db` 명령(유료 어림과 DB만 따로 만들기), 유료 모델은 `--yes` 없이 멈춤
-- `pyproject.toml`의 설치 묶음 `compare`(sentence-transformers)
-- 시작할 때 묶음·정답 검사(두 번 든 청크, 청크 파일에 없는 열쇠, 묶음 밖 정답)
+| 자료 | 위치 | 다른 PC에서 |
+|---|---|---|
+| 설명서 벡터(115MB) | `data/vectors/manual_text-embedding-3-large.npz` + `.json` | 드라이브로 옮기거나 `python -m blender_tutor.manual_vectors build --yes`(약 $0.13, 1분) |
+| 연습 과정 벡터 | `data/vectors/courses_text-embedding-3-large.npz` | 없으면 도우미가 켤 때 자동으로 만든다 |
+| 검색 비교 질문·묶음·DB | `data/search_compare/` | **아직 드라이브 백업 전**. 다른 PC로 가기 전에 백업 |
+| 검색 비교 결과 | `results/20261029_search_compare/` (요약표는 `docs/실험결과/`에 커밋) | 원본은 백업 대상 |
+| BGE-M3 모델 | `C:\Users\201\.cache\huggingface\hub\models--BAAI--bge-m3` | 비교 프로그램에만 필요(`pip install -e ".[dev,compare]"`) |
 
 ## 추천 스킬과 참고
 
-- 스킬 없이 위 1번 명령을 백그라운드로 돌리고, 끝나면 `요약.md`를 읽는다.
-- [40번](.scratch/mvp-roundtrip/issues/40-소규모-검색-비교.md), [31번](.scratch/mvp-roundtrip/issues/31-유료-번역과-임베딩.md), [구조 6절 "소규모 검색 비교"](STRUCTURE.md), [경과 [93]-[100]](HISTORY.md).
-- 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해. 측정은 내가 시작하라고 하면 돌려. PR은 만들지 마.`
+- 33번은 `implement` 스킬(계획 → 구현 → 검수). 스킬 없이: 33번 티켓 Comments를 읽고 답변 모델 연결 코드를 가짜로 시험한 뒤, 어림 비용을 보이고 확인받아 실측한다.
+- [33번](.scratch/mvp-roundtrip/issues/33-유료-생각-수준-실측.md), [31번](.scratch/mvp-roundtrip/issues/31-유료-번역과-임베딩.md), [40번](.scratch/mvp-roundtrip/issues/40-소규모-검색-비교.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [102]-[109]](HISTORY.md), PR #28.
+- 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
