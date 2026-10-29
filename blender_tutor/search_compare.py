@@ -20,7 +20,6 @@ import re
 import statistics
 import sys
 import time
-import urllib.request
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -36,14 +35,13 @@ from blender_tutor.answer_engine import RRF_DEPTH, RRF_K, Embedder, _normalized
 from blender_tutor.beginner_scope import openai_key
 from blender_tutor.evaluate import _commit
 from blender_tutor.manual_chunks import load_chunks
+from blender_tutor.manual_vectors import PRICE_PER_MILLION, OpenAIEmbedder  # 요금표에 있는 모델만 돈이 든다
 from blender_tutor.menu_names import MenuNames
 from blender_tutor.paths import PROJECT
 from blender_tutor.translate import _tokens, pieces
 from blender_tutor.translation_check import reviewed
 
 MODELS = ("text-embedding-3-large", "bge-m3")
-# 유료 모델의 요금(달러 / 100만 토큰, OpenAI 요금표 기준). 여기 있는 모델만 돈이 든다
-PRICE_PER_MILLION = {"text-embedding-3-large": 0.13}
 TOP_KS = (4, 6, 8)  # 같은 검색 순위에서 상위 몇 개까지를 채점하나(티켓 40)
 ROUNDS = 3  # 질문마다 몇 회 재나
 SEED = 40  # 질문마다 조건 순서를 섞는 씨앗(다시 돌려도 같은 순서)
@@ -388,28 +386,6 @@ def estimate(pool: Sequence[PoolChunk], questions: Sequence[Question], models: S
             f" (요금 ${PRICE_PER_MILLION[model]}/100만 토큰, 저장된 DB를 재사용하면 DB 몫은 들지 않음)"
         )
     return lines
-
-
-class OpenAIEmbedder:
-    """OpenAI 임베딩(돈이 든다, 시험하지 않음). 받은 토큰·요청 수를 쌓아 둔다."""
-
-    URL = "https://api.openai.com/v1/embeddings"
-
-    def __init__(self, model: str, key: str):
-        self.model, self.key = model, key
-        self.tokens = self.requests = 0
-
-    def embed(self, texts: Sequence[str], timeout: float) -> list[list[float]]:
-        body = {"model": self.model, "input": list(texts)}
-        request = urllib.request.Request(
-            self.URL, json.dumps(body).encode("utf-8"),
-            {"Authorization": f"Bearer {self.key}", "Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            answer = json.loads(response.read())
-        self.requests += 1
-        self.tokens += answer["usage"]["prompt_tokens"]
-        return [row["embedding"] for row in sorted(answer["data"], key=lambda row: row["index"])]
 
 
 class BgeEmbedder:

@@ -111,6 +111,7 @@
 | 자료 만들기 | `blender_tutor/blender_ui_labels.py` | Blender 안에서 돈다(`menu_review`가 화면 없이 띄움): 조작·속성·고르는 값·메뉴·패널 이름과 화면 파이썬 코드의 `text=`가 쓰는 번역 문맥을 모두 뽑음(`data/menu_names/ui_labels.json`). 조작 단추 글자는 조작 문맥, C 코드 메뉴 4개는 손으로 적음 | 31 |
 | 자료 만들기 | `blender_tutor/beginner_scope.py` | 설명서 쪽을 초보자 범위로 나눔(한 번 돌림, 손으로). `fixed`: 바로 넣는 쪽, `estimate`: 비용 어림, `classify`: 모델에게 물음(유료), `merge`: 분류 파일들 → 최종 범위. 모양은 6절 아래 | 30 |
 | 평가 | `blender_tutor/evaluate.py` | 평가 프로그램(도우미 밖에서 손으로 돌림). `run`: 문항 파일 → 답 엔진에 바로 넣어 답·검색 결과·검색 적중. `times`: 시간 기록 → PC·엔진·설정 묶음마다 중앙값·최대값. 결과는 `results/<날짜>_<이름>/`에 새로(있으면 멈춤). 모양은 6절 아래 | 29 |
+| 자료 만들기 + 읽기 | `blender_tutor/manual_vectors.py` | 만들기(손으로 한 번, 유료라 `--yes` 필요): 설명서 전체 청크 영어 원문 → text-embedding-3-large 벡터 → `data/vectors/manual_text-embedding-3-large.npz`(vectors 3,072차원·keys 청크 열쇠·digests 글 해시, 있으면 멈춤) + 같은 이름 .json(실제 토큰·비용). 읽기: `load(파일, 청크)`가 지금 청크와 열쇠·글이 다르면 멈춤. OpenAI 임베딩 연결 `OpenAIEmbedder`(응답 없음 → TimeoutError)도 여기 있고 검색 비교가 함께 씀 | 31 |
 | 평가 | `blender_tutor/search_compare.py` | 소규모 검색 비교(손으로 돌림). 같은 질문 20개·200청크 묶음으로 임베딩 모델 2 × 뜻 검색에 넣는 글 3 × BM25 3 = 18조건의 정답 근거 적중(상위 4·6·8개)과 질문 처리 시간을 잰다. 검색용 DB는 `data/search_compare/db/`에 만들고 재사용. 결과는 `results/<날짜>_<이름>/`에 새로(있으면 멈춤). 모양은 6절 아래. 답 엔진은 바꾸지 않는다 | 40 |
 | 만드는 사람 | `blender_tutor/course_check.py` | 연습 과정 파일 검사 | 15, 24 |
 | 만드는 사람 | `courses/*.yaml` | 연습 과정(검 `sword.yaml`, 공통 준비 `_common.yaml`) | 16 |
@@ -325,6 +326,7 @@ Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_
 | 임시 엔진 | `test_stand_in.py` | 작은 청크 파일 → 엔진이 만들어지고 근거가 붙음 |
 | 초보자 범위 | `test_beginner_scope.py` | 지어낸 청크·연습 과정·가짜 모델 → 쪽 목록, 바로 넣는 쪽, 묶음 분류(이어 받기·다시 묻기·멈춤), 비용 어림, 합치기(앞 파일이 이김, 빠진 쪽·없는 쪽에서 멈춤), 결과 파일 쓰기(없는 폴더에도 씀, 이미 있으면 멈춤) |
 | 평가 프로그램 | `test_evaluate.py` | 문항 파일 → 대화·차례(틀린 칸은 번호와 함께 오류), 가짜 모델 엔진 → 차례별 답·적중 순위·시나리오형의 앞 답 넘기기, 시간 기록 줄 → 묶음별 중앙값·최대값·분모, 명령 줄 → 결과 폴더(덮어쓰지 않음) |
+| 설명서 벡터 | `test_manual_vectors.py` | 가짜 임베딩(글 길이) → 나눠 보내기, 청크 차례대로 읽기, 차례·글·개수가 바뀌면 멈춤, 있으면 덮어쓰지 않음, --yes 없이 멈춤, 연결·읽기 시간 초과 → TimeoutError |
 | 검색 비교 | `test_search_compare.py` | 가짜 임베딩(낱말 세기)·지어낸 청크 → 조건 18개, 낱말 자르기, DB 재사용(호출 수)·글이 바뀌면 새로, 분리 검색에서 같은 청크 한 번·원문/번역 점수 남김, BM25+RRF, 회차×질문×조건과 준비 운동 호출 수, 상위 k개 채점(대신하는 근거 한 번만, 일부/전부), 회차마다 다른 순위 표시, 명령 줄 → 결과 폴더(덮어쓰지 않음)·유료 모델은 --yes 없이 멈춤 |
 | 애드온 | `addon/selftest.py`(기본 테스트 밖) | 화면 없는 Blender → 14칸(시점·위치·진행 중인 조작 포함), 바뀐 때만 보내기, F10 봉투의 누른 시각, 지금 상태 저장의 JSON(PNG는 화면이 없어 눈 확인), 도우미 켜기·꺼짐 |
 | 입구·Windows 조작·화면·F10·한글 입력·Blender 둘 오가기 | 사용자 눈 확인(`helper.py`, `winapi.py`) | |
