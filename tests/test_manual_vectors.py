@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from blender_tutor.manual_chunks import Chunk, save_chunks
-from blender_tutor.manual_vectors import OpenAIEmbedder, build, load, main, path_for
+from blender_tutor.manual_vectors import OpenAIEmbedder, build, cached, load, main, path_for
 
 BEVEL = Chunk("modeling/bevel", "options", "modeling", "modeling", "Bevel", ("Options",), "Width sets the size.")
 ARRAY = Chunk("modeling/array", "intro", "modeling", "modeling", "Array", ("Introduction",), "Array copies the object.")
@@ -75,3 +75,21 @@ def test_OpenAI_임베딩은_연결이든_읽기든_시간_초과면_TimeoutErro
     monkeypatch.setattr(urllib.request, "urlopen", slow)
     with pytest.raises(TimeoutError):
         OpenAIEmbedder("text-embedding-3-large", "가짜 키").embed(["베벨"], timeout=0.1)
+
+
+def test_연습_과정_벡터는_저장해_두고_새로_생기거나_바뀐_글만_임베딩한다(tmp_path):
+    path = tmp_path / "vectors" / "courses.npz"
+    embedder = LengthEmbedder()
+    first = cached(["검", "방패"], embedder, path, timeout=1)
+    assert embedder.calls == [2] and [vector[0] for vector in first] == [1.0, 2.0]
+    cached(["검", "방패"], embedder, path, timeout=1)
+    assert embedder.calls == [2]  # 그대로면 부르지 않는다
+    again = cached(["검", "둥근 방패"], embedder, path, timeout=1)
+    assert embedder.calls == [2, 1] and again[1][0] == 5.0  # 바뀐 글 하나만 부른다
+    cached(["검"], embedder, path, timeout=1)
+    assert np.load(path)["digests"].shape == (1,)  # 없어진 연습 과정의 벡터는 지운다
+
+
+def test_연습_과정이_없으면_부르지_않는다(tmp_path):
+    embedder = LengthEmbedder()
+    assert cached([], embedder, tmp_path / "courses.npz", timeout=1) == [] and embedder.calls == []

@@ -74,7 +74,7 @@ def build_engine(
     """data_dir(보통 data/)의 청크·메뉴 이름 사전으로 임시 엔진을 만든다. 청크 파일이 없으면 FileNotFoundError.
 
     메뉴 이름 사전이 없으면 메뉴 이름을 영어 그대로 보인다. courses는 연습 과정 밖 질문에 권할 연습 과정이고,
-    벡터는 이름 + 한 줄 설명 + 비슷한 말(Course.search_text)로 엔진을 만들 때 한 번 만든다(티켓 14·31).
+    벡터는 이름 + 한 줄 설명 + 비슷한 말(Course.search_text)로 만든다(티켓 14·31). 진짜 임베딩이면 data_dir/vectors/에 저장해 두고 바뀐 것만 다시 만든다.
     settings는 평가 프로그램이 바꿔 넘기는 엔진 설정이다(티켓 29).
     embedding이 진짜 임베딩이면 data_dir/vectors/의 설명서 벡터를 읽고(없으면 FileNotFoundError, 청크와 다르면 ValueError)
     질문·연습 과정은 OpenAI로 임베딩한다(키가 없으면 SystemExit). 엔진 이름은 "임베딩+답변"(예: text-embedding-3-large+stand_in).
@@ -95,9 +95,11 @@ def build_engine(
         if names_path.exists()
         else None
     )
-    # 연습 과정은 몇 개뿐이라 파일로 저장하지 않고 켤 때마다 한 번 부른다. 연습 과정 파일을 고쳐도 옛 벡터가 남지 않는다(HISTORY [108])
     texts = [course.search_text for course in courses]
-    course_vectors = embedder.embed(texts, settings.timeout) if texts else []
+    if embedding == NAME:
+        course_vectors = embedder.embed(texts, timeout=0)
+    else:  # 저장해 둔 것을 쓰고 새로 생기거나 바뀐 연습 과정만 부른다(HISTORY [109])
+        course_vectors = manual_vectors.cached(texts, embedder, manual_vectors.courses_path_for(embedding, data_dir), settings.timeout)
     name = NAME if embedding == NAME else f"{embedding}+{NAME}"
     return AnswerEngine(
         chunks, vectors, embedder, model or StandInModel(), settings=settings,

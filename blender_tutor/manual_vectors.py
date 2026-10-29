@@ -117,6 +117,29 @@ def load(path: Path, chunks: Sequence[Chunk]) -> np.ndarray:
     return stored["vectors"]
 
 
+def courses_path_for(model: str, data_dir: Path = DATA) -> Path:
+    return data_dir / "vectors" / f"courses_{model}.npz"
+
+
+def cached(texts: Sequence[str], embedder: Embedder, path: Path, timeout: float) -> list[np.ndarray]:
+    """글마다 벡터(연습 과정용, HISTORY [109]). path에 같은 글(해시)의 벡터가 있으면 그것을 쓰고, 새로 생기거나 바뀐 글만 임베딩한다.
+    지금 글과 저장된 것이 다르면 path를 지금 글들로 다시 쓴다(없어진 글의 벡터는 지운다)."""
+    stored: dict[str, np.ndarray] = {}
+    if path.exists():
+        saved = np.load(path)
+        stored = dict(zip(saved["digests"].tolist(), saved["vectors"]))
+    digests = [_digest(text) for text in texts]
+    missing = list(dict.fromkeys(text for text, digest in zip(texts, digests) if digest not in stored))
+    if missing:
+        for text, vector in zip(missing, embedder.embed(missing, timeout)):
+            stored[_digest(text)] = np.asarray(vector, dtype=np.float32)
+    if missing or set(stored) != set(digests):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        vectors = [stored[digest] for digest in digests]
+        np.savez(path, digests=np.array(digests), vectors=np.stack(vectors) if vectors else np.zeros((0, 0), np.float32))
+    return [stored[digest] for digest in digests]
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """명령 줄 입구. 돌려주는 값은 종료 코드(0 성공, 2 --yes 없음)."""
     parser = argparse.ArgumentParser(description="설명서 청크의 검색용 벡터를 만듭니다(티켓 31).")
