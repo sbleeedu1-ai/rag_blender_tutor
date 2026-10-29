@@ -978,3 +978,9 @@
 - 만든 결과: 앞뒤 규칙은 청크가 하나뿐인 쪽과 이미 정답인 이웃 때문에 31-32개만 나와, 다른 분야를 남는 자리로 채워 200개를 맞추도록 했다(TARGET = 200).
 - 숨은 정답 확인: 질문별 핵심 낱말로 묶음을 찾아 본문을 읽고 13건을 제시했다. 정답에 더한 5건(모두 질문과 번역 유무가 같음): A1 axis_locking#pointing/1, A2 apply#options/1, A6 mesh warp#warp/1, A7 edge screw#usage/1·screw 모디파이어#options/1, A9 mesh_deform#mesh-deform-modifier/1. 헷갈릴 청크로 둔 8건: W5 Shrink/Fatten 옵션(정답 청크가 "Extrude 없이 옮길 때"로 구분), W6 primitives#plane/1(이름만 있고 위치 없음, 번역 있음), W7 Get Extensions·예전 방식 애드온 설치, W8 UV 경고, W9 FBX 미지원 목록(원인만 있음), A2 Clear(모양이 바뀜), A4 로컬 뷰·Frame Last Stroke, W3 미러 원리 설명. 사용자 "뭐 그래 ㅇㅇ 솔직히 이건 내가 판단할 영역을 넘어선듯 난 블렌더에 대해 잘 모르니까". 번역 섞임 때문에 뺀 청크는 없다.
 - 결과: pool_v1 200개 = 정답 46(번역 27) + 같은 쪽 앞뒤 32(18) + 고른 것 60(33) + 다른 분야 62(12), 번역 비율 45%. 정답이 된 Warp·Mesh Deform 자리는 Warp 모디파이어·Surface Deform으로 바꿨다. 다른 분야를 다시 뽑은 뒤에도 숨은 정답은 없었다. 파일: data/search_compare/pool/pool_v1.jsonl, scripts/build_pool.py·check_hidden_answers.py(모두 커밋 안 함). 남은 일: 비교 프로그램.
+
+### [99] 2026-10-29 · 코드와 설명을 이해하기 쉽게 유지하기 위해 새 작성 기준을 프로젝트에 적용한다
+
+- 사용자 요청: "rag_blendere_tutor 에 적용을 따로 시킬건데 거기 AGENTS.md 를 읽고 최대한 원본을 건드리지 않는선에서 지금 바꾼걸 적용시켜".
+- 결과: 기존 프로젝트 규칙은 유지하고 `new-setup`의 코드 작성 기준을 추가했다. Python에 맞춰 `try/except`를 함께 적었다. 사용자 "아 그럼 전역 설정들은 먼저 적용 시키고 그거 할래?"에 따라 이 PC의 Claude·Codex 전역 개인설정과 handoff 스킬을 먼저 갱신했다. 답변과 요약 기준은 전역 설정을 따른다.
+- 확인: 문서 변경만 했으며 기존 규칙과 변경 내용을 비교했다. 새 대화에서 각 AI 도구가 작성 기준을 따르는지는 아직 확인하지 않았다.
