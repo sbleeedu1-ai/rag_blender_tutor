@@ -244,3 +244,42 @@ def test_main_refuses_paid_model_without_yes(tmp_path):
     calls = []
     assert main(args, make_embedder=lambda model: calls.append(model), load_names=lambda: FakeNames()) == 2
     assert calls == [] and not (tmp_path / "results").exists()
+
+
+def test_original_only_uses_document_encoder_and_keeps_all_time_samples(tmp_path):
+    """문서는 passage 형식, 질문은 query 형식이어야 한다. 시간 표본은 3회 모두 남긴다."""
+    write_data(tmp_path)
+
+    class SplitEmbedder(FakeEmbedder):
+        def __init__(self):
+            super().__init__()
+            self.documents = []
+
+        def embed_documents(self, texts, timeout):
+            self.documents.extend(texts)
+            return FakeEmbedder().embed(texts, timeout)
+
+    embedder = SplitEmbedder()
+    args = run_args(tmp_path, "--original-only", "--rounds", "3")
+    assert main(args, make_embedder=lambda _: embedder, load_names=lambda: FakeNames()) == 0
+    folder = next((tmp_path / "results").iterdir())
+    about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    rows = [json.loads(line) for line in (folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(about["조건"]) == 1 and about["조건"][0] == "fake / 원문만 / BM25 끔"
+    assert len(embedder.documents) == 3 and all("오리진 설정" not in text for text in embedder.documents)
+    assert embedder.calls == 7  # 질문 2개 × 3회 + 준비 운동 1회
+    assert len(rows) == 6 and {row["회차"] for row in rows} == {1, 2, 3}
+
+
+def test_cache_separates_model_revisions_and_prompts(tmp_path):
+    embedder = FakeEmbedder()
+    embedder.cache_identity = {"revision": "v1", "document": "passage: "}
+    build_index(POOL, "fake", embedder, tmp_path, original_only=True)
+    same = FakeEmbedder()
+    same.cache_identity = embedder.cache_identity
+    build_index(POOL, "fake", same, tmp_path, original_only=True)
+    assert same.calls == 0
+    changed = FakeEmbedder()
+    changed.cache_identity = {"revision": "v2", "document": "document: "}
+    build_index(POOL, "fake", changed, tmp_path, original_only=True)
+    assert changed.calls == 1 and len(list(tmp_path.glob("*.npz"))) == 2

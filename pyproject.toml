@@ -19,7 +19,7 @@ dependencies = [
 dev = [
     "pytest>=8",
 ]
-# 검색 비교(티켓 40)의 로컬 BGE-M3. PyTorch를 함께 받아 무거우므로 따로 설치한다
+# 검색 비교의 로컬 BGE-M3·가벼운 후보 3개. PyTorch를 함께 받아 무거우므로 따로 설치한다
 compare = [
     "sentence-transformers>=3.0",
 ]

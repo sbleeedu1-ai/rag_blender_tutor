@@ -38,6 +38,7 @@ from blender_tutor.manual_chunks import load_chunks
 from blender_tutor.manual_vectors import PRICE_PER_MILLION, OpenAIEmbedder  # 요금표에 있는 모델만 돈이 든다
 from blender_tutor.menu_names import MenuNames
 from blender_tutor.paths import PROJECT
+from blender_tutor.local_embeddings import MODELS as LOCAL_MODELS, LocalEmbedder
 from blender_tutor.translate import _tokens, pieces
 from blender_tutor.translation_check import reviewed
 
@@ -183,7 +184,7 @@ class Index:
     records: list[dict]  # 글 종류마다 어떤 글·모델로 만들었나, 새로 만들었나 재사용했나
 
 
-def build_index(pool: Sequence[PoolChunk], model: str, embedder: Embedder, db: Path) -> Index:
+def build_index(pool: Sequence[PoolChunk], model: str, embedder: Embedder, db: Path, original_only: bool = False) -> Index:
     """원문·번역·합침 글을 한 번씩 임베딩해 저장하고, 같은 글·모델로 저장된 것이 있으면 다시 부르지 않고 읽는다.
     번역 없는 청크의 합침 글은 원문과 같아 다시 임베딩하지 않는다."""
     translated = [chunk for chunk in pool if chunk.korean]
@@ -192,6 +193,10 @@ def build_index(pool: Sequence[PoolChunk], model: str, embedder: Embedder, db: P
         "translation": [(chunk.key, chunk.korean) for chunk in translated],
         "combined": [(chunk.key, f"{chunk.english}\n\n{chunk.korean}") for chunk in translated],
     }
+    if original_only:
+        original, record = _stored(kinds["original"], model, "original", embedder, db)
+        original = _normalized(original)
+        return Index(original, np.zeros_like(original), original.copy(), np.zeros(len(pool), dtype=bool), [record])
     stored, records = {}, []
     for kind, items in kinds.items():
         stored[kind], record = _stored(items, model, kind, embedder, db)
@@ -209,15 +214,19 @@ def build_index(pool: Sequence[PoolChunk], model: str, embedder: Embedder, db: P
 
 def _stored(items: list[tuple[str, str]], model: str, kind: str, embedder: Embedder, db: Path) -> tuple[np.ndarray, dict]:
     """글 목록의 벡터. 파일 이름에 모델·글의 해시를 넣어, 글이 바뀌면 이전 파일을 두고 새 파일을 만든다."""
-    digest = hashlib.sha256(json.dumps([model, items], ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
+    identity = [model, items]
+    if hasattr(embedder, "cache_identity"):
+        identity.append(embedder.cache_identity)
+    digest = hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
     path = db / f"{re.sub(r'[^0-9A-Za-z.-]', '_', model)}_{kind}_{digest}.npz"
     meta = path.with_suffix(".json")
     if path.exists():
         return np.load(path)["vectors"], {**json.loads(meta.read_text(encoding="utf-8")), "상태": "재사용"}
     start = time.perf_counter()
     vectors = []
+    embed_documents = getattr(embedder, "embed_documents", embedder.embed)
     for begin in range(0, len(items), BATCH):
-        vectors += embedder.embed([text for _, text in items[begin : begin + BATCH]], TIMEOUT * 4)
+        vectors += embed_documents([text for _, text in items[begin : begin + BATCH]], TIMEOUT * 4)
     if len(vectors) != len(items):
         raise ValueError(f"{model} {kind}: 글 {len(items)}개에 벡터 {len(vectors)}개")
     array = np.asarray(vectors, dtype=np.float32).reshape(len(items), -1)
@@ -225,6 +234,8 @@ def _stored(items: list[tuple[str, str]], model: str, kind: str, embedder: Embed
         "모델": model, "글": kind, "청크 수": len(items), "해시": digest, "파일": path.name,
         "만든 시각": datetime.now().isoformat(timespec="seconds"), "걸린 초": round(time.perf_counter() - start, 3),
     }
+    if hasattr(embedder, "cache_identity"):
+        record["임베딩 설정"] = embedder.cache_identity
     db.mkdir(parents=True, exist_ok=True)
     np.savez(path, vectors=array, keys=np.array([key for key, _ in items]))
     meta.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -404,11 +415,13 @@ class BgeEmbedder:
 
 
 def _real_embedder(model: str) -> Embedder:
+    if model in LOCAL_MODELS:
+        return LocalEmbedder(model)
     if model == "bge-m3":
         return BgeEmbedder()
     if model == "text-embedding-3-large":
         return OpenAIEmbedder(model, openai_key())
-    raise SystemExit(f"모르는 모델: {model} (고를 수 있는 것: {', '.join(MODELS)})")
+    raise SystemExit(f"모르는 모델: {model} (고를 수 있는 것: {', '.join((*MODELS, *LOCAL_MODELS))})")
 
 
 def _load_names() -> MenuNames:
@@ -437,11 +450,14 @@ def main(
     for command in (build_command, run_command):
         command.add_argument("--db", type=Path, default=COMPARE / "db", help="검색용 DB 폴더")
         command.add_argument("--yes", action="store_true", help="어림 비용을 보고 확인받았다(유료 모델에 필요)")
+        command.add_argument("--original-only", action="store_true", help="영어 원문만·BM25 끔 한 조건으로 비교한다(가벼운 로컬 후보 실험)")
     run_command.add_argument("--name", required=True, help="결과 폴더 이름(results/<날짜>_<이름>)")
     run_command.add_argument("--results", type=Path, default=PROJECT / "results", help="결과를 쓸 폴더")
     run_command.add_argument("--seed", type=int, default=SEED, help="조건 순서를 섞는 씨앗")
     run_command.add_argument("--note", required=True, help="측정 환경(PC·Blender에 연 파일·함께 켠 프로그램)")
     args = parser.parse_args(argv)
+    if getattr(args, "original_only", False) and any(model in PRICE_PER_MILLION for model in args.models):
+        parser.error("--original-only는 무료 로컬 모델 비교에만 씁니다. 유료 기준선은 기존 결과를 이용해 주세요.")
 
     translations = reviewed(args.translations)
     pool = load_pool(args.pool, args.chunks, translations)
@@ -458,14 +474,14 @@ def main(
         print(f"{folder}가 이미 있어 멈춥니다(결과는 덮어쓰지 않음). 다른 --name을 주세요.", file=sys.stderr)
         return 1
     embedders = {model: make_embedder(model) for model in args.models}
-    indexes = {model: build_index(pool, model, embedders[model], args.db) for model in args.models}
+    indexes = {model: build_index(pool, model, embedders[model], args.db, args.original_only) for model in args.models}
     for index in indexes.values():
         for record in index.records:
             print(f"DB {record['모델']} {record['글']}: {record['상태']} ({record['파일']})")
     if args.command == "build-db":
         return 0
 
-    chosen = conditions(args.models)
+    chosen = [Condition(model, Text.ORIGINAL, Bm25.OFF) for model in args.models] if args.original_only else conditions(args.models)
     started = datetime.now().isoformat(timespec="seconds")
     measured = measure(questions, chosen, Searcher(pool, indexes), embedders, load_names(), args.rounds, args.seed)
     paid = {
@@ -481,6 +497,7 @@ def main(
         "회차": args.rounds, "씨앗": args.seed, "상위 개수": list(TOP_KS), "RRF_K": RRF_K, "RRF_DEPTH": RRF_DEPTH,
         "DB": [record for index in indexes.values() for record in index.records],
         "모델 불러오기 초": {model: embedder.load_seconds for model, embedder in embedders.items() if hasattr(embedder, "load_seconds")},
+        "로컬 모델 설정": {model: embedder.metadata for model, embedder in embedders.items() if hasattr(embedder, "metadata")},
         "준비 운동": measured.warmups, "유료": paid, "메모": args.note,
         "pc": platform.node(), "운영체제": platform.platform(), "프로세서": platform.processor(),
         "시작 시각": started, "커밋": _commit(),
