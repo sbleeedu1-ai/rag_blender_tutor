@@ -4,36 +4,41 @@
 
 ## 다음 할 일
 
-1. [40번 소규모 검색 비교](.scratch/mvp-roundtrip/issues/40-소규모-검색-비교.md)의 질문 20개와 **200청크 검색 묶음은 확정**했다(HISTORY [94]-[98]). 묶음은 `data/search_compare/pool/pool_v1.jsonl`(정답 46·헷갈릴 청크 92·다른 분야 62, 번역 45%).
-2. 다음은 비교 프로그램(18개 조합, 상위 4·6·8개, 시간 측정)을 만든다. 자동 시험은 가짜 임베딩으로. 유료 실행 전 추정 비용을 보여 주고 확인받는다(조각 약 200개 임베딩 + 질문 처리 1,080회 중 large 540회).
+1. 사용자가 새 스킬을 적용한 뒤 새 세션을 시작한다. 새 스킬 목록을 먼저 확인하고, 맞는 스킬로 [40번 소규모 검색 비교](.scratch/mvp-roundtrip/issues/40-소규모-검색-비교.md)의 **비교 프로그램 계획**부터 세운다. 저장소에 들어갈 코드라 계획을 먼저 보이고 승인받는다.
+   - 조합 18개: 임베딩 모델(large / BGE-M3) × 넣는 글(원문만 / 원문+번역 합침 / 분리 검색) × BM25(끔 / 영어 / 원문+번역).
+   - 채점은 상위 4·6·8개 모두. 시간 측정은 질문 20개 × 3회 × 18조건 = 1,080회.
+   - 자동 시험은 가짜 임베딩으로 한다.
+2. 유료 실행 전에 추정 비용을 보이고 확인받는다. 대상은 청크 200개 임베딩(원문·번역)과 large 질문 처리 540회.
 3. 40번 결과로 31번 검색 방식 선택을 이어 간다. 이후 34 → 33 → 32 → 35 → 36·37(HISTORY [62]).
 
 ## 지금 상태와 검증
 
-- 이번 세션 커밋: HISTORY [94]-[98], 모두 푸시. 저장소 코드는 바꾸지 않았다(만든 프로그램은 모두 data/ 안).
-- 강의실 PC .venv에 PyTorch 2.15.0 CPU판·sentence-transformers·openai를 설치하고 BGE-M3를 받았다(`C:\Users\201\.cache\huggingface\hub\models--BAAI--bge-m3`, 4.3GB). 첫 불러오기 24.5초, 문장 2개 0.39초. 그래픽카드 GTX 950(2GB)은 쓰지 않음. **pyproject.toml에는 아직 안 적음**(40번 구현 때 별도 설치 묶음으로, 티켓 Comments에 남김).
-- 마지막 pytest는 어제 490개 통과. 오늘은 코드 변경이 없어 다시 돌리지 않았다.
+- 질문 20개와 200청크 검색 묶음을 확정했다(HISTORY [94]-[98]). 마지막 커밋 `3553abf`까지 푸시했다. 저장소 코드는 바꾸지 않았다(이번에 만든 프로그램은 모두 data/ 안에 있다).
+- pytest: **490개 통과**(2026-10-29 세션 끝에 실행).
+- 강의실 PC .venv에 PyTorch 2.15.0 CPU판·sentence-transformers·openai를 설치했고, BGE-M3를 `C:\Users\201\.cache\huggingface\hub\models--BAAI--bge-m3`(4.3GB)에 받았다.
+  - 첫 불러오기 24.5초, 문장 2개 0.39초. 그래픽카드(GTX 950)는 쓰지 않는다.
+  - **pyproject.toml에는 아직 안 적었다.** 40번 구현 때 별도 설치 묶음으로 넣고 티켓 Comments에 남긴다.
 
-## 질문 자료 (모두 data/, 커밋 안 함)
+## 자료 (모두 data/search_compare/, 커밋 안 함)
 
-- `data/search_compare/questions/web_questions.jsonl`: 웹 질문 W1-W10. 원문 말투, 만든 방식(`written_from`)·확인한 것(`checked`)·근거 글 주소·조회수·정답 묶음(`answer_groups`: 묶음 안은 서로 대신, 묶음이 둘이면 둘 다 필요).
-- `data/search_compare/questions/ai_questions.jsonl`: AI 질문 A1-A7·A9-A11(A8·A12는 뺀 이유와 함께 기록).
-- `data/search_compare/web_questions/v1_대조용_2026-10-29/`(1판, 대조용)·`v2_사이트별_2026-10-29/`(SE·BA·DC·인프런 원자료 raw/와 README.md).
-- `data/search_compare/scripts/`: 위 두 질문 파일을 만드는 프로그램과 정답 후보 찾기 프로그램. 다시 만들 때 `.venv\Scripts\python -I data\search_compare\scripts\build_web_questions.py` 뒤 `build_ai_questions.py`(겹침 검사 포함), 그다음 `build_pool.py`(묶음)와 `check_hidden_answers.py`(숨은 정답 후보를 사람이 읽고 판단).
-- **data/search_compare/(약 7.8MB)는 아직 드라이브 백업 전**이다. 다른 PC로 가기 전에 백업한다.
+- `questions/web_questions.jsonl`(W1-W10)·`ai_questions.jsonl`(A1-A7·A9-A11). 정답 묶음(`answer_groups`) 규칙: 같은 묶음 안의 청크는 서로 대신하고, 묶음이 여럿이면 모두 필요하다.
+- `pool/pool_v1.jsonl`: 200청크. 정답 46 + 같은 쪽 앞뒤 32 + 비슷한 다른 쪽 60 + 다른 분야 62, 번역 45%. 청크마다 맡은 역할·질문·고른 이유·번역 여부를 적었다.
+- `scripts/`: 다시 만드는 순서는 `build_web_questions.py` → `build_ai_questions.py` → `build_pool.py`. 숨은 정답 후보는 `check_hidden_answers.py`로 뽑아 사람이 읽고 판단한다. 실행은 `.venv\Scripts\python -I <경로>`.
+- `web_questions/v1_대조용…`·`v2_사이트별…`: 웹 질문 원자료.
+- **data/search_compare/(약 8MB)는 아직 드라이브 백업 전**이다. 다른 PC로 가기 전에 백업한다.
 
 ## 모르면 실수할 것
 
 - PR은 만들지 않는다. 검토 결과는 빠짐없이 한 항목씩 사용자 판단을 받는다. 질문·채점 차례·시간 표본을 구현 편의로 빼지 않는다.
-- "번역 없음" 질문은 대신할 정답까지 포함해 정답 청크 어느 것에도 번역이 없어야 한다(HISTORY [95]). 툴바·상단 메뉴 같은 번역된 목록 청크도 정답이 될 수 있어 확인한다.
-- 웹 질문은 원문 말투를 살린다. 제목만 보고 상황을 짐작하지 말고 본문·답글로 확인한다(오늘 짐작 5개 중 1개만 맞았다, HISTORY [97]). W1·W6은 아직 본문을 안 읽었다. W4 정답(Clamp Overlap)은 SE 답변 근거의 추정이다.
-- 청크 열쇠는 `쪽주소.html#소제목/차례`(번역 파일 열쇠와 같은 규칙, 1,379개 일치 확인).
-- 원문만 / 원문+번역 합침 / 분리 검색은 독립 조건이다. 분리 검색 안에서만 같은 청크의 높은 점수 하나를 쓰되 개별 결과는 모두 남긴다.
-- 자동 모드는 사이트 내부 목록 주소를 터미널에서 부르는 것과 레딧 미러를 막았다. 브라우저 확장(Claude in Chrome)은 `claude --chrome`으로 시작해야 연결되고, 레딧·네이버 지식iN은 확장이 막는다.
+- 묶음을 바꾸면 모든 조건에 같이 적용하고 새 결과로 다시 비교한다. 다른 분야 청크는 남는 자리를 채우게 되어 있어, 정답·헷갈릴 청크가 바뀌면 다시 뽑힌다. 그러면 `check_hidden_answers.py`도 다시 본다.
+- "번역 없음" 질문은 대신할 정답까지 포함해 번역이 없어야 한다(HISTORY [95]). 번역 비율 45%(설명서 전체는 15%)는 결과에 한계로 적는다.
+- 청크 열쇠는 `쪽주소.html#소제목/차례` 형식이다.
+- 분리 검색 안에서만 같은 청크의 높은 점수 하나를 쓴다. 개별 점수·순위는 모두 남긴다.
+- 사용자는 Blender 기능을 깊이 모른다. 청크가 정답인지 같은 판단은 Claude가 근거와 권하는 답을 내고, 사용자는 방향을 승인한다(HISTORY [98]).
 - 강사님에게 물을 것: GPT 비교에서 연습 과정 정보를 GPT에 주지 않는 조건이 괜찮은지.
 
 ## 추천 스킬과 참고
 
-- `/implement .scratch/mvp-roundtrip/issues/40-소규모-검색-비교.md`. 유료 실행 승인은 별도로 받는다.
-- [31번](.scratch/mvp-roundtrip/issues/31-유료-번역과-임베딩.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [용어집](CONTEXT.md), [경과 [93]-[97]](HISTORY.md), [결정](docs/adr/).
-- 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 40번 소규모 검색 비교의 200청크 묶음부터 이어서 해. PR은 만들지 마.`
+- 새 스킬이 들어오면 그 목록을 먼저 본다. 기존 것으로는 `/implement .scratch/mvp-roundtrip/issues/40-소규모-검색-비교.md` 또는 `/tdd`가 맞다(가짜 임베딩 시험부터 쓰고 구현). 유료 실행 승인은 따로 받는다.
+- [31번](.scratch/mvp-roundtrip/issues/31-유료-번역과-임베딩.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [용어집](CONTEXT.md), [경과 [93]-[98]](HISTORY.md), [결정](docs/adr/).
+- 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 40번 비교 프로그램 계획부터 세워. PR은 만들지 마.`
