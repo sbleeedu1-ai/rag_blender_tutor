@@ -8,7 +8,9 @@ from dataclasses import replace
 
 import pytest
 
-from blender_tutor.answer_engine import TERMS, AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source
+from blender_tutor.answer_engine import (
+    INSTRUCTIONS, AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source, _terms_for,
+)
 from blender_tutor.manual_chunks import Chunk, Example, MediaKind
 from blender_tutor.menu_names import MenuName, MenuNames, Translation
 from blender_tutor.menu_names import Source as MenuSource
@@ -449,12 +451,23 @@ def test_질문_하나에_임베딩_한_번_답변_한_번만_부른다():
     assert (len(embedder.calls), len(model.calls)) == (1, 1)
 
 
-def test_지시에_문장_속_낱말_용어표를_넣는다():
+def test_넘긴_청크에_나온_낱말의_용어표_줄만_지시에_붙인다():
     model = FakeModel()
-    ask(model=model)
+    ask(model=model, settings=Settings(top_k=len(CHUNKS)))  # SELECT의 "Vertex, edge and face"가 함께 넘어간다
     system = model.calls[0][0]["content"]
-    assert all(f"{english} → {korean}" in system for english, korean in TERMS)
-    assert "vertex → 버텍스" in system  # 표가 비어도 위 줄은 통과하므로, 실제 한 줄을 따로 본다
+    assert all(line in system for line in ("vertex → 버텍스", "edge → 에지", "face → 페이스"))
+    assert "bone → 뼈대(Bone)" not in system  # 청크에 없는 낱말의 줄은 붙이지 않는다
+
+
+def test_넘긴_글에_용어표_낱말이_없으면_용어표_안내도_붙이지_않는다():
+    assert _terms_for("Export writes the scene to a file.") == ""
+    assert "Blender 낱말은 아래 표기" not in INSTRUCTIONS  # 안내는 줄이 있을 때만 _terms_for가 붙인다
+
+
+def test_용어표_낱말은_복수형과_꼴이_바뀐_말도_찾는다():
+    found = _terms_for("Select vertices and faces, then unwrapping. Empties have properties.")
+    assert all(line in found for line in ("vertex →", "face →", "unwrap →", "empty →", "properties →"))
+    assert "pack / unpack" not in found  # unwrapping 안의 글자가 pack으로 잘못 잡히지 않는다
 
 
 def test_모델에_검색_청크_글과_작업_상태와_질문을_넘긴다():

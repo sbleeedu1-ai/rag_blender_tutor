@@ -35,6 +35,7 @@ ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물�
 # 문장 속 Blender 낱말의 한국어 표기(영어 → 한국어). 번역 검수에서 화면 글자(ko.po)에 맞춰 정한 것(HISTORY [78]-[92], [104]).
 # 메뉴·버튼·옵션 이름은 [[ ]] 표시로 프로그램이 바꾸므로 여기에는 문장 속에 일반 낱말로 나오는 것만 둔다.
 # 괄호: 영어 발음을 옮긴 낱말은 붙이지 않고, 한국어로 바꿔 영어가 안 보이는 낱말과 여러 낱말 이름은 처음 한 번 붙인다([83]).
+# 표 전체(약 360토큰)를 늘 넘기지 않고, 넘기는 청크 글에 나온 낱말의 줄만 지시에 붙인다(HISTORY [105]).
 TERMS = (
     ("vertex", "버텍스"),  # 정점·꼭짓점 아님 [78]
     ("edge", "에지"),  # 모서리 아님. 선택 모드 버튼 이름은 화면 글자가 '엣지'라 [[Edge]]로 [78][80]
@@ -71,6 +72,15 @@ TERMS = (
     ("focal length", "초점의 길이(Focal Length)"),  # 초점 거리는 Focus Distance의 화면 글자 [91]
     ("legacy", "레거시(Legacy)"),  # 기존 아님 [92]
 )
+# 청크 글에서 낱말을 찾는 꼴. 기본은 영어 낱말로 시작하는 말(faces·unwrapping 등)이고, 꼴이 바뀌는 것만 따로 적는다.
+# 비슷한 다른 말(normalize 등)이 걸려 줄이 하나 더 붙는 것은 괜찮다
+TERM_PATTERNS = {
+    "vertex": r"vert(?:ex|ices)",
+    "empty": r"empt(?:y|ies)",
+    "properties": r"propert(?:y|ies)",
+    "custom split normals": r"custom split normal",
+    "pack / unpack": r"(?:un)?pack",
+}
 
 INSTRUCTIONS = """너는 Blender 5.2를 처음 쓰는 사람을 돕는 도우미다.
 - 쉬운 한국어로 짧게 답하고, 처음 나오는 용어는 한 줄로 풀어 준다.
@@ -78,9 +88,8 @@ INSTRUCTIONS = """너는 Blender 5.2를 처음 쓰는 사람을 돕는 도우미
 - 설명서 내용에 답이 없으면 지어내지 말고 "설명서에 없어요"라고 말한 뒤 가장 가까운 내용을 권한다.
 - 그림은 캡션 글만 쓴다. [그림] 자리가 중요해 보이면 "설명서 그림을 함께 보세요"라고 안내한다.
 - '작업 상태'는 사용자의 Blender 화면에서 지금 읽은 값이다. 사용자가 설명하지 않아도 이것을 보고 답한다.
-- Blender 화면의 메뉴·버튼·옵션 이름은 설명서의 영어 그대로 [[ ]]로 감싼다. 메뉴 경로는 통째로 감싸고 단 사이를 >로 가른다(예: [[Add > Mesh]]). 한국어로 옮기지 않는다(프로그램이 사용자 화면 언어에 맞춰 바꾼다).
-- [[ ]] 밖 문장에 나오는 Blender 낱말은 아래 표기를 쓴다(Blender 한국어 화면 글자에 맞춘 것). 괄호 속 영어는 답에서 처음 한 번만 붙인다.
-""" + "\n".join(f"  - {english} → {korean}" for english, korean in TERMS)
+- Blender 화면의 메뉴·버튼·옵션 이름은 설명서의 영어 그대로 [[ ]]로 감싼다. 메뉴 경로는 통째로 감싸고 단 사이를 >로 가른다(예: [[Add > Mesh]]). 한국어로 옮기지 않는다(프로그램이 사용자 화면 언어에 맞춰 바꾼다)."""
+TERMS_NOTE = "- [[ ]] 밖 문장에 나오는 Blender 낱말은 아래 표기를 쓴다(Blender 한국어 화면 글자에 맞춘 것). 괄호 속 영어는 답에서 처음 한 번만 붙인다."
 
 SIMILAR_NOTE = (
     "사용자가 연습 과정을 진행하지 않고 있다. 아래는 질문과 가까운 연습 과정이다(가까운 차례). "
@@ -418,10 +427,10 @@ def _messages(
     groups는 넘길 청크마다 함께 읽을 묶음(찾은 청크와 그 형제 소제목). 묶음 사이를 ---로 가른다.
     similar는 연습 과정을 진행하지 않을 때만 붙이는 비슷한 연습 과정, step은 지금 단계(그 단계 내용만 넘긴다).
     """
-    messages = [{"role": "system", "content": INSTRUCTIONS}]
+    manual = "\n\n---\n\n".join("\n\n".join(chunk.text for chunk in group) for group in groups)
+    messages = [{"role": "system", "content": INSTRUCTIONS + _terms_for(manual)}]
     for asked, answered in recent:
         messages += [{"role": "user", "content": asked}, {"role": "assistant", "content": answered}]
-    manual = "\n\n---\n\n".join("\n\n".join(chunk.text for chunk in group) for group in groups)
     content = f"# 설명서 내용\n\n{manual}\n\n"
     if similar:
         courses = "\n".join(f"- {course.name}: {course.summary}" for course in similar)
@@ -433,6 +442,16 @@ def _messages(
         f"# 질문\n\n{question}"
     )
     return messages + [{"role": "user", "content": content}]
+
+
+def _terms_for(manual: str) -> str:
+    """넘기는 설명서 글에 나온 낱말의 용어표 줄(지시 끝에 붙임). 하나도 없으면 빈 글."""
+    found = [
+        f"  - {english} → {korean}"
+        for english, korean in TERMS
+        if re.search(rf"\b{TERM_PATTERNS.get(english, re.escape(english))}", manual, re.IGNORECASE)
+    ]
+    return "\n".join(["", TERMS_NOTE, *found]) if found else ""
 
 
 def _sources(results: list[Chunk]) -> tuple[Source, ...]:
