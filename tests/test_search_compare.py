@@ -13,10 +13,12 @@ from blender_tutor.manual_chunks import Chunk, save_chunks
 from blender_tutor.search_compare import (
     MODELS,
     Bm25,
+    NarrowNames,
     Condition,
     PoolChunk,
     Question,
     Searcher,
+    sounds_alike,
     Text,
     bm25_words,
     build_index,
@@ -272,15 +274,15 @@ def test_original_only_uses_document_encoder_and_keeps_all_time_samples(tmp_path
 
 
 def test_no_menu_names_searches_the_question_as_is(tmp_path):
-    """--no-menu-names면 '오리진' 질문에도 Origin을 붙이지 않고, 설정에 꺼진 것을 남긴다."""
+    """--menu-names off면 '오리진' 질문에도 Origin을 붙이지 않고, 설정에 꺼진 것을 남긴다."""
     write_data(tmp_path)
     embedder = FakeEmbedder()
-    assert main(run_args(tmp_path, "--original-only", "--no-menu-names"), make_embedder=lambda _: embedder,
+    assert main(run_args(tmp_path, "--original-only", "--menu-names", "off"), make_embedder=lambda _: embedder,
                 load_names=lambda: FakeNames()) == 0
     folder = next((tmp_path / "results").iterdir())
     about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     rows = [json.loads(line) for line in (folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert about["메뉴 이름 덧붙이기"] is False
+    assert about["메뉴 이름 덧붙이기"] == "off"
     assert any("오리진" in row["원래 질문"] for row in rows)  # 켜 두었다면 Origin이 붙었을 질문
     assert all(row["검색어"] == row["원래 질문"] for row in rows)
 
@@ -297,3 +299,22 @@ def test_cache_separates_model_revisions_and_prompts(tmp_path):
     changed.cache_identity = {"revision": "v2", "document": "document: "}
     build_index(POOL, "fake", changed, tmp_path, original_only=True)
     assert changed.calls == 1 and len(list(tmp_path.glob("*.npz"))) == 2
+
+
+def test_sounds_alike_keeps_spelled_out_names_and_drops_everyday_words():
+    """실제 평가 질문에서 걸린 조각(HISTORY [113]): 소리대로 적은 이름만 닮았다고 본다."""
+    for korean, english in [("미러모디파이어", "Mirror Modifier"), ("오리진", "Origin"), ("큐브", "Cube"),
+                            ("오브젝트", "Object"), ("텍스처", "Textures"), ("버텍스", "Vertices")]:
+        assert sounds_alike(korean, english), (korean, english)
+    for korean, english in [("만들", "Make"), ("바닥", "Floor"), ("회전", "Rotate"), ("감싸", "Wrap"),
+                            ("표면", "Surface"), ("복사", "Copy"), ("아래", "Bottom")]:
+        assert not sounds_alike(korean, english), (korean, english)
+
+
+def test_narrow_names_needs_hangul_and_every_candidate_alike():
+    class Matches:
+        def matches_in(self, text):
+            return [("만들", ("Make",)), ("오브젝트", ("Object", "Objects")), ("회전", ("Rotate", "Rotation")),
+                    ("A", ("A",)), ("오브젝트", ("Object", "Objects")), ("버텍스", ("Vertices", "Vertex"))]
+
+    assert NarrowNames(Matches()).english_in("아무 글") == ("Object", "Objects", "Vertices", "Vertex")

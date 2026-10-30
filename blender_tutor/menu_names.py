@@ -135,6 +135,10 @@ class MenuNames:
         - 화면과 다른 낱말(꼭짓점 ↔ 화면 '버텍스')은 못 찾는다
         - 엉뚱한 것이 붙기도 한다(바꾸고 → Replace, 실수 → Float, 되돌리려면 → Dolly)
         """
+        return tuple(dict.fromkeys(english for _, names in self.matches_in(text) for english in names))
+
+    def matches_in(self, text: str) -> list[tuple[str, tuple[str, ...]]]:
+        """english_in과 같은 규칙으로 찾되, 걸린 한국어 조각(띄어쓰기 뺀 것)과 그 영어 이름들을 나온 차례로 돌려준다."""
         index = self._in_questions
         longest = max(map(len, index), default=0)
         letters, word_starts = [], set()
@@ -145,18 +149,18 @@ class MenuNames:
                 word_starts.add(len(letters))
             letters.append(letter)
         squashed = "".join(letters)
-        found: dict[str, None] = {}
+        found = []
         start, last_end = 0, 0
         while start < len(squashed):
             for size in range(min(longest, len(squashed) - start), 0, -1):
                 piece = squashed[start : start + size]
                 if piece in index and (size > 1 or start in word_starts or start == last_end):
-                    found.update(dict.fromkeys(index[piece]))
+                    found.append((piece, index[piece]))
                     start = last_end = start + size
                     break
             else:
                 start += 1
-        return tuple(found)
+        return found
 
     def to_review(self) -> list[MenuName]:
         """번역이 여러 개인 이름을 많이 나온 차례로. 화면과 맞춰 하나로 고정하는 일은 사용자 검수 뒤에 한다."""

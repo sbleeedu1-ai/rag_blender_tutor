@@ -1110,3 +1110,15 @@
 - 변경: `evaluate.py`·`search_compare.py`의 결과 폴더를 `results/<날짜>-<시각>_<이름>/`(예: `20261030-0923_이름`, 시작 시각 시·분)으로. 같은 이름·같은 분이면 지금처럼 멈춘다. AGENTS.md 규칙과 STRUCTURE를 함께 고침. pytest 523 passed.
 - 이미 있는 폴더(`20261029_*`, `20261030_*`)는 HISTORY·문서가 그 이름으로 가리키므로 이름을 바꾸지 않는다. 그 순서는 `설정.json`의 "시작 시각"으로 본다.
 - 함께 확인: `results/`의 첫 기록은 [102]의 `20261029_search_compare`. 그보다 앞선 번역·분류 시험([63]·[68]·[76])은 `data/`에 있고, 사용자 "번역 이나 분류는 없어도 될거같고 102 남아있으면 되겠네".
+
+### [115] 2026-10-30 · 의도한 메뉴 이름만 검색어에 붙이기 위해, 소리대로 적은 이름만 남기는 좁힌 덧붙이기를 Gemma·large로 잰다
+
+- 사용자: "너 말대로 범위 좁힌 버전을 만들고 gemma / large 비교 한번만 해보자 아 참 또 top_k 도 4 6 8 다 재야함".
+- 규칙(Claude, 평가 프로그램에만): 걸린 한국어 조각과 영어 이름을 자음 뼈대(ㅂ·ㅍ·b·p·f·v 한 묶음 등)로 바꿔 70% 이상 겹치면 소리대로 적은 이름으로 보고 붙인다. 한글 없는 조각(A·S·Y) 제외, 영어 후보가 여럿이면 모두 닮아야 붙임, 영어 복수형 s는 떼고 비교. 처음 시험에서 버텍스(Vertices/Vertex)가 빠지고 텍스처(Textures 0.67)가 빠져 두 규칙을 고침. 20문항에서 남은 것: Origin, Object·Vertex, Mirror Modifier, Bevel Modifier, Menu, Add-ons, Texture·Paint, Node·File, Material, Cube, Panel, Dolly(A4 "돌리면", 알려진 잡음), Text·Font. 걸러진 것: Make·Floor·Rotate 계열·Copy·Flip·Axis·Wrap·Pull·Surface 등.
+- 구현: `MenuNames.matches_in`(걸린 한국어 조각과 영어, `english_in` 동작은 같음), `search_compare --menu-names all|narrow|off`([113]의 `--no-menu-names`를 바꿈), `NarrowNames`·`sounds_alike`. 시험 2개 추가, pytest 525 passed.
+- 결과(찾은 비율, 괄호는 전부 찾은 질문 수. 모두 / 좁힘 / 끔):
+  - Gemma 상위 4개 65%(12) / **75%(14)** / 70%(12), 상위 6개 70%(13) / 77.5%(15) / **82.5%(16)**, 상위 8개 75%(14) / 82.5%(16) / **87.5%(17)**.
+  - large 상위 4개 50%(9) / **57.5%(11)** / 50%(9), 상위 6개 67.5%(13) / **72.5%(14)** / 67.5%(13), 상위 8개 72.5%(14) / 72.5%(14) / 67.5%(13).
+  - Gemma 좁힘과 끔의 상위 6·8개 차이는 A2 한 문항(좁힘이 Panel을 붙여 놓침). 상위 4개에서는 좁힘이 W2·A11(근거 두 개 질문)을 더 찾음. large는 좁힘이 W4(베벨)를 지키면서 A9(Lattice)를 얻어 세 개수 모두 가장 높거나 같음.
+  - Gemma 모두를 오늘 다시 잰 결과는 어제와 20문항 순위가 모두 같았다.
+- 비용: large 좁힘 질문 임베딩 $0.0005. 원본 `results/20261030-0939_gemma_menu_narrow/`, `20261030-0940_gemma_menu_all/`, `20261030-0940_large_menu_narrow/`(Git 제외). 도우미의 덧붙이기·검색 모델은 아직 바꾸지 않았다.

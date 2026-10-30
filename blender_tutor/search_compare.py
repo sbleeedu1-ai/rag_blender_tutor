@@ -23,6 +23,7 @@ import time
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from datetime import datetime
 from enum import StrEnum
 from itertools import product
@@ -309,10 +310,57 @@ class Names:
 
 
 class NoNames:
-    """메뉴 이름을 덧붙이지 않을 때(--no-menu-names): 원래 질문 그대로 검색한다."""
+    """메뉴 이름을 덧붙이지 않을 때(--menu-names off): 원래 질문 그대로 검색한다."""
 
     def english_in(self, text: str) -> tuple[str, ...]:
         return ()
+
+
+class NarrowNames:
+    """좁힌 덧붙이기(--menu-names narrow, HISTORY [115]): 영어를 소리대로 적은 한국어 이름만 붙인다.
+
+    일상어와 겹치는 화면 글자(만들 → Make, 바닥 → Floor)는 걸러지고 미러 모디파이어 → Mirror Modifier 같은 이름만 남는다.
+    한글이 없는 조각(A·S·Y)은 빼고, 영어 후보가 여럿이면 모두 소리가 닮았을 때만(Object·Objects) 붙인다.
+    알려진 한계: 일상어인데 소리도 닮으면 남는다(돌리면 → Dolly).
+    """
+
+    def __init__(self, names: MenuNames):
+        self._names = names
+
+    def english_in(self, text: str) -> tuple[str, ...]:
+        found: dict[str, None] = {}
+        for piece, english in self._names.matches_in(text):
+            if _HANGUL.search(piece) and all(sounds_alike(piece, name) for name in english):
+                found.update(dict.fromkeys(english))
+        return tuple(found)
+
+
+_HANGUL = re.compile("[가-힣]")
+_FIRST = "KKNTTLMPPSS-SSSKTPH"  # 한글 첫소리 19개(ㄱ-ㅎ) → 자음 묶음, ㅇ은 소리가 없어 뺀다
+_LAST = ("", "K", "K", "K", "N", "N", "N", "T", "L", "L", "L", "L", "L", "L", "L", "L",
+         "M", "P", "P", "S", "S", "", "S", "S", "K", "T", "P", "H")  # 받침 28개(없음 포함)
+_ENGLISH_SPELLING = (("ph", "p"), ("ch", "s"), ("sh", "s"), ("th", "s"), ("ck", "k"), ("x", "ks"), ("qu", "k"))
+_ENGLISH = dict(zip("bpfvdtgkcqszjlrmnh", "PPPPTTKKKKSSSLLMNH"))
+
+
+def _bones(letters: str) -> str:
+    return re.sub(r"(.)\1+", r"\1", letters)  # 같은 묶음이 이어지면 하나로(mirror → MLL → ML)
+
+
+def sounds_alike(korean: str, english: str) -> bool:
+    """한국어 이름이 영어를 소리대로 적은 것인가: 둘을 자음 뼈대(ㅂ·ㅍ·b·p·f·v는 한 묶음 등)로 바꿔 70% 이상 겹치면 그렇다고 본다.
+    미러(ML)·mirror(ML), 오리진(LSN)·origin(LSN)은 닮고, 바닥(PTK)·floor(PL), 만들(MNTL)·make(MK)는 닮지 않는다."""
+    consonants = []
+    for letter in korean:
+        code = ord(letter) - 0xAC00
+        if 0 <= code < 11172:
+            consonants += [_FIRST[code // 588].replace("-", ""), _LAST[code % 28]]
+    spelled = re.sub(r"(?<=\w\w)s\b", "", english.lower())  # 복수형 s는 한국어 표기에 없다(Textures → 텍스처)
+    for written, sound in _ENGLISH_SPELLING:
+        spelled = spelled.replace(written, sound)
+    spelled = re.sub(r"[gc](?=[eiy])", "s", spelled)  # origin의 g, face의 c
+    left, right = _bones("".join(consonants)), _bones("".join(_ENGLISH.get(letter, "") for letter in spelled))
+    return bool(left) and SequenceMatcher(None, left, right).ratio() >= 0.7
 
 
 def query_of(question: str, names: Names) -> str:
@@ -462,7 +510,8 @@ def main(
     run_command.add_argument("--results", type=Path, default=PROJECT / "results", help="결과를 쓸 폴더")
     run_command.add_argument("--seed", type=int, default=SEED, help="조건 순서를 섞는 씨앗")
     run_command.add_argument("--note", required=True, help="측정 환경(PC·Blender에 연 파일·함께 켠 프로그램)")
-    run_command.add_argument("--no-menu-names", action="store_true", help="질문에 영어 메뉴 이름을 덧붙이지 않는다(덧붙이기 효과 비교)")
+    run_command.add_argument("--menu-names", choices=("all", "narrow", "off"), default="all",
+                             help="질문에 붙일 영어 메뉴 이름: all 사전에서 찾은 것 모두, narrow 소리대로 적은 이름만, off 붙이지 않음")
     args = parser.parse_args(argv)
 
     translations = reviewed(args.translations)
@@ -489,7 +538,7 @@ def main(
 
     chosen = [Condition(model, Text.ORIGINAL, Bm25.OFF) for model in args.models] if args.original_only else conditions(args.models)
     started = datetime.now().isoformat(timespec="seconds")
-    measured = measure(questions, chosen, Searcher(pool, indexes), embedders, NoNames() if args.no_menu_names else load_names(), args.rounds, args.seed)
+    measured = measure(questions, chosen, Searcher(pool, indexes), embedders, {"all": load_names, "narrow": lambda: NarrowNames(load_names()), "off": NoNames}[args.menu_names](), args.rounds, args.seed)
     paid = {
         model: {"토큰": embedder.tokens, "요청": embedder.requests,
                 "달러": round(embedder.tokens / 1_000_000 * PRICE_PER_MILLION[model], 6)}
@@ -504,7 +553,7 @@ def main(
         "DB": [record for index in indexes.values() for record in index.records],
         "모델 불러오기 초": {model: embedder.load_seconds for model, embedder in embedders.items() if hasattr(embedder, "load_seconds")},
         "로컬 모델 설정": {model: embedder.metadata for model, embedder in embedders.items() if hasattr(embedder, "metadata")},
-        "준비 운동": measured.warmups, "메뉴 이름 덧붙이기": not args.no_menu_names, "유료": paid, "메모": args.note,
+        "준비 운동": measured.warmups, "메뉴 이름 덧붙이기": args.menu_names, "유료": paid, "메모": args.note,
         "pc": platform.node(), "운영체제": platform.platform(), "프로세서": platform.processor(),
         "시작 시각": started, "커밋": _commit(),
     }
