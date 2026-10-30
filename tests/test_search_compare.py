@@ -14,10 +14,14 @@ from blender_tutor.search_compare import (
     MODELS,
     Bm25,
     NarrowNames,
+    Picked,
+    Scope,
+    area_of,
     Condition,
     PoolChunk,
     Question,
     Searcher,
+    rewrite,
     sounds_alike,
     Text,
     bm25_words,
@@ -318,3 +322,100 @@ def test_narrow_names_needs_hangul_and_every_candidate_alike():
                     ("A", ("A",)), ("오브젝트", ("Object", "Objects")), ("버텍스", ("Vertices", "Vertex"))]
 
     assert NarrowNames(Matches()).english_in("아무 글") == ("Object", "Objects", "Vertices", "Vertex")
+
+
+def test_scope_drops_chunks_from_meaning_and_bm25_before_ranking(tmp_path):
+    """거른 청크는 뜻 검색 1위였어도, BM25 낱말이 겹쳐도 결과에 없다."""
+    keep = np.array([True, True, False, True])  # bevel을 뺀다
+    searcher = Searcher(POOL, {"fake": build_index(POOL, "fake", FakeEmbedder(), tmp_path)}, scopes={Scope.BEGINNER: keep})
+    vector = FakeEmbedder().embed(["bevel"], 0)[0]
+    for bm25 in (Bm25.OFF, Bm25.ENGLISH):
+        whole = searcher.search(Condition("fake", Text.ORIGINAL, bm25), "bevel", vector)
+        kept = searcher.search(Condition("fake", Text.ORIGINAL, bm25, Scope.BEGINNER), "bevel", vector)
+        assert whole.final[0] == "bevel.html#bevel/1"
+        assert "bevel.html#bevel/1" not in kept.final and len(kept.final) == 3
+    assert Condition("fake", Text.ORIGINAL, Bm25.OFF).name == "fake / 원문만 / BM25 끔"  # 범위 전체면 예전 이름 그대로
+
+
+def test_question_areas_keep_only_asked_or_drop_excluded(tmp_path):
+    searcher = Searcher(POOL, {"fake": build_index(POOL, "fake", FakeEmbedder(), tmp_path)})
+    vector = FakeEmbedder().embed(["bevel"], 0)[0]
+    picked = Picked(asked=("set", "merge"), excluded=("other",))
+    asked = searcher.search(Condition("fake", Text.ORIGINAL, Bm25.OFF, Scope.ASKED), "bevel", vector, picked)
+    others = searcher.search(Condition("fake", Text.ORIGINAL, Bm25.OFF, Scope.OTHERS), "bevel", vector, picked)
+    assert sorted(asked.final) == ["merge.html#merge/1", "set.html#origin/1"]
+    assert sorted(others.final) == ["bevel.html#bevel/1", "merge.html#merge/1", "set.html#origin/1"]
+
+
+def test_area_splits_only_big_fields_one_level_deeper():
+    assert area_of("modeling/modifiers/deform/lattice") == "modeling/modifiers"
+    assert area_of("render/cycles/baking") == "render/cycles"
+    assert area_of("physics/cloth/introduction") == "physics"
+    assert area_of("index") == "index"
+
+
+class FakeChat:
+    """질문 바꾸기 모델 대신: 질문에 '오리진'이 있으면 Set Origin, 아니면 bevel. 분야는 목록 밖 이름 하나를 섞는다."""
+
+    def __init__(self, answers=None):
+        self.input_tokens = self.output_tokens = 0
+        self.asked = []
+        self.answers = answers
+
+    def ask(self, messages):
+        self.asked.append(messages)
+        self.input_tokens += 100
+        self.output_tokens += 10
+        if self.answers:
+            return self.answers.pop(0)
+        if "오리진" in messages[-1]["content"]:
+            return json.dumps({"query": "Set Origin", "areas": ["set", "없는 분야"], "exclude": ["other"]})
+        return json.dumps({"query": "bevel edges", "areas": ["bevel"], "exclude": []})
+
+
+def test_rewrite_asks_every_round_keeps_known_areas_and_stops_on_answer_without_query():
+    chat = FakeChat()
+    rows = rewrite(questions(), chat, ["bevel", "other", "set"], rounds=2, clock=Clock())
+    assert [(row["회차"], row["질문"], row["검색어"]) for row in rows] == [
+        (1, "Q1", "Set Origin"), (1, "Q2", "bevel edges"), (2, "Q1", "Set Origin"), (2, "Q2", "bevel edges")]
+    assert rows[0]["분야"] == ["set"] and rows[0]["뺄 분야"] == ["other"] and rows[0]["목록 밖"] == ["없는 분야"]
+    assert all(row["초"] == 1.0 for row in rows)
+    assert "bevel\nother\nset" in chat.asked[0][0]["content"]  # 분야 목록을 지시에 넣는다
+    with pytest.raises(ValueError, match="검색어가 없는"):
+        rewrite(questions(), FakeChat([json.dumps({"query": ""})]), ["set"], rounds=1)
+
+
+def test_rewrite_command_needs_yes_and_run_uses_its_queries_and_areas(tmp_path):
+    write_data(tmp_path)
+    (tmp_path / "scope.jsonl").write_text(json.dumps({"path": "set", "include": True}) + "\n"
+                                          + json.dumps({"path": "bevel", "include": False}) + "\n", encoding="utf-8")
+    base = ["--pool", str(tmp_path / "pool.jsonl"), "--chunks", str(tmp_path / "chunks.jsonl"),
+            "--translations", str(tmp_path / "ko.jsonl"), "--questions", str(tmp_path / "q.jsonl"),
+            "--results", str(tmp_path / "results"), "--rounds", "1", "--note", "시험"]
+    chats = []
+
+    def make_chat(model, effort):
+        chats.append(FakeChat())
+        return chats[-1]
+
+    assert main(["rewrite", "--name", "바꿈", *base], make_chat=make_chat) == 2 and chats == []  # 유료라 --yes 없이는 멈춤
+    assert main(["rewrite", "--name", "바꿈", "--yes", *base], now=datetime(2026, 10, 30, 10, 0), make_chat=make_chat) == 0
+    rewrites = tmp_path / "results" / "20261030" / "100000_바꿈" / "검색어.jsonl"
+    assert len(rewrites.read_text(encoding="utf-8").splitlines()) == 2
+
+    embedder = FakeEmbedder()
+    args = ["run", "--name", "t", "--models", "fake", "--db", str(tmp_path / "db"), *base, "--original-only", "--with-bm25",
+            "--rewrites", str(rewrites), "--rewritten-query", "--scopes", "all", "asked", "others", "beginner",
+            "--scope-file", str(tmp_path / "scope.jsonl")]
+    assert main(args, now=datetime(2026, 10, 30, 10, 1), make_embedder=lambda _: embedder, load_names=lambda: FakeNames()) == 0
+    folder = tmp_path / "results" / "20261030" / "100100_t"
+    about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    rows = [json.loads(line) for line in (folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(about["조건"]) == 8  # BM25 끔·켬 × 범위 4
+    assert {row["검색어"] for row in rows} == {"Set Origin", "bevel edges"}  # 메뉴 이름 대신 바꾼 검색어
+    q1 = {row["조건"].split(" / ")[-1]: row for row in rows if row["질문"] == "Q1" and "BM25 끔" in row["조건"]}
+    assert q1["질문 분야만"]["결과"] == ["set.html#origin/1"] and q1["질문 분야만"]["남은 청크"] == 1
+    assert q1["질문 보고 뺀 나머지"]["남은 청크"] == 2 and q1["초보자 범위만"]["결과"] == ["set.html#origin/1"]
+    without = ["run", "--name", "u", "--models", "fake", "--db", str(tmp_path / "db"), *base, "--original-only", "--scopes", "asked"]
+    with pytest.raises(SystemExit):  # --rewrites 없이 질문 분야 범위는 못 씀
+        main(without, make_embedder=lambda _: embedder, load_names=lambda: FakeNames())

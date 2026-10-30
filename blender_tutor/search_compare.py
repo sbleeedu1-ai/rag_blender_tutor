@@ -33,7 +33,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from blender_tutor.answer_engine import RRF_DEPTH, RRF_K, Embedder, _normalized
-from blender_tutor.beginner_scope import openai_key
+from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.evaluate import _commit
 from blender_tutor.manual_chunks import load_chunks
 from blender_tutor.manual_vectors import PRICE_PER_MILLION, OpenAIEmbedder  # 요금표에 있는 모델만 돈이 든다
@@ -70,15 +70,43 @@ class Bm25(StrEnum):
     BOTH = "BM25 원문+번역"
 
 
+class Scope(StrEnum):
+    """검색 전에 남길 청크(HISTORY [117]). 거른 청크는 뜻 검색·BM25 모두에서 뺀다."""
+
+    ALL = "범위 전체"
+    ASKED = "질문 분야만"  # 질문 바꾸기 모델이 답이 있다고 고른 분야 안에서만
+    OTHERS = "질문 보고 뺀 나머지"  # 질문 바꾸기 모델이 확실히 관계없다고 고른 분야만 빼고
+    BEGINNER = "초보자 범위만"  # data/beginner_scope/scope.jsonl의 include 쪽(질문과 상관없이 고정)
+
+
+BIG_FIELDS = ("modeling", "render", "editors")  # 너무 커서 한 단계 더 나눠 고르는 분야(modeling만 설명서의 30%)
+
+
+def area_of(page_path: str) -> str:
+    """질문 분야 고르기의 단위: 큰 세 분야는 둘째 폴더까지(modeling/modifiers), 나머지는 분야(physics)."""
+    parts = page_path.split("/")
+    return "/".join(parts[:2]) if parts[0] in BIG_FIELDS and len(parts) > 1 else parts[0]
+
+
+@dataclass(frozen=True)
+class Picked:
+    """질문 하나에 대해 질문 바꾸기 모델이 고른 분야."""
+
+    asked: tuple[str, ...]  # 답이 있을 분야
+    excluded: tuple[str, ...]  # 확실히 관계없는 분야
+
+
 @dataclass(frozen=True)
 class Condition:
     model: str
     text: Text
     bm25: Bm25
+    scope: Scope = Scope.ALL
 
     @property
     def name(self) -> str:
-        return f"{self.model} / {self.text} / {self.bm25}"
+        base = f"{self.model} / {self.text} / {self.bm25}"
+        return base if self.scope is Scope.ALL else f"{base} / {self.scope}"
 
 
 def conditions(models: Sequence[str]) -> list[Condition]:
@@ -253,16 +281,19 @@ class Search:
 class Searcher:
     """모델별 DB와 BM25 두 가지(영어 원문, 원문+번역)를 들고 조건대로 검색한다."""
 
-    def __init__(self, pool: Sequence[PoolChunk], indexes: Mapping[str, Index], clock: Callable[[], float] = time.perf_counter):
+    def __init__(self, pool: Sequence[PoolChunk], indexes: Mapping[str, Index], clock: Callable[[], float] = time.perf_counter,
+                 scopes: Mapping[Scope, np.ndarray] | None = None):
         self._keys = [chunk.key for chunk in pool]
+        self._areas = np.array([area_of(chunk.key.split(".html")[0]) for chunk in pool])
         self._indexes = indexes
         self._clock = clock
+        self._scopes = {Scope.ALL: np.ones(len(pool), dtype=bool), **(scopes or {})}  # 범위마다 남길 청크
         self._bm25 = {
             Bm25.ENGLISH: BM25Okapi([bm25_words(chunk.english) for chunk in pool]),
             Bm25.BOTH: BM25Okapi([bm25_words(f"{chunk.english}\n\n{chunk.korean or ''}") for chunk in pool]),
         }
 
-    def search(self, condition: Condition, query: str, vector: Sequence[float]) -> Search:
+    def search(self, condition: Condition, query: str, vector: Sequence[float], picked: Picked | None = None) -> Search:
         start = self._clock()
         index = self._indexes[condition.model]
         query_vector = _normalized(np.asarray(vector, dtype=np.float32))
@@ -276,13 +307,15 @@ class Searcher:
             translation = np.where(index.translated, index.translation @ query_vector, -np.inf)
             meaning = np.maximum(original, translation)
             parts["원문"], parts["번역"] = self._top(original), self._top(translation)
-        meaning_order = np.argsort(-meaning, kind="stable")
+        keep = self.keep(condition.scope, picked)
+        meaning = np.where(keep, meaning, -np.inf)
+        meaning_order = np.argsort(-meaning, kind="stable")[: int(keep.sum())]
         parts["뜻"] = self._top(meaning)
         meaning_done = self._clock()
         if condition.bm25 is Bm25.OFF:
             final = [self._keys[index] for index in meaning_order]
             return Search(final, parts, {"뜻 검색": meaning_done - start, "BM25": 0.0, "RRF": 0.0})
-        scores = self._bm25[condition.bm25].get_scores(bm25_words(query))
+        scores = np.where(keep, self._bm25[condition.bm25].get_scores(bm25_words(query)), 0.0)
         word_order = np.argsort(-scores, kind="stable")[:RRF_DEPTH]
         word_order = word_order[scores[word_order] > 0]  # 겹치는 낱말이 없는 청크는 순위에 넣지 않는다(도우미와 같음)
         parts["BM25"] = [(self._keys[index], float(scores[index])) for index in word_order]
@@ -296,6 +329,14 @@ class Searcher:
         rrf_done = self._clock()
         seconds = {"뜻 검색": meaning_done - start, "BM25": bm25_done - meaning_done, "RRF": rrf_done - bm25_done}
         return Search([self._keys[index] for index in best], parts, seconds)
+
+    def keep(self, scope: Scope, picked: Picked | None = None) -> np.ndarray:
+        """이 범위에서 남길 청크. 질문 분야 범위는 질문마다 고른 분야(picked)로 정한다."""
+        if scope is Scope.ASKED:
+            return np.isin(self._areas, picked.asked)
+        if scope is Scope.OTHERS:
+            return ~np.isin(self._areas, picked.excluded)
+        return self._scopes[scope]
 
     def _top(self, scores: np.ndarray) -> list[tuple[str, float]]:
         """점수 높은 차례 상위 RRF_DEPTH개(점수가 없는 청크는 뺀다)."""
@@ -368,6 +409,64 @@ def query_of(question: str, names: Names) -> str:
     return " ".join((question, *names.english_in(question)))
 
 
+REWRITE_PROMPT = """너는 Blender 5.2 공식 설명서(영어)를 찾을 검색어와 분야를 고른다.
+사용자는 Blender를 처음 쓰는 사람이고, 기능 이름 대신 겪은 증상이나 하고 싶은 일을 한국어로 말한다.
+질문에 답하지 말고, 답이 있을 설명서 쪽을 찾기 위한 것만 낸다.
+- query: 영어 검색어 하나. 필요할 것 같은 Blender 기능·도구·모디파이어·메뉴·옵션의 공식 영어 이름과 질문의 핵심 상황을 짧은 영어로, 30낱말 이하.
+- areas: 답이 있을 가능성이 큰 설명서 분야 1-3개(아래 목록 이름 그대로).
+- exclude: 이 질문과 확실히 관계없는 분야(아래 목록 이름 그대로). 조금이라도 관계있을 수 있으면 넣지 않는다.
+설명서 분야 목록(폴더 이름):
+{areas}
+JSON으로만 답한다: {{"query": "...", "areas": ["..."], "exclude": ["..."]}}"""
+REWRITE_PRICE = {"gpt-6-luna": (0.10, 0.50)}  # 100만 토큰당 입력·출력 달러(.scratch/.../31-번역-모델-조사.md)
+
+
+class Chat:
+    """질문 바꾸기에 쓰는 모델(beginner_scope.OpenAIModel과 같은 꼴)."""
+
+    input_tokens: int
+    output_tokens: int
+
+    def ask(self, messages: list[dict[str, str]]) -> str: ...
+
+
+def rewrite(questions: Sequence[Question], chat: Chat, areas: Sequence[str], rounds: int = ROUNDS,
+            clock: Callable[[], float] = time.perf_counter) -> list[dict]:
+    """회차마다 질문을 영어 검색어와 분야로 바꾼다. 같은 질문도 회차마다 새로 물어 바뀌는 정도와 걸린 시간을 남긴다.
+    목록에 없는 분야 이름은 빼고 "목록 밖"에 남긴다(빠진 만큼 질문 분야 범위가 좁아지는 것을 결과에서 볼 수 있게)."""
+    prompt = REWRITE_PROMPT.format(areas="\n".join(areas))
+    known = set(areas)
+    rows = []
+    for round_number in range(1, rounds + 1):
+        for question in questions:
+            start = clock()
+            answer = chat.ask([{"role": "system", "content": prompt}, {"role": "user", "content": question.question}])
+            seconds = clock() - start
+            got = json.loads(answer)
+            query = got.get("query")
+            if not isinstance(query, str) or not query.strip():
+                raise ValueError(f"{question.id} {round_number}회차: 검색어가 없는 답 {answer!r}")
+            named = [str(name) for key in ("areas", "exclude") for name in got.get(key) or []]
+            rows.append({
+                "회차": round_number, "질문": question.id, "원래 질문": question.question, "검색어": query.strip(),
+                "분야": [name for name in got.get("areas") or [] if name in known],
+                "뺄 분야": [name for name in got.get("exclude") or [] if name in known],
+                "목록 밖": [name for name in named if name not in known], "초": seconds,
+            })
+    return rows
+
+
+def load_rewrites(path: Path) -> dict[tuple[int, str], dict]:
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return {(row["회차"], row["질문"]): row for row in rows}
+
+
+def beginner_mask(pool: Sequence[PoolChunk], scope_path: Path) -> np.ndarray:
+    """초보자 범위(쪽 단위 분류 파일의 include 쪽)에 드는 청크."""
+    beginner = {row["path"] for row in map(json.loads, scope_path.read_text(encoding="utf-8").splitlines()) if row["include"]}
+    return np.array([chunk.key.split(".html")[0] in beginner for chunk in pool])
+
+
 @dataclass(frozen=True)
 class Measured:
     rows: list[dict]  # 회차 × 질문 × 조건마다 한 줄
@@ -377,30 +476,41 @@ class Measured:
 def measure(
     questions: Sequence[Question], chosen: Sequence[Condition], searcher: Searcher, embedders: Mapping[str, Embedder],
     names: Names, rounds: int = ROUNDS, seed: int = SEED, clock: Callable[[], float] = time.perf_counter,
+    rewrites: Mapping[tuple[int, str], dict] | None = None, rewritten_query: bool = False,
 ) -> Measured:
     """회차마다 질문 하나에 조건을 모두(질문마다 섞은 순서로) 돌린 뒤 다음 질문으로 간다.
-    질문 임베딩은 저장한 것을 쓰지 않고 매번 새로 부른다. 상위 4·6·8개는 같은 결과에서 채점한다(다시 돌리지 않음)."""
+    질문 임베딩은 저장한 것을 쓰지 않고 매번 새로 부른다. 상위 4·6·8개는 같은 결과에서 채점한다(다시 돌리지 않음).
+    rewrites(질문 바꾸기 결과)가 있으면 질문 분야 범위에 그 분야를 쓰고, rewritten_query면 검색어도 바꾼 것을 쓴다."""
+
+    def query_for(round_number: int, question: Question) -> str:
+        if rewritten_query:
+            return rewrites[(round_number, question.id)]["검색어"]
+        return query_of(question.question, names)
+
     shuffler = random.Random(seed)
     warmups = []
     for model in dict.fromkeys(condition.model for condition in chosen):
         start = clock()
-        embedders[model].embed([query_of(questions[0].question, names)], TIMEOUT)
+        embedders[model].embed([query_for(1, questions[0])], TIMEOUT)
         warmups.append({"모델": model, "질문": questions[0].id, "초": clock() - start})
     rows = []
     for round_number in range(1, rounds + 1):
         for question in questions:
-            query = query_of(question.question, names)
+            query = query_for(round_number, question)
+            row = rewrites[(round_number, question.id)] if rewrites else None
+            picked = Picked(tuple(row["분야"]), tuple(row["뺄 분야"])) if row else None
             order = list(chosen)
             shuffler.shuffle(order)
             for condition in order:
                 start = clock()
                 (vector,) = embedders[condition.model].embed([query], TIMEOUT)
                 embedded = clock()
-                found = searcher.search(condition, query, vector)
+                found = searcher.search(condition, query, vector, picked)
                 done = clock()
                 rows.append({
                     "회차": round_number, "질문": question.id, "조건": condition.name,
                     "원래 질문": question.question, "검색어": query,
+                    "남은 청크": int(searcher.keep(condition.scope, picked).sum()),
                     "시간": {"질문 임베딩": embedded - start, **found.seconds, "전체": done - start},
                     "결과": found.final[:RRF_DEPTH], "부분": found.parts,
                 })
@@ -487,6 +597,7 @@ def _load_names() -> MenuNames:
 def main(
     argv: Sequence[str] | None = None, now: datetime | None = None,
     make_embedder: Callable[[str], Embedder] = _real_embedder, load_names: Callable[[], Names] = _load_names,
+    make_chat: Callable[[str, str], Chat] = lambda model, effort: OpenAIModel(model, openai_key(), effort),
 ) -> int:
     """명령 줄 입구. 돌려주는 값은 종료 코드(0 성공, 1 결과 폴더가 이미 있음, 2 유료 실행에 --yes가 없음)."""
     parser = argparse.ArgumentParser(description="검색 조건 18개를 같은 질문·청크 묶음으로 견줍니다(티켓 40).")
@@ -494,7 +605,8 @@ def main(
     estimate_command = commands.add_parser("estimate", help="유료 임베딩의 어림 비용을 보인다")
     build_command = commands.add_parser("build-db", help="검색용 DB를 만들거나 저장된 것을 재사용한다")
     run_command = commands.add_parser("run", help="질문 × 회차 × 조건을 돌려 결과 폴더에 쓴다")
-    for command in (estimate_command, build_command, run_command):
+    rewrite_command = commands.add_parser("rewrite", help="질문을 영어 검색어로 바꿔 결과 폴더에 쓴다(유료, run --queries로 씀)")
+    for command in (estimate_command, build_command, run_command, rewrite_command):
         command.add_argument("--models", nargs="+", default=list(MODELS), help="임베딩 모델")
         command.add_argument("--pool", type=Path, default=COMPARE / "pool" / "pool_v1.jsonl", help="검색 묶음 파일")
         command.add_argument("--chunks", type=Path, default=DATA / "chunks" / "manual_chunks.jsonl", help="청크 파일")
@@ -506,10 +618,20 @@ def main(
         command.add_argument("--db", type=Path, default=COMPARE / "db", help="검색용 DB 폴더")
         command.add_argument("--yes", action="store_true", help="어림 비용을 보고 확인받았다(유료 모델에 필요)")
         command.add_argument("--original-only", action="store_true", help="영어 원문만·BM25 끔 한 조건으로 비교한다(로컬 후보·메뉴 이름 덧붙이기 비교)")
-    run_command.add_argument("--name", required=True, help="결과 폴더 이름(results/<날짜>_<이름>)")
-    run_command.add_argument("--results", type=Path, default=PROJECT / "results", help="결과를 쓸 폴더")
+    for command in (run_command, rewrite_command):
+        command.add_argument("--name", required=True, help="결과 폴더 이름(results/<날짜>/<시각>_<이름>)")
+        command.add_argument("--results", type=Path, default=PROJECT / "results", help="결과를 쓸 폴더")
+        command.add_argument("--note", required=True, help="측정 환경(PC·Blender에 연 파일·함께 켠 프로그램)")
+    rewrite_command.add_argument("--chat", choices=list(REWRITE_PRICE), default="gpt-6-luna", help="질문을 바꿀 모델")
+    rewrite_command.add_argument("--effort", default="none", help="생각 수준(도우미 기본 none)")
+    rewrite_command.add_argument("--yes", action="store_true", help="어림 비용을 보고 확인받았다")
     run_command.add_argument("--seed", type=int, default=SEED, help="조건 순서를 섞는 씨앗")
-    run_command.add_argument("--note", required=True, help="측정 환경(PC·Blender에 연 파일·함께 켠 프로그램)")
+    run_command.add_argument("--rewrites", type=Path, help="rewrite가 만든 검색어.jsonl(질문 분야 범위에 그 분야를 쓴다)")
+    run_command.add_argument("--rewritten-query", action="store_true", help="메뉴 이름 덧붙이기 대신 --rewrites의 영어 검색어로 찾는다")
+    run_command.add_argument("--with-bm25", action="store_true", help="--original-only에 BM25 영어 원문을 켠 조건도 더한다")
+    run_command.add_argument("--scopes", nargs="+", choices=[scope.name.lower() for scope in Scope], default=["all"],
+                             help="검색 전에 남길 청크: all 전체, asked 질문 분야만, others 질문 보고 뺀 나머지, beginner 초보자 범위만")
+    run_command.add_argument("--scope-file", type=Path, default=DATA / "beginner_scope" / "scope.jsonl", help="초보자 범위 분류 파일")
     run_command.add_argument("--menu-names", choices=("all", "narrow", "off"), default="all",
                              help="질문에 붙일 영어 메뉴 이름: all 사전에서 찾은 것 모두, narrow 소리대로 적은 이름만, off 붙이지 않음")
     args = parser.parse_args(argv)
@@ -517,6 +639,9 @@ def main(
     translations = reviewed(args.translations)
     pool = load_pool(args.pool, args.chunks, translations)
     questions = load_questions(args.questions, pool)
+    now = now or datetime.now()
+    if args.command == "rewrite":
+        return _rewrite_command(args, questions, make_chat, now)
     costs = estimate(pool, questions, args.models, args.rounds)
     if args.command == "estimate":
         print("\n".join(costs or ["유료 모델 없음"]))
@@ -524,7 +649,6 @@ def main(
     if costs and not args.yes:
         print("\n".join([*costs, "유료 모델이 있어 멈춥니다. 비용을 확인받은 뒤 --yes를 붙여 주세요."]), file=sys.stderr)
         return 2
-    now = now or datetime.now()
     folder = args.results / f"{now:%Y%m%d}" / f"{now:%H%M%S}_{args.name}" if args.command == "run" else None
     if folder and folder.exists():  # 측정이 끝난 뒤 폴더를 만든다(도중에 멈추면 빈 폴더가 다시 돌리기를 막지 않게)
         print(f"{folder}가 이미 있어 멈춥니다(결과는 덮어쓰지 않음). 다른 --name을 주세요.", file=sys.stderr)
@@ -537,9 +661,20 @@ def main(
     if args.command == "build-db":
         return 0
 
-    chosen = [Condition(model, Text.ORIGINAL, Bm25.OFF) for model in args.models] if args.original_only else conditions(args.models)
+    scopes = [Scope[name.upper()] for name in args.scopes]
+    if args.original_only:
+        bm25s = (Bm25.OFF, Bm25.ENGLISH) if args.with_bm25 else (Bm25.OFF,)
+        chosen = [Condition(model, Text.ORIGINAL, bm25, scope) for model in args.models for bm25 in bm25s for scope in scopes]
+    else:
+        chosen = conditions(args.models)
+    if (args.rewritten_query or {Scope.ASKED, Scope.OTHERS} & set(scopes)) and not args.rewrites:
+        parser.error("--rewritten-query와 asked·others 범위는 --rewrites가 있어야 합니다.")
+    masks = {Scope.BEGINNER: beginner_mask(pool, args.scope_file)} if Scope.BEGINNER in scopes else {}
+    rewrites = load_rewrites(args.rewrites) if args.rewrites else None
+    names = {"all": load_names, "narrow": lambda: NarrowNames(load_names()), "off": NoNames}[args.menu_names]()
     started = datetime.now().isoformat(timespec="seconds")
-    measured = measure(questions, chosen, Searcher(pool, indexes), embedders, {"all": load_names, "narrow": lambda: NarrowNames(load_names()), "off": NoNames}[args.menu_names](), args.rounds, args.seed)
+    measured = measure(questions, chosen, Searcher(pool, indexes, scopes=masks), embedders, names, args.rounds, args.seed,
+                       rewrites=rewrites, rewritten_query=args.rewritten_query)
     paid = {
         model: {"토큰": embedder.tokens, "요청": embedder.requests,
                 "달러": round(embedder.tokens / 1_000_000 * PRICE_PER_MILLION[model], 6)}
@@ -554,7 +689,8 @@ def main(
         "DB": [record for index in indexes.values() for record in index.records],
         "모델 불러오기 초": {model: embedder.load_seconds for model, embedder in embedders.items() if hasattr(embedder, "load_seconds")},
         "로컬 모델 설정": {model: embedder.metadata for model, embedder in embedders.items() if hasattr(embedder, "metadata")},
-        "준비 운동": measured.warmups, "메뉴 이름 덧붙이기": args.menu_names, "유료": paid, "메모": args.note,
+        "준비 운동": measured.warmups, "메뉴 이름 덧붙이기": "쓰지 않음(바꾼 검색어)" if args.rewritten_query else args.menu_names,
+        "질문 바꾸기 파일": str(args.rewrites) if args.rewrites else None, "유료": paid, "메모": args.note,
         "pc": platform.node(), "운영체제": platform.platform(), "프로세서": platform.processor(),
         "시작 시각": started, "커밋": _commit(),
     }
@@ -565,6 +701,44 @@ def main(
             file.write(json.dumps(row, ensure_ascii=False) + "\n")
     (folder / "요약.md").write_text(_summary_markdown(args.name, measured.rows, questions, about), encoding="utf-8")
     print(f"결과: {folder}")
+    return 0
+
+
+def _rewrite_command(args: argparse.Namespace, questions: Sequence[Question], make_chat: Callable[[str, str], Chat],
+                     now: datetime) -> int:
+    """질문 바꾸기: 어림 비용을 보이고(--yes 없으면 멈춤) 회차마다 바꾼 검색어·시간·토큰을 새 폴더에 쓴다."""
+    calls = len(questions) * args.rounds
+    tokens_in = calls * (_tokens(REWRITE_PROMPT) + 600)  # 분야 목록 약 500, 질문 한 줄 약 80토큰으로 어림
+    tokens_out = calls * 120
+    price_in, price_out = REWRITE_PRICE[args.chat]
+    guess = f"{args.chat}: {calls}번 물음, 약 입력 {tokens_in:,}·출력 {tokens_out:,}토큰 → 약 ${(tokens_in * price_in + tokens_out * price_out) / 1_000_000:.4f}"
+    if not args.yes:
+        print(f"{guess}\n유료라 멈춥니다. 비용을 확인받은 뒤 --yes를 붙여 주세요.", file=sys.stderr)
+        return 2
+    folder = args.results / f"{now:%Y%m%d}" / f"{now:%H%M%S}_{args.name}"
+    if folder.exists():
+        print(f"{folder}가 이미 있어 멈춥니다(결과는 덮어쓰지 않음). 다른 --name을 주세요.", file=sys.stderr)
+        return 1
+    chat = make_chat(args.chat, args.effort)
+    started = datetime.now().isoformat(timespec="seconds")
+    areas = sorted({area_of(chunk.key.split(".html")[0]) for chunk in load_pool(args.pool, args.chunks, {})})
+    rows = rewrite(questions, chat, areas, args.rounds)
+    seconds = [row["초"] for row in rows]
+    about = {
+        "모델": args.chat, "생각 수준": args.effort, "지시": REWRITE_PROMPT.format(areas="\n".join(areas)), "분야 수": len(areas),
+        "어림": guess,
+        "질문 파일": [str(path) for path in args.questions], "질문 수": len(questions), "회차": args.rounds,
+        "토큰": {"입력": chat.input_tokens, "출력": chat.output_tokens},
+        "달러": round((chat.input_tokens * price_in + chat.output_tokens * price_out) / 1_000_000, 6),
+        "시간": {"중앙값": statistics.median(seconds), "최대값": max(seconds)},
+        "메모": args.note, "pc": platform.node(), "시작 시각": started, "커밋": _commit(),
+    }
+    folder.mkdir(parents=True)
+    (folder / "설정.json").write_text(json.dumps(about, ensure_ascii=False, indent=2), encoding="utf-8")
+    with (folder / "검색어.jsonl").open("w", encoding="utf-8") as file:
+        for row in rows:
+            file.write(json.dumps(row, ensure_ascii=False) + "\n")
+    print(f"결과: {folder}\n{guess}\n실제: 입력 {chat.input_tokens:,}·출력 {chat.output_tokens:,}토큰, ${about['달러']}")
     return 0
 
 
