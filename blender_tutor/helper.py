@@ -37,6 +37,8 @@ from blender_tutor.state_stream import RecordingDesk
 from blender_tutor.timing import Stopwatch
 from blender_tutor.window_rules import FrontBlender, Place, Screen, needs_move, place
 
+WARM_UP_ENV = "BLENDER_TUTOR_WARM_UP"  # 1이면 엔진을 만든 뒤 예열한다(질문 바꾸기·임베딩을 한 번씩, 돈이 아주 조금 든다)
+
 FOLLOW_EVERY_MS = 100  # Blender를 따라 창 자리를 다시 보는 간격
 # 작업 상태 흐름을 늘 기록한다(검수 동안 쓰려고, 2026-10-26 사용자 결정). 코드 동결 전에 False로 바꾼다(티켓 37)
 RECORD_STREAM = True
@@ -114,6 +116,10 @@ class Helper:
             self._conversation.waiting_message = PROGRAM_ERROR
             return
         log.info("답 엔진 준비 %.1f초(%s, 답변 모델은 티켓 33에서 진짜로)", time.perf_counter() - started, self._conversation.engine.name)
+        if os.environ.get(WARM_UP_ENV) == "1":  # 예열은 사용자가 켤 때만(몰래 처리하는 인상을 주지 않게, HISTORY [127])
+            started = time.perf_counter()
+            self._conversation.engine.warm_up()
+            log.info("예열 %.1f초", time.perf_counter() - started)
 
     # ---- 연습 과정(진행 관리는 창 번호마다 하나, course_desk)
     def _on_message(self, message: Message) -> None:

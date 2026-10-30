@@ -4,6 +4,7 @@
 질문을 넣고 나온 답 조각·근거 목록·검색 결과·오류 표시와, 모델이 받은 것만 본다.
 """
 
+import threading
 from dataclasses import replace
 
 import pytest
@@ -245,18 +246,16 @@ MENU_NAMES = MenuNames([
         ("꼭짓점을 고르려면", ""),  # 없으면 붙이지 않는다
     ],
 )
-def test_질문_속_한국어_메뉴_이름에_영어를_덧붙인다(question, english):
-    embedder = FakeEmbedder()
-    engine = AnswerEngine(CHUNKS, VECTORS, embedder, FakeModel(), menu_names=MENU_NAMES)
-    list(engine.answer(question, STATE, []))
-    assert embedder.calls == [[f"{question} {english}".strip()]]
+def test_질문_속_한국어_메뉴_이름의_영어를_찾는다(question, english):
+    # 도우미 검색어에는 더 붙이지 않지만([127]) 검색 비교(search_compare)의 덧붙이기 조건이 이 규칙을 쓴다
+    assert " ".join(MENU_NAMES.english_in(question)) == english
 
 
-def test_통과하지_않은_제목은_질문_찾기에_쓰지_않는다():
-    # 제목에서만 뽑은 이름(1,055개)에는 흔한 낱말(에서 → At)이 섞인다. 검수를 통과한 것만 쓴다(티켓 31, menu_titles.json)
+def test_검색어에_메뉴_이름을_덧붙이지_않는다():
+    # 메뉴 이름 덧붙이기는 효과가 없어 뺐다(HISTORY [115]·[127]). 메뉴 이름 사전은 답 글의 [[ ]]를 바꾸는 데만 쓴다
     embedder = FakeEmbedder()
-    list(AnswerEngine(CHUNKS, VECTORS, embedder, FakeModel(), menu_names=MENU_NAMES).answer("여기에서", STATE, []))
-    assert embedder.calls == [["여기에서"]]
+    list(AnswerEngine(CHUNKS, VECTORS, embedder, FakeModel(), menu_names=MENU_NAMES).answer("베벨폭을 줄이려면", STATE, []))
+    assert embedder.calls == [["베벨폭을 줄이려면"]]
 
 
 def test_붙인_검색어로_낱말_검색도_한다():
@@ -655,3 +654,86 @@ def test_생각_수준은_정해_둔_이름만_받는다():
     assert Settings(reasoning="low").reasoning is Reasoning.LOW
     with pytest.raises(ValueError):
         Settings(reasoning="nnoe")
+
+
+# 질문 바꾸기(티켓 43, HISTORY [127])
+
+
+class FakeRewriter:
+    """질문 바꾸기 모델 대신: release가 열릴 때까지 기다렸다가 answer를 돌려준다(error면 그 오류를 낸다). 받은 글을 적어 둔다."""
+
+    def __init__(self, answer='{"query": "array copies"}', release: threading.Event | None = None, error: Exception | None = None):
+        self.answer, self.error = answer, error
+        self.release = release or threading.Event()
+        if release is None:
+            self.release.set()
+        self.calls: list[list[dict[str, str]]] = []
+
+    def ask(self, messages):
+        self.calls.append(messages)
+        self.release.wait(5)
+        if self.error:
+            raise self.error
+        return self.answer
+
+
+def ask_rewritten(rewriters, question="배열로 복사하려면?", embedder=None, model=None, settings=Settings(), recent=(), state=STATE, step=None):
+    engine = AnswerEngine(CHUNKS, VECTORS, embedder or FakeEmbedder(), model or FakeModel(), settings, rewriters=rewriters)
+    return list(engine.answer(question, state, list(recent), step))
+
+
+def test_질문_바꾸기를_동시에_불러_먼저_온_답의_검색어만_임베딩한다():
+    late = threading.Event()  # 첫 모델은 셋째가 답한 뒤에야 답한다
+    rewriters = [FakeRewriter('{"query": "bevel width"}', late), FakeRewriter("{}"), FakeRewriter('{"query": " array copies "}')]
+    embedder = FakeEmbedder(by_text={"array copies": TOWARD_ARRAY})
+    events = ask_rewritten(rewriters, embedder=embedder)
+    late.set()
+    assert embedder.calls == [["array copies"]]  # 검색어 없는 둘째 답은 버리고, 늦은 첫째는 기다리지 않는다
+    assert found(events)[0] == ARRAY
+    assert all(len(rewriter.calls) == 1 for rewriter in rewriters)  # 셋 다 불렀다
+
+
+def test_질문_바꾸기에는_분야_목록을_담은_지시와_질문만_보낸다():
+    rewriter = FakeRewriter()
+    ask_rewritten([rewriter])
+    system, user = rewriter.calls[0]
+    assert "목록(폴더 이름):\naddons\nfiles\nmodeling/meshes\nmodeling/modifiers\nJSON" in system["content"]  # 청크의 분야(큰 분야는 둘째 폴더까지)
+    assert user == {"role": "user", "content": "배열로 복사하려면?"}  # 맥락이 없으면 측정 때처럼 질문 한 줄
+
+
+def test_맥락이_있으면_질문_아래에_참고로_붙이고_먼저_볼_소제목_경로는_보내지_않는다():
+    rewriter = FakeRewriter()
+    step = Step("save-file", "파일 저장하기", manual=("files/blend/save.html#save",))
+    state = replace(STATE, recent_operators=("wm.save_mainfile",))
+    ask_rewritten([rewriter], question="그다음은요?", recent=[("저장은 어떻게 해요?", "답")], state=state, step=step)
+    assert rewriter.calls[0][1]["content"] == (
+        "그다음은요?\n\n# 참고(질문을 이해하는 데만 쓴다)\n"
+        "- 직전 질문: 저장은 어떻게 해요?\n- 지금 연습 단계: 파일 저장하기\n- 방금 실행한 조작: wm.save_mainfile"
+    )
+
+
+def test_질문_바꾸기가_모두_실패하면_한국어_질문으로_찾지_않고_오류_표시로_멈춘다():
+    embedder, model = FakeEmbedder(), FakeModel()
+    events = ask_rewritten([FakeRewriter(error=OSError("연결 끊김")), FakeRewriter("검색어 아님")], embedder=embedder, model=model)
+    assert events == [Failure(ERROR_MESSAGE)]
+    assert embedder.calls == [] and model.calls == []
+
+
+def test_오류_표시로_멈추면_어떤_답이_와서_실패했는지_기록에_남긴다(caplog):
+    events = ask_rewritten([FakeRewriter("[]")])
+    assert events == [Failure(ERROR_MESSAGE)]
+    assert "ValueError" in caplog.text and "'[]'" in caplog.text
+
+
+def test_질문_바꾸기가_한도_안에_하나도_오지_않으면_시간_초과_표시로_멈춘다():
+    never = threading.Event()
+    model = FakeModel()
+    events = ask_rewritten([FakeRewriter(release=never), FakeRewriter(release=never)], model=model, settings=Settings(rewrite_timeout=0.05))
+    never.set()
+    assert events == [Failure(TIMEOUT_MESSAGE)] and model.calls == []
+
+
+def test_예열은_질문_바꾸기_하나와_임베딩을_한_번씩_부른다():
+    rewriters, embedder = [FakeRewriter(), FakeRewriter()], FakeEmbedder()
+    AnswerEngine(CHUNKS, VECTORS, embedder, FakeModel(), rewriters=rewriters).warm_up()
+    assert [len(rewriter.calls) for rewriter in rewriters] == [1, 0] and len(embedder.calls) == 1

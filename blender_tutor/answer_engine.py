@@ -1,4 +1,4 @@
-"""답 엔진: 질문 + 작업 상태 → 설명서 검색 → 답 글 흐름 + 근거 목록.
+"""답 엔진: 질문 + 작업 상태 → (질문 바꾸기) → 설명서 검색 → 답 글 흐름 + 근거 목록.
 
 시험 경계 ①(.scratch/mvp-roundtrip/spec.md의 "답 엔진"과 Testing Decisions 참고).
 Blender·창 없이 부를 수 있고, 아무것도 기억하지 않는다(최근 대화는 부를 때마다 입력으로 받음, 티켓 09).
@@ -6,8 +6,10 @@ Blender·창 없이 부를 수 있고, 아무것도 기억하지 않는다(최�
 """
 
 import json
+import logging
 import re
 from collections.abc import Iterable, Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from enum import StrEnum
 from itertools import islice
@@ -21,10 +23,33 @@ from blender_tutor.menu_names import MenuNames
 from blender_tutor.progress import Course, Step
 from blender_tutor.work_state import WorkState
 
+log = logging.getLogger(__name__)
+
 RRF_K = 60  # RRF 합치기 상수. 순위 r인 청크는 1 / (RRF_K + r)점을 받는다(널리 쓰는 값)
 RRF_DEPTH = 50  # 뜻 검색·낱말 검색 각각 상위 몇 개까지 합치기에 넣나
 SIMILAR_COURSES = 3  # 연습 과정을 진행하지 않을 때 붙이는 비슷한 연습 과정 수
 SHORT_WORDS = 50  # 찾은 청크 본문이 이보다 짧으면 형제 소제목을 MAX_WORDS(청크 나누는 기준과 같은 값)까지 함께 넘긴다(명세 "검색")
+
+# 질문 바꾸기(HISTORY [117]·[127]): luna가 한국어 질문을 영어 검색어로 바꾼다. 분야(areas·exclude)는 검색에 쓰지 않지만,
+# 분야를 함께 고르게 한 이 지시가 검색어만 묻는 짧은 지시보다 잘 찾았다(86.7% 대 77.3%, [127]).
+REWRITE_PROMPT = """너는 Blender 5.2 공식 설명서(영어)를 찾을 검색어와 분야를 고른다.
+사용자는 Blender를 처음 쓰는 사람이고, 기능 이름 대신 겪은 증상이나 하고 싶은 일을 한국어로 말한다.
+질문에 답하지 말고, 답이 있을 설명서 쪽을 찾기 위한 것만 낸다.
+- query: 영어 검색어 하나. 필요할 것 같은 Blender 기능·도구·모디파이어·메뉴·옵션의 공식 영어 이름과 질문의 핵심 상황을 짧은 영어로, 30낱말 이하.
+- areas: 답이 있을 가능성이 큰 설명서 분야 1-3개(아래 목록 이름 그대로).
+- exclude: 이 질문과 확실히 관계없는 분야(아래 목록 이름 그대로). 조금이라도 관계있을 수 있으면 넣지 않는다.
+설명서 분야 목록(폴더 이름):
+{areas}
+JSON으로만 답한다: {{"query": "...", "areas": ["..."], "exclude": ["..."]}}"""
+
+BIG_FIELDS = ("modeling", "render", "editors")  # 너무 커서 한 단계 더 나눠 고르는 분야(modeling만 설명서의 30%)
+
+
+def area_of(page_path: str) -> str:
+    """luna가 고르는 단위: 큰 세 분야(modeling·render·editors)는 묶음(둘째 폴더, modeling/modifiers)까지, 나머지는 분야(physics) 그대로."""
+    parts = page_path.split("/")
+    return "/".join(parts[:2]) if parts[0] in BIG_FIELDS and len(parts) > 1 else parts[0]
+
 
 MARK_OPEN, MARK_CLOSE = "[[", "]]"  # 답변 모델이 메뉴 이름을 감싸는 표시. 엔진이 화면 언어에 맞게 바꾼다(티켓 23)
 MARK_LIMIT = 80  # 표시가 열린 뒤 이만큼(글자) 닫히지 않으면 표시가 아닌 글로 보고 그대로 낸다
@@ -103,6 +128,13 @@ class Embedder(Protocol):
     def embed(self, texts: Sequence[str], timeout: float) -> Sequence[Sequence[float]]: ...
 
 
+class Rewriter(Protocol):
+    """질문 바꾸기 모델: OpenAI 방식 채팅 글(역할 system·user)을 받아 답 글(JSON)을 돌려준다.
+    주소를 바꿔 로컬 모델(llama-server, 티켓 42)로 바꿔 끼울 수 있게 이 모양만 약속한다."""
+
+    def ask(self, messages: list[dict[str, str]]) -> str: ...
+
+
 class AnswerModel(Protocol):
     """대화 글(역할 system·user·assistant)을 받아 답 글 조각을 나오는 대로 돌려준다.
 
@@ -127,8 +159,9 @@ class Reasoning(StrEnum):
 class Settings:
     """답 엔진 설정. 평가 때 바꿔 같은 문항을 다시 잰다."""
 
-    top_k: int = 6  # 답변 모델에 넘길 검색 결과 수(명세 6-8개, 22번의 먼저 볼 소제목이 이 위에 더 붙는다)
+    top_k: int = 8  # 답변 모델에 넘길 검색 결과 수(명세 6-8개, [122]에서 8로 정함. 22번의 먼저 볼 소제목이 이 위에 더 붙는다)
     timeout: float = 10.0  # 모델이 이만큼(초) 아무것도 보내지 않으면 멈춘 것으로 본다(사용자 결정, 2026-10-21)
+    rewrite_timeout: float = 5.0  # 질문 바꾸기를 동시에 부른 것 중 하나라도 올 때까지 기다리는 한도(초, [127])
     use_bm25: bool = False  # 낱말 검색(BM25)을 섞을지. 끄면 뜻 검색만(티켓 40 결과로 끔, HISTORY [102])
     # 답변 모델의 생각 수준(명세 기본 none). 시간 기록에 남긴다. 실제 모델에 넘기는 일은 티켓 33
     reasoning: Reasoning = Reasoning.NONE
@@ -194,10 +227,13 @@ class AnswerEngine:
         courses: Sequence[Course] = (),
         course_vectors: Sequence[Sequence[float]] = (),
         name: str = "",
+        rewriters: Sequence[Rewriter] = (),
     ):
         """name은 시간 기록·평가 결과에 남길 엔진 이름(어떤 임베딩·답변 모델인지, 엔진을 만드는 곳이 정한다).
-        menu_names는 질문 속 한국어 메뉴 이름에 영어를 덧붙일 사전(없으면 덧붙이지 않음).
-        courses·course_vectors는 비슷한 연습 과정을 권할 연습 과정과 그 벡터(이름 + 한 줄 설명 + 비슷한 말, 티켓 31)."""
+        menu_names는 답 글의 [[메뉴 이름]] 표시를 한국어 화면 이름으로 바꿀 사전(없으면 바꾸지 않음).
+        courses·course_vectors는 비슷한 연습 과정을 권할 연습 과정과 그 벡터(이름 + 한 줄 설명 + 비슷한 말, 티켓 31).
+        rewriters는 질문 바꾸기 모델들(동시에 부를 수만큼, 하나씩 따로). 있으면 모두 동시에 불러 먼저 온 답의 영어 검색어로
+        찾는다(늦는 답을 기다리지 않으려고, [127]). 없으면 질문과 맥락 줄을 그대로 검색어로 쓴다."""
         self.name = name
         self._chunks = list(chunks)
         self._menu_names = menu_names
@@ -218,6 +254,9 @@ class AnswerEngine:
         self._embedder = embedder
         self._model = model
         self._settings = settings
+        self._rewriters = list(rewriters)
+        areas = sorted({area_of(chunk.page_path) for chunk in self._chunks})
+        self._rewrite_prompt = REWRITE_PROMPT.format(areas="\n".join(areas))
 
     @property
     def settings(self) -> Settings:
@@ -228,14 +267,17 @@ class AnswerEngine:
     ) -> Iterator[Event]:
         """질문에 답한다. state는 애드온이 보낸 작업 상태 JSON, recent는 최근 대화 (질문, 답) 쌍 목록,
         step은 진행 중인 연습 과정의 지금 단계(연습 과정을 진행하지 않으면 None)."""
-        query = self._query(question, state, recent, step)
-        # 비슷한 연습 과정은 덧붙인 검색어(직전 질문·조작에 끌림)가 아니라 질문만으로 고른다.
-        # 질문만의 벡터는 따로 부르지 않고 같은 호출에 글을 하나 더 실어 받는다(호출 2번 유지, 비용은 질문 길이만큼 늚)
+        context = self._context(recent, step, state)
         recommend = step is None and bool(self._courses)
-        texts = [query, question] if recommend and question != query else [query]
-        # 바깥 서비스(임베딩·답변 모델)를 부르는 두 곳만 오류 표시로 바꾼다.
-        # 검색·글 만들기 같은 우리 코드의 오류는 그대로 올려 보내 버그가 "잠시 뒤 다시"에 숨지 않게 한다
+        rewrite = self._rewrite_messages(question, context) if self._rewriters else None
+        # 바깥 서비스(질문 바꾸기·임베딩·답변 모델)를 부르는 곳만 오류 표시로 바꾼다.
+        # 검색·글 만들기 같은 우리 코드의 오류는 그대로 올려 보내 버그가 "잠시 뒤 다시"에 숨지 않게 한다.
+        # 질문 바꾸기가 모두 실패하거나 늦으면 한국어 질문으로 찾지 않고 멈춘다(엉뚱한 근거로 답하지 않게, [127])
         try:
+            query = self._rewritten(rewrite) if rewrite else "\n".join([question, *context.values()])
+            # 비슷한 연습 과정은 검색어(직전 질문·조작에 끌림)가 아니라 질문만으로 고른다.
+            # 질문만의 벡터는 따로 부르지 않고 같은 호출에 글을 하나 더 실어 받는다(비용은 질문 길이만큼 늚)
+            texts = [query, question] if recommend and question != query else [query]
             vectors = self._embedder.embed(texts, self._settings.timeout)
             if len(vectors) != len(texts):
                 raise ValueError(f"임베딩이 글 {len(texts)}개에 벡터 {len(vectors)}개를 돌려줌")
@@ -318,22 +360,47 @@ class AnswerEngine:
             return []
         return [chunk for address in step.manual for chunk in self._by_address.get(address, [])]
 
-    def _query(self, question: str, state: WorkState, recent: Sequence[tuple[str, str]], step: Step | None) -> str:
-        """검색어: 질문 + 직전 질문 + 지금 단계 이름과 먼저 볼 소제목 경로 + 방금 실행한 조작(추가 호출 없이 아는 것만).
-
-        "그다음은요?"처럼 앞말에 기대는 질문도 무엇을 찾는지 알 수 있게 하고, 영어 설명서와 겹치는 낱말을 늘려
-        낱말 검색(BM25)이 한국어 질문에도 일하게 한다.
-        """
-        english = self._menu_names.english_in(question) if self._menu_names else ()
-        lines = [" ".join((question, *english))]
+    def _context(self, recent: Sequence[tuple[str, str]], step: Step | None, state: WorkState) -> dict[str, str]:
+        """질문을 이해하는 데 쓰는 맥락(추가 호출 없이 아는 것만): 직전 질문, 지금 단계 이름과 먼저 볼 소제목 경로, 방금 실행한 조작.
+        "그다음은요?"처럼 앞말에 기대는 질문도 무엇을 찾는지 알 수 있게 한다. 질문 바꾸기에는 소제목 경로를 넘기지 않는다
+        (그 소제목은 검색과 따로 답변 모델에 넘어간다)."""
+        context = {}
         if recent:
-            lines.append(recent[-1][0])
+            context["직전 질문"] = recent[-1][0]
         if step:
-            lines.append(step.name)
-            lines += dict.fromkeys(chunk.path for chunk in self._preview(step))  # 나눈 조각은 경로가 같아 한 번만
+            context["지금 연습 단계"] = step.name
+            if paths := dict.fromkeys(chunk.path for chunk in self._preview(step)):  # 나눈 조각은 경로가 같아 한 번만
+                context["먼저 볼 소제목"] = "\n".join(paths)
         if state.recent_operators:
-            lines.append(" ".join(state.recent_operators))
-        return "\n".join(lines)
+            context["방금 실행한 조작"] = " ".join(state.recent_operators)
+        return context
+
+    def _rewrite_messages(self, question: str, context: dict[str, str]) -> list[dict[str, str]]:
+        """질문 바꾸기 모델에 보낼 메시지: 지시 + 질문(맥락이 있으면 참고 줄을 붙여)."""
+        content = question
+        if notes := [f"- {label}: {value}" for label, value in context.items() if label != "먼저 볼 소제목"]:
+            content += "\n\n# 참고(질문을 이해하는 데만 쓴다)\n" + "\n".join(notes)
+        return [{"role": "system", "content": self._rewrite_prompt}, {"role": "user", "content": content}]
+
+    def _rewritten(self, messages: list[dict[str, str]]) -> str:
+        """질문 바꾸기 모델들을 동시에 불러 먼저 온 쓸 만한 답의 영어 검색어. 나머지 답은 기다리지 않고 버린다(값은 든다).
+        rewrite_timeout 안에 하나도 오지 않으면 TimeoutError, 모두 실패하면 첫 오류를 그대로 낸다."""
+        pool = ThreadPoolExecutor(len(self._rewriters))
+        futures = [pool.submit(lambda rewriter: _query_in(rewriter.ask(messages)), rewriter) for rewriter in self._rewriters]
+        pool.shutdown(wait=False)  # 늦은 답은 뒤에서 끝나게 둔다
+        errors = []
+        for future in as_completed(futures, timeout=self._settings.rewrite_timeout):  # 한도를 넘기면 TimeoutError
+            if future.exception() is None:
+                return future.result()
+            errors.append(future.exception())
+        raise errors[0]
+
+    def warm_up(self) -> None:
+        """예열(옵션, 기본 끔, [127]): 첫 질문이 늦지 않게 질문 바꾸기 하나와 임베딩을 짧게 한 번씩 부른다. 돈이 아주 조금 든다.
+        첫 요청이 느렸던 까닭은 확인하지 못해, 이것으로 빨라지는지는 아직 모른다."""
+        if self._rewriters:
+            self._rewriters[0].ask(self._rewrite_messages("베벨", {}))
+        self._embedder.embed(["bevel"], self._settings.timeout)
 
     def _search(self, query: str, vector: Sequence[float]) -> list[Chunk]:
         """뜻 검색과 낱말 검색 순위를 RRF로 합쳐 상위 top_k개를 고른다."""
@@ -349,6 +416,15 @@ class AnswerEngine:
                 rrf_scores[int(index)] = rrf_scores.get(int(index), 0.0) + 1 / (RRF_K + rank)
         best = sorted(rrf_scores, key=lambda index: (-rrf_scores[index], index))[: self._settings.top_k]
         return [self._chunks[index] for index in best]
+
+
+def _query_in(answer: str) -> str:
+    """질문 바꾸기 답(JSON)의 영어 검색어. 검색어가 없거나 비었으면 ValueError(그 답은 버리고 다음 답을 쓴다)."""
+    data = json.loads(answer)
+    query = data.get("query") if isinstance(data, dict) else None
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError(f"검색어가 없는 질문 바꾸기 답 {answer!r}")
+    return query.strip()
 
 
 def _translated(state: WorkState) -> bool:
@@ -407,7 +483,8 @@ class _MenuMarks:
 
 
 def _failure(error: Exception, results: list[Chunk]) -> Failure:
-    """바깥 서비스 오류를 짧은 오류 표시로. 시간 초과면 그 문구로."""
+    """바깥 서비스 오류를 짧은 오류 표시로. 시간 초과면 그 문구로. 원래 오류는 도우미 기록에 남긴다(무엇이 실패했는지 가르려고)."""
+    log.warning("바깥 서비스 오류: %r", error)
     message = TIMEOUT_MESSAGE if isinstance(error, TimeoutError) else ERROR_MESSAGE
     return Failure(message, tuple(results))
 

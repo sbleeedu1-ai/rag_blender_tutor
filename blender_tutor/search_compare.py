@@ -33,7 +33,7 @@ from pathlib import Path
 import numpy as np
 from rank_bm25 import BM25Okapi
 
-from blender_tutor.answer_engine import RRF_DEPTH, RRF_K, Embedder, _normalized
+from blender_tutor.answer_engine import REWRITE_PROMPT, RRF_DEPTH, RRF_K, Embedder, _normalized, area_of
 from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.evaluate import _commit
 from blender_tutor import manual_vectors
@@ -81,13 +81,6 @@ class Scope(StrEnum):
     BEGINNER = "초보자 범위만"  # data/beginner_scope/scope.jsonl의 include 쪽(질문과 상관없이 고정)
 
 
-BIG_FIELDS = ("modeling", "render", "editors")  # 너무 커서 한 단계 더 나눠 고르는 분야(modeling만 설명서의 30%)
-
-
-def area_of(page_path: str) -> str:
-    """질문 분야 고르기의 단위: 큰 세 분야는 둘째 폴더까지(modeling/modifiers), 나머지는 분야(physics)."""
-    parts = page_path.split("/")
-    return "/".join(parts[:2]) if parts[0] in BIG_FIELDS and len(parts) > 1 else parts[0]
 
 
 @dataclass(frozen=True)
@@ -411,23 +404,21 @@ def query_of(question: str, names: Names) -> str:
     return " ".join((question, *names.english_in(question)))
 
 
-REWRITE_PROMPT = """너는 Blender 5.2 공식 설명서(영어)를 찾을 검색어와 분야를 고른다.
-사용자는 Blender를 처음 쓰는 사람이고, 기능 이름 대신 겪은 증상이나 하고 싶은 일을 한국어로 말한다.
-질문에 답하지 말고, 답이 있을 설명서 쪽을 찾기 위한 것만 낸다.
-- query: 영어 검색어 하나. 필요할 것 같은 Blender 기능·도구·모디파이어·메뉴·옵션의 공식 영어 이름과 질문의 핵심 상황을 짧은 영어로, 30낱말 이하.
-- areas: 답이 있을 가능성이 큰 설명서 분야 1-3개(아래 목록 이름 그대로).
-- exclude: 이 질문과 확실히 관계없는 분야(아래 목록 이름 그대로). 조금이라도 관계있을 수 있으면 넣지 않는다.
-설명서 분야 목록(폴더 이름):
-{areas}
-JSON으로만 답한다: {{"query": "...", "areas": ["..."], "exclude": ["..."]}}"""
 # 번역만(HISTORY [118]·[120]): 질문 바꾸기의 효과가 영어로 옮긴 데서 왔는지, 기능 이름을 찾아 붙인 데서 왔는지 가른다.
 TRANSLATE_PROMPT = """너는 한국어 질문을 영어로 옮긴다.
 질문에 답하지 말고, 질문을 뜻 그대로 자연스러운 영어 한 문장(또는 두 문장)으로 옮기기만 한다.
 질문에 없는 Blender 기능·도구·모디파이어·메뉴·옵션 이름을 떠올려 더하거나, 증상을 기능 이름으로 바꾸지 않는다.
 질문에 한국어로 적힌 메뉴 이름(예: 오리진, 베벨)은 그 낱말 그대로 영어로 옮긴다.
 JSON으로만 답한다: {{"query": "..."}}"""
-PROMPTS = {"rewrite": REWRITE_PROMPT, "translate": TRANSLATE_PROMPT}
+# 짧은 지시(티켓 43): 검색어 지시는 REWRITE_PROMPT와 같고, 분야 목록과 areas·exclude 칸을 뺐다(분야 거르기는 효과가 없었다, [113]-[119]).
+SHORT_PROMPT = """너는 Blender 5.2 공식 설명서(영어)를 찾을 검색어를 만든다.
+사용자는 Blender를 처음 쓰는 사람이고, 기능 이름 대신 겪은 증상이나 하고 싶은 일을 한국어로 말한다.
+질문에 답하지 말고, 답이 있을 설명서 쪽을 찾기 위한 영어 검색어 하나만 낸다.
+필요할 것 같은 Blender 기능·도구·모디파이어·메뉴·옵션의 공식 영어 이름과 질문의 핵심 상황을 짧은 영어로, 30낱말 이하.
+JSON으로만 답한다: {{"query": "..."}}"""
+PROMPTS = {"rewrite": REWRITE_PROMPT, "translate": TRANSLATE_PROMPT, "short": SHORT_PROMPT}
 REWRITE_PRICE = {"gpt-6-luna": (0.10, 0.50)}  # 100만 토큰당 입력·출력 달러(.scratch/.../31-번역-모델-조사.md)
+TIER_FACTOR = {None: 1, "fast": 2}  # 처리 등급별 값 배수(공식 가격 쪽 Fast: luna 입력 $0.20·출력 $1.00, 2026-10-30 확인)
 
 
 class Chat:
@@ -435,6 +426,7 @@ class Chat:
 
     input_tokens: int
     output_tokens: int
+    tiers: Counter  # 응답이 알린 처리 등급별 수
 
     def ask(self, messages: list[dict[str, str]]) -> str: ...
 
@@ -489,39 +481,58 @@ def rrf_merge(rankings: Sequence[Sequence[str]]) -> list[str]:
     return sorted(scores, key=lambda key: -scores[key])[:RRF_DEPTH]
 
 
-FLOW_WAYS = {"한 번 바꾸기": 1, "3번 합치기": 3}  # 질문 하나에 질문 바꾸기를 몇 번(동시에) 부르나
+@dataclass(frozen=True)
+class FlowWay:
+    """흐름 측정의 한 방식: 어떤 지시(PROMPTS 이름)로, 질문 바꾸기를 몇 번 동시에, 어떤 처리 등급으로 부르나."""
+
+    prompt: str
+    count: int
+    tier: str | None = None
 
 
-def flow(questions: Sequence[Question], chats: Sequence[Chat], embedder: Embedder, searcher: Searcher, condition: Condition,
-         template: str, areas: Sequence[str], rounds: int = ROUNDS, seed: int = SEED,
-         clock: Callable[[], float] = time.perf_counter) -> list[dict]:
-    """도우미에 넣을 흐름 그대로 질문 하나를 처음부터 끝까지 잰다(HISTORY [122]).
-    질문 바꾸기 n번을 동시에 부르고 → 검색어 n개를 임베딩 한 번에 보내고 → 검색어마다 찾고 → n이 2 이상이면 RRF로 합친다.
-    방식 순서는 질문마다 섞는다(시간대에 따라 바뀌는 응답 속도가 한 방식에만 몰리지 않게). chats는 동시에 부를 만큼 따로 둔다.
-    OpenAIModel·OpenAIEmbedder는 부를 때마다 새로 연결하므로, 잰 시간에는 연결을 맺는 시간도 들어 있다."""
-    prompt = template.format(areas="\n".join(areas))
+FLOW_WAYS = {
+    "한 번 바꾸기": FlowWay("rewrite", 1), "3번 합치기": FlowWay("rewrite", 3),
+    "짧은 지시 3번": FlowWay("short", 3), "짧은 지시 3번 fast": FlowWay("short", 3, "fast"),
+}
+
+
+def flow(questions: Sequence[Question], ways: Mapping[str, tuple[str, Sequence[Chat]]], embedder: Embedder, searcher: Searcher,
+         condition: Condition, rounds: int = ROUNDS, seed: int = SEED, clock: Callable[[], float] = time.perf_counter) -> list[dict]:
+    """도우미에 넣을 흐름 그대로 질문 하나를 처음부터 끝까지 잰다(HISTORY [122]). ways는 방식 이름 → (지시, 동시에 부를 모델들).
+    모델 n개를 동시에 부르고 → 검색어 n개를 임베딩 한 번에 보내고 → 검색어마다 찾고 → n이 2 이상이면 RRF로 합친다.
+    방식 순서는 질문마다 섞는다(시간대에 따라 바뀌는 응답 속도가 한 방식에만 몰리지 않게).
+    "호출별"에 호출마다 걸린 시간과 그 검색어의 순위를 남긴다(먼저 온 몇 개만 쓰는 방식을 새 호출 없이 따져 보려고).
+    OpenAIModel·OpenAIEmbedder는 부를 때마다 새로 연결하므로, 잰 시간에는 연결을 맺는 시간(이 PC에서 약 0.03초)도 들어 있다."""
     shuffler = random.Random(seed)
     rows = []
-    with ThreadPoolExecutor(max_workers=max(FLOW_WAYS.values())) as pool:
+    with ThreadPoolExecutor(max_workers=max(len(chats) for _, chats in ways.values())) as pool:
         for round_number in range(1, rounds + 1):
             for question in questions:
-                ways = list(FLOW_WAYS.items())
-                shuffler.shuffle(ways)
-                for way, count in ways:
+                order = list(ways.items())
+                shuffler.shuffle(order)
+                for way, (prompt, chats) in order:
                     messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question.question}]
+
+                    def timed(chat: Chat) -> tuple[str, float]:
+                        began = clock()
+                        answer = chat.ask(messages)
+                        return answer, clock() - began
+
                     start = clock()
-                    answers = list(pool.map(lambda chat: chat.ask(messages), chats[:count]))
+                    answers = list(pool.map(timed, chats))
                     asked = clock()
-                    queries = [_parsed(answer, f"{question.id} {round_number}회차")["query"] for answer in answers]
+                    queries = [_parsed(answer, f"{question.id} {round_number}회차")["query"] for answer, _ in answers]
                     vectors = embedder.embed(queries, TIMEOUT)
                     embedded = clock()
                     rankings = [searcher.search(condition, query, vector).final for query, vector in zip(queries, vectors)]
                     searched = clock()
-                    final = rrf_merge(rankings) if count > 1 else rankings[0][:RRF_DEPTH]
+                    final = rrf_merge(rankings) if len(chats) > 1 else rankings[0][:RRF_DEPTH]
                     done = clock()
                     rows.append({
                         "회차": round_number, "질문": question.id, "조건": f"흐름 / {way}", "원래 질문": question.question,
                         "검색어": queries, "결과": final,
+                        "호출별": [{"초": seconds, "검색어": query, "결과": ranking[:RRF_DEPTH]}
+                                  for (_, seconds), query, ranking in zip(answers, queries, rankings)],
                         "시간": {"질문 바꾸기": asked - start, "임베딩": embedded - asked, "검색": searched - embedded,
                                  "합치기": done - searched, "전체": done - start},
                     })
@@ -682,7 +693,7 @@ def _load_names() -> MenuNames:
 def main(
     argv: Sequence[str] | None = None, now: datetime | None = None,
     make_embedder: Callable[[str], Embedder] = _real_embedder, load_names: Callable[[], Names] = _load_names,
-    make_chat: Callable[[str, str], Chat] = lambda model, effort: OpenAIModel(model, openai_key(), effort),
+    make_chat: Callable[[str, str, str | None], Chat] = lambda model, effort, tier: OpenAIModel(model, openai_key(), effort, tier=tier),
 ) -> int:
     """명령 줄 입구. 돌려주는 값은 종료 코드(0 성공, 1 결과 폴더가 이미 있음, 2 유료 실행에 --yes가 없음)."""
     parser = argparse.ArgumentParser(description="검색 조건 18개를 같은 질문·청크 묶음으로 견줍니다(티켓 40).")
@@ -723,6 +734,8 @@ def main(
     flow_command.add_argument("--chat", choices=list(REWRITE_PRICE), default="gpt-6-luna", help="질문을 바꿀 모델")
     flow_command.add_argument("--effort", default="none", help="생각 수준(도우미 기본 none)")
     flow_command.add_argument("--seed", type=int, default=SEED, help="방식 순서를 섞는 씨앗")
+    flow_command.add_argument("--ways", nargs="+", choices=list(FLOW_WAYS), default=["한 번 바꾸기", "3번 합치기"],
+                              help="잴 방식(지시·동시 호출 수·처리 등급, FLOW_WAYS)")
     fuse_command.add_argument("--runs", type=Path, required=True, help="합칠 run 결과 폴더(실행.jsonl·설정.json)")
     run_command.add_argument("--seed", type=int, default=SEED, help="조건 순서를 섞는 씨앗")
     run_command.add_argument("--rewrites", type=Path, help="rewrite가 만든 검색어.jsonl(질문 분야 범위에 그 분야를 쓴다)")
@@ -858,7 +871,7 @@ def _confirmed(costs: Sequence[str], yes: bool) -> bool:
 
 
 def _rewrite_command(args: argparse.Namespace, pool: Sequence[PoolChunk], questions: Sequence[Question],
-                     make_chat: Callable[[str, str], Chat], now: datetime) -> int:
+                     make_chat: Callable[[str, str, str | None], Chat], now: datetime) -> int:
     """질문 바꾸기: 어림 비용을 보이고(--yes 없으면 멈춤) 회차마다 바꾼 검색어·시간·토큰을 새 폴더에 쓴다."""
     template = PROMPTS[args.prompt]
     calls = len(questions) * args.rounds
@@ -871,7 +884,7 @@ def _rewrite_command(args: argparse.Namespace, pool: Sequence[PoolChunk], questi
     folder = _new_folder(args, now)
     if folder is None:
         return 1
-    chat = make_chat(args.chat, args.effort)
+    chat = make_chat(args.chat, args.effort, None)
     started = datetime.now().isoformat(timespec="seconds")
     areas = sorted({area_of(chunk.key.split(".html")[0]) for chunk in pool})
     rows = rewrite(questions, chat, areas, args.rounds, template=template)
@@ -919,16 +932,24 @@ def _fuse_command(args: argparse.Namespace, questions: Sequence[Question], now: 
 
 
 def _flow_command(args: argparse.Namespace, pool: Sequence[PoolChunk], questions: Sequence[Question],
-                  make_embedder: Callable[[str], Embedder], make_chat: Callable[[str, str], Chat], now: datetime) -> int:
+                  make_embedder: Callable[[str], Embedder], make_chat: Callable[[str, str, str | None], Chat], now: datetime) -> int:
     """흐름 측정: 모델 하나·원문만·BM25 끔·범위 전체. 어림 비용을 보이고(--yes 없으면 멈춤) 결과를 새 폴더에 쓴다."""
     if len(args.models) != 1:
         raise SystemExit("flow는 임베딩 모델 하나로만 잽니다(--models 하나).")
     model = args.models[0]
-    calls = len(questions) * args.rounds * sum(FLOW_WAYS.values())
-    tokens_in, tokens_out = calls * (_tokens(REWRITE_PROMPT) + 600), calls * 120  # rewrite 어림과 같은 셈
+    areas = sorted({area_of(chunk.key.split(".html")[0]) for chunk in pool})
+    prompts = {way: PROMPTS[FLOW_WAYS[way].prompt].format(areas="\n".join(areas)) for way in args.ways}
     price_in, price_out = REWRITE_PRICE[args.chat]
-    guess = f"{args.chat}: {calls}번 물음, 약 ${(tokens_in * price_in + tokens_out * price_out) / 1_000_000:.4f} + 검색어 임베딩(아주 적음)"
-    costs = [guess]
+
+    def dollars(way: str, tokens_in: int, tokens_out: int) -> float:
+        return (tokens_in * price_in + tokens_out * price_out) * TIER_FACTOR[FLOW_WAYS[way].tier] / 1_000_000
+
+    guesses = {}
+    for way in args.ways:
+        calls = len(questions) * args.rounds * FLOW_WAYS[way].count
+        tokens_in, tokens_out = calls * (_tokens(prompts[way]) + 80), calls * 60  # 질문 한 줄 약 80, 답 약 54토큰([117])
+        guesses[way] = f"{args.chat} {way}: {calls}번 물음, 약 입력 {tokens_in:,}·출력 {tokens_out:,}토큰 → 약 ${dollars(way, tokens_in, tokens_out):.4f}"
+    costs = [*guesses.values(), "+ 검색어 임베딩(아주 적음)"]
     if model in PRICE_PER_MILLION:
         db_tokens = sum(_tokens(chunk.english) for chunk in pool)
         costs.append(f"{model} DB: 저장된 것이 없으면 새로 만듦, 약 {db_tokens:,}토큰 → 약 "
@@ -940,26 +961,30 @@ def _flow_command(args: argparse.Namespace, pool: Sequence[PoolChunk], questions
         return 1
     embedder = make_embedder(model)
     index = build_index(pool, model, embedder, args.db, original_only=True)
-    chats = [make_chat(args.chat, args.effort) for _ in range(max(FLOW_WAYS.values()))]
-    areas = sorted({area_of(chunk.key.split(".html")[0]) for chunk in pool})
+    chats = {way: [make_chat(args.chat, args.effort, FLOW_WAYS[way].tier) for _ in range(FLOW_WAYS[way].count)] for way in args.ways}
     started = datetime.now().isoformat(timespec="seconds")
-    rows = flow(questions, chats, embedder, Searcher(pool, {model: index}), Condition(model, Text.ORIGINAL, Bm25.OFF),
-                REWRITE_PROMPT, areas, args.rounds, args.seed)
-    tokens = {"입력": sum(chat.input_tokens for chat in chats), "출력": sum(chat.output_tokens for chat in chats)}
+    rows = flow(questions, {way: (prompts[way], chats[way]) for way in args.ways}, embedder, Searcher(pool, {model: index}),
+                Condition(model, Text.ORIGINAL, Bm25.OFF), args.rounds, args.seed)
     stages = {
         way: {stage: {"중앙값": statistics.median(values), "최대값": max(values)}
               for stage in rows[0]["시간"] for values in [[row["시간"][stage] for row in rows if row["조건"] == f"흐름 / {way}"]]}
-        for way in FLOW_WAYS
+        for way in args.ways
     }
+    paid = {}
+    for way, mine in chats.items():
+        tokens = {"입력": sum(chat.input_tokens for chat in mine), "출력": sum(chat.output_tokens for chat in mine)}
+        tiers = sum((chat.tiers for chat in mine), Counter())
+        paid[f"{args.chat} {way}"] = {**tokens, "처리 등급": dict(tiers), "달러": round(dollars(way, tokens["입력"], tokens["출력"]), 6)}
+    if model in PRICE_PER_MILLION:
+        paid[model] = {"토큰": embedder.tokens, "요청": embedder.requests,
+                       "달러": round(embedder.tokens / 1_000_000 * PRICE_PER_MILLION[model], 6)}
     about = {
-        "조건": [f"흐름 / {way}" for way in FLOW_WAYS], "모델": [model], "질문 바꾸기 모델": args.chat, "생각 수준": args.effort,
-        "지시": REWRITE_PROMPT.format(areas="\n".join(areas)), "묶음 파일": str(args.pool), "청크 수": len(pool),
+        "조건": [f"흐름 / {way}" for way in args.ways], "모델": [model], "질문 바꾸기 모델": args.chat, "생각 수준": args.effort,
+        "방식": {way: {"지시 종류": FLOW_WAYS[way].prompt, "동시 호출": FLOW_WAYS[way].count, "처리 등급": FLOW_WAYS[way].tier}
+                 for way in args.ways},
+        "지시": {FLOW_WAYS[way].prompt: prompts[way] for way in args.ways}, "묶음 파일": str(args.pool), "청크 수": len(pool),
         "번역 있는 청크 수": 0, "질문 파일": [str(path) for path in args.questions], "질문 수": len(questions),
-        "회차": args.rounds, "씨앗": args.seed, "DB": index.records, "어림": guess, "단계별 시간": stages,
-        "유료": {args.chat: {**tokens, "달러": round((tokens["입력"] * price_in + tokens["출력"] * price_out) / 1_000_000, 6)},
-                 **({model: {"토큰": embedder.tokens, "요청": embedder.requests,
-                             "달러": round(embedder.tokens / 1_000_000 * PRICE_PER_MILLION[model], 6)}}
-                    if model in PRICE_PER_MILLION else {})},
+        "회차": args.rounds, "씨앗": args.seed, "DB": index.records, "어림": costs, "단계별 시간": stages, "유료": paid,
         "메모": args.note, "pc": platform.node(), "시작 시각": started, "커밋": _commit(),
     }
     folder.mkdir(parents=True)
@@ -971,7 +996,7 @@ def _flow_command(args: argparse.Namespace, pool: Sequence[PoolChunk], questions
     lines += [f"| {way} | {stage} | {value['중앙값']:.3f} | {value['최대값']:.3f} |"
               for way, table in stages.items() for stage, value in table.items()]
     (folder / "요약.md").write_text(_summary_markdown(args.name, rows, questions, about) + "\n".join(lines) + "\n", encoding="utf-8")
-    print(f"결과: {folder}\n{guess}\n실제: {about['유료']}")
+    print(f"결과: {folder}\n" + "\n".join(costs) + f"\n실제: {paid}")
     return 0
 
 

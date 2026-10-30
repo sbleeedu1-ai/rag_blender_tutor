@@ -4,6 +4,7 @@
 """
 
 import json
+from collections import Counter
 from datetime import datetime
 
 import numpy as np
@@ -398,7 +399,7 @@ def test_rewrite_command_needs_yes_and_run_uses_its_queries_and_areas(tmp_path):
             "--results", str(tmp_path / "results"), "--rounds", "1", "--note", "시험"]
     chats = []
 
-    def make_chat(model, effort):
+    def make_chat(model, effort, tier):
         chats.append(FakeChat())
         return chats[-1]
 
@@ -467,13 +468,16 @@ def test_fuse_command_scores_fused_rows_next_to_original_conditions(tmp_path):
 class SameChat:
     """늘 같은 검색어를 내는 질문 바꾸기 모델(흐름 시험용). 여러 개를 두어 동시에 부른다."""
 
-    def __init__(self, query):
+    def __init__(self, query, tier=None):
         self.query, self.input_tokens, self.output_tokens = query, 0, 0
+        self.tiers, self.tier, self.prompts = Counter(), tier, []
 
     def ask(self, messages):
         self.input_tokens += 100
         self.output_tokens += 10
-        return json.dumps({"query": self.query, "areas": [], "exclude": []})
+        self.tiers[self.tier or "default"] += 1
+        self.prompts.append(messages[0]["content"])
+        return json.dumps({"query": self.query})
 
 
 def test_flow_asks_once_or_three_times_and_merges_three_rankings(tmp_path):
@@ -481,7 +485,8 @@ def test_flow_asks_once_or_three_times_and_merges_three_rankings(tmp_path):
     embedder = FakeEmbedder()
     searcher = Searcher(POOL, {"fake": build_index(POOL, "fake", embedder, tmp_path, original_only=True)})
     chats = [SameChat("origin"), SameChat("merge"), SameChat("merge")]
-    rows = flow(questions(), chats, embedder, searcher, Condition("fake", Text.ORIGINAL, Bm25.OFF), "지시", [], rounds=2, clock=Clock())
+    ways = {"한 번 바꾸기": ("지시", chats[:1]), "3번 합치기": ("지시", chats)}
+    rows = flow(questions(), ways, embedder, searcher, Condition("fake", Text.ORIGINAL, Bm25.OFF), rounds=2, clock=Clock())
     assert len(rows) == 2 * 2 * 2  # 회차 2 × 질문 2 × 방식 2
     once = next(row for row in rows if row["조건"] == "흐름 / 한 번 바꾸기")
     three = next(row for row in rows if row["조건"] == "흐름 / 3번 합치기")
@@ -489,6 +494,9 @@ def test_flow_asks_once_or_three_times_and_merges_three_rankings(tmp_path):
     assert three["검색어"] == ["origin", "merge", "merge"] and three["결과"][0] == "merge.html#merge/1"
     assert set(once["시간"]) == {"질문 바꾸기", "임베딩", "검색", "합치기", "전체"}
     assert embedder.texts[-3:] in (["origin", "merge", "merge"], ["origin"])  # 검색어 여럿을 임베딩 한 번에 보낸다
+    calls = three["호출별"]  # 호출마다 걸린 시간과 그 검색어 하나의 순위
+    assert [call["검색어"] for call in calls] == ["origin", "merge", "merge"] and calls[0]["결과"][0] == "set.html#origin/1"
+    assert all(call["초"] > 0 for call in calls)
 
 
 def test_flow_command_needs_yes_and_writes_stage_times(tmp_path):
@@ -498,7 +506,7 @@ def test_flow_command_needs_yes_and_writes_stage_times(tmp_path):
             "--questions", str(tmp_path / "q.jsonl"), "--results", str(tmp_path / "results"), "--rounds", "1", "--note", "시험"]
     chats = []
 
-    def make_chat(model, effort):
+    def make_chat(model, effort, tier):
         chats.append(SameChat("bevel"))
         return chats[-1]
 
@@ -507,7 +515,7 @@ def test_flow_command_needs_yes_and_writes_stage_times(tmp_path):
     folder = tmp_path / "results" / "20261030" / "120000_흐름"
     about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     assert about["조건"] == ["흐름 / 한 번 바꾸기", "흐름 / 3번 합치기"] and set(about["단계별 시간"]) == {"한 번 바꾸기", "3번 합치기"}
-    assert about["유료"]["gpt-6-luna"]["입력"] == 100 * 2 * 4  # 질문 2 × (1 + 3)번
+    assert about["유료"]["gpt-6-luna 한 번 바꾸기"]["입력"] == 100 * 2 and about["유료"]["gpt-6-luna 3번 합치기"]["입력"] == 100 * 2 * 3
     assert "단계별 시간" in (folder / "요약.md").read_text(encoding="utf-8")
 
 
@@ -523,14 +531,38 @@ def test_flow_command_keeps_rewrite_dollars_with_free_embedder_and_notes_connect
     base = ["flow", "--name", "흐름", "--models", "fake", "--db", str(tmp_path / "db"), "--pool", str(tmp_path / "pool.jsonl"),
             "--chunks", str(tmp_path / "chunks.jsonl"), "--translations", str(tmp_path / "ko.jsonl"),
             "--questions", str(tmp_path / "q.jsonl"), "--results", str(tmp_path / "results"), "--rounds", "1", "--note", "시험", "--yes"]
-    assert main(base, now=datetime(2026, 10, 30, 12, 0), make_chat=lambda model, effort: SameChat("bevel"),
+    assert main(base, now=datetime(2026, 10, 30, 12, 0), make_chat=lambda model, effort, tier: SameChat("bevel"),
                 make_embedder=lambda _: FakeEmbedder()) == 0
     folder = tmp_path / "results" / "20261030" / "120000_흐름"
     about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
-    assert set(about["유료"]) == {"gpt-6-luna"} and "달러" in about["유료"]["gpt-6-luna"]  # 무료 임베딩이어도 바꾸기 달러는 남긴다
+    assert set(about["유료"]) == {"gpt-6-luna 한 번 바꾸기", "gpt-6-luna 3번 합치기"}  # 무료 임베딩이어도 바꾸기 달러는 남긴다
+    assert all("달러" in paid for paid in about["유료"].values())
     summary = (folder / "요약.md").read_text(encoding="utf-8")
     assert "3청크·2문항의 작은 실험" in summary and "200청크" not in summary  # 실제 묶음·문항 수로 적는다
     assert "새로 연결을 맺는 시간" in summary
+
+
+def test_flow_command_short_prompt_and_fast_tier_count_their_own_dollars(tmp_path):
+    """짧은 지시는 분야 목록 없이 묻고, fast 방식만 처리 등급을 청하며 값을 2배로 센다. 응답이 알린 등급을 남긴다."""
+    write_data(tmp_path)
+    base = ["flow", "--name", "흐름", "--models", "fake", "--db", str(tmp_path / "db"), "--pool", str(tmp_path / "pool.jsonl"),
+            "--chunks", str(tmp_path / "chunks.jsonl"), "--translations", str(tmp_path / "ko.jsonl"),
+            "--questions", str(tmp_path / "q.jsonl"), "--results", str(tmp_path / "results"), "--rounds", "1", "--note", "시험",
+            "--yes", "--ways", "짧은 지시 3번", "짧은 지시 3번 fast"]
+    chats = []
+
+    def make_chat(model, effort, tier):
+        chats.append(SameChat("bevel", tier))
+        return chats[-1]
+
+    assert main(base, now=datetime(2026, 10, 30, 12, 0), make_chat=make_chat, make_embedder=lambda _: FakeEmbedder()) == 0
+    assert sorted(chat.tier or "" for chat in chats) == ["", "", "", "fast", "fast", "fast"]
+    assert all("분야 목록" not in prompt and '"query"' in prompt for chat in chats for prompt in chat.prompts)
+    about = json.loads((tmp_path / "results" / "20261030" / "120000_흐름" / "설정.json").read_text(encoding="utf-8"))
+    normal, fast = about["유료"]["gpt-6-luna 짧은 지시 3번"], about["유료"]["gpt-6-luna 짧은 지시 3번 fast"]
+    assert normal["입력"] == fast["입력"] == 100 * 2 * 3  # 질문 2 × 3번
+    assert fast["달러"] == pytest.approx(2 * normal["달러"]) and fast["처리 등급"] == {"fast": 6}
+    assert about["방식"]["짧은 지시 3번 fast"] == {"지시 종류": "short", "동시 호출": 3, "처리 등급": "fast"}
 
 
 def test_full_pool_writes_every_chunk_and_moves_helper_vectors_without_calls(tmp_path):
