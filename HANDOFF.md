@@ -39,10 +39,10 @@
 | 설명서 벡터(115MB) | `data/vectors/manual_text-embedding-3-large.npz` + `.json` | 드라이브로 옮기거나 `python -m blender_tutor.manual_vectors build --yes`(약 $0.13, 1분) |
 | 연습 과정 벡터 | `data/vectors/courses_text-embedding-3-large.npz` | 없으면 도우미가 켤 때 자동으로 만든다 |
 | 검색 비교 질문·묶음·DB | `data/search_compare/` | **아직 드라이브 백업 전**. 다른 PC로 가기 전에 백업 |
-| 검색 비교 결과 | `results/20261029_search_compare/` (요약표는 `docs/실험결과/`에 커밋) | 원본은 백업 대상 |
+| 검색 비교 결과 | `results/20261029/125835_search_compare/` (요약표는 `docs/실험결과/`에 커밋) | 원본은 백업 대상 |
 | BGE-M3 모델 | `C:\Users\201\.cache\huggingface\hub\models--BAAI--bge-m3` | 비교 프로그램에만 필요(`pip install -e ".[dev,compare]"`) |
 | 새 로컬 후보 3개 | `data/models/<모델>/<버전>/`(약 1.98GB, 버전·다운로드 기록 포함) | 백업 전. `python -m blender_tutor.local_embeddings prepare --model <이름>`으로 다시 받을 수 있다. EmbeddingGemma는 해당 PC에서 약관 동의한 계정으로 인증 필요. 인증 파일은 공유하지 않는다 |
-| 로컬 측정 원본·통합 비교표 | `results/20261029_local_*` | 백업 전. 핵심 요약만 `docs/실험결과/20261029_local_embedding_요약.md`에 커밋. 원본 제외 사유·300행 자료 검증·코드 해시는 `results/20261029_local_embedding_report/` |
+| 로컬 측정 원본·통합 비교표 | `results/20261029/*_local_*` | 백업 전. 핵심 요약만 `docs/실험결과/20261029_local_embedding_요약.md`에 커밋. 원본 제외 사유·300행 자료 검증·코드 해시는 `results/20261029/173520_local_embedding_report/` |
 
 ## 추천 스킬과 참고
 

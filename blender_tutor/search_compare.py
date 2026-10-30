@@ -524,7 +524,8 @@ def main(
     if costs and not args.yes:
         print("\n".join([*costs, "유료 모델이 있어 멈춥니다. 비용을 확인받은 뒤 --yes를 붙여 주세요."]), file=sys.stderr)
         return 2
-    folder = args.results / f"{now or datetime.now():%Y%m%d-%H%M}_{args.name}" if args.command == "run" else None
+    now = now or datetime.now()
+    folder = args.results / f"{now:%Y%m%d}" / f"{now:%H%M%S}_{args.name}" if args.command == "run" else None
     if folder and folder.exists():  # 측정이 끝난 뒤 폴더를 만든다(도중에 멈추면 빈 폴더가 다시 돌리기를 막지 않게)
         print(f"{folder}가 이미 있어 멈춥니다(결과는 덮어쓰지 않음). 다른 --name을 주세요.", file=sys.stderr)
         return 1

@@ -1,4 +1,4 @@
-> 원본: `results/20261029_search_compare/요약.md`(커밋하지 않는 결과 폴더). 강의실 PC, 커밋 `8bfa299`, 2026-10-29 실행. 판단과 사용자 선택은 HISTORY [102].
+> 원본: `results/20261029/125835_search_compare/요약.md`(커밋하지 않는 결과 폴더). 강의실 PC, 커밋 `8bfa299`, 2026-10-29 실행. 판단과 사용자 선택은 HISTORY [102].
 
 # search_compare
 

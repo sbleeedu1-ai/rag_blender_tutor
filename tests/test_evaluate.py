@@ -298,7 +298,7 @@ def run_options(tmp_path, *more):
 
 def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약을_쓴다(tmp_path):
     assert main(["run", *run_options(tmp_path, "--name", "기준", "--reasoning", "low", "--recent", "5")], now=datetime(2026, 10, 26, 9, 5)) == 0
-    folder = tmp_path / "results" / "20261026-0905_기준"
+    folder = tmp_path / "results" / "20261026" / "090500_기준"
     settings = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     assert settings["engine"] == "stand_in" and settings["임베딩"] == "stand_in" and settings["리랭커"] == "끔"
     # 어느 코드로 잰 결과인지(홀드아웃은 동결한 커밋 번호를 적는다). 커밋 안 한 변경이 있으면 뒤에 표시가 붙는다
@@ -319,10 +319,10 @@ def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약
 def test_같은_날_같은_이름으로_다시_돌리면_덮어쓰지_않고_멈춘다(tmp_path, capsys):
     arguments = ["run", *run_options(tmp_path, "--name", "기준")]
     main(arguments, now=datetime(2026, 10, 26, 9, 5))
-    before = (tmp_path / "results" / "20261026-0905_기준" / "답.jsonl").read_text(encoding="utf-8")
+    before = (tmp_path / "results" / "20261026" / "090500_기준" / "답.jsonl").read_text(encoding="utf-8")
     assert main(arguments, now=datetime(2026, 10, 26, 9, 5)) == 1
-    assert "20261026-0905_기준" in capsys.readouterr().err
-    assert (tmp_path / "results" / "20261026-0905_기준" / "답.jsonl").read_text(encoding="utf-8") == before
+    assert "090500_기준" in capsys.readouterr().err
+    assert (tmp_path / "results" / "20261026" / "090500_기준" / "답.jsonl").read_text(encoding="utf-8") == before
 
 
 def test_아직_없는_리랭커나_임베딩은_고를_수_없다(tmp_path):
@@ -338,7 +338,7 @@ def test_times는_시간_기록_파일에서_통계를_써_둔다(tmp_path):
         line("게임 엔진", 200.0, 202.5, 206.0),
     ]) + "\n", encoding="utf-8")
     assert main(["times", *options(tmp_path, "--name", "시간", "--timings", str(timings))], now=datetime(2026, 10, 26, 9, 5)) == 0
-    report = (tmp_path / "results" / "20261026-0905_시간" / "시간.md").read_text(encoding="utf-8")
+    report = (tmp_path / "results" / "20261026" / "090500_시간" / "시간.md").read_text(encoding="utf-8")
     assert "| 답 끝(보냄 → 답 끝) | 2 | 5.00 | 6.00 |" in report
     assert "잰 것: 프로그램" in report
     assert "| 창 뜨기(F10 → 입력 가능) | 1 | 0.30 | 0.30 |" in report

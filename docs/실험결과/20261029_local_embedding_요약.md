@@ -1,6 +1,6 @@
 # 로컬 임베딩 후보 비교
 
-2026-10-29 · Codex · 강의실 PC. 원본: `results/20261029_local_embedding_report/`(Git 제외). 티켓 41, HISTORY [111].
+2026-10-29 · Codex · 강의실 PC. 원본: `results/20261029/173520_local_embedding_report/`(Git 제외). 티켓 41, HISTORY [111].
 
 현재 상위 6개 기준으로 EmbeddingGemma를 다음 확인 후보로 권한다. 근거 적중률은 70%(OpenAI 67.5%), 검색 중앙값은 0.151초(OpenAI 0.213초)다. 20문항에서의 2.5%p 차이이며, 일반적인 우열이나 설명서 전체 성능으로 확정하지 않는다. granite는 빠르지만 적중률 50%, e5-small은 35%였다. 세 모델의 현재 PyTorch 실행은 라이브러리 포함 불러오기 10.9-13.1초로 조사 문서의 잠정 목표 5-8초보다 길다.
 
@@ -157,10 +157,10 @@
 
 ## 원본
 
-- `results/20261029_search_compare`
-- `results/20261029_local_granite_idle`
-- `results/20261029_local_e5_first`
-- `results/20261029_local_gemma_first`
+- `results/20261029/125835_search_compare`
+- `results/20261029/172651_local_granite_idle`
+- `results/20261029/172817_local_e5_first`
+- `results/20261029/173116_local_gemma_first`
 
 ## 모델 입력 형식 근거
 

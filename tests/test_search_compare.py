@@ -229,7 +229,7 @@ def test_main_writes_new_result_folder_and_never_overwrites(tmp_path):
         return main(run_args(tmp_path), now=datetime(2026, 10, 29, 9, 5), make_embedder=make, load_names=lambda: FakeNames())
 
     assert run() == 0
-    folder = tmp_path / "results" / "20261029-0905_t"
+    folder = tmp_path / "results" / "20261029" / "090500_t"
     about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     assert about["메모"] == "시험" and len(about["조건"]) == 9
     assert len((folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()) == 2 * 9
@@ -264,7 +264,7 @@ def test_original_only_uses_document_encoder_and_keeps_all_time_samples(tmp_path
     embedder = SplitEmbedder()
     args = run_args(tmp_path, "--original-only", "--rounds", "3")
     assert main(args, make_embedder=lambda _: embedder, load_names=lambda: FakeNames()) == 0
-    folder = next((tmp_path / "results").iterdir())
+    folder = next((tmp_path / "results").glob("*/*"))
     about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     rows = [json.loads(line) for line in (folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()]
     assert len(about["조건"]) == 1 and about["조건"][0] == "fake / 원문만 / BM25 끔"
@@ -279,7 +279,7 @@ def test_no_menu_names_searches_the_question_as_is(tmp_path):
     embedder = FakeEmbedder()
     assert main(run_args(tmp_path, "--original-only", "--menu-names", "off"), make_embedder=lambda _: embedder,
                 load_names=lambda: FakeNames()) == 0
-    folder = next((tmp_path / "results").iterdir())
+    folder = next((tmp_path / "results").glob("*/*"))
     about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     rows = [json.loads(line) for line in (folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()]
     assert about["메뉴 이름 덧붙이기"] == "off"
