@@ -20,7 +20,9 @@ from blender_tutor.search_compare import (
     Condition,
     PoolChunk,
     Question,
+    TRANSLATE_PROMPT,
     Searcher,
+    fuse_rounds,
     rewrite,
     sounds_alike,
     Text,
@@ -419,3 +421,42 @@ def test_rewrite_command_needs_yes_and_run_uses_its_queries_and_areas(tmp_path):
     without = ["run", "--name", "u", "--models", "fake", "--db", str(tmp_path / "db"), *base, "--original-only", "--scopes", "asked"]
     with pytest.raises(SystemExit):  # --rewrites 없이 질문 분야 범위는 못 씀
         main(without, make_embedder=lambda _: embedder, load_names=lambda: FakeNames())
+
+
+def test_fuse_rounds_ranks_chunks_found_high_in_more_rounds_first():
+    """회차 하나에서만 1위인 청크보다, 세 회차 모두 2위인 청크가 앞선다."""
+    def row(round_number, ranked, seconds):
+        return {"회차": round_number, "질문": "Q1", "조건": "c", "원래 질문": "q", "검색어": f"s{round_number}",
+                "시간": {"전체": seconds}, "결과": ranked}
+
+    fused = fuse_rounds([row(2, ["b", "x"], 3.0), row(1, ["a", "x"], 1.0), row(3, ["c", "x"], 2.0)])
+    assert len(fused) == 1
+    assert fused[0]["결과"][0] == "x" and fused[0]["결과"][1:] == ["a", "b", "c"]  # 같은 점수는 회차 차례
+    assert fused[0]["조건"] == "c / 3회차 합침" and fused[0]["검색어"] == ["s1", "s2", "s3"]
+    assert fused[0]["회차"] == 1 and fused[0]["시간"]["전체"] == 3.0  # 동시에 보냈다고 보고 가장 느린 회차
+
+
+def test_translate_prompt_asks_only_for_query_without_area_list():
+    chat = FakeChat([json.dumps({"query": "How do I move the origin?"})])
+    rows = rewrite(questions()[:1], chat, ["bevel", "set"], rounds=1, clock=Clock(), template=TRANSLATE_PROMPT)
+    assert rows[0]["검색어"] == "How do I move the origin?" and rows[0]["분야"] == [] and rows[0]["뺄 분야"] == []
+    assert "bevel" not in chat.asked[0][0]["content"]  # 분야 목록을 넣지 않는다
+
+
+def test_fuse_command_scores_fused_rows_next_to_original_conditions(tmp_path):
+    write_data(tmp_path)
+    base = ["--pool", str(tmp_path / "pool.jsonl"), "--chunks", str(tmp_path / "chunks.jsonl"),
+            "--translations", str(tmp_path / "ko.jsonl"), "--questions", str(tmp_path / "q.jsonl"),
+            "--results", str(tmp_path / "results"), "--rounds", "2", "--note", "시험"]
+    embedder = FakeEmbedder()
+    run = ["run", "--name", "t", "--models", "fake", "--db", str(tmp_path / "db"), *base, "--original-only"]
+    assert main(run, now=datetime(2026, 10, 30, 11, 0), make_embedder=lambda _: embedder, load_names=lambda: FakeNames()) == 0
+    runs = tmp_path / "results" / "20261030" / "110000_t"
+    assert main(["fuse", "--name", "f", "--runs", str(runs), *base], now=datetime(2026, 10, 30, 11, 1)) == 0
+    folder = tmp_path / "results" / "20261030" / "110100_f"
+    rows = [json.loads(line) for line in (folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert {row["조건"] for row in rows} == {"fake / 원문만 / BM25 끔 / 2회차 합침"} and len(rows) == 2
+    about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    assert about["조건"] == ["fake / 원문만 / BM25 끔", "fake / 원문만 / BM25 끔 / 2회차 합침"] and about["합친 run"] == str(runs)
+    assert "2회차 합침" in (folder / "요약.md").read_text(encoding="utf-8")
+    assert main(["fuse", "--name", "f", "--runs", str(runs), *base], now=datetime(2026, 10, 30, 11, 1)) == 1  # 덮어쓰지 않음
