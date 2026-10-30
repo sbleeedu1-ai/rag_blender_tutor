@@ -271,6 +271,20 @@ def test_original_only_uses_document_encoder_and_keeps_all_time_samples(tmp_path
     assert len(rows) == 6 and {row["회차"] for row in rows} == {1, 2, 3}
 
 
+def test_no_menu_names_searches_the_question_as_is(tmp_path):
+    """--no-menu-names면 '오리진' 질문에도 Origin을 붙이지 않고, 설정에 꺼진 것을 남긴다."""
+    write_data(tmp_path)
+    embedder = FakeEmbedder()
+    assert main(run_args(tmp_path, "--original-only", "--no-menu-names"), make_embedder=lambda _: embedder,
+                load_names=lambda: FakeNames()) == 0
+    folder = next((tmp_path / "results").iterdir())
+    about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    rows = [json.loads(line) for line in (folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert about["메뉴 이름 덧붙이기"] is False
+    assert any("오리진" in row["원래 질문"] for row in rows)  # 켜 두었다면 Origin이 붙었을 질문
+    assert all(row["검색어"] == row["원래 질문"] for row in rows)
+
+
 def test_cache_separates_model_revisions_and_prompts(tmp_path):
     embedder = FakeEmbedder()
     embedder.cache_identity = {"revision": "v1", "document": "passage: "}

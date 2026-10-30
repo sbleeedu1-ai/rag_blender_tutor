@@ -308,6 +308,13 @@ class Names:
     def english_in(self, text: str) -> tuple[str, ...]: ...
 
 
+class NoNames:
+    """메뉴 이름을 덧붙이지 않을 때(--no-menu-names): 원래 질문 그대로 검색한다."""
+
+    def english_in(self, text: str) -> tuple[str, ...]:
+        return ()
+
+
 def query_of(question: str, names: Names) -> str:
     """실제 검색어: 질문 뒤에 사전으로 찾은 영어 메뉴 이름을 덧붙인다(도우미의 검색어 첫 줄과 같음)."""
     return " ".join((question, *names.english_in(question)))
@@ -450,14 +457,13 @@ def main(
     for command in (build_command, run_command):
         command.add_argument("--db", type=Path, default=COMPARE / "db", help="검색용 DB 폴더")
         command.add_argument("--yes", action="store_true", help="어림 비용을 보고 확인받았다(유료 모델에 필요)")
-        command.add_argument("--original-only", action="store_true", help="영어 원문만·BM25 끔 한 조건으로 비교한다(가벼운 로컬 후보 실험)")
+        command.add_argument("--original-only", action="store_true", help="영어 원문만·BM25 끔 한 조건으로 비교한다(로컬 후보·메뉴 이름 덧붙이기 비교)")
     run_command.add_argument("--name", required=True, help="결과 폴더 이름(results/<날짜>_<이름>)")
     run_command.add_argument("--results", type=Path, default=PROJECT / "results", help="결과를 쓸 폴더")
     run_command.add_argument("--seed", type=int, default=SEED, help="조건 순서를 섞는 씨앗")
     run_command.add_argument("--note", required=True, help="측정 환경(PC·Blender에 연 파일·함께 켠 프로그램)")
+    run_command.add_argument("--no-menu-names", action="store_true", help="질문에 영어 메뉴 이름을 덧붙이지 않는다(덧붙이기 효과 비교)")
     args = parser.parse_args(argv)
-    if getattr(args, "original_only", False) and any(model in PRICE_PER_MILLION for model in args.models):
-        parser.error("--original-only는 무료 로컬 모델 비교에만 씁니다. 유료 기준선은 기존 결과를 이용해 주세요.")
 
     translations = reviewed(args.translations)
     pool = load_pool(args.pool, args.chunks, translations)
@@ -483,7 +489,7 @@ def main(
 
     chosen = [Condition(model, Text.ORIGINAL, Bm25.OFF) for model in args.models] if args.original_only else conditions(args.models)
     started = datetime.now().isoformat(timespec="seconds")
-    measured = measure(questions, chosen, Searcher(pool, indexes), embedders, load_names(), args.rounds, args.seed)
+    measured = measure(questions, chosen, Searcher(pool, indexes), embedders, NoNames() if args.no_menu_names else load_names(), args.rounds, args.seed)
     paid = {
         model: {"토큰": embedder.tokens, "요청": embedder.requests,
                 "달러": round(embedder.tokens / 1_000_000 * PRICE_PER_MILLION[model], 6)}
@@ -498,7 +504,7 @@ def main(
         "DB": [record for index in indexes.values() for record in index.records],
         "모델 불러오기 초": {model: embedder.load_seconds for model, embedder in embedders.items() if hasattr(embedder, "load_seconds")},
         "로컬 모델 설정": {model: embedder.metadata for model, embedder in embedders.items() if hasattr(embedder, "metadata")},
-        "준비 운동": measured.warmups, "유료": paid, "메모": args.note,
+        "준비 운동": measured.warmups, "메뉴 이름 덧붙이기": not args.no_menu_names, "유료": paid, "메모": args.note,
         "pc": platform.node(), "운영체제": platform.platform(), "프로세서": platform.processor(),
         "시작 시각": started, "커밋": _commit(),
     }
