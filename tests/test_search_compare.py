@@ -22,6 +22,7 @@ from blender_tutor.search_compare import (
     Question,
     TRANSLATE_PROMPT,
     Searcher,
+    flow,
     fuse_rounds,
     rewrite,
     sounds_alike,
@@ -460,3 +461,50 @@ def test_fuse_command_scores_fused_rows_next_to_original_conditions(tmp_path):
     assert about["조건"] == ["fake / 원문만 / BM25 끔", "fake / 원문만 / BM25 끔 / 2회차 합침"] and about["합친 run"] == str(runs)
     assert "2회차 합침" in (folder / "요약.md").read_text(encoding="utf-8")
     assert main(["fuse", "--name", "f", "--runs", str(runs), *base], now=datetime(2026, 10, 30, 11, 1)) == 1  # 덮어쓰지 않음
+
+
+class SameChat:
+    """늘 같은 검색어를 내는 질문 바꾸기 모델(흐름 시험용). 여러 개를 두어 동시에 부른다."""
+
+    def __init__(self, query):
+        self.query, self.input_tokens, self.output_tokens = query, 0, 0
+
+    def ask(self, messages):
+        self.input_tokens += 100
+        self.output_tokens += 10
+        return json.dumps({"query": self.query, "areas": [], "exclude": []})
+
+
+def test_flow_asks_once_or_three_times_and_merges_three_rankings(tmp_path):
+    """한 번 바꾸기는 첫 모델의 검색어만, 3번 합치기는 세 검색어의 순위를 RRF로 합친다(둘이 merge면 merge가 1위)."""
+    embedder = FakeEmbedder()
+    searcher = Searcher(POOL, {"fake": build_index(POOL, "fake", embedder, tmp_path, original_only=True)})
+    chats = [SameChat("origin"), SameChat("merge"), SameChat("merge")]
+    rows = flow(questions(), chats, embedder, searcher, Condition("fake", Text.ORIGINAL, Bm25.OFF), "지시", [], rounds=2, clock=Clock())
+    assert len(rows) == 2 * 2 * 2  # 회차 2 × 질문 2 × 방식 2
+    once = next(row for row in rows if row["조건"] == "흐름 / 한 번 바꾸기")
+    three = next(row for row in rows if row["조건"] == "흐름 / 3번 합치기")
+    assert once["검색어"] == ["origin"] and once["결과"][0] == "set.html#origin/1"
+    assert three["검색어"] == ["origin", "merge", "merge"] and three["결과"][0] == "merge.html#merge/1"
+    assert set(once["시간"]) == {"질문 바꾸기", "임베딩", "검색", "합치기", "전체"}
+    assert embedder.texts[-3:] in (["origin", "merge", "merge"], ["origin"])  # 검색어 여럿을 임베딩 한 번에 보낸다
+
+
+def test_flow_command_needs_yes_and_writes_stage_times(tmp_path):
+    write_data(tmp_path)
+    base = ["flow", "--name", "흐름", "--models", "fake", "--db", str(tmp_path / "db"), "--pool", str(tmp_path / "pool.jsonl"),
+            "--chunks", str(tmp_path / "chunks.jsonl"), "--translations", str(tmp_path / "ko.jsonl"),
+            "--questions", str(tmp_path / "q.jsonl"), "--results", str(tmp_path / "results"), "--rounds", "1", "--note", "시험"]
+    chats = []
+
+    def make_chat(model, effort):
+        chats.append(SameChat("bevel"))
+        return chats[-1]
+
+    assert main(base, make_chat=make_chat, make_embedder=lambda _: FakeEmbedder()) == 2 and chats == []  # 유료라 멈춤
+    assert main([*base, "--yes"], now=datetime(2026, 10, 30, 12, 0), make_chat=make_chat, make_embedder=lambda _: FakeEmbedder()) == 0
+    folder = tmp_path / "results" / "20261030" / "120000_흐름"
+    about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    assert about["조건"] == ["흐름 / 한 번 바꾸기", "흐름 / 3번 합치기"] and set(about["단계별 시간"]) == {"한 번 바꾸기", "3번 합치기"}
+    assert about["유료"]["gpt-6-luna"]["입력"] == 100 * 2 * 4  # 질문 2 × (1 + 3)번
+    assert "단계별 시간" in (folder / "요약.md").read_text(encoding="utf-8")
