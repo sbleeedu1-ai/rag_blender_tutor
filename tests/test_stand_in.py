@@ -90,11 +90,23 @@ def test_진짜_임베딩을_고르면_만들어_둔_설명서_벡터를_읽고_
     made = []
     monkeypatch.setattr(stand_in, "openai_key", lambda: "가짜 키")
     monkeypatch.setattr(manual_vectors, "OpenAIEmbedder", lambda model, key: made.append(QuestionEmbedder(model, key)) or made[-1])
+    rewriters = []
+
+    class Rewriter:  # luna 대신(돈이 드는 호출 없음)
+        def __init__(self, model, key, effort, timeout):
+            self.settings = (model, effort, timeout)
+            rewriters.append(self)
+
+        def ask(self, messages):
+            return '{"query": "bevel width"}'
+
+    monkeypatch.setattr(stand_in, "OpenAIModel", Rewriter)
     engine = build_engine(tmp_path, model=StandInModel(0, 0, sleep=lambda _: None), embedding="text-embedding-3-large")
     events = list(engine.answer("베벨 너비", WorkState.from_json(EDITING), []))
     assert events[-1].sources[0].path == "Bevel > Options"  # 낱말이 하나도 안 겹쳐도 벡터로 찾는다
-    assert len(made[0].texts) == 1 and made[0].texts[0].startswith("베벨 너비")  # 검색어 하나만, 설명서는 다시 임베딩하지 않는다
-    assert engine.name == "text-embedding-3-large+stand_in"
+    assert made[0].texts == ["bevel width"]  # 바꾼 검색어 하나만, 설명서는 다시 임베딩하지 않는다
+    assert [rewriter.settings for rewriter in rewriters] == [("gpt-6-luna", "none", 5.0)] * 3
+    assert engine.name == "text-embedding-3-large+gpt-6-luna×3+stand_in"
 
 
 def test_진짜_임베딩인데_설명서_벡터_파일이_없으면_FileNotFoundError(tmp_path):

@@ -222,8 +222,9 @@ class OpenAIModel:
 
     URL = "https://api.openai.com/v1/chat/completions"
 
-    def __init__(self, model: str, key: str, effort: str | None = None, timeout: float = 120, tier: str | None = None):
-        self.model, self.key, self.effort, self.timeout, self.tier = model, key, effort, timeout, tier
+    def __init__(self, model: str, key: str, effort: str | None = None, timeout: float = 120, tier: str | None = None, url: str = URL):
+        """url을 바꾸면 OpenAI 방식 채팅 주소를 가진 다른 곳(로컬 llama-server 등, 티켓 42)에 묻는다."""
+        self.model, self.key, self.effort, self.timeout, self.tier, self.url = model, key, effort, timeout, tier, url
         self.input_tokens = self.output_tokens = self.reasoning_tokens = self.requests = 0
         self.tiers: Counter[str] = Counter()  # 응답이 알린 처리 등급별 수(fast를 청해도 몰리면 default로 내려간다)
 
@@ -234,7 +235,7 @@ class OpenAIModel:
         if self.tier:  # 처리 등급. "fast"는 값이 2배이고 더 빠르다(티켓 43)
             body["service_tier"] = self.tier
         request = urllib.request.Request(
-            self.URL, json.dumps(body).encode("utf-8"),
+            self.url, json.dumps(body).encode("utf-8"),
             {"Authorization": f"Bearer {self.key}", "Content-Type": "application/json"},
         )
         with urllib.request.urlopen(request, timeout=self.timeout) as response:

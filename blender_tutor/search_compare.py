@@ -33,7 +33,7 @@ from pathlib import Path
 import numpy as np
 from rank_bm25 import BM25Okapi
 
-from blender_tutor.answer_engine import RRF_DEPTH, RRF_K, Embedder, _normalized
+from blender_tutor.answer_engine import REWRITE_PROMPT, RRF_DEPTH, RRF_K, Embedder, _normalized, area_of
 from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.evaluate import _commit
 from blender_tutor import manual_vectors
@@ -81,13 +81,6 @@ class Scope(StrEnum):
     BEGINNER = "초보자 범위만"  # data/beginner_scope/scope.jsonl의 include 쪽(질문과 상관없이 고정)
 
 
-BIG_FIELDS = ("modeling", "render", "editors")  # 너무 커서 한 단계 더 나눠 고르는 분야(modeling만 설명서의 30%)
-
-
-def area_of(page_path: str) -> str:
-    """질문 분야 고르기의 단위: 큰 세 분야는 둘째 폴더까지(modeling/modifiers), 나머지는 분야(physics)."""
-    parts = page_path.split("/")
-    return "/".join(parts[:2]) if parts[0] in BIG_FIELDS and len(parts) > 1 else parts[0]
 
 
 @dataclass(frozen=True)
@@ -411,15 +404,6 @@ def query_of(question: str, names: Names) -> str:
     return " ".join((question, *names.english_in(question)))
 
 
-REWRITE_PROMPT = """너는 Blender 5.2 공식 설명서(영어)를 찾을 검색어와 분야를 고른다.
-사용자는 Blender를 처음 쓰는 사람이고, 기능 이름 대신 겪은 증상이나 하고 싶은 일을 한국어로 말한다.
-질문에 답하지 말고, 답이 있을 설명서 쪽을 찾기 위한 것만 낸다.
-- query: 영어 검색어 하나. 필요할 것 같은 Blender 기능·도구·모디파이어·메뉴·옵션의 공식 영어 이름과 질문의 핵심 상황을 짧은 영어로, 30낱말 이하.
-- areas: 답이 있을 가능성이 큰 설명서 분야 1-3개(아래 목록 이름 그대로).
-- exclude: 이 질문과 확실히 관계없는 분야(아래 목록 이름 그대로). 조금이라도 관계있을 수 있으면 넣지 않는다.
-설명서 분야 목록(폴더 이름):
-{areas}
-JSON으로만 답한다: {{"query": "...", "areas": ["..."], "exclude": ["..."]}}"""
 # 번역만(HISTORY [118]·[120]): 질문 바꾸기의 효과가 영어로 옮긴 데서 왔는지, 기능 이름을 찾아 붙인 데서 왔는지 가른다.
 TRANSLATE_PROMPT = """너는 한국어 질문을 영어로 옮긴다.
 질문에 답하지 말고, 질문을 뜻 그대로 자연스러운 영어 한 문장(또는 두 문장)으로 옮기기만 한다.
