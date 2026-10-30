@@ -23,7 +23,7 @@ import time
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from enum import StrEnum
 from itertools import product
 from pathlib import Path
@@ -437,7 +437,7 @@ def _load_names() -> MenuNames:
 
 
 def main(
-    argv: Sequence[str] | None = None, today: date | None = None,
+    argv: Sequence[str] | None = None, now: datetime | None = None,
     make_embedder: Callable[[str], Embedder] = _real_embedder, load_names: Callable[[], Names] = _load_names,
 ) -> int:
     """명령 줄 입구. 돌려주는 값은 종료 코드(0 성공, 1 결과 폴더가 이미 있음, 2 유료 실행에 --yes가 없음)."""
@@ -475,7 +475,7 @@ def main(
     if costs and not args.yes:
         print("\n".join([*costs, "유료 모델이 있어 멈춥니다. 비용을 확인받은 뒤 --yes를 붙여 주세요."]), file=sys.stderr)
         return 2
-    folder = args.results / f"{today or date.today():%Y%m%d}_{args.name}" if args.command == "run" else None
+    folder = args.results / f"{now or datetime.now():%Y%m%d-%H%M}_{args.name}" if args.command == "run" else None
     if folder and folder.exists():  # 측정이 끝난 뒤 폴더를 만든다(도중에 멈추면 빈 폴더가 다시 돌리기를 막지 않게)
         print(f"{folder}가 이미 있어 멈춥니다(결과는 덮어쓰지 않음). 다른 --name을 주세요.", file=sys.stderr)
         return 1

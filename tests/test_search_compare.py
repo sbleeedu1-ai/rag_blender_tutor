@@ -4,7 +4,7 @@
 """
 
 import json
-from datetime import date
+from datetime import datetime
 
 import numpy as np
 import pytest
@@ -224,10 +224,10 @@ def test_main_writes_new_result_folder_and_never_overwrites(tmp_path):
         return made[-1]
 
     def run():
-        return main(run_args(tmp_path), today=date(2026, 10, 29), make_embedder=make, load_names=lambda: FakeNames())
+        return main(run_args(tmp_path), now=datetime(2026, 10, 29, 9, 5), make_embedder=make, load_names=lambda: FakeNames())
 
     assert run() == 0
-    folder = tmp_path / "results" / "20261029_t"
+    folder = tmp_path / "results" / "20261029-0905_t"
     about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     assert about["메모"] == "시험" and len(about["조건"]) == 9
     assert len((folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()) == 2 * 9

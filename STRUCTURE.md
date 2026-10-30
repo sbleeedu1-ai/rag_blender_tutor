@@ -110,9 +110,9 @@
 | 자료 만들기 | `blender_tutor/menu_review.py` | 메뉴 이름 검수 초안: 초보자 범위 안 "번역 여러 개"·"제목에서만" 이름을 Blender가 실제로 쓰는 문맥과 맞대 자동/갈림/못 찾음으로 나눔(`data/menu_names/scope_review.json`, 한 번 돌림) | 31 |
 | 자료 만들기 | `blender_tutor/blender_ui_labels.py` | Blender 안에서 돈다(`menu_review`가 화면 없이 띄움): 조작·속성·고르는 값·메뉴·패널 이름과 화면 파이썬 코드의 `text=`가 쓰는 번역 문맥을 모두 뽑음(`data/menu_names/ui_labels.json`). 조작 단추 글자는 조작 문맥, C 코드 메뉴 4개는 손으로 적음 | 31 |
 | 자료 만들기 | `blender_tutor/beginner_scope.py` | 설명서 쪽을 초보자 범위로 나눔(한 번 돌림, 손으로). `fixed`: 바로 넣는 쪽, `estimate`: 비용 어림, `classify`: 모델에게 물음(유료), `merge`: 분류 파일들 → 최종 범위. 모양은 6절 아래 | 30 |
-| 평가 | `blender_tutor/evaluate.py` | 평가 프로그램(도우미 밖에서 손으로 돌림). `run`: 문항 파일 → 답 엔진에 바로 넣어 답·검색 결과·검색 적중. `times`: 시간 기록 → PC·엔진·설정 묶음마다 중앙값·최대값. 결과는 `results/<날짜>_<이름>/`에 새로(있으면 멈춤). 모양은 6절 아래 | 29 |
+| 평가 | `blender_tutor/evaluate.py` | 평가 프로그램(도우미 밖에서 손으로 돌림). `run`: 문항 파일 → 답 엔진에 바로 넣어 답·검색 결과·검색 적중. `times`: 시간 기록 → PC·엔진·설정 묶음마다 중앙값·최대값. 결과는 `results/<날짜>-<시각>_<이름>/`에 새로(있으면 멈춤). 모양은 6절 아래 | 29 |
 | 자료 만들기 + 읽기 | `blender_tutor/manual_vectors.py` | 만들기(손으로 한 번, 유료라 `--yes` 필요): 설명서 전체 청크 영어 원문 → text-embedding-3-large 벡터 → `data/vectors/manual_text-embedding-3-large.npz`(vectors 3,072차원·keys 청크 열쇠·digests 글 해시, 있으면 멈춤) + 같은 이름 .json(실제 토큰·비용). 읽기: `load(파일, 청크)`가 지금 청크와 열쇠·글이 다르면 멈춤. 연습 과정 벡터 `cached`: `data/vectors/courses_<모델>.npz`에 글 해시와 함께 저장, 새로 생기거나 바뀐 글만 임베딩하고 없어진 것은 지움(엔진을 만들 때 부름). OpenAI 임베딩 연결 `OpenAIEmbedder`(응답 없음 → TimeoutError)도 여기 있고 검색 비교가 함께 씀 | 31 |
-| 평가 | `blender_tutor/search_compare.py` | 소규모 검색 비교(손으로 돌림). 같은 질문 20개·200청크 묶음으로 임베딩 모델 2 × 뜻 검색에 넣는 글 3 × BM25 3 = 18조건의 정답 근거 적중(상위 4·6·8개)과 질문 처리 시간을 잰다. 검색용 DB는 `data/search_compare/db/`에 만들고 재사용. 결과는 `results/<날짜>_<이름>/`에 새로(있으면 멈춤). 모양은 6절 아래. 답 엔진은 바꾸지 않는다 | 40 |
+| 평가 | `blender_tutor/search_compare.py` | 소규모 검색 비교(손으로 돌림). 같은 질문 20개·200청크 묶음으로 임베딩 모델 2 × 뜻 검색에 넣는 글 3 × BM25 3 = 18조건의 정답 근거 적중(상위 4·6·8개)과 질문 처리 시간을 잰다. 검색용 DB는 `data/search_compare/db/`에 만들고 재사용. 결과는 `results/<날짜>-<시각>_<이름>/`에 새로(있으면 멈춤). 모양은 6절 아래. 답 엔진은 바꾸지 않는다 | 40 |
 | 평가 | `blender_tutor/local_embeddings.py` | 로컬 후보 3개(granite 97m r2·e5-small·EmbeddingGemma)를 고정한 버전으로 `data/models/`에 준비하고 CPU float32로 실행한다. 다운로드와 모델 불러오기를 분리하며, 질문·문서의 접두어를 구분한다. `search_compare`에 연결되며 도우미의 검색 모델은 바꾸지 않는다 | 41 |
 | 만드는 사람 | `blender_tutor/course_check.py` | 연습 과정 파일 검사. 설명서 자료와 맞댈 때 청크 파일은 답 엔진과 같은 `manual_chunks.load_chunks`로 읽는다 | 15, 24, 31 |
 | 만드는 사람 | `courses/*.yaml` | 연습 과정(검 `sword.yaml`, 공통 준비 `_common.yaml`) | 16 |
@@ -265,8 +265,8 @@ Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_
 ### 평가 프로그램 (티켓 29, 측정할 때 손으로 돌림)
 
 ```
-문항 파일(eval/…/questions.json) + 작업 상태 JSON(Ctrl+F10) ──evaluate run──▶ results/<날짜>_<이름>/ 설정.json · 답.jsonl · 요약.md
-문항 파일 + 시간 기록(%APPDATA%\blender_tutor\timings.jsonl) ──evaluate times──▶ results/<날짜>_<이름>/ 시간.md
+문항 파일(eval/…/questions.json) + 작업 상태 JSON(Ctrl+F10) ──evaluate run──▶ results/<날짜>-<시각>_<이름>/ 설정.json · 답.jsonl · 요약.md
+문항 파일 + 시간 기록(%APPDATA%\blender_tutor\timings.jsonl) ──evaluate times──▶ results/<날짜>-<시각>_<이름>/ 시간.md
 ```
 
 - 실행: `.venv\Scripts\python -m blender_tutor.evaluate run <문항 파일> --name <이름> [--reasoning low] [--recent 5] [--top-k 8] [--bm25] [--embedding text-embedding-3-large]`, `... evaluate times <문항 파일> --name <이름>`. 기본 임베딩은 낱말 세기(무료), `--embedding text-embedding-3-large`는 질문마다 아주 적은 돈이 든다. 답변은 아직 가짜
@@ -294,7 +294,7 @@ Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_
 묶음(data/search_compare/pool/pool_v1.jsonl) + 청크 파일 + 번역(ko_none.jsonl 위에 _fixes 덮어 읽기)
   + 질문(data/search_compare/questions/web·ai_questions.jsonl)
   ──search_compare build-db──▶ data/search_compare/db/<모델>_<original|translation|combined>_<해시>.npz + 같은 이름 .json
-  ──search_compare run──▶ results/<날짜>_<이름>/ 설정.json · 실행.jsonl · 요약.md
+  ──search_compare run──▶ results/<날짜>-<시각>_<이름>/ 설정.json · 실행.jsonl · 요약.md
 ```
 
 - 실행: `.venv\Scripts\python -m blender_tutor.search_compare estimate`(유료 어림, 돈 안 듦), `... build-db [--models bge-m3]`, `... run --name <이름> --note "<PC·Blender에 연 파일·함께 켠 프로그램>" --yes`. 유료 모델(text-embedding-3-large)이 들면 `--yes` 없이는 멈춘다(종료 코드 2). BGE-M3는 `compare` 설치 묶음과 내려받은 모델이 필요하다

@@ -6,7 +6,7 @@
 
 import json
 import re
-from datetime import date
+from datetime import datetime
 
 import pytest
 
@@ -297,8 +297,8 @@ def run_options(tmp_path, *more):
 
 
 def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약을_쓴다(tmp_path):
-    assert main(["run", *run_options(tmp_path, "--name", "기준", "--reasoning", "low", "--recent", "5")], today=date(2026, 10, 26)) == 0
-    folder = tmp_path / "results" / "20261026_기준"
+    assert main(["run", *run_options(tmp_path, "--name", "기준", "--reasoning", "low", "--recent", "5")], now=datetime(2026, 10, 26, 9, 5)) == 0
+    folder = tmp_path / "results" / "20261026-0905_기준"
     settings = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     assert settings["engine"] == "stand_in" and settings["임베딩"] == "stand_in" and settings["리랭커"] == "끔"
     # 어느 코드로 잰 결과인지(홀드아웃은 동결한 커밋 번호를 적는다). 커밋 안 한 변경이 있으면 뒤에 표시가 붙는다
@@ -318,17 +318,17 @@ def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약
 
 def test_같은_날_같은_이름으로_다시_돌리면_덮어쓰지_않고_멈춘다(tmp_path, capsys):
     arguments = ["run", *run_options(tmp_path, "--name", "기준")]
-    main(arguments, today=date(2026, 10, 26))
-    before = (tmp_path / "results" / "20261026_기준" / "답.jsonl").read_text(encoding="utf-8")
-    assert main(arguments, today=date(2026, 10, 26)) == 1
-    assert "20261026_기준" in capsys.readouterr().err
-    assert (tmp_path / "results" / "20261026_기준" / "답.jsonl").read_text(encoding="utf-8") == before
+    main(arguments, now=datetime(2026, 10, 26, 9, 5))
+    before = (tmp_path / "results" / "20261026-0905_기준" / "답.jsonl").read_text(encoding="utf-8")
+    assert main(arguments, now=datetime(2026, 10, 26, 9, 5)) == 1
+    assert "20261026-0905_기준" in capsys.readouterr().err
+    assert (tmp_path / "results" / "20261026-0905_기준" / "답.jsonl").read_text(encoding="utf-8") == before
 
 
 def test_아직_없는_리랭커나_임베딩은_고를_수_없다(tmp_path):
     for more in (["--reranker", "켬"], ["--embedding", "bge-m3"]):
         with pytest.raises(SystemExit):
-            main(["run", *run_options(tmp_path, "--name", "기준", *more)], today=date(2026, 10, 26))
+            main(["run", *run_options(tmp_path, "--name", "기준", *more)], now=datetime(2026, 10, 26, 9, 5))
 
 
 def test_times는_시간_기록_파일에서_통계를_써_둔다(tmp_path):
@@ -337,8 +337,8 @@ def test_times는_시간_기록_파일에서_통계를_써_둔다(tmp_path):
         line("save the blend file", 100.0, 101.5, 104.0, f10=99.0, ready=99.3),
         line("게임 엔진", 200.0, 202.5, 206.0),
     ]) + "\n", encoding="utf-8")
-    assert main(["times", *options(tmp_path, "--name", "시간", "--timings", str(timings))], today=date(2026, 10, 26)) == 0
-    report = (tmp_path / "results" / "20261026_시간" / "시간.md").read_text(encoding="utf-8")
+    assert main(["times", *options(tmp_path, "--name", "시간", "--timings", str(timings))], now=datetime(2026, 10, 26, 9, 5)) == 0
+    report = (tmp_path / "results" / "20261026-0905_시간" / "시간.md").read_text(encoding="utf-8")
     assert "| 답 끝(보냄 → 답 끝) | 2 | 5.00 | 6.00 |" in report
     assert "잰 것: 프로그램" in report
     assert "| 창 뜨기(F10 → 입력 가능) | 1 | 0.30 | 0.30 |" in report
@@ -347,16 +347,16 @@ def test_times는_시간_기록_파일에서_통계를_써_둔다(tmp_path):
 
 def test_엔진을_만들거나_시간_기록을_읽다_실패하면_결과_폴더를_만들지_않는다(tmp_path):
     with pytest.raises(FileNotFoundError):
-        main(["run", *options(tmp_path, "--name", "기준", "--data", str(tmp_path / "없는 폴더"))], today=date(2026, 10, 26))
+        main(["run", *options(tmp_path, "--name", "기준", "--data", str(tmp_path / "없는 폴더"))], now=datetime(2026, 10, 26, 9, 5))
     with pytest.raises(FileNotFoundError):
-        main(["times", *options(tmp_path, "--name", "시간", "--timings", str(tmp_path / "없음.jsonl"))], today=date(2026, 10, 26))
+        main(["times", *options(tmp_path, "--name", "시간", "--timings", str(tmp_path / "없음.jsonl"))], now=datetime(2026, 10, 26, 9, 5))
     assert not (tmp_path / "results").exists()
 
 
 @pytest.mark.parametrize("more", [["--recent", "-1"], ["--top-k", "0"]])
 def test_최근_대화_쌍_수는_0_이상_검색_결과_수는_1_이상만_받는다(tmp_path, more):
     with pytest.raises(SystemExit):
-        main(["run", *run_options(tmp_path, "--name", "기준", *more)], today=date(2026, 10, 26))
+        main(["run", *run_options(tmp_path, "--name", "기준", *more)], now=datetime(2026, 10, 26, 9, 5))
     assert not (tmp_path / "results").exists()
 
 
