@@ -48,19 +48,35 @@ def ask(question):
     return time.perf_counter() - start, got
 
 
-rows = []
-for name, path in MODELS:
-    load_start = time.perf_counter()
-    server = subprocess.Popen([str(SERVER), "-m", str(path), "-t", "4", "-c", "4096", "--port", str(PORT)],
-                              stdout=subprocess.DEVNULL, stderr=open(out / f"{name}_server.log", "w", encoding="utf-8"))
-    while True:
+LOAD_LIMIT = 120  # 초. 큰 모델도 이 안에 뜬다고 본다(강의실 PC E2B 3.1초)
+
+
+def wait_ready(server: subprocess.Popen, log: Path) -> None:
+    """서버가 /health에 답할 때까지 기다린다. 서버가 먼저 끝나거나 한도를 넘으면 로그 위치와 함께 멈춘다."""
+    deadline = time.perf_counter() + LOAD_LIMIT
+    while time.perf_counter() < deadline:
+        if server.poll() is not None:
+            raise RuntimeError(f"llama-server가 뜨지 못하고 끝났습니다(코드 {server.returncode}). {log}를 보세요.")
         try:
             urllib.request.urlopen(f"http://127.0.0.1:{PORT}/health", timeout=2)
-            break
-        except Exception:
+            return
+        except OSError:  # 아직 모델을 읽는 중이면 연결이 거절되거나 503이 온다
             time.sleep(0.5)
-    loaded = time.perf_counter() - load_start
+    raise TimeoutError(f"llama-server가 {LOAD_LIMIT}초 안에 뜨지 않았습니다. {log}를 보세요.")
+
+
+rows = []
+for name, path in MODELS:
+    if not path.exists():
+        raise FileNotFoundError(f"모델 파일이 없습니다: {path} (llm_bench.sh로 먼저 받으세요)")
+    load_start = time.perf_counter()
+    log = out / f"{name}_server.log"
+    with log.open("w", encoding="utf-8") as log_file:
+        server = subprocess.Popen([str(SERVER), "-m", str(path), "-t", "4", "-c", "4096", "--port", str(PORT)],
+                                  stdout=subprocess.DEVNULL, stderr=log_file)
     try:
+        wait_ready(server, log)
+        loaded = time.perf_counter() - load_start
         for order, qid in enumerate(QUESTIONS, start=1):
             seconds, got = ask(questions[qid])
             text = got["choices"][0]["message"]["content"]

@@ -23,6 +23,7 @@ from blender_tutor.search_compare import (
     TRANSLATE_PROMPT,
     Searcher,
     flow,
+    full_pool,
     fuse_rounds,
     rewrite,
     sounds_alike,
@@ -508,3 +509,46 @@ def test_flow_command_needs_yes_and_writes_stage_times(tmp_path):
     assert about["조건"] == ["흐름 / 한 번 바꾸기", "흐름 / 3번 합치기"] and set(about["단계별 시간"]) == {"한 번 바꾸기", "3번 합치기"}
     assert about["유료"]["gpt-6-luna"]["입력"] == 100 * 2 * 4  # 질문 2 × (1 + 3)번
     assert "단계별 시간" in (folder / "요약.md").read_text(encoding="utf-8")
+
+
+def test_rewrite_stops_when_areas_are_not_a_list():
+    """분야를 목록 대신 글자로 주면 한 글자씩 쪼개 '목록 밖'에 넣지 않고 멈춘다."""
+    chat = FakeChat([json.dumps({"query": "bevel", "areas": "modeling", "exclude": []})])
+    with pytest.raises(ValueError, match="분야 칸이 글자 목록이 아닌"):
+        rewrite(questions()[:1], chat, ["modeling"], rounds=1, clock=Clock())
+
+
+def test_flow_command_keeps_rewrite_dollars_with_free_embedder_and_notes_connection_time(tmp_path):
+    write_data(tmp_path)
+    base = ["flow", "--name", "흐름", "--models", "fake", "--db", str(tmp_path / "db"), "--pool", str(tmp_path / "pool.jsonl"),
+            "--chunks", str(tmp_path / "chunks.jsonl"), "--translations", str(tmp_path / "ko.jsonl"),
+            "--questions", str(tmp_path / "q.jsonl"), "--results", str(tmp_path / "results"), "--rounds", "1", "--note", "시험", "--yes"]
+    assert main(base, now=datetime(2026, 10, 30, 12, 0), make_chat=lambda model, effort: SameChat("bevel"),
+                make_embedder=lambda _: FakeEmbedder()) == 0
+    folder = tmp_path / "results" / "20261030" / "120000_흐름"
+    about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    assert set(about["유료"]) == {"gpt-6-luna"} and "달러" in about["유료"]["gpt-6-luna"]  # 무료 임베딩이어도 바꾸기 달러는 남긴다
+    summary = (folder / "요약.md").read_text(encoding="utf-8")
+    assert "3청크·2문항의 작은 실험" in summary and "200청크" not in summary  # 실제 묶음·문항 수로 적는다
+    assert "새로 연결을 맺는 시간" in summary
+
+
+def test_full_pool_writes_every_chunk_and_moves_helper_vectors_without_calls(tmp_path):
+    from blender_tutor import manual_vectors
+    from blender_tutor.manual_chunks import load_chunks
+
+    write_data(tmp_path)
+    chunks_path, vectors_path = tmp_path / "chunks.jsonl", tmp_path / "manual_fake.npz"
+    manual_vectors.build(load_chunks(chunks_path), FakeEmbedder(), vectors_path, "fake")
+    pool_path, db = tmp_path / "pool_full.jsonl", tmp_path / "db"
+    index = full_pool(chunks_path, pool_path, db, "fake", vectors_path)
+    keys = [json.loads(line)["key"] for line in pool_path.read_text(encoding="utf-8").splitlines()]
+    assert keys == ["set.html#origin/1", "bevel.html#bevel/1", "other.html#other/1"]
+    stored = np.load(vectors_path)["vectors"]
+    assert np.allclose(index.original, stored / np.linalg.norm(stored, axis=1, keepdims=True))  # 도우미 벡터 그대로
+    meta = json.loads((db / index.records[0]["파일"].replace(".npz", ".json")).read_text(encoding="utf-8"))
+    assert "새 API 호출 없음" in meta["출처"]
+    assert full_pool(chunks_path, pool_path, db, "fake", vectors_path).records[0]["상태"] == "재사용"  # 다시 해도 같은 파일
+    pool_path.write_text(json.dumps({"key": "set.html#origin/1"}) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="지금 청크와 다릅니다"):
+        full_pool(chunks_path, pool_path, db, "fake", vectors_path)

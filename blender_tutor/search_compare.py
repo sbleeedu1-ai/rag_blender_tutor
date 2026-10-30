@@ -36,7 +36,8 @@ from rank_bm25 import BM25Okapi
 from blender_tutor.answer_engine import RRF_DEPTH, RRF_K, Embedder, _normalized
 from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.evaluate import _commit
-from blender_tutor.manual_chunks import load_chunks
+from blender_tutor import manual_vectors
+from blender_tutor.manual_chunks import Chunk, load_chunks
 from blender_tutor.manual_vectors import PRICE_PER_MILLION, OpenAIEmbedder  # 요금표에 있는 모델만 돈이 든다
 from blender_tutor.menu_names import MenuNames
 from blender_tutor.paths import PROJECT
@@ -451,13 +452,12 @@ def rewrite(questions: Sequence[Question], chat: Chat, areas: Sequence[str], rou
             start = clock()
             answer = chat.ask([{"role": "system", "content": prompt}, {"role": "user", "content": question.question}])
             seconds = clock() - start
-            query = _query_in(answer, f"{question.id} {round_number}회차")
-            got = json.loads(answer)
-            named = [str(name) for key in ("areas", "exclude") for name in got.get(key) or []]
+            got = _parsed(answer, f"{question.id} {round_number}회차")
+            named = got["areas"] + got["exclude"]
             rows.append({
-                "회차": round_number, "질문": question.id, "원래 질문": question.question, "검색어": query,
-                "분야": [name for name in got.get("areas") or [] if name in known],
-                "뺄 분야": [name for name in got.get("exclude") or [] if name in known],
+                "회차": round_number, "질문": question.id, "원래 질문": question.question, "검색어": got["query"],
+                "분야": [name for name in got["areas"] if name in known],
+                "뺄 분야": [name for name in got["exclude"] if name in known],
                 "목록 밖": [name for name in named if name not in known], "초": seconds,
             })
     return rows
@@ -497,7 +497,8 @@ def flow(questions: Sequence[Question], chats: Sequence[Chat], embedder: Embedde
          clock: Callable[[], float] = time.perf_counter) -> list[dict]:
     """도우미에 넣을 흐름 그대로 질문 하나를 처음부터 끝까지 잰다(HISTORY [122]).
     질문 바꾸기 n번을 동시에 부르고 → 검색어 n개를 임베딩 한 번에 보내고 → 검색어마다 찾고 → n이 2 이상이면 RRF로 합친다.
-    방식 순서는 질문마다 섞는다(먼저 부른 쪽만 연결이 데워지는 치우침을 줄이려고). chats는 동시에 부를 만큼 따로 둔다."""
+    방식 순서는 질문마다 섞는다(시간대에 따라 바뀌는 응답 속도가 한 방식에만 몰리지 않게). chats는 동시에 부를 만큼 따로 둔다.
+    OpenAIModel·OpenAIEmbedder는 부를 때마다 새로 연결하므로, 잰 시간에는 연결을 맺는 시간도 들어 있다."""
     prompt = template.format(areas="\n".join(areas))
     shuffler = random.Random(seed)
     rows = []
@@ -511,7 +512,7 @@ def flow(questions: Sequence[Question], chats: Sequence[Chat], embedder: Embedde
                     start = clock()
                     answers = list(pool.map(lambda chat: chat.ask(messages), chats[:count]))
                     asked = clock()
-                    queries = [_query_in(answer, f"{question.id} {round_number}회차") for answer in answers]
+                    queries = [_parsed(answer, f"{question.id} {round_number}회차")["query"] for answer in answers]
                     vectors = embedder.embed(queries, TIMEOUT)
                     embedded = clock()
                     rankings = [searcher.search(condition, query, vector).final for query, vector in zip(queries, vectors)]
@@ -527,12 +528,17 @@ def flow(questions: Sequence[Question], chats: Sequence[Chat], embedder: Embedde
     return rows
 
 
-def _query_in(answer: str, label: str) -> str:
-    """질문 바꾸기 답(JSON)의 검색어. 없으면 멈춘다(빈 검색어로 찾은 결과를 채점하지 않게)."""
-    query = json.loads(answer).get("query")
+def _parsed(answer: str, label: str) -> dict:
+    """질문 바꾸기 답(JSON)을 읽는다. 검색어가 없거나 분야 칸이 글자 목록이 아니면 멈춘다
+    (빈 검색어나 한 글자씩 쪼개진 분야로 찾은 결과를 '못 찾음'으로 채점하지 않게). 분야 칸이 없으면 빈 목록."""
+    got = json.loads(answer)
+    query = got.get("query")
     if not isinstance(query, str) or not query.strip():
         raise ValueError(f"{label}: 검색어가 없는 답 {answer!r}")
-    return query.strip()
+    areas = {key: got.get(key) or [] for key in ("areas", "exclude")}
+    if any(not isinstance(names, list) or not all(isinstance(name, str) for name in names) for names in areas.values()):
+        raise ValueError(f"{label}: 분야 칸이 글자 목록이 아닌 답 {answer!r}")
+    return {"query": query.strip(), **areas}
 
 
 def load_rewrites(path: Path) -> dict[tuple[int, str], dict]:
@@ -686,6 +692,12 @@ def main(
     run_command = commands.add_parser("run", help="질문 × 회차 × 조건을 돌려 결과 폴더에 쓴다")
     rewrite_command = commands.add_parser("rewrite", help="질문을 영어 검색어로 바꿔 결과 폴더에 쓴다(유료, run --queries로 씀)")
     fuse_command = commands.add_parser("fuse", help="run 결과의 회차별 순위를 RRF로 합쳐 다시 채점한다(새 호출 없음)")
+    full_command = commands.add_parser("full-pool", help="설명서 전체 묶음 파일을 쓰고 도우미용 벡터를 DB로 옮긴다(새 호출 없음)")
+    full_command.add_argument("--chunks", type=Path, default=DATA / "chunks" / "manual_chunks.jsonl", help="청크 파일")
+    full_command.add_argument("--pool", type=Path, default=COMPARE / "pool" / "pool_full.jsonl", help="쓸 묶음 파일")
+    full_command.add_argument("--db", type=Path, default=COMPARE / "db", help="검색용 DB 폴더")
+    full_command.add_argument("--model", default="text-embedding-3-large", help="옮길 도우미용 벡터의 모델")
+    full_command.add_argument("--vectors", type=Path, help="도우미용 벡터 파일(기본 data/vectors/manual_<모델>.npz)")
     flow_command = commands.add_parser("flow", help="질문 바꾸기 → 임베딩 → 검색(→ 합치기)을 도우미 흐름대로 처음부터 끝까지 잰다(유료)")
     for command in (estimate_command, build_command, run_command, rewrite_command, fuse_command, flow_command):
         command.add_argument("--models", nargs="+", default=list(MODELS), help="임베딩 모델")
@@ -722,13 +734,17 @@ def main(
     run_command.add_argument("--menu-names", choices=("all", "narrow", "off"), default="all",
                              help="질문에 붙일 영어 메뉴 이름: all 사전에서 찾은 것 모두, narrow 소리대로 적은 이름만, off 붙이지 않음")
     args = parser.parse_args(argv)
+    if args.command == "full-pool":
+        index = full_pool(args.chunks, args.pool, args.db, args.model, args.vectors or manual_vectors.path_for(args.model))
+        print(f"묶음: {args.pool}\nDB: {index.records[0]['파일']} ({index.records[0]['상태']})")
+        return 0
 
     translations = reviewed(args.translations)
     pool = load_pool(args.pool, args.chunks, translations)
     questions = load_questions(args.questions, pool)
     now = now or datetime.now()
     if args.command == "rewrite":
-        return _rewrite_command(args, questions, make_chat, now)
+        return _rewrite_command(args, pool, questions, make_chat, now)
     if args.command == "fuse":
         return _fuse_command(args, questions, now)
     if args.command == "flow":
@@ -737,12 +753,10 @@ def main(
     if args.command == "estimate":
         print("\n".join(costs or ["유료 모델 없음"]))
         return 0
-    if costs and not args.yes:
-        print("\n".join([*costs, "유료 모델이 있어 멈춥니다. 비용을 확인받은 뒤 --yes를 붙여 주세요."]), file=sys.stderr)
+    if costs and not _confirmed(costs, args.yes):
         return 2
-    folder = args.results / f"{now:%Y%m%d}" / f"{now:%H%M%S}_{args.name}" if args.command == "run" else None
-    if folder and folder.exists():  # 측정이 끝난 뒤 폴더를 만든다(도중에 멈추면 빈 폴더가 다시 돌리기를 막지 않게)
-        print(f"{folder}가 이미 있어 멈춥니다(결과는 덮어쓰지 않음). 다른 --name을 주세요.", file=sys.stderr)
+    folder = _new_folder(args, now) if args.command == "run" else None
+    if args.command == "run" and folder is None:
         return 1
     embedders = {model: make_embedder(model) for model in args.models}
     indexes = {model: build_index(pool, model, embedders[model], args.db, args.original_only) for model in args.models}
@@ -795,8 +809,56 @@ def main(
     return 0
 
 
-def _rewrite_command(args: argparse.Namespace, questions: Sequence[Question], make_chat: Callable[[str, str], Chat],
-                     now: datetime) -> int:
+class StoredVectors:
+    """도우미용 벡터 파일(manual_vectors)에서 청크 글로 벡터를 찾아 돌려준다(API를 부르지 않음)."""
+
+    def __init__(self, chunks: Sequence[Chunk], vectors: np.ndarray):
+        self._by_text = {chunk.text: vector for chunk, vector in zip(chunks, vectors)}
+
+    def embed(self, texts: Sequence[str], timeout: float) -> list[list[float]]:
+        return [self._by_text[text].tolist() for text in texts]
+
+
+def full_pool(chunks_path: Path, pool_path: Path, db: Path, model: str, vectors_path: Path) -> Index:
+    """설명서 전체 청크로 묶음 파일을 쓰고(이미 있으면 같은지 확인), 도우미용 벡터를 비교 프로그램 DB로 옮긴다(HISTORY [117]).
+    manual_vectors.load가 지금 청크 파일과 열쇠·글 해시가 모두 같을 때만 읽으므로, 옮긴 벡터는 같은 글로 만든 것이다."""
+    chunks = load_chunks(chunks_path)
+    lines = "".join(json.dumps({"key": piece.key}) + "\n" for piece in pieces(chunks))
+    if pool_path.exists() and pool_path.read_text(encoding="utf-8") != lines:
+        raise ValueError(f"{pool_path}가 이미 있고 지금 청크와 다릅니다(덮어쓰지 않음). 옛 파일을 archive/로 옮긴 뒤 다시 만드세요.")
+    pool_path.parent.mkdir(parents=True, exist_ok=True)
+    pool_path.write_text(lines, encoding="utf-8")
+    vectors = manual_vectors.load(vectors_path, chunks)
+    index = build_index(load_pool(pool_path, chunks_path, {}), model, StoredVectors(chunks, vectors), db, original_only=True)
+    record = index.records[0]
+    meta = db / record["파일"].replace(".npz", ".json")
+    saved = json.loads(meta.read_text(encoding="utf-8"))
+    if "출처" not in saved:
+        made = json.loads(vectors_path.with_suffix(".json").read_text(encoding="utf-8"))["만든 시각"]
+        saved["출처"] = f"{vectors_path.name}(만든 시각 {made}, 청크 글 해시 일치 확인)을 옮김. 새 API 호출 없음"
+        meta.write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+    return index
+
+
+def _new_folder(args: argparse.Namespace, now: datetime) -> Path | None:
+    """results/<날짜>/<시각>_<이름>. 이미 있으면 알리고 None(결과는 덮어쓰지 않음). 폴더는 측정이 끝난 뒤 만든다
+    (도중에 멈추면 빈 폴더가 다시 돌리기를 막지 않게)."""
+    folder = args.results / f"{now:%Y%m%d}" / f"{now:%H%M%S}_{args.name}"
+    if folder.exists():
+        print(f"{folder}가 이미 있어 멈춥니다(결과는 덮어쓰지 않음). 다른 --name을 주세요.", file=sys.stderr)
+        return None
+    return folder
+
+
+def _confirmed(costs: Sequence[str], yes: bool) -> bool:
+    """유료 실행은 어림 비용을 보고 확인받은 뒤(--yes)에만 한다."""
+    if not yes:
+        print("\n".join([*costs, "유료라 멈춥니다. 비용을 확인받은 뒤 --yes를 붙여 주세요."]), file=sys.stderr)
+    return yes
+
+
+def _rewrite_command(args: argparse.Namespace, pool: Sequence[PoolChunk], questions: Sequence[Question],
+                     make_chat: Callable[[str, str], Chat], now: datetime) -> int:
     """질문 바꾸기: 어림 비용을 보이고(--yes 없으면 멈춤) 회차마다 바꾼 검색어·시간·토큰을 새 폴더에 쓴다."""
     template = PROMPTS[args.prompt]
     calls = len(questions) * args.rounds
@@ -804,16 +866,14 @@ def _rewrite_command(args: argparse.Namespace, questions: Sequence[Question], ma
     tokens_out = calls * 120
     price_in, price_out = REWRITE_PRICE[args.chat]
     guess = f"{args.chat}: {calls}번 물음, 약 입력 {tokens_in:,}·출력 {tokens_out:,}토큰 → 약 ${(tokens_in * price_in + tokens_out * price_out) / 1_000_000:.4f}"
-    if not args.yes:
-        print(f"{guess}\n유료라 멈춥니다. 비용을 확인받은 뒤 --yes를 붙여 주세요.", file=sys.stderr)
+    if not _confirmed([guess], args.yes):
         return 2
-    folder = args.results / f"{now:%Y%m%d}" / f"{now:%H%M%S}_{args.name}"
-    if folder.exists():
-        print(f"{folder}가 이미 있어 멈춥니다(결과는 덮어쓰지 않음). 다른 --name을 주세요.", file=sys.stderr)
+    folder = _new_folder(args, now)
+    if folder is None:
         return 1
     chat = make_chat(args.chat, args.effort)
     started = datetime.now().isoformat(timespec="seconds")
-    areas = sorted({area_of(chunk.key.split(".html")[0]) for chunk in load_pool(args.pool, args.chunks, {})})
+    areas = sorted({area_of(chunk.key.split(".html")[0]) for chunk in pool})
     rows = rewrite(questions, chat, areas, args.rounds, template=template)
     seconds = [row["초"] for row in rows]
     about = {
@@ -836,16 +896,16 @@ def _rewrite_command(args: argparse.Namespace, questions: Sequence[Question], ma
 
 def _fuse_command(args: argparse.Namespace, questions: Sequence[Question], now: datetime) -> int:
     """run 결과 폴더의 회차별 순위를 합친 조건을 원래 조건과 같은 표로 채점해 새 폴더에 쓴다."""
-    folder = args.results / f"{now:%Y%m%d}" / f"{now:%H%M%S}_{args.name}"
-    if folder.exists():
-        print(f"{folder}가 이미 있어 멈춥니다(결과는 덮어쓰지 않음). 다른 --name을 주세요.", file=sys.stderr)
+    folder = _new_folder(args, now)
+    if folder is None:
         return 1
     source = json.loads((args.runs / "설정.json").read_text(encoding="utf-8"))
     rows = [json.loads(line) for line in (args.runs / "실행.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
     fused = fuse_rounds(rows)
     about = {
         **source, "조건": [*source["조건"], *dict.fromkeys(row["조건"] for row in fused)], "유료": {},
-        "합친 run": str(args.runs), "합치기": f"조건·질문마다 회차별 상위 {RRF_DEPTH}개를 RRF(K={RRF_K})로 합침, 시간은 가장 느린 회차",
+        "합친 run": str(args.runs), "합치기": f"조건·질문마다 회차별 상위 {RRF_DEPTH}개를 RRF(K={RRF_K})로 합침. 합친 조건의 시간은 run이 잰 "
+              "임베딩·검색 시간 중 가장 느린 회차(질문 바꾸기 시간은 들어 있지 않음)",
         "메모": args.note, "시작 시각": datetime.now().isoformat(timespec="seconds"), "커밋": _commit(),
     }
     folder.mkdir(parents=True)
@@ -868,12 +928,15 @@ def _flow_command(args: argparse.Namespace, pool: Sequence[PoolChunk], questions
     tokens_in, tokens_out = calls * (_tokens(REWRITE_PROMPT) + 600), calls * 120  # rewrite 어림과 같은 셈
     price_in, price_out = REWRITE_PRICE[args.chat]
     guess = f"{args.chat}: {calls}번 물음, 약 ${(tokens_in * price_in + tokens_out * price_out) / 1_000_000:.4f} + 검색어 임베딩(아주 적음)"
-    if not args.yes:
-        print(f"{guess}\n유료라 멈춥니다. 비용을 확인받은 뒤 --yes를 붙여 주세요.", file=sys.stderr)
+    costs = [guess]
+    if model in PRICE_PER_MILLION:
+        db_tokens = sum(_tokens(chunk.english) for chunk in pool)
+        costs.append(f"{model} DB: 저장된 것이 없으면 새로 만듦, 약 {db_tokens:,}토큰 → 약 "
+                     f"${db_tokens / 1_000_000 * PRICE_PER_MILLION[model]:.4f}(저장된 DB를 재사용하면 들지 않음)")
+    if not _confirmed(costs, args.yes):
         return 2
-    folder = args.results / f"{now:%Y%m%d}" / f"{now:%H%M%S}_{args.name}"
-    if folder.exists():
-        print(f"{folder}가 이미 있어 멈춥니다(결과는 덮어쓰지 않음). 다른 --name을 주세요.", file=sys.stderr)
+    folder = _new_folder(args, now)
+    if folder is None:
         return 1
     embedder = make_embedder(model)
     index = build_index(pool, model, embedder, args.db, original_only=True)
@@ -894,9 +957,9 @@ def _flow_command(args: argparse.Namespace, pool: Sequence[PoolChunk], questions
         "번역 있는 청크 수": 0, "질문 파일": [str(path) for path in args.questions], "질문 수": len(questions),
         "회차": args.rounds, "씨앗": args.seed, "DB": index.records, "어림": guess, "단계별 시간": stages,
         "유료": {args.chat: {**tokens, "달러": round((tokens["입력"] * price_in + tokens["출력"] * price_out) / 1_000_000, 6)},
-                 model: {"토큰": embedder.tokens, "요청": embedder.requests,
-                         "달러": round(embedder.tokens / 1_000_000 * PRICE_PER_MILLION[model], 6)}} if model in PRICE_PER_MILLION
-                else {args.chat: tokens},
+                 **({model: {"토큰": embedder.tokens, "요청": embedder.requests,
+                             "달러": round(embedder.tokens / 1_000_000 * PRICE_PER_MILLION[model], 6)}}
+                    if model in PRICE_PER_MILLION else {})},
         "메모": args.note, "pc": platform.node(), "시작 시각": started, "커밋": _commit(),
     }
     folder.mkdir(parents=True)
@@ -914,14 +977,22 @@ def _flow_command(args: argparse.Namespace, pool: Sequence[PoolChunk], questions
 
 def _summary_markdown(name: str, rows: Sequence[dict], questions: Sequence[Question], about: dict) -> str:
     """상위 4·6·8개마다 조건 비교표(찾은 비율 높은 차례)와 질문별 표, 그리고 해석할 때의 한계."""
+    chunks, translated = about["청크 수"], about["번역 있는 청크 수"]
     lines = [
         f"# {name}", "",
         f"질문 {about['질문 수']}개 × 회차 {about['회차']} × 조건 {len(about['조건'])}개. 채점은 1회차 순위, 시간은 모든 회차.",
-        f"묶음 {about['청크 수']}청크(번역 있음 {about['번역 있는 청크 수']}개). 유료: {about['유료'] or '없음'}", "",
+        f"묶음 {chunks}청크(번역 있음 {translated}개). 유료: {about['유료'] or '없음'}", "",
         "## 해석할 때 주의", "",
-        "- 200청크·20문항의 작은 실험이다. 질문마다 필요한 근거 수·난이도가 달라 몇 문항이 결과를 크게 움직인다.",
+        f"- {chunks:,}청크·{about['질문 수']}문항의 작은 실험이다. 질문마다 필요한 근거 수·난이도가 달라 몇 문항이 결과를 크게 움직인다.",
         "- BM25는 한국어를 두 글자씩, 영어를 낱말로 자른다. 번역 포함 BM25의 효과에는 이 한국어 처리의 영향이 함께 들어 있다.",
-        "- 묶음의 번역 비율은 설명서 전체(약 15%)보다 높다. 전체 설명서의 최종 성능으로 읽지 않는다.",
+    ]
+    if translated:
+        lines.append(f"- 묶음의 번역 비율은 {translated / chunks:.0%}다(설명서 전체는 약 15%). 비율이 다르면 전체 설명서의 성능으로 읽지 않는다.")
+    if "합치기" in about:
+        lines.append(f"- {about['합치기']}.")
+    if "단계별 시간" in about:
+        lines.append("- 흐름 시간에는 호출마다 새로 연결을 맺는 시간이 들어 있다.")
+    lines += [
         f"- 처음 정답 순위는 남긴 상위 {RRF_DEPTH}개 안에서만 센다(BM25를 켜면 RRF에 든 청크만).",
         "- '회차마다 순위 다름'은 같은 질문의 2·3회차 순위가 1회차와 달랐던 질문이다(임베딩이 매번 조금 달라질 때).", "",
     ]
