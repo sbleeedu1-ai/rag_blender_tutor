@@ -6,6 +6,7 @@ Blender·창 없이 부를 수 있고, 아무것도 기억하지 않는다(최�
 """
 
 import json
+import logging
 import re
 from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,6 +22,8 @@ from blender_tutor.manual_chunks import MAX_WORDS, Chunk
 from blender_tutor.menu_names import MenuNames
 from blender_tutor.progress import Course, Step
 from blender_tutor.work_state import WorkState
+
+log = logging.getLogger(__name__)
 
 RRF_K = 60  # RRF 합치기 상수. 순위 r인 청크는 1 / (RRF_K + r)점을 받는다(널리 쓰는 값)
 RRF_DEPTH = 50  # 뜻 검색·낱말 검색 각각 상위 몇 개까지 합치기에 넣나
@@ -43,7 +46,7 @@ BIG_FIELDS = ("modeling", "render", "editors")  # 너무 커서 한 단계 더 �
 
 
 def area_of(page_path: str) -> str:
-    """질문 분야 고르기의 단위: 큰 세 분야는 둘째 폴더까지(modeling/modifiers), 나머지는 분야(physics)."""
+    """luna가 고르는 단위: 큰 세 분야(modeling·render·editors)는 묶음(둘째 폴더, modeling/modifiers)까지, 나머지는 분야(physics) 그대로."""
     parts = page_path.split("/")
     return "/".join(parts[:2]) if parts[0] in BIG_FIELDS and len(parts) > 1 else parts[0]
 
@@ -227,7 +230,7 @@ class AnswerEngine:
         rewriters: Sequence[Rewriter] = (),
     ):
         """name은 시간 기록·평가 결과에 남길 엔진 이름(어떤 임베딩·답변 모델인지, 엔진을 만드는 곳이 정한다).
-        menu_names는 질문 속 한국어 메뉴 이름에 영어를 덧붙일 사전(없으면 덧붙이지 않음).
+        menu_names는 답 글의 [[메뉴 이름]] 표시를 한국어 화면 이름으로 바꿀 사전(없으면 바꾸지 않음).
         courses·course_vectors는 비슷한 연습 과정을 권할 연습 과정과 그 벡터(이름 + 한 줄 설명 + 비슷한 말, 티켓 31).
         rewriters는 질문 바꾸기 모델들(동시에 부를 수만큼, 하나씩 따로). 있으면 모두 동시에 불러 먼저 온 답의 영어 검색어로
         찾는다(늦는 답을 기다리지 않으려고, [127]). 없으면 질문과 맥락 줄을 그대로 검색어로 쓴다."""
@@ -266,11 +269,12 @@ class AnswerEngine:
         step은 진행 중인 연습 과정의 지금 단계(연습 과정을 진행하지 않으면 None)."""
         context = self._context(recent, step, state)
         recommend = step is None and bool(self._courses)
+        rewrite = self._rewrite_messages(question, context) if self._rewriters else None
         # 바깥 서비스(질문 바꾸기·임베딩·답변 모델)를 부르는 곳만 오류 표시로 바꾼다.
         # 검색·글 만들기 같은 우리 코드의 오류는 그대로 올려 보내 버그가 "잠시 뒤 다시"에 숨지 않게 한다.
         # 질문 바꾸기가 모두 실패하거나 늦으면 한국어 질문으로 찾지 않고 멈춘다(엉뚱한 근거로 답하지 않게, [127])
         try:
-            query = self._rewritten(question, context) if self._rewriters else "\n".join([question, *context.values()])
+            query = self._rewritten(rewrite) if rewrite else "\n".join([question, *context.values()])
             # 비슷한 연습 과정은 검색어(직전 질문·조작에 끌림)가 아니라 질문만으로 고른다.
             # 질문만의 벡터는 따로 부르지 않고 같은 호출에 글을 하나 더 실어 받는다(비용은 질문 길이만큼 늚)
             texts = [query, question] if recommend and question != query else [query]
@@ -371,13 +375,16 @@ class AnswerEngine:
             context["방금 실행한 조작"] = " ".join(state.recent_operators)
         return context
 
-    def _rewritten(self, question: str, context: dict[str, str]) -> str:
-        """질문 바꾸기 모델들을 동시에 불러 먼저 온 쓸 만한 답의 영어 검색어. 나머지 답은 기다리지 않고 버린다(값은 든다).
-        rewrite_timeout 안에 하나도 오지 않으면 TimeoutError, 모두 실패하면 첫 오류를 그대로 낸다."""
+    def _rewrite_messages(self, question: str, context: dict[str, str]) -> list[dict[str, str]]:
+        """질문 바꾸기 모델에 보낼 메시지: 지시 + 질문(맥락이 있으면 참고 줄을 붙여)."""
         content = question
         if notes := [f"- {label}: {value}" for label, value in context.items() if label != "먼저 볼 소제목"]:
             content += "\n\n# 참고(질문을 이해하는 데만 쓴다)\n" + "\n".join(notes)
-        messages = [{"role": "system", "content": self._rewrite_prompt}, {"role": "user", "content": content}]
+        return [{"role": "system", "content": self._rewrite_prompt}, {"role": "user", "content": content}]
+
+    def _rewritten(self, messages: list[dict[str, str]]) -> str:
+        """질문 바꾸기 모델들을 동시에 불러 먼저 온 쓸 만한 답의 영어 검색어. 나머지 답은 기다리지 않고 버린다(값은 든다).
+        rewrite_timeout 안에 하나도 오지 않으면 TimeoutError, 모두 실패하면 첫 오류를 그대로 낸다."""
         pool = ThreadPoolExecutor(len(self._rewriters))
         futures = [pool.submit(lambda rewriter: _query_in(rewriter.ask(messages)), rewriter) for rewriter in self._rewriters]
         pool.shutdown(wait=False)  # 늦은 답은 뒤에서 끝나게 둔다
@@ -392,7 +399,7 @@ class AnswerEngine:
         """예열(옵션, 기본 끔, [127]): 첫 질문이 늦지 않게 질문 바꾸기 하나와 임베딩을 짧게 한 번씩 부른다. 돈이 아주 조금 든다.
         첫 요청이 느렸던 까닭은 확인하지 못해, 이것으로 빨라지는지는 아직 모른다."""
         if self._rewriters:
-            self._rewriters[0].ask([{"role": "system", "content": self._rewrite_prompt}, {"role": "user", "content": "베벨"}])
+            self._rewriters[0].ask(self._rewrite_messages("베벨", {}))
         self._embedder.embed(["bevel"], self._settings.timeout)
 
     def _search(self, query: str, vector: Sequence[float]) -> list[Chunk]:
@@ -413,7 +420,8 @@ class AnswerEngine:
 
 def _query_in(answer: str) -> str:
     """질문 바꾸기 답(JSON)의 영어 검색어. 검색어가 없거나 비었으면 ValueError(그 답은 버리고 다음 답을 쓴다)."""
-    query = json.loads(answer).get("query")
+    data = json.loads(answer)
+    query = data.get("query") if isinstance(data, dict) else None
     if not isinstance(query, str) or not query.strip():
         raise ValueError(f"검색어가 없는 질문 바꾸기 답 {answer!r}")
     return query.strip()
@@ -475,7 +483,8 @@ class _MenuMarks:
 
 
 def _failure(error: Exception, results: list[Chunk]) -> Failure:
-    """바깥 서비스 오류를 짧은 오류 표시로. 시간 초과면 그 문구로."""
+    """바깥 서비스 오류를 짧은 오류 표시로. 시간 초과면 그 문구로. 원래 오류는 도우미 기록에 남긴다(무엇이 실패했는지 가르려고)."""
+    log.warning("바깥 서비스 오류: %r", error)
     message = TIMEOUT_MESSAGE if isinstance(error, TimeoutError) else ERROR_MESSAGE
     return Failure(message, tuple(results))
 

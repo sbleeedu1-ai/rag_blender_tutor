@@ -719,6 +719,12 @@ def test_질문_바꾸기가_모두_실패하면_한국어_질문으로_찾지_�
     assert embedder.calls == [] and model.calls == []
 
 
+def test_오류_표시로_멈추면_어떤_답이_와서_실패했는지_기록에_남긴다(caplog):
+    events = ask_rewritten([FakeRewriter("[]")])
+    assert events == [Failure(ERROR_MESSAGE)]
+    assert "ValueError" in caplog.text and "'[]'" in caplog.text
+
+
 def test_질문_바꾸기가_한도_안에_하나도_오지_않으면_시간_초과_표시로_멈춘다():
     never = threading.Event()
     model = FakeModel()
