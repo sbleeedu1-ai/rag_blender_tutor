@@ -24,7 +24,7 @@ import sys
 import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 from blender_tutor import stand_in
@@ -312,7 +312,7 @@ def _check_fields(data: object, fields: dict[str, bool]) -> None:
         raise ValueError(f"{number}: 빠진 칸 {missing}")
 
 
-def main(argv: Sequence[str] | None = None, today: date | None = None) -> int:
+def main(argv: Sequence[str] | None = None, now: datetime | None = None) -> int:
     """명령 줄 입구. 돌려주는 값은 종료 코드(0 성공, 1 결과 폴더가 이미 있음)."""
     parser = argparse.ArgumentParser(description="평가 문항을 답 엔진에 넣어 답·검색 적중을 모으거나(run), 시간 기록 통계를 냅니다(times).")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -336,7 +336,8 @@ def main(argv: Sequence[str] | None = None, today: date | None = None) -> int:
 
     courses = load_courses(args.courses)
     dialogues = load_questions(args.questions, courses)
-    folder = args.results / f"{today or date.today():%Y%m%d}_{args.name}"
+    now = now or datetime.now()
+    folder = args.results / f"{now:%Y%m%d}" / f"{now:%H%M%S}_{args.name}"  # 날짜 폴더 안에서 이름순이 실행 순서
     # 실패할 수 있는 읽기(엔진 만들기·시간 기록)는 폴더를 만들기 전에 한다. 빈 폴더가 남으면 같은 이름으로 다시 돌릴 수 없어서
     if args.command == "run":
         settings = Settings(top_k=args.top_k, use_bm25=args.bm25, reasoning=args.reasoning)

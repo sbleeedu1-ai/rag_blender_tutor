@@ -4,7 +4,7 @@
 """
 
 import json
-from datetime import date
+from datetime import datetime
 
 import numpy as np
 import pytest
@@ -13,10 +13,20 @@ from blender_tutor.manual_chunks import Chunk, save_chunks
 from blender_tutor.search_compare import (
     MODELS,
     Bm25,
+    NarrowNames,
+    Picked,
+    Scope,
+    area_of,
     Condition,
     PoolChunk,
     Question,
+    TRANSLATE_PROMPT,
     Searcher,
+    flow,
+    full_pool,
+    fuse_rounds,
+    rewrite,
+    sounds_alike,
     Text,
     bm25_words,
     build_index,
@@ -224,10 +234,10 @@ def test_main_writes_new_result_folder_and_never_overwrites(tmp_path):
         return made[-1]
 
     def run():
-        return main(run_args(tmp_path), today=date(2026, 10, 29), make_embedder=make, load_names=lambda: FakeNames())
+        return main(run_args(tmp_path), now=datetime(2026, 10, 29, 9, 5), make_embedder=make, load_names=lambda: FakeNames())
 
     assert run() == 0
-    folder = tmp_path / "results" / "20261029_t"
+    folder = tmp_path / "results" / "20261029" / "090500_t"
     about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     assert about["메모"] == "시험" and len(about["조건"]) == 9
     assert len((folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()) == 2 * 9
@@ -244,3 +254,301 @@ def test_main_refuses_paid_model_without_yes(tmp_path):
     calls = []
     assert main(args, make_embedder=lambda model: calls.append(model), load_names=lambda: FakeNames()) == 2
     assert calls == [] and not (tmp_path / "results").exists()
+
+
+def test_original_only_uses_document_encoder_and_keeps_all_time_samples(tmp_path):
+    """문서는 passage 형식, 질문은 query 형식이어야 한다. 시간 표본은 3회 모두 남긴다."""
+    write_data(tmp_path)
+
+    class SplitEmbedder(FakeEmbedder):
+        def __init__(self):
+            super().__init__()
+            self.documents = []
+
+        def embed_documents(self, texts, timeout):
+            self.documents.extend(texts)
+            return FakeEmbedder().embed(texts, timeout)
+
+    embedder = SplitEmbedder()
+    args = run_args(tmp_path, "--original-only", "--rounds", "3")
+    assert main(args, make_embedder=lambda _: embedder, load_names=lambda: FakeNames()) == 0
+    folder = next((tmp_path / "results").glob("*/*"))
+    about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    rows = [json.loads(line) for line in (folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(about["조건"]) == 1 and about["조건"][0] == "fake / 원문만 / BM25 끔"
+    assert len(embedder.documents) == 3 and all("오리진 설정" not in text for text in embedder.documents)
+    assert embedder.calls == 7  # 질문 2개 × 3회 + 준비 운동 1회
+    assert len(rows) == 6 and {row["회차"] for row in rows} == {1, 2, 3}
+
+
+def test_no_menu_names_searches_the_question_as_is(tmp_path):
+    """--menu-names off면 '오리진' 질문에도 Origin을 붙이지 않고, 설정에 꺼진 것을 남긴다."""
+    write_data(tmp_path)
+    embedder = FakeEmbedder()
+    assert main(run_args(tmp_path, "--original-only", "--menu-names", "off"), make_embedder=lambda _: embedder,
+                load_names=lambda: FakeNames()) == 0
+    folder = next((tmp_path / "results").glob("*/*"))
+    about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    rows = [json.loads(line) for line in (folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert about["메뉴 이름 덧붙이기"] == "off"
+    assert any("오리진" in row["원래 질문"] for row in rows)  # 켜 두었다면 Origin이 붙었을 질문
+    assert all(row["검색어"] == row["원래 질문"] for row in rows)
+
+
+def test_cache_separates_model_revisions_and_prompts(tmp_path):
+    embedder = FakeEmbedder()
+    embedder.cache_identity = {"revision": "v1", "document": "passage: "}
+    build_index(POOL, "fake", embedder, tmp_path, original_only=True)
+    same = FakeEmbedder()
+    same.cache_identity = embedder.cache_identity
+    build_index(POOL, "fake", same, tmp_path, original_only=True)
+    assert same.calls == 0
+    changed = FakeEmbedder()
+    changed.cache_identity = {"revision": "v2", "document": "document: "}
+    build_index(POOL, "fake", changed, tmp_path, original_only=True)
+    assert changed.calls == 1 and len(list(tmp_path.glob("*.npz"))) == 2
+
+
+def test_sounds_alike_keeps_spelled_out_names_and_drops_everyday_words():
+    """실제 평가 질문에서 걸린 조각(HISTORY [113]): 소리대로 적은 이름만 닮았다고 본다."""
+    for korean, english in [("미러모디파이어", "Mirror Modifier"), ("오리진", "Origin"), ("큐브", "Cube"),
+                            ("오브젝트", "Object"), ("텍스처", "Textures"), ("버텍스", "Vertices")]:
+        assert sounds_alike(korean, english), (korean, english)
+    for korean, english in [("만들", "Make"), ("바닥", "Floor"), ("회전", "Rotate"), ("감싸", "Wrap"),
+                            ("표면", "Surface"), ("복사", "Copy"), ("아래", "Bottom")]:
+        assert not sounds_alike(korean, english), (korean, english)
+
+
+def test_narrow_names_needs_hangul_and_every_candidate_alike():
+    class Matches:
+        def matches_in(self, text):
+            return [("만들", ("Make",)), ("오브젝트", ("Object", "Objects")), ("회전", ("Rotate", "Rotation")),
+                    ("A", ("A",)), ("오브젝트", ("Object", "Objects")), ("버텍스", ("Vertices", "Vertex"))]
+
+    assert NarrowNames(Matches()).english_in("아무 글") == ("Object", "Objects", "Vertices", "Vertex")
+
+
+def test_scope_drops_chunks_from_meaning_and_bm25_before_ranking(tmp_path):
+    """거른 청크는 뜻 검색 1위였어도, BM25 낱말이 겹쳐도 결과에 없다."""
+    keep = np.array([True, True, False, True])  # bevel을 뺀다
+    searcher = Searcher(POOL, {"fake": build_index(POOL, "fake", FakeEmbedder(), tmp_path)}, scopes={Scope.BEGINNER: keep})
+    vector = FakeEmbedder().embed(["bevel"], 0)[0]
+    for bm25 in (Bm25.OFF, Bm25.ENGLISH):
+        whole = searcher.search(Condition("fake", Text.ORIGINAL, bm25), "bevel", vector)
+        kept = searcher.search(Condition("fake", Text.ORIGINAL, bm25, Scope.BEGINNER), "bevel", vector)
+        assert whole.final[0] == "bevel.html#bevel/1"
+        assert "bevel.html#bevel/1" not in kept.final and len(kept.final) == 3
+    assert Condition("fake", Text.ORIGINAL, Bm25.OFF).name == "fake / 원문만 / BM25 끔"  # 범위 전체면 예전 이름 그대로
+
+
+def test_question_areas_keep_only_asked_or_drop_excluded(tmp_path):
+    searcher = Searcher(POOL, {"fake": build_index(POOL, "fake", FakeEmbedder(), tmp_path)})
+    vector = FakeEmbedder().embed(["bevel"], 0)[0]
+    picked = Picked(asked=("set", "merge"), excluded=("other",))
+    asked = searcher.search(Condition("fake", Text.ORIGINAL, Bm25.OFF, Scope.ASKED), "bevel", vector, picked)
+    others = searcher.search(Condition("fake", Text.ORIGINAL, Bm25.OFF, Scope.OTHERS), "bevel", vector, picked)
+    assert sorted(asked.final) == ["merge.html#merge/1", "set.html#origin/1"]
+    assert sorted(others.final) == ["bevel.html#bevel/1", "merge.html#merge/1", "set.html#origin/1"]
+
+
+def test_area_splits_only_big_fields_one_level_deeper():
+    assert area_of("modeling/modifiers/deform/lattice") == "modeling/modifiers"
+    assert area_of("render/cycles/baking") == "render/cycles"
+    assert area_of("physics/cloth/introduction") == "physics"
+    assert area_of("index") == "index"
+
+
+class FakeChat:
+    """질문 바꾸기 모델 대신: 질문에 '오리진'이 있으면 Set Origin, 아니면 bevel. 분야는 목록 밖 이름 하나를 섞는다."""
+
+    def __init__(self, answers=None):
+        self.input_tokens = self.output_tokens = 0
+        self.asked = []
+        self.answers = answers
+
+    def ask(self, messages):
+        self.asked.append(messages)
+        self.input_tokens += 100
+        self.output_tokens += 10
+        if self.answers:
+            return self.answers.pop(0)
+        if "오리진" in messages[-1]["content"]:
+            return json.dumps({"query": "Set Origin", "areas": ["set", "없는 분야"], "exclude": ["other"]})
+        return json.dumps({"query": "bevel edges", "areas": ["bevel"], "exclude": []})
+
+
+def test_rewrite_asks_every_round_keeps_known_areas_and_stops_on_answer_without_query():
+    chat = FakeChat()
+    rows = rewrite(questions(), chat, ["bevel", "other", "set"], rounds=2, clock=Clock())
+    assert [(row["회차"], row["질문"], row["검색어"]) for row in rows] == [
+        (1, "Q1", "Set Origin"), (1, "Q2", "bevel edges"), (2, "Q1", "Set Origin"), (2, "Q2", "bevel edges")]
+    assert rows[0]["분야"] == ["set"] and rows[0]["뺄 분야"] == ["other"] and rows[0]["목록 밖"] == ["없는 분야"]
+    assert all(row["초"] == 1.0 for row in rows)
+    assert "bevel\nother\nset" in chat.asked[0][0]["content"]  # 분야 목록을 지시에 넣는다
+    with pytest.raises(ValueError, match="검색어가 없는"):
+        rewrite(questions(), FakeChat([json.dumps({"query": ""})]), ["set"], rounds=1)
+
+
+def test_rewrite_command_needs_yes_and_run_uses_its_queries_and_areas(tmp_path):
+    write_data(tmp_path)
+    (tmp_path / "scope.jsonl").write_text(json.dumps({"path": "set", "include": True}) + "\n"
+                                          + json.dumps({"path": "bevel", "include": False}) + "\n", encoding="utf-8")
+    base = ["--pool", str(tmp_path / "pool.jsonl"), "--chunks", str(tmp_path / "chunks.jsonl"),
+            "--translations", str(tmp_path / "ko.jsonl"), "--questions", str(tmp_path / "q.jsonl"),
+            "--results", str(tmp_path / "results"), "--rounds", "1", "--note", "시험"]
+    chats = []
+
+    def make_chat(model, effort):
+        chats.append(FakeChat())
+        return chats[-1]
+
+    assert main(["rewrite", "--name", "바꿈", *base], make_chat=make_chat) == 2 and chats == []  # 유료라 --yes 없이는 멈춤
+    assert main(["rewrite", "--name", "바꿈", "--yes", *base], now=datetime(2026, 10, 30, 10, 0), make_chat=make_chat) == 0
+    rewrites = tmp_path / "results" / "20261030" / "100000_바꿈" / "검색어.jsonl"
+    assert len(rewrites.read_text(encoding="utf-8").splitlines()) == 2
+
+    embedder = FakeEmbedder()
+    args = ["run", "--name", "t", "--models", "fake", "--db", str(tmp_path / "db"), *base, "--original-only", "--with-bm25",
+            "--rewrites", str(rewrites), "--rewritten-query", "--scopes", "all", "asked", "others", "beginner",
+            "--scope-file", str(tmp_path / "scope.jsonl")]
+    assert main(args, now=datetime(2026, 10, 30, 10, 1), make_embedder=lambda _: embedder, load_names=lambda: FakeNames()) == 0
+    folder = tmp_path / "results" / "20261030" / "100100_t"
+    about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    rows = [json.loads(line) for line in (folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(about["조건"]) == 8  # BM25 끔·켬 × 범위 4
+    assert {row["검색어"] for row in rows} == {"Set Origin", "bevel edges"}  # 메뉴 이름 대신 바꾼 검색어
+    q1 = {row["조건"].split(" / ")[-1]: row for row in rows if row["질문"] == "Q1" and "BM25 끔" in row["조건"]}
+    assert q1["질문 분야만"]["결과"] == ["set.html#origin/1"] and q1["질문 분야만"]["남은 청크"] == 1
+    assert q1["질문 보고 뺀 나머지"]["남은 청크"] == 2 and q1["초보자 범위만"]["결과"] == ["set.html#origin/1"]
+    without = ["run", "--name", "u", "--models", "fake", "--db", str(tmp_path / "db"), *base, "--original-only", "--scopes", "asked"]
+    with pytest.raises(SystemExit):  # --rewrites 없이 질문 분야 범위는 못 씀
+        main(without, make_embedder=lambda _: embedder, load_names=lambda: FakeNames())
+
+
+def test_fuse_rounds_ranks_chunks_found_high_in_more_rounds_first():
+    """회차 하나에서만 1위인 청크보다, 세 회차 모두 2위인 청크가 앞선다."""
+    def row(round_number, ranked, seconds):
+        return {"회차": round_number, "질문": "Q1", "조건": "c", "원래 질문": "q", "검색어": f"s{round_number}",
+                "시간": {"전체": seconds}, "결과": ranked}
+
+    fused = fuse_rounds([row(2, ["b", "x"], 3.0), row(1, ["a", "x"], 1.0), row(3, ["c", "x"], 2.0)])
+    assert len(fused) == 1
+    assert fused[0]["결과"][0] == "x" and fused[0]["결과"][1:] == ["a", "b", "c"]  # 같은 점수는 회차 차례
+    assert fused[0]["조건"] == "c / 3회차 합침" and fused[0]["검색어"] == ["s1", "s2", "s3"]
+    assert fused[0]["회차"] == 1 and fused[0]["시간"]["전체"] == 3.0  # 동시에 보냈다고 보고 가장 느린 회차
+
+
+def test_translate_prompt_asks_only_for_query_without_area_list():
+    chat = FakeChat([json.dumps({"query": "How do I move the origin?"})])
+    rows = rewrite(questions()[:1], chat, ["bevel", "set"], rounds=1, clock=Clock(), template=TRANSLATE_PROMPT)
+    assert rows[0]["검색어"] == "How do I move the origin?" and rows[0]["분야"] == [] and rows[0]["뺄 분야"] == []
+    assert "bevel" not in chat.asked[0][0]["content"]  # 분야 목록을 넣지 않는다
+
+
+def test_fuse_command_scores_fused_rows_next_to_original_conditions(tmp_path):
+    write_data(tmp_path)
+    base = ["--pool", str(tmp_path / "pool.jsonl"), "--chunks", str(tmp_path / "chunks.jsonl"),
+            "--translations", str(tmp_path / "ko.jsonl"), "--questions", str(tmp_path / "q.jsonl"),
+            "--results", str(tmp_path / "results"), "--rounds", "2", "--note", "시험"]
+    embedder = FakeEmbedder()
+    run = ["run", "--name", "t", "--models", "fake", "--db", str(tmp_path / "db"), *base, "--original-only"]
+    assert main(run, now=datetime(2026, 10, 30, 11, 0), make_embedder=lambda _: embedder, load_names=lambda: FakeNames()) == 0
+    runs = tmp_path / "results" / "20261030" / "110000_t"
+    assert main(["fuse", "--name", "f", "--runs", str(runs), *base], now=datetime(2026, 10, 30, 11, 1)) == 0
+    folder = tmp_path / "results" / "20261030" / "110100_f"
+    rows = [json.loads(line) for line in (folder / "실행.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert {row["조건"] for row in rows} == {"fake / 원문만 / BM25 끔 / 2회차 합침"} and len(rows) == 2
+    about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    assert about["조건"] == ["fake / 원문만 / BM25 끔", "fake / 원문만 / BM25 끔 / 2회차 합침"] and about["합친 run"] == str(runs)
+    assert "2회차 합침" in (folder / "요약.md").read_text(encoding="utf-8")
+    assert main(["fuse", "--name", "f", "--runs", str(runs), *base], now=datetime(2026, 10, 30, 11, 1)) == 1  # 덮어쓰지 않음
+
+
+class SameChat:
+    """늘 같은 검색어를 내는 질문 바꾸기 모델(흐름 시험용). 여러 개를 두어 동시에 부른다."""
+
+    def __init__(self, query):
+        self.query, self.input_tokens, self.output_tokens = query, 0, 0
+
+    def ask(self, messages):
+        self.input_tokens += 100
+        self.output_tokens += 10
+        return json.dumps({"query": self.query, "areas": [], "exclude": []})
+
+
+def test_flow_asks_once_or_three_times_and_merges_three_rankings(tmp_path):
+    """한 번 바꾸기는 첫 모델의 검색어만, 3번 합치기는 세 검색어의 순위를 RRF로 합친다(둘이 merge면 merge가 1위)."""
+    embedder = FakeEmbedder()
+    searcher = Searcher(POOL, {"fake": build_index(POOL, "fake", embedder, tmp_path, original_only=True)})
+    chats = [SameChat("origin"), SameChat("merge"), SameChat("merge")]
+    rows = flow(questions(), chats, embedder, searcher, Condition("fake", Text.ORIGINAL, Bm25.OFF), "지시", [], rounds=2, clock=Clock())
+    assert len(rows) == 2 * 2 * 2  # 회차 2 × 질문 2 × 방식 2
+    once = next(row for row in rows if row["조건"] == "흐름 / 한 번 바꾸기")
+    three = next(row for row in rows if row["조건"] == "흐름 / 3번 합치기")
+    assert once["검색어"] == ["origin"] and once["결과"][0] == "set.html#origin/1"
+    assert three["검색어"] == ["origin", "merge", "merge"] and three["결과"][0] == "merge.html#merge/1"
+    assert set(once["시간"]) == {"질문 바꾸기", "임베딩", "검색", "합치기", "전체"}
+    assert embedder.texts[-3:] in (["origin", "merge", "merge"], ["origin"])  # 검색어 여럿을 임베딩 한 번에 보낸다
+
+
+def test_flow_command_needs_yes_and_writes_stage_times(tmp_path):
+    write_data(tmp_path)
+    base = ["flow", "--name", "흐름", "--models", "fake", "--db", str(tmp_path / "db"), "--pool", str(tmp_path / "pool.jsonl"),
+            "--chunks", str(tmp_path / "chunks.jsonl"), "--translations", str(tmp_path / "ko.jsonl"),
+            "--questions", str(tmp_path / "q.jsonl"), "--results", str(tmp_path / "results"), "--rounds", "1", "--note", "시험"]
+    chats = []
+
+    def make_chat(model, effort):
+        chats.append(SameChat("bevel"))
+        return chats[-1]
+
+    assert main(base, make_chat=make_chat, make_embedder=lambda _: FakeEmbedder()) == 2 and chats == []  # 유료라 멈춤
+    assert main([*base, "--yes"], now=datetime(2026, 10, 30, 12, 0), make_chat=make_chat, make_embedder=lambda _: FakeEmbedder()) == 0
+    folder = tmp_path / "results" / "20261030" / "120000_흐름"
+    about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    assert about["조건"] == ["흐름 / 한 번 바꾸기", "흐름 / 3번 합치기"] and set(about["단계별 시간"]) == {"한 번 바꾸기", "3번 합치기"}
+    assert about["유료"]["gpt-6-luna"]["입력"] == 100 * 2 * 4  # 질문 2 × (1 + 3)번
+    assert "단계별 시간" in (folder / "요약.md").read_text(encoding="utf-8")
+
+
+def test_rewrite_stops_when_areas_are_not_a_list():
+    """분야를 목록 대신 글자로 주면 한 글자씩 쪼개 '목록 밖'에 넣지 않고 멈춘다."""
+    chat = FakeChat([json.dumps({"query": "bevel", "areas": "modeling", "exclude": []})])
+    with pytest.raises(ValueError, match="분야 칸이 글자 목록이 아닌"):
+        rewrite(questions()[:1], chat, ["modeling"], rounds=1, clock=Clock())
+
+
+def test_flow_command_keeps_rewrite_dollars_with_free_embedder_and_notes_connection_time(tmp_path):
+    write_data(tmp_path)
+    base = ["flow", "--name", "흐름", "--models", "fake", "--db", str(tmp_path / "db"), "--pool", str(tmp_path / "pool.jsonl"),
+            "--chunks", str(tmp_path / "chunks.jsonl"), "--translations", str(tmp_path / "ko.jsonl"),
+            "--questions", str(tmp_path / "q.jsonl"), "--results", str(tmp_path / "results"), "--rounds", "1", "--note", "시험", "--yes"]
+    assert main(base, now=datetime(2026, 10, 30, 12, 0), make_chat=lambda model, effort: SameChat("bevel"),
+                make_embedder=lambda _: FakeEmbedder()) == 0
+    folder = tmp_path / "results" / "20261030" / "120000_흐름"
+    about = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    assert set(about["유료"]) == {"gpt-6-luna"} and "달러" in about["유료"]["gpt-6-luna"]  # 무료 임베딩이어도 바꾸기 달러는 남긴다
+    summary = (folder / "요약.md").read_text(encoding="utf-8")
+    assert "3청크·2문항의 작은 실험" in summary and "200청크" not in summary  # 실제 묶음·문항 수로 적는다
+    assert "새로 연결을 맺는 시간" in summary
+
+
+def test_full_pool_writes_every_chunk_and_moves_helper_vectors_without_calls(tmp_path):
+    from blender_tutor import manual_vectors
+    from blender_tutor.manual_chunks import load_chunks
+
+    write_data(tmp_path)
+    chunks_path, vectors_path = tmp_path / "chunks.jsonl", tmp_path / "manual_fake.npz"
+    manual_vectors.build(load_chunks(chunks_path), FakeEmbedder(), vectors_path, "fake")
+    pool_path, db = tmp_path / "pool_full.jsonl", tmp_path / "db"
+    index = full_pool(chunks_path, pool_path, db, "fake", vectors_path)
+    keys = [json.loads(line)["key"] for line in pool_path.read_text(encoding="utf-8").splitlines()]
+    assert keys == ["set.html#origin/1", "bevel.html#bevel/1", "other.html#other/1"]
+    stored = np.load(vectors_path)["vectors"]
+    assert np.allclose(index.original, stored / np.linalg.norm(stored, axis=1, keepdims=True))  # 도우미 벡터 그대로
+    meta = json.loads((db / index.records[0]["파일"].replace(".npz", ".json")).read_text(encoding="utf-8"))
+    assert "새 API 호출 없음" in meta["출처"]
+    assert full_pool(chunks_path, pool_path, db, "fake", vectors_path).records[0]["상태"] == "재사용"  # 다시 해도 같은 파일
+    pool_path.write_text(json.dumps({"key": "set.html#origin/1"}) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="지금 청크와 다릅니다"):
+        full_pool(chunks_path, pool_path, db, "fake", vectors_path)
