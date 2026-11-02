@@ -1,25 +1,23 @@
 # 인수인계
 
-마지막 갱신: 2026-11-02 · Claude Code(Opus 5.5) · 강의실 PC · **PR #31 병합 전에 씀**(브랜치 `feat/33-answer-model`). 이어받을 때 `git fetch` 뒤 PR #31이 main에 병합됐는지 먼저 본다. 병합됐으면 main에서 새 브랜치로.
+마지막 갱신: 2026-11-02 · Claude Code(Opus 5.5) · 강의실 PC · **PR #32 병합 전에 씀**(브랜치 `feat/44-first-token-tweaks`). 이어받을 때 `git fetch` 뒤 PR #32가 main에 병합됐는지 먼저 본다. 병합됐으면 main에서 새 브랜치로.
 
 ## 다음 할 일
 
-1. 티켓 44([44번](.scratch/mvp-roundtrip/issues/44-첫-글자-시간-작은-방법-1-3-실측.md)): 비용이 적은 작은 방법 1-3(질문 바꾸기 흘려 받아 query 닫히면 검색 / 동시 3 → 5 / 답변 2개 동시)을 넣고 20문항 × 2회차로 잰다(어림 약 $0.04, 실행 전 확인). Fast는 빼기로 함.
+1. 사용자가 정할 것: 적중률 + 답변 정답률을 보는 새 티켓을 만들지(사용자 "다음 티켓 하나 더 팔까 고민중"). 44 실측에서 적중이 [127]의 85.3%보다 낮았다(쓴 검색어 0.76, 까닭 미확인, HISTORY [135]). 미뤄 둔 근거 거르기(HISTORY [132], "안녕"에도 근거 8개: (가) 답변 모델이 실제 쓴 근거 번호만 표시 / (나) 질문 바꾸기 JSON에 "찾을 필요 없음" 칸)도 "44 결과를 본 뒤 정한다"였으니 함께 정한다(조사 C는 (가) 먼저를 권함).
 2. 그다음 42(집 PC) → 32 → 35 → 36·37.
-3. 미뤄 둔 것(HISTORY [132]): "안녕" 같은 질문에도 근거 8개가 붙는 문제. (가) 답변 모델이 실제 쓴 근거 번호만 표시, (나) 질문 바꾸기 JSON에 "찾을 필요 없음" 칸. 44 결과를 본 뒤 정한다(조사 C는 (가) 먼저를 권함).
 
 ## 지금 상태와 검증
 
-- 티켓 33 끝(`Status: resolved`): 진짜 답변 모델 gpt-6-luna, 생각 수준 none(HISTORY [131]). 엔진 만들기는 `engine_setup.py`, 무료 임시 엔진 `stand_in.py`는 `archive/`. 근거 카드는 "▸ 근거 n개"로 접힘([132]). 코드 검토 17건 판단·반영([134]).
-- 속도(강의실 PC, none): 엔진만 A1-A10 첫 글자 중앙 2.47초·답 끝 3.89초, 창 5문항 창 뜨기 0.02초·첫 글자 2.55초·답 끝 3.55초. 목표 2초는 그대로("목표는 목표로").
-- pytest **550 passed**(2026-11-02, 강의실 PC, 검토 반영 뒤). 연습 과정 파일·애드온은 바꾸지 않아 course_check·애드온 자체 시험은 돌리지 않았다.
-- 첫 글자 시간 조사(하위 에이전트 A·B·C): `.scratch/mvp-roundtrip/research/2026-11-02-첫-글자-시간-줄이기-조사.md`.
+- 티켓 44 끝(`Status: resolved`): 질문 바꾸기를 흘려 받아 `"query"` 칸이 닫히면 바로 검색(방법 1)만 남김. 5개 동시·답변 2개 동시는 재 보고 되돌림("ㅇㅇ 방법1만 남겨"). 실측 프로그램 `speed_trial.py`는 다음 시간 측정용으로 남김.
+- 속도(강의실 PC, none, 엔진만, 20문항 × 2회차, 같은 기록으로 계산): 방법 1만 남긴 첫 글자 중앙 1.89초·90% 2.23초·2초 넘음 9/40, 방법 1 없을 때 어림 2.04초. 질문당 약 $0.00058. 도우미 창에서는 아직 재지 않았다.
+- pytest **560 passed**(2026-11-02, 강의실 PC, 2·3 되돌린 뒤 세 번 돌림). 연습 과정 파일·애드온은 바꾸지 않아 course_check·애드온 자체 시험은 돌리지 않았다.
 
 ## 모르면 실수할 것
 
-- **유료**: 이제 도우미 창 질문마다 질문 바꾸기 3번 + 임베딩 + 답변 모델(none 실측 질문당 약 $0.00055). 무료로 돌리는 길은 없다(시험은 가짜 부품). `evaluate run`은 `--yes` 없이 멈추고 어림 비용만 보인다(none $0.0006·low $0.00065/차례, medium은 어림 안 함). 오늘 쓴 유료 약 $0.016.
+- **유료**: 도우미 창 질문마다 질문 바꾸기 3번 + 임베딩 + 답변 모델(none 실측 질문당 약 $0.00058, [135]). 무료로 돌리는 길은 없다(시험은 가짜 부품). `evaluate run`·`speed_trial`은 `--yes` 없이 멈추고 어림 비용만 보인다(평가 none $0.00064·low $0.00065/차례, medium은 어림 안 함). 오늘 쓴 유료 약 $0.059(티켓 33 $0.016 + 44 실측 $0.043).
 - 생각 수준을 창에서 바꾸려면 환경 변수 `BLENDER_TUTOR_REASONING=low`(대문자·오타면 "문제가 생겼어요", 원인은 기록 파일). 도우미는 Blender를 다시 켜야 새 코드로 뜬다.
-- 첫 질문이 약 1초 느리다(원인 미확인, 조사 A: 요금 없는 `GET /v1/models`로 가를 수 있음).
+- 첫 질문이 약 1초 느리다(원인 미확인, 조사 A: 요금 없는 `GET /v1/models`로 가를 수 있음). 질문 바꾸기는 이제 흘려 받는다: 화면 답이 끝난 뒤에도 질문 바꾸기 호출이 뒤에서 끝까지 읽히고(요금 기록), 그 뒤 실패는 기록 파일에 "검색어를 쓴 뒤 질문 바꾸기 호출이 실패함"으로만 남는다.
 - 답이 나오는 도중 도우미를 끄면 기록에 `RuntimeError: Signal source has been deleted`가 남는다(알려진 것, [130]).
 - "잠시 뒤 다시"·"문제가 생겼어요"가 뜨면 `%TEMP%\blender_tutor_receiver.log`의 "바깥 서비스 오류" 줄로 원인을 본다. 답 도중 OpenAI 오류 조각도 이제 그 메시지로 남는다.
 - 청크 파일을 다시 만들면 설명서 벡터가 안 맞아 도우미가 멈춘다 → `manual_vectors build --yes`(약 $0.13), 그 뒤 `search_compare full-pool`.
@@ -33,11 +31,11 @@
 | 설명서 벡터(115MB) | `data/vectors/manual_text-embedding-3-large.npz` + `.json` | 옮기거나 `manual_vectors build --yes`(약 $0.13) |
 | 검색 비교 질문 | `data/search_compare/questions/` | **드라이브 백업 확인 안 함**. 손으로 만든 것이라 꼭 옮긴다 |
 | 속도 실측 문항 | `data/eval/speed/A1-A10.json` + `state_cube.json` | ai_questions에서 다시 만들 수 있음(HISTORY [131]) |
-| 결과 원본 | `results/20261029/`·`20261030/`·`20261102/` | 백업 확인 안 함. 숫자는 HISTORY [113]-[134] |
+| 결과 원본 | `results/20261029/`·`20261030/`·`20261102/`(44 실측 `105750_t44_speed`) | 백업 확인 안 함. 숫자는 HISTORY [113]-[135] |
 | 로컬 모델 | `data/models/` | `local_embeddings prepare`, `prototype/local_llm/llm_bench.sh` |
 
 ## 추천 스킬과 참고
 
-- 44는 `tdd` 또는 직접. 스킬 없이: 티켓 44 할 일 1-3을 `answer_engine.py`(`_rewritten`)·`answer_model.py`·`beginner_scope.OpenAIModel`에 넣고, 조사 문서 "실험 하나로 한꺼번에 확인하기" 설계대로 잰다.
-- [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [131]-[134]](HISTORY.md), [조사](.scratch/mvp-roundtrip/research/2026-11-02-첫-글자-시간-줄이기-조사.md).
+- 1번은 사용자 결정이 먼저. 새 티켓을 만들면 `/implement`(사용자 요청). 시간을 다시 잴 때는 `.venv\Scripts\python -m blender_tutor.speed_trial --name <이름> --yes`(20문항 × 2회차 어림 약 $0.02).
+- [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [131]-[135]](HISTORY.md), [티켓 44](.scratch/mvp-roundtrip/issues/44-첫-글자-시간-작은-방법-1-3-실측.md), [조사](.scratch/mvp-roundtrip/research/2026-11-02-첫-글자-시간-줄이기-조사.md).
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`

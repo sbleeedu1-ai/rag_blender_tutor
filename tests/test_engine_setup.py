@@ -73,9 +73,9 @@ def test_만들어_둔_설명서_벡터를_읽고_바꾼_검색어만_임베딩�
     assert isinstance(events[-1], Done)
     assert events[-1].sources[0].path == "Bevel > Options"  # 낱말이 하나도 안 겹쳐도 벡터로 찾는다
     assert fakes["embedder"][0].texts == ["bevel width"]  # 바꾼 검색어 하나만, 설명서는 다시 임베딩하지 않는다
-    assert [rewriter.settings for rewriter in fakes["rewriter"]] == [("gpt-6-luna", "none", 5.0)] * 5
-    assert [model.settings for model in fakes["model"]] == [("gpt-6-luna", "low")] * 2  # 생각 수준은 설정 값 그대로, 2개 동시
-    assert engine.name == "text-embedding-3-large+gpt-6-luna×5+gpt-6-luna×2"
+    assert [rewriter.settings for rewriter in fakes["rewriter"]] == [("gpt-6-luna", "none", 5.0)] * 3
+    assert fakes["model"][0].settings == ("gpt-6-luna", "low")  # 생각 수준은 설정 값 그대로
+    assert engine.name == "text-embedding-3-large+gpt-6-luna×3+gpt-6-luna"
 
 
 def test_답변_모델을_넘기면_그것을_쓴다(tmp_path, fakes):
@@ -91,8 +91,7 @@ def test_연습_과정은_이름_한_줄_설명_비슷한_말을_합친_글로_�
     engine = build_engine(tmp_path, courses=[sword])
     assert fakes["embedder"][0].texts == ["단순한 검 정육면체로 검을 만든다. 장검 blade"]
     list(engine.answer("활을 만들고 싶어요", WorkState.from_json(EDITING), []))
-    sent = [str(messages) for model in fakes["model"] for messages in model.sent]
-    assert sent and all("단순한 검: 정육면체로 검을 만든다." in text for text in sent)  # 연습 과정 밖 질문에 비슷한 연습 과정이 붙는다
+    assert "단순한 검: 정육면체로 검을 만든다." in str(fakes["model"][0].sent[0])  # 연습 과정 밖 질문에 비슷한 연습 과정이 붙는다
 
 
 def test_설명서_벡터_파일이_없으면_FileNotFoundError(tmp_path):

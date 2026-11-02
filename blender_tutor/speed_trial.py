@@ -1,10 +1,9 @@
-"""첫 글자 시간 실측(티켓 44): 도우미와 같은 엔진(질문 바꾸기 5개 흘려 받기 + 답변 모델 2개 동시)으로 문항을 돌리며
-호출마다 보냄·첫 조각·검색어 닫힘·끝 시각과 토큰을 남기고, 새 호출 없이 방법 1-3 각각의 단축을 가른다.
+"""첫 글자 시간 실측(티켓 44): 도우미와 같은 엔진(질문 바꾸기 흘려 받기 + 답변 모델)으로 문항을 돌리며
+호출마다 보냄·첫 조각·검색어 닫힘·끝 시각과 토큰을 남기고, 새 호출 없이 단계별 시간과 흘려 받기로 준 시간을 가른다.
 
-- 방법 1(흘려 받기): 5개 중 먼저 끝난 시각 − 먼저 검색어가 닫힌 시각
-- 방법 2(3 → 5개): 앞 3개 중 먼저 닫힌 시각 − 5개 중 먼저 닫힌 시각
-- 방법 3(답변 2개): 첫째 답변의 첫 조각까지 − 둘 중 빠른 쪽의 첫 조각까지(각자 보낸 시각부터)
-- 옛 방식 어림 첫 글자: 잰 첫 글자 + (앞 3개 중 먼저 끝난 시각 − 쓴 검색어가 닫힌 시각) + 방법 3의 단축
+- 흘려 받기로 준 시간: 질문 바꾸기 중 먼저 끝난 시각 − 먼저 검색어가 닫힌 시각
+- 흘려 받지 않을 때 어림 첫 글자: 잰 첫 글자 + 위의 값
+질문 바꾸기 5개·답변 2개 동시는 이 프로그램으로 재 보고 이득이 작아 되돌렸다(HISTORY [135], 원본 results/20261102/105750_t44_speed).
 적중은 search_compare와 같은 기준(질문마다 필요한 근거 중 상위 top_k에서 찾은 비율의 평균, HISTORY [127]의 85.3%와 견줌)이다.
 쓰지 않은 검색어도 채점하려고, 다 돈 뒤 모든 검색어를 임베딩해 같은 검색으로 순위를 낸다(아주 적은 비용).
 돈이 든다. 어림 비용을 보이고 --yes가 있어야 돈다. 결과는 results/<날짜>/<시각>_<이름>/에 새로 쓴다.
@@ -24,7 +23,7 @@ from pathlib import Path
 
 from blender_tutor import engine_setup, manual_vectors
 from blender_tutor.answer_engine import CLOSED_QUERY, AnswerEngine, Done, Failure, Piece, Settings, closed_query
-from blender_tutor.answer_model import COPIES, MODEL, PRICE, FirstOf, OpenAIAnswerModel
+from blender_tutor.answer_model import MODEL, PRICE, OpenAIAnswerModel
 from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.manual_chunks import load_chunks
 from blender_tutor.paths import PROJECT
@@ -124,7 +123,7 @@ class TimedRewriter:
 
 
 class TimedAnswer:
-    """답변 모델을 감싸 호출마다 보냄·첫 조각·끝 시각, 토큰, 답 글자 수를 남긴다(FirstOf에 끼운다)."""
+    """답변 모델을 감싸 호출마다 보냄·첫 조각·끝 시각, 토큰, 받은 답 글을 남긴다."""
 
     def __init__(self, inner: OpenAIAnswerModel, calls: Calls, slot: int):
         self.inner, self.calls, self.slot, self.model = inner, calls, slot, inner.model
@@ -187,52 +186,40 @@ def score_queries(rows: list[dict], questions: Sequence[Question], engine: Answe
 
 
 def summarize(rows: Sequence[dict]) -> dict:
-    """기록에서 방법별 단축(질문마다 계산한 값의 중앙값)·단계별 시간·적중·칸 순서를 계산한다. 실패한 줄은 뺀다."""
-    gains = {"방법 1 흘려 받기": [], "방법 2 3→5개": [], "방법 3 답변 2개": []}
-    stages = {"검색어 닫힘(5개 중 먼저)": [], "임베딩+검색": [], "답변 첫 조각(빠른 쪽)": [], "첫 글자(잰 것)": [],
-              "첫 글자(옛 방식 어림)": [], "답 끝": []}
-    hits = {"쓴 검색어(5개 중 먼저 닫힘)": [], "앞 3개 중 먼저 닫힘": [], "옛 방식(앞 3개 중 먼저 끝남)": []}
+    """기록에서 흘려 받기로 준 시간(질문마다 계산한 값)·단계별 시간·적중·칸 순서를 계산한다. 실패한 줄은 뺀다."""
+    gains: list[float] = []
+    stages = {"검색어 닫힘(먼저 닫힌 것)": [], "임베딩+검색": [], "답변 첫 조각": [], "첫 글자(잰 것)": [],
+              "첫 글자(흘려 받지 않을 때 어림)": [], "답 끝": []}
+    hits = {"쓴 검색어(먼저 닫힘)": [], "흘려 받지 않을 때(먼저 끝남)": []}
     query_first, reasoning = [], 0
     fixed = {"질문 바꾸기": [], "답변": []}  # 호출 하나의 보냄 → 첫 조각(조사 문서의 "고정 몫 약 0.8초")
     for row in rows:
         if row["실패"] or row["첫 글자"] is None:
             continue
-        rewrites = sorted((r for r in row["호출"] if r["종류"] == "질문 바꾸기"), key=lambda r: r["몇째"])
-        answers = sorted((r for r in row["호출"] if r["종류"] == "답변"), key=lambda r: r["몇째"])
+        rewrites = [r for r in row["호출"] if r["종류"] == "질문 바꾸기"]
         usable = [r for r in rewrites if "검색어 닫힘" in r]
         used = min(usable, key=lambda r: r["검색어 닫힘"])
-        front = [r for r in usable if r["몇째"] < 3]
-        front_closed = min(front, key=lambda r: r["검색어 닫힘"]) if front else None
-        front_ended = min(front, key=lambda r: r["끝"]) if front else None
-        waits = [r["첫 조각"] - r["보냄"] for r in answers if "첫 조각" in r]
-        sent = min(r["보냄"] for r in answers)
-        gains["방법 1 흘려 받기"].append(min(r["끝"] for r in usable) - used["검색어 닫힘"])
-        if front_closed:
-            gains["방법 2 3→5개"].append(front_closed["검색어 닫힘"] - used["검색어 닫힘"])
-        hedge = answers[0]["첫 조각"] - answers[0]["보냄"] - min(waits) if "첫 조각" in answers[0] else None
-        if hedge is not None:
-            gains["방법 3 답변 2개"].append(hedge)
-        stages["검색어 닫힘(5개 중 먼저)"].append(used["검색어 닫힘"])
+        ended = min(usable, key=lambda r: r["끝"])
+        sent = min(r["보냄"] for r in row["호출"] if r["종류"] == "답변")
+        gains.append(ended["끝"] - used["검색어 닫힘"])
+        stages["검색어 닫힘(먼저 닫힌 것)"].append(used["검색어 닫힘"])
         stages["임베딩+검색"].append(sent - used["검색어 닫힘"])
-        stages["답변 첫 조각(빠른 쪽)"].append(row["첫 글자"] - sent)
+        stages["답변 첫 조각"].append(row["첫 글자"] - sent)
         stages["첫 글자(잰 것)"].append(row["첫 글자"])
-        if front_ended and hedge is not None:  # 첫째 답변이 실패했으면 1개만 쓸 때를 알 수 없어 뺀다
-            stages["첫 글자(옛 방식 어림)"].append(row["첫 글자"] + front_ended["끝"] - used["검색어 닫힘"] + hedge)
+        stages["첫 글자(흘려 받지 않을 때 어림)"].append(row["첫 글자"] + gains[-1])
         stages["답 끝"].append(row["답 끝"])
-        for name, record in (("쓴 검색어(5개 중 먼저 닫힘)", used), ("앞 3개 중 먼저 닫힘", front_closed),
-                             ("옛 방식(앞 3개 중 먼저 끝남)", front_ended)):
-            if record and "적중" in record:
+        for name, record in (("쓴 검색어(먼저 닫힘)", used), ("흘려 받지 않을 때(먼저 끝남)", ended)):
+            if "적중" in record:
                 hits[name].append(record["적중"])
         for record in rewrites:
             if record["글"].lstrip().startswith("{"):
                 query_first.append(record["글"].lstrip().lstrip("{").lstrip().startswith('"query"'))
-        reasoning += sum(record.get("생각", 0) for record in row["호출"])
         for record in row["호출"]:
+            reasoning += record.get("생각", 0)
             if "첫 조각" in record:
                 fixed[record["종류"]].append(record["첫 조각"] - record["보냄"])
     return {
-        "단축(초, 중앙값)": {name: _median(values) for name, values in gains.items()},
-        "단축(초, 평균)": {name: round(statistics.mean(values), 4) if values else None for name, values in gains.items()},
+        "흘려 받기로 준 시간(초, 중앙값·평균)": (_median(gains), round(statistics.mean(gains), 4) if gains else None),
         "단계(초, 중앙값·최대값)": {name: (_median(values), max(values) if values else None) for name, values in stages.items()},
         "적중(찾은 비율 평균)": {name: round(statistics.mean(values), 4) if values else None for name, values in hits.items()},
         "적중 견줄 값([127])": BEFORE_HIT,
@@ -249,16 +236,15 @@ def _median(values: list[float]) -> float | None:
 
 def estimate(questions: int, rounds: int) -> str:
     turns = questions * rounds
-    dollars = turns * (engine_setup.REWRITE_COUNT * GUESS_REWRITE + COPIES * GUESS_ANSWER)
-    return (f"질문 {questions}개 × {rounds}회차 = {turns}번, 질문 바꾸기 {engine_setup.REWRITE_COUNT}개 + 답변 {COPIES}개씩 "
+    dollars = turns * (engine_setup.REWRITE_COUNT * GUESS_REWRITE + GUESS_ANSWER)
+    return (f"질문 {questions}개 × {rounds}회차 = {turns}번, 질문 바꾸기 {engine_setup.REWRITE_COUNT}개 + 답변 1개씩 "
             f"→ 약 ${dollars:.3f}(어림, 임베딩은 아주 적음)")
 
 
 def _markdown(name: str, about: dict, summary: dict) -> str:
     lines = [f"# {name}", "", f"- 엔진 {about['엔진']}, {about['pc']}, 시작 {about['시작 시각']}, 실제 비용 ${about['실제 비용(달러)']['합']}",
              f"- 질문 {about['질문 수']}개 × {about['회차']}회차, 실패 뺀 {summary['질문 수(실패 뺌)']}번", "",
-             "## 방법별 단축(초)", "", "| 방법 | 중앙값 | 평균 |", "|---|---|---|"]
-    lines += [f"| {k} | {v} | {summary['단축(초, 평균)'][k]} |" for k, v in summary["단축(초, 중앙값)"].items()]
+             f"- 흘려 받기로 준 시간(초, 중앙값·평균): {summary['흘려 받기로 준 시간(초, 중앙값·평균)']}"]
     lines += ["", "## 단계(초)", "", "| 단계 | 중앙값 | 최대값 |", "|---|---|---|"]
     lines += [f"| {k} | {m} | {x} |" for k, (m, x) in summary["단계(초, 중앙값·최대값)"].items()]
     lines += ["", "## 적중(상위 8개, 찾은 비율 평균)", "", f"견줄 값 [127]: {BEFORE_HIT}", ""]
@@ -287,9 +273,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit(f"{folder}가 이미 있습니다(덮어쓰지 않음).")
     settings, key, calls = Settings(), openai_key(), Calls()
     inner_rewriters = engine_setup.rewriters_for(settings, key)
-    inner_answers = [OpenAIAnswerModel(MODEL, key, settings.reasoning.value) for _ in range(COPIES)]
+    inner_answer = OpenAIAnswerModel(MODEL, key, settings.reasoning.value)
     engine = engine_setup.build_engine(
-        args.data, model=FirstOf([TimedAnswer(model, calls, slot) for slot, model in enumerate(inner_answers)]),
+        args.data, model=TimedAnswer(inner_answer, calls, 0),
         settings=settings, rewriters=[TimedRewriter(model, calls, slot) for slot, model in enumerate(inner_rewriters)],
     )
     keys = {piece.chunk: piece.key for piece in pieces(load_chunks(args.data / "chunks" / "manual_chunks.jsonl"))}
@@ -308,7 +294,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     price_in, price_out = PRICE[MODEL]
     paid = {
         "질문 바꾸기": round((rewrite_in * price_in + rewrite_out * price_out) / 1_000_000, 6),
-        "답변": round(sum(model.dollars() for model in inner_answers), 6),
+        "답변": inner_answer.dollars(),
         # 엔진 안 임베딩기의 토큰 수는 실측에서만 들여다본다(엔진이 바깥에 내놓지 않음)
         "임베딩(엔진)": round(engine._embedder.tokens * manual_vectors.PRICE_PER_MILLION[manual_vectors.MODEL] / 1_000_000, 6),
         "임베딩(채점)": round(scorer.tokens * manual_vectors.PRICE_PER_MILLION[manual_vectors.MODEL] / 1_000_000, 6),

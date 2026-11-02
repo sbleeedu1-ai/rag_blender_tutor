@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from blender_tutor.answer_model import FirstOf, OpenAIAnswerModel
+from blender_tutor.answer_model import OpenAIAnswerModel
 from blender_tutor.beginner_scope import OpenAIModel
 
 USAGE = {"prompt_tokens": 6000, "completion_tokens": 400, "completion_tokens_details": {"reasoning_tokens": 100}}
@@ -125,55 +125,3 @@ def test_질문_바꾸기_흐름이_끝_표시_없이_끊기면_오류(server):
     server["lines"] = [piece('{"query": "bevel"}')]
     with pytest.raises(ValueError, match="질문 바꾸기"):
         list(OpenAIModel("gpt-6-luna", "fake-key", timeout=5, url=server["url"]).stream([]))
-
-
-# 답변 모델 2개 동시(티켓 44)
-
-
-class Paced:
-    """답변 모델 대신: wait초 쉰 뒤 pieces를 차례로 흘려 준다(error면 첫 조각 전에 그 오류). 끝까지 읽혔으면 finished가 열린다."""
-
-    def __init__(self, pieces=(), wait=0.0, error=None, tail=None):
-        self.model, self.pieces, self.wait, self.error, self.tail = "luna", pieces, wait, error, tail
-        self.reasoning_tokens = 3
-        self.finished = threading.Event()
-
-    def stream(self, messages, timeout):
-        time.sleep(self.wait)
-        if self.error:
-            raise self.error
-        for text in self.pieces:
-            yield text
-        if self.tail:
-            raise self.tail
-        self.finished.set()
-
-    def dollars(self):
-        return 0.001
-
-
-def test_첫_조각이_먼저_온_흐름만_돌려주고_늦은_흐름도_끝까지_읽는다():
-    slow = Paced(["늦은 답"], wait=0.2)
-    hedged = FirstOf([slow, Paced(["빠른 ", "답"])])
-    assert list(hedged.stream([], timeout=5)) == ["빠른 ", "답"]
-    assert slow.finished.wait(5)  # 요금을 세려고 늦은 흐름도 끝까지 읽는다
-    assert hedged.model == "luna×2" and hedged.dollars() == pytest.approx(0.002) and hedged.reasoning_tokens == 6
-
-
-def test_조각_없이_먼저_끝난_흐름은_고르지_않고_모두_비면_빈_답():
-    assert list(FirstOf([Paced([]), Paced(["답"], wait=0.1)]).stream([], timeout=5)) == ["답"]
-    assert list(FirstOf([Paced([]), Paced(error=OSError("끊김"), wait=0.1)]).stream([], timeout=5)) == []
-
-
-def test_첫_조각_전에_실패한_흐름은_건너뛰고_모두_실패하면_첫_오류():
-    assert list(FirstOf([Paced(error=OSError("끊김")), Paced(["답"], wait=0.1)]).stream([], timeout=5)) == ["답"]
-    with pytest.raises(OSError, match="첫"):
-        list(FirstOf([Paced(error=OSError("첫")), Paced(error=TimeoutError("둘째"), wait=0.1)]).stream([], timeout=5))
-
-
-def test_고른_흐름이_도중에_실패하면_다른_흐름으로_바꾸지_않고_그_오류를_낸다():
-    pieces = []
-    with pytest.raises(RuntimeError, match="도중"):
-        for text in FirstOf([Paced(["먼저 "], tail=RuntimeError("도중")), Paced(["늦은 답"], wait=0.2)]).stream([], timeout=5):
-            pieces.append(text)
-    assert pieces == ["먼저 "]  # 이미 보인 글에 다른 답을 이어 붙이지 않는다

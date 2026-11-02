@@ -1,8 +1,8 @@
 """답 엔진 만들기: 도우미 창과 평가 프로그램이 같은 엔진을 쓰게 한곳에서 부품을 끼운다(티켓 33, 이전 stand_in.build_engine).
 
-부품: 미리 만든 설명서 벡터 + 질문마다 OpenAI 임베딩(티켓 31), luna 질문 바꾸기 5개(검색어가 먼저 닫힌 1개, 티켓 43·44),
-진짜 답변 모델 2개(첫 조각이 먼저 온 1개, answer_model.FirstOf, 생각 수준은 Settings.reasoning). 모두 돈이 든다(질문마다 아주 조금).
-엔진 이름은 "임베딩+질문 바꾸기+답변"(예: text-embedding-3-large+gpt-6-luna×5+gpt-6-luna×2)으로 시간 기록·평가 결과에 남는다.
+부품: 미리 만든 설명서 벡터 + 질문마다 OpenAI 임베딩(티켓 31), luna 질문 바꾸기 3개(흘려 받아 검색어가 먼저 닫힌 1개, 티켓 43·44),
+진짜 답변 모델(answer_model, 생각 수준은 Settings.reasoning). 모두 돈이 든다(질문마다 아주 조금).
+엔진 이름은 "임베딩+질문 바꾸기+답변"(예: text-embedding-3-large+gpt-6-luna×3+gpt-6-luna)으로 시간 기록·평가 결과에 남는다.
 """
 
 from collections.abc import Sequence
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from blender_tutor import answer_model, manual_vectors
 from blender_tutor.answer_engine import AnswerEngine, Rewriter, Settings
-from blender_tutor.answer_model import FirstOf, OpenAIAnswerModel
+from blender_tutor.answer_model import OpenAIAnswerModel
 from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.manual_chunks import load_chunks
 from blender_tutor.menu_names import MenuNames
@@ -18,14 +18,13 @@ from blender_tutor.paths import PROJECT
 from blender_tutor.progress import Course
 
 EMBEDDINGS = (manual_vectors.MODEL,)  # 고를 수 있는 임베딩(bge-m3는 생기는 티켓에서 더한다)
-REWRITE_MODEL, REWRITE_EFFORT, REWRITE_COUNT = "gpt-6-luna", "none", 5  # 질문 바꾸기(HISTORY [127], 3 → 5는 티켓 44. 질문마다 약 $0.0004)
+REWRITE_MODEL, REWRITE_EFFORT, REWRITE_COUNT = "gpt-6-luna", "none", 3  # 질문 바꾸기(HISTORY [127], 질문마다 약 $0.00025. 5개는 이득이 작아 되돌림, [135])
 
 
-def answer_model_for(settings: Settings) -> FirstOf:
-    """진짜 답변 모델 COPIES개를 settings.reasoning 생각 수준으로 만들어 먼저 온 것을 쓰게 묶는다(만드는 곳은 여기 하나).
-    키가 없으면 SystemExit."""
-    key = openai_key()
-    return FirstOf([OpenAIAnswerModel(answer_model.MODEL, key, settings.reasoning.value) for _ in range(answer_model.COPIES)])
+def answer_model_for(settings: Settings) -> OpenAIAnswerModel:
+    """진짜 답변 모델을 settings.reasoning 생각 수준으로 만든다(만드는 곳은 여기 하나). 키가 없으면 SystemExit.
+    2개를 동시에 보내 먼저 온 것을 쓰는 방법은 이득이 작아 되돌렸다(HISTORY [135])."""
+    return OpenAIAnswerModel(answer_model.MODEL, openai_key(), settings.reasoning.value)
 
 
 def rewriters_for(settings: Settings, key: str) -> list[OpenAIModel]:
@@ -35,7 +34,7 @@ def rewriters_for(settings: Settings, key: str) -> list[OpenAIModel]:
 
 def build_engine(
     data_dir: Path,
-    model: FirstOf | None = None,
+    model: OpenAIAnswerModel | None = None,
     menu_choices: Path = PROJECT / "menu_choices.json",
     menu_titles: Path = PROJECT / "menu_titles.json",
     courses: Sequence[Course] = (),
