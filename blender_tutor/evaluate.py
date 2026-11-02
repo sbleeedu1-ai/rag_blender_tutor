@@ -30,7 +30,7 @@ from pathlib import Path
 
 from blender_tutor import engine_setup
 from blender_tutor.answer_engine import AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source
-from blender_tutor.answer_model import OpenAIAnswerModel
+from blender_tutor.answer_model import FirstOf
 from blender_tutor.conversation import RECENT_PAIRS, Conversation, settings_record
 from blender_tutor.manual_chunks import BASE_URL, Chunk
 from blender_tutor.paths import COURSES, PROJECT, default_progress_records
@@ -320,7 +320,7 @@ def _check_fields(data: object, fields: dict[str, bool]) -> None:
 def main(
     argv: Sequence[str] | None = None,
     now: datetime | None = None,
-    make_model: Callable[[Settings], OpenAIAnswerModel] = engine_setup.answer_model_for,
+    make_model: Callable[[Settings], FirstOf] = engine_setup.answer_model_for,
     build: Callable[..., AnswerEngine] = engine_setup.build_engine,
 ) -> int:
     """명령 줄 입구. 돌려주는 값은 종료 코드(0 성공, 1 결과 폴더가 이미 있음, 2 run에 --yes가 없음).

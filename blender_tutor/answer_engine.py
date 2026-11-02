@@ -9,7 +9,8 @@ import json
 import logging
 import re
 from collections.abc import Iterable, Iterator, Sequence
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+from concurrent.futures import Future, as_completed
 from dataclasses import dataclass
 from enum import StrEnum
 from itertools import islice
@@ -129,10 +130,10 @@ class Embedder(Protocol):
 
 
 class Rewriter(Protocol):
-    """질문 바꾸기 모델: OpenAI 방식 채팅 글(역할 system·user)을 받아 답 글(JSON)을 돌려준다.
+    """질문 바꾸기 모델: OpenAI 방식 채팅 글(역할 system·user)을 받아 답 글(JSON)을 조각으로 흘려 준다(티켓 44).
     주소를 바꿔 로컬 모델(llama-server, 티켓 42)로 바꿔 끼울 수 있게 이 모양만 약속한다."""
 
-    def ask(self, messages: list[dict[str, str]]) -> str: ...
+    def stream(self, messages: list[dict[str, str]]) -> Iterable[str]: ...
 
 
 class AnswerModel(Protocol):
@@ -286,7 +287,7 @@ class AnswerEngine:
         except Exception as error:
             yield _failure(error, [])
             return
-        results = self._search(query, vectors[0])
+        results = self.search(query, vectors[0])
         # 먼저 볼 소제목은 검색 상위를 대신하지 않고 그 위에 덧붙인다. 검색에도 걸렸으면 한 번만
         preview = self._preview(step)
         sent = list(dict.fromkeys(preview + results))
@@ -383,11 +384,13 @@ class AnswerEngine:
         return [{"role": "system", "content": self._rewrite_prompt}, {"role": "user", "content": content}]
 
     def _rewritten(self, messages: list[dict[str, str]]) -> str:
-        """질문 바꾸기 모델들을 동시에 불러 먼저 온 쓸 만한 답의 영어 검색어. 나머지 답은 기다리지 않고 버린다(값은 든다).
-        rewrite_timeout 안에 하나도 오지 않으면 TimeoutError, 모두 실패하면 첫 오류를 그대로 낸다."""
-        pool = ThreadPoolExecutor(len(self._rewriters))
-        futures = [pool.submit(lambda rewriter: _query_in(rewriter.ask(messages)), rewriter) for rewriter in self._rewriters]
-        pool.shutdown(wait=False)  # 늦은 답은 뒤에서 끝나게 둔다
+        """질문 바꾸기 모델들을 동시에 흘려 받아, 검색어 칸이 가장 먼저 닫힌 답의 영어 검색어(티켓 44).
+        칸 순서는 따지지 않는다: query가 첫 칸이 아니면 그 칸이 닫힐 때까지 기다릴 뿐이다.
+        모든 호출은 뒤에서 끝까지 읽는다(마지막 조각의 토큰 수로 요금을 세려고). 나머지 답은 기다리지 않는다(값은 든다).
+        rewrite_timeout 안에 검색어가 하나도 닫히지 않으면 TimeoutError, 모두 실패하면 첫 오류를 그대로 낸다."""
+        futures = [Future() for _ in self._rewriters]
+        for rewriter, future in zip(self._rewriters, futures):
+            threading.Thread(target=_read_rewrite, args=(rewriter, messages, future), daemon=True).start()
         errors = []
         for future in as_completed(futures, timeout=self._settings.rewrite_timeout):  # 한도를 넘기면 TimeoutError
             if future.exception() is None:
@@ -399,11 +402,12 @@ class AnswerEngine:
         """예열(옵션, 기본 끔, [127]): 첫 질문이 늦지 않게 질문 바꾸기 하나와 임베딩을 짧게 한 번씩 부른다. 돈이 아주 조금 든다.
         첫 요청이 느렸던 까닭은 확인하지 못해, 이것으로 빨라지는지는 아직 모른다."""
         if self._rewriters:
-            self._rewriters[0].ask(self._rewrite_messages("베벨", {}))
+            for _ in self._rewriters[0].stream(self._rewrite_messages("베벨", {})):
+                pass
         self._embedder.embed(["bevel"], self._settings.timeout)
 
-    def _search(self, query: str, vector: Sequence[float]) -> list[Chunk]:
-        """뜻 검색과 낱말 검색 순위를 RRF로 합쳐 상위 top_k개를 고른다."""
+    def search(self, query: str, vector: Sequence[float]) -> list[Chunk]:
+        """뜻 검색과 낱말 검색 순위를 RRF로 합쳐 상위 top_k개를 고른다. 실측 프로그램(speed_trial)이 쓰지 않은 검색어도 채점하려고 부른다."""
         meaning_scores = self._vectors @ _normalized(np.asarray(vector, dtype=np.float32))
         rankings = [np.argsort(-meaning_scores, kind="stable")[:RRF_DEPTH]]
         if self._settings.use_bm25:
@@ -418,13 +422,39 @@ class AnswerEngine:
         return [self._chunks[index] for index in best]
 
 
-def _query_in(answer: str) -> str:
-    """질문 바꾸기 답(JSON)의 영어 검색어. 검색어가 없거나 비었으면 ValueError(그 답은 버리고 다음 답을 쓴다)."""
-    data = json.loads(answer)
-    query = data.get("query") if isinstance(data, dict) else None
-    if not isinstance(query, str) or not query.strip():
-        raise ValueError(f"검색어가 없는 질문 바꾸기 답 {answer!r}")
-    return query.strip()
+# 흘려 받는 질문 바꾸기 답(JSON) 안에서 닫힌 검색어 칸: "query": "…"(따옴표 안의 \" 같은 풀이 기호는 건너뛴다)
+CLOSED_QUERY = re.compile(r'"query"\s*:\s*("(?:[^"\\]|\\.)*")')
+
+
+def closed_query(text: str) -> str | None:
+    """지금까지 받은 질문 바꾸기 답 글에서 닫힌 검색어 칸의 값(앞뒤 공백 뺌). 아직 닫히지 않았으면 None.
+    빈 검색어면 ValueError(그 답은 버리고 다음 답을 쓴다). 실측 프로그램(speed_trial)도 같은 판정으로 닫힌 시각을 잰다."""
+    match = CLOSED_QUERY.search(text)
+    if match is None:
+        return None
+    query = json.loads(match.group(1)).strip()
+    if not query:
+        raise ValueError(f"검색어가 빈 질문 바꾸기 답 {text!r}")
+    return query
+
+
+def _read_rewrite(rewriter: Rewriter, messages: list[dict[str, str]], found: Future) -> None:
+    """질문 바꾸기 하나를 끝까지 흘려 읽으며, 검색어 칸이 닫히는 즉시 found에 넣는다(뒤에서 도는 일).
+    검색어를 넣기 전의 오류는 found에 넣어 엔진이 다음 답을 보게 하고, 넣은 뒤의 오류는 기록만 남긴다(답은 이미 진행 중)."""
+    text = ""
+    try:
+        for piece in rewriter.stream(messages):
+            text += piece
+            if not found.done() and (query := closed_query(text)):
+                found.set_result(query)
+    except Exception as error:
+        if found.done():
+            log.warning("검색어를 쓴 뒤 질문 바꾸기 호출이 실패함(요금 기록이 빠질 수 있음): %r", error)
+        else:
+            found.set_exception(error)
+        return
+    if not found.done():
+        found.set_exception(ValueError(f"검색어가 없는 질문 바꾸기 답 {text!r}"))
 
 
 def _translated(state: WorkState) -> bool:

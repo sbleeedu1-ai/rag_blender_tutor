@@ -11,11 +11,12 @@ import os
 import sys
 import urllib.request
 from collections import Counter
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Protocol
 
+from blender_tutor.answer_model import events
 from blender_tutor.manual_chunks import Chunk, load_chunks
 from blender_tutor.paths import COURSES, PROJECT
 from blender_tutor.progress import Course, load_courses
@@ -246,6 +247,31 @@ class OpenAIModel:
         self.output_tokens += answer["usage"]["completion_tokens"]  # 생각 토큰을 포함한 출력(이것으로 요금을 매긴다)
         self.reasoning_tokens += answer["usage"].get("completion_tokens_details", {}).get("reasoning_tokens", 0)
         return answer["choices"][0]["message"]["content"]
+
+    def stream(self, messages: list[dict[str, str]]) -> Iterator[str]:
+        """ask와 같은 요청을 흘려 받아 답 글 조각을 오는 대로 돌려준다(질문 바꾸기, 티켓 44). 토큰 수는 마지막 조각에서 센다.
+        timeout은 조각 사이 한도다(소켓 읽기 한 번마다 걸림)."""
+        body = {"model": self.model, "messages": messages, "response_format": {"type": "json_object"},
+                "stream": True, "stream_options": {"include_usage": True}}
+        if self.effort:
+            body["reasoning_effort"] = self.effort
+        if self.tier:
+            body["service_tier"] = self.tier
+        request = urllib.request.Request(
+            self.url, json.dumps(body).encode("utf-8"),
+            {"Authorization": f"Bearer {self.key}", "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            self.requests += 1
+            for piece in events(response, "질문 바꾸기"):
+                if usage := piece.get("usage"):
+                    self.tiers[piece.get("service_tier", "알림 없음")] += 1
+                    self.input_tokens += usage["prompt_tokens"]
+                    self.output_tokens += usage["completion_tokens"]
+                    self.reasoning_tokens += (usage.get("completion_tokens_details") or {}).get("reasoning_tokens", 0)
+                for choice in piece.get("choices", []):
+                    if text := choice.get("delta", {}).get("content"):
+                        yield text
 
 
 def openai_key(env_file: Path = DATA / ".env") -> str:

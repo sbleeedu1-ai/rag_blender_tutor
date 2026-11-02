@@ -5,6 +5,7 @@
 """
 
 import threading
+import time
 from dataclasses import replace
 
 import pytest
@@ -660,21 +661,32 @@ def test_생각_수준은_정해_둔_이름만_받는다():
 
 
 class FakeRewriter:
-    """질문 바꾸기 모델 대신: release가 열릴 때까지 기다렸다가 answer를 돌려준다(error면 그 오류를 낸다). 받은 글을 적어 둔다."""
+    """질문 바꾸기 모델 대신: release가 열릴 때까지 기다렸다가 answer를 cut 글자에서 두 조각으로 흘려 준다(error면 그 오류를 낸다).
+    tail을 주면 둘째 조각 앞에서 그것이 열릴 때까지 기다리고, tail_error를 주면 둘째 조각 대신 그 오류를 낸다.
+    받은 글을 적어 두고, 끝까지 읽혔으면 finished가 열린다."""
 
-    def __init__(self, answer='{"query": "array copies"}', release: threading.Event | None = None, error: Exception | None = None):
-        self.answer, self.error = answer, error
+    def __init__(self, answer='{"query": "array copies"}', release: threading.Event | None = None, error: Exception | None = None,
+                 cut: int | None = None, tail: threading.Event | None = None, tail_error: Exception | None = None):
+        self.answer, self.error, self.tail, self.tail_error = answer, error, tail, tail_error
+        self.cut = len(answer) // 2 if cut is None else cut
         self.release = release or threading.Event()
         if release is None:
             self.release.set()
         self.calls: list[list[dict[str, str]]] = []
+        self.finished = threading.Event()
 
-    def ask(self, messages):
+    def stream(self, messages):
         self.calls.append(messages)
         self.release.wait(5)
         if self.error:
             raise self.error
-        return self.answer
+        yield self.answer[: self.cut]
+        if self.tail:
+            self.tail.wait(5)
+        if self.tail_error:
+            raise self.tail_error
+        yield self.answer[self.cut :]
+        self.finished.set()
 
 
 def ask_rewritten(rewriters, question="배열로 복사하려면?", embedder=None, model=None, settings=Settings(), recent=(), state=STATE, step=None):
@@ -691,6 +703,48 @@ def test_질문_바꾸기를_동시에_불러_먼저_온_답의_검색어만_임
     assert embedder.calls == [["array copies"]]  # 검색어 없는 둘째 답은 버리고, 늦은 첫째는 기다리지 않는다
     assert found(events)[0] == ARRAY
     assert all(len(rewriter.calls) == 1 for rewriter in rewriters)  # 셋 다 불렀다
+
+
+def test_검색어_칸이_닫히면_나머지_칸을_기다리지_않고_찾고_호출은_뒤에서_끝까지_읽는다():
+    tail = threading.Event()  # 분야 칸은 답이 끝난 뒤에야 온다
+    answer = '{"query": "array copies", "areas": ["modeling/modifiers"], "exclude": []}'
+    rewriter = FakeRewriter(answer, cut=answer.index(","), tail=tail)
+    embedder = FakeEmbedder(by_text={"array copies": TOWARD_ARRAY})
+    events = ask_rewritten([rewriter], embedder=embedder)
+    assert found(events)[0] == ARRAY and not rewriter.finished.is_set()
+    tail.set()
+    assert rewriter.finished.wait(5)  # 요금 기록(마지막 조각)을 받으려고 끝까지 읽는다
+
+
+def test_검색어_칸이_뒤에_있어도_닫힌_곳에서_쓰고_따옴표_풀이를_지킨다():
+    rewriter = FakeRewriter('{"areas": [], "query": "array \\"copies\\"", "exclude": []}')
+    embedder = FakeEmbedder()
+    ask_rewritten([rewriter], embedder=embedder)
+    assert embedder.calls == [['array "copies"']]
+
+
+def test_검색어를_쓴_뒤에_난_오류는_답을_멈추지_않고_기록만_남긴다(caplog):
+    answer = '{"query": "array copies", "areas": []}'
+    rewriter = FakeRewriter(answer, cut=answer.index(","), tail_error=OSError("끊김"))
+    events = ask_rewritten([rewriter])
+    assert isinstance(events[-1], Done)
+    assert rewriter.calls and _waited(lambda: "끊김" in caplog.text)
+
+
+def _waited(check, seconds=5.0):
+    """뒤에서 도는 일이 check를 참으로 만들 때까지 조금씩 기다린다."""
+    deadline = time.monotonic() + seconds
+    while not check() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return check()
+
+
+def test_빈_검색어는_쓸_수_없는_답으로_버린다():
+    late = threading.Event()  # 빈 검색어가 먼저 온다
+    threading.Timer(0.1, late.set).start()
+    embedder = FakeEmbedder()
+    events = ask_rewritten([FakeRewriter('{"query": "  ", "areas": []}'), FakeRewriter('{"query": "array copies"}', late)], embedder=embedder)
+    assert embedder.calls == [["array copies"]] and isinstance(events[-1], Done)
 
 
 def test_질문_바꾸기에는_분야_목록을_담은_지시와_질문만_보낸다():
