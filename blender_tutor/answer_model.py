@@ -8,6 +8,7 @@ import json
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
+from http.client import HTTPResponse
 
 MODEL = "gpt-6-luna"  # 명세 기본 답변 모델
 PRICE = {"gpt-6-luna": (0.10, 0.50)}  # 100만 토큰당 입력·출력 달러(.scratch/.../31-번역-모델-조사.md, search_compare와 같은 값)
@@ -39,23 +40,12 @@ class OpenAIAnswerModel:
             raise
         with response:
             self.requests += 1
-            for line in response:  # 서버가 보내는 줄: "data: {조각 JSON}" … "data: [DONE]", 사이사이 빈 줄
-                data = line.decode("utf-8").strip().removeprefix("data:").strip()
-                if not data:
-                    continue
-                if data == "[DONE]":
-                    return
-                piece = json.loads(data)
-                # 흐름 도중 오류 조각. 공식 라이브러리(openai-python _streaming.py)와 같은 규칙으로 오류를 낸다(버리면 빈 답이 성공처럼 끝남)
-                if error := piece.get("error"):
-                    message = error.get("message") if isinstance(error, dict) else None
-                    raise RuntimeError(f"답변 모델 흐름 도중 오류: {message or '알 수 없는 오류'}")
+            for piece in events(response, "답변 모델"):
                 if usage := piece.get("usage"):
                     self._count(usage)
                 for choice in piece.get("choices", []):
                     if text := choice.get("delta", {}).get("content"):
                         yield text
-        raise ValueError("답변 모델의 흐름이 끝 표시([DONE]) 없이 끊김")
 
     def _count(self, usage: dict) -> None:
         self.input_tokens += usage["prompt_tokens"]
@@ -65,3 +55,21 @@ class OpenAIAnswerModel:
     def dollars(self) -> float:
         input_price, output_price = PRICE[self.model]
         return round((self.input_tokens * input_price + self.output_tokens * output_price) / 1_000_000, 6)
+
+
+def events(response: HTTPResponse, label: str) -> Iterator[dict]:
+    """흘려 받는 응답(줄마다 "data: {조각 JSON}" … "data: [DONE]", 사이사이 빈 줄)의 조각 JSON을 차례로 돌려준다.
+    흐름 도중 오류 조각이면 RuntimeError(공식 라이브러리 openai-python _streaming.py와 같은 규칙, 버리면 빈 답이 성공처럼 끝남),
+    끝 표시 없이 끊기면 ValueError. label은 오류 글에 붙일 이름(답변 모델·질문 바꾸기)."""
+    for line in response:
+        data = line.decode("utf-8").strip().removeprefix("data:").strip()
+        if not data:
+            continue
+        if data == "[DONE]":
+            return
+        piece = json.loads(data)
+        if error := piece.get("error"):
+            message = error.get("message") if isinstance(error, dict) else None
+            raise RuntimeError(f"{label} 흐름 도중 오류: {message or '알 수 없는 오류'}")
+        yield piece
+    raise ValueError(f"{label}의 흐름이 끝 표시([DONE]) 없이 끊김")

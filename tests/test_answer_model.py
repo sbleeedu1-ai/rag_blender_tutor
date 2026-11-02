@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 from blender_tutor.answer_model import OpenAIAnswerModel
+from blender_tutor.beginner_scope import OpenAIModel
 
 USAGE = {"prompt_tokens": 6000, "completion_tokens": 400, "completion_tokens_details": {"reasoning_tokens": 100}}
 
@@ -104,3 +105,23 @@ def test_흐름_도중_오류_조각이_오면_그_메시지로_오류(server):
         for text in model_for(server).stream([], timeout=5):
             pieces.append(text)
     assert pieces == ["베벨은 "]
+
+
+# 질문 바꾸기 흘려 받기(티켓 44): beginner_scope.OpenAIModel.stream도 같은 흐름 읽기를 쓴다
+
+
+def test_질문_바꾸기를_JSON_모드로_흘려_받고_마지막_조각에서_토큰을_센다(server):
+    server["lines"] = [piece('{"query": '), piece('"bevel"}'), {"choices": [], "usage": USAGE, "service_tier": "default"},
+                       "data: [DONE]"]
+    rewriter = OpenAIModel("gpt-6-luna", "fake-key", "none", timeout=5, url=server["url"])
+    assert list(rewriter.stream([{"role": "user", "content": "베벨"}])) == ['{"query": ', '"bevel"}']
+    body = server["bodies"][0]
+    assert (body["stream"], body["response_format"], body["reasoning_effort"]) == (True, {"type": "json_object"}, "none")
+    assert (rewriter.input_tokens, rewriter.output_tokens, rewriter.reasoning_tokens, rewriter.requests) == (6000, 400, 100, 1)
+    assert rewriter.tiers == {"default": 1}
+
+
+def test_질문_바꾸기_흐름이_끝_표시_없이_끊기면_오류(server):
+    server["lines"] = [piece('{"query": "bevel"}')]
+    with pytest.raises(ValueError, match="질문 바꾸기"):
+        list(OpenAIModel("gpt-6-luna", "fake-key", timeout=5, url=server["url"]).stream([]))

@@ -377,7 +377,7 @@ def test_run은_yes가_없으면_어림_비용만_보이고_돌리지_않는다(
     made_models.clear()
     argv = ["run", *options(tmp_path, "--name", "기준", "--data", str(tmp_path / "data"))]
     assert main(argv, now=datetime(2026, 10, 26, 9, 5)) == 2
-    assert "차례 2개 × 약 $0.0006 = 약 $0.0012" in capsys.readouterr().err
+    assert "차례 2개 × 약 $0.00064 = 약 $0.00128" in capsys.readouterr().err
     # 잰 적 없는 생각 수준은 숫자를 지어내지 않는다
     assert main([*argv, "--reasoning", "medium"], now=datetime(2026, 10, 26, 9, 5)) == 2
     assert "medium은 잰 적이 없어" in capsys.readouterr().err

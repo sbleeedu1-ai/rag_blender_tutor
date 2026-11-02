@@ -29,8 +29,8 @@ class Rewriter:  # luna 질문 바꾸기 대신
     def __init__(self, model, key, effort, timeout):
         self.settings = (model, effort, timeout)
 
-    def ask(self, messages):
-        return '{"query": "bevel width"}'
+    def stream(self, messages):
+        yield '{"query": "bevel width"}'
 
 
 class AnswerModel:  # 진짜 답변 모델 대신: 만들 때 받은 값과 받은 대화 글을 적어 둔다
