@@ -2,7 +2,7 @@
 
 시험 경계 ①(.scratch/mvp-roundtrip/spec.md의 "답 엔진"과 Testing Decisions 참고).
 Blender·창 없이 부를 수 있고, 아무것도 기억하지 않는다(최근 대화는 부를 때마다 입력으로 받음, 티켓 09).
-답변 모델·임베딩은 밖에서 받는다. 테스트는 가짜를 끼우고, 실제 모델을 끼우는 일은 유료 티켓에서 한다.
+답변 모델·임베딩은 밖에서 받는다. 테스트는 가짜를 끼우고, 실제 모델은 engine_setup이 끼운다(티켓 31·33).
 """
 
 import json
@@ -147,7 +147,7 @@ class AnswerModel(Protocol):
 class Reasoning(StrEnum):
     """답변 모델의 생각 수준. 정해 둔 이름만 쓴다(오타를 내면 바로 오류가 난다).
 
-    명세의 none·low·medium. 실제 모델이 받는 값과 다르면 모델을 붙이는 티켓 33에서 고친다.
+    명세의 none·low·medium. 값을 그대로 OpenAI의 reasoning_effort로 넘긴다(luna가 none·low를 받는 것은 HISTORY [127]·[63]에서 확인).
     """
 
     NONE = "none"
@@ -163,7 +163,7 @@ class Settings:
     timeout: float = 10.0  # 모델이 이만큼(초) 아무것도 보내지 않으면 멈춘 것으로 본다(사용자 결정, 2026-10-21)
     rewrite_timeout: float = 5.0  # 질문 바꾸기를 동시에 부른 것 중 하나라도 올 때까지 기다리는 한도(초, [127])
     use_bm25: bool = False  # 낱말 검색(BM25)을 섞을지. 끄면 뜻 검색만(티켓 40 결과로 끔, HISTORY [102])
-    # 답변 모델의 생각 수준(명세 기본 none). 시간 기록에 남긴다. 실제 모델에 넘기는 일은 티켓 33
+    # 답변 모델의 생각 수준(명세 기본 none). 엔진을 만들 때 답변 모델에 넘기고(engine_setup), 시간 기록에 남긴다
     reasoning: Reasoning = Reasoning.NONE
 
     def __post_init__(self):

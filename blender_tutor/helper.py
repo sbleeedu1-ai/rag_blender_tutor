@@ -23,7 +23,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication
 
 from blender_tutor import winapi
-from blender_tutor.answer_engine import Event
+from blender_tutor.answer_engine import Event, Settings
 from blender_tutor.conversation import PROGRAM_ERROR, Conversation
 from blender_tutor.course_desk import CourseDesk, Line
 from blender_tutor.helper_window import FONT, HelperWindow, Tray
@@ -32,12 +32,13 @@ from blender_tutor.progress import Course, load_courses
 from blender_tutor.question_flow import QuestionFlow
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
 from blender_tutor.manual_vectors import MODEL as EMBEDDING
-from blender_tutor.stand_in import build_engine
+from blender_tutor.engine_setup import build_engine
 from blender_tutor.state_stream import RecordingDesk
 from blender_tutor.timing import Stopwatch
 from blender_tutor.window_rules import FrontBlender, Place, Screen, needs_move, place
 
 WARM_UP_ENV = "BLENDER_TUTOR_WARM_UP"  # 1이면 엔진을 만든 뒤 예열한다(질문 바꾸기·임베딩을 한 번씩, 돈이 아주 조금 든다)
+REASONING_ENV = "BLENDER_TUTOR_REASONING"  # 답변 모델의 생각 수준(none·low·medium). 없으면 명세 기본 none(티켓 33 실측용)
 
 FOLLOW_EVERY_MS = 100  # Blender를 따라 창 자리를 다시 보는 간격
 # 작업 상태 흐름을 늘 기록한다(검수 동안 쓰려고, 2026-10-26 사용자 결정). 코드 동결 전에 False로 바꾼다(티켓 37)
@@ -102,7 +103,9 @@ class Helper:
         """설명서를 읽어 엔진을 만든다(약 2초). 창은 먼저 떠 있고, 그동안 물으면 '읽는 중' 문구를 보인다."""
         started = time.perf_counter()
         try:
-            self._conversation.engine = build_engine(PROJECT / "data", courses=self._courses, embedding=EMBEDDING)
+            # 모르는 생각 수준이면 ValueError → 아래에서 기록에 남기고 "문제가 생겼어요"를 보인다
+            settings = Settings(reasoning=os.environ.get(REASONING_ENV, Settings().reasoning))
+            self._conversation.engine = build_engine(PROJECT / "data", courses=self._courses, settings=settings, embedding=EMBEDDING)
         except SystemExit as error:  # OpenAI 키가 없음(openai_key). 스레드 안이라 잡지 않으면 '읽는 중'에 머문다
             log.warning("OpenAI 키 없음: %s", error)
             self._conversation.waiting_message = str(error)
@@ -115,7 +118,10 @@ class Helper:
             log.exception("답 엔진을 만들지 못함")
             self._conversation.waiting_message = PROGRAM_ERROR
             return
-        log.info("답 엔진 준비 %.1f초(%s, 답변 모델은 티켓 33에서 진짜로)", time.perf_counter() - started, self._conversation.engine.name)
+        log.info(
+            "답 엔진 준비 %.1f초(%s, 생각 수준 %s)",
+            time.perf_counter() - started, self._conversation.engine.name, self._conversation.engine.settings.reasoning,
+        )
         if os.environ.get(WARM_UP_ENV) == "1":  # 예열은 사용자가 켤 때만(몰래 처리하는 인상을 주지 않게, HISTORY [127])
             started = time.perf_counter()
             self._conversation.engine.warm_up()
