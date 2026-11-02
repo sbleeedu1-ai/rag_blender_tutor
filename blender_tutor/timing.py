@@ -5,6 +5,7 @@
 F10 시각은 F10 뒤 첫 질문에만, 입력 가능 뒤 F10_VALID초 안에 보냈을 때만 붙인다. 창이 떠 있는 채 이어 물었거나,
 F10을 누르고 묻지 않은 채 Blender에서 작업하다 창을 눌러 물었으면 준비 시간이 아니라서 비운다(None).
 평가 프로그램(티켓 29)이 이 파일을 읽어 가운데값·최대값을 낸다. 못 써도 답에는 영향이 없게 기록 오류는 삼킨다.
+창에 보인 답을 캡처 없이 다시 보려고 답 글·근거(쪽 제목 > 소제목, 주소)·실패 문구도 같은 줄에 남긴다(티켓 32 다시 검수).
 """
 
 import json
@@ -16,7 +17,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from blender_tutor.answer_engine import Event, Failure, Piece
+from blender_tutor.answer_engine import Done, Event, Failure, Piece
 
 # F10 시각을 붙이는 한도(초). 다른 창에서 복사해 붙여 넣느라 오가는 시간은 넉넉히 들고,
 # 묻지 않고 떠났다 돌아온 질문은 거른다(2026-10-26 사용자 결정)
@@ -92,18 +93,23 @@ class Stopwatch:
 
 
 class Lap:
-    """질문 하나의 시각들. 첫 Piece에 첫 글자, Done·Failure에 답 끝을 적고 그때 기록 파일에 쓴다."""
+    """질문 하나의 시각들. 첫 Piece에 첫 글자, Done·Failure에 답 끝을 적고 그때 기록 파일에 쓴다. 답 글 조각도 모아 함께 쓴다."""
 
     def __init__(self, record: dict, clock: Callable[[], float], write: Callable[[dict], None]):
         self._record = record
         self._clock = clock
         self._write = write  # 답이 끝나면 한 줄을 쓴다(Stopwatch._write)
+        self._pieces: list[str] = []
 
     def saw(self, event: Event) -> None:
         if isinstance(event, Piece):
             if self._record["first_piece"] is None:
                 self._record["first_piece"] = self._clock()
+            self._pieces.append(event.text)
             return
         self._record["done"] = self._clock()
         self._record["outcome"] = Outcome.FAILURE if isinstance(event, Failure) else Outcome.DONE
+        self._record["answer"] = "".join(self._pieces)
+        self._record["sources"] = [{"path": s.path, "url": s.url} for s in event.sources] if isinstance(event, Done) else []
+        self._record["failure"] = event.message if isinstance(event, Failure) else None
         self._write(self._record)

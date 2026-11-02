@@ -104,7 +104,7 @@
 | 도우미 | `blender_tutor/progress.py` | 담당자: 연습 과정 파일 읽기(이름·한 줄 설명·비슷한 말 → `Course.search_text`, 비슷한 연습 과정 고르기에 임베딩), 연습 과정 하나의 진행. 조작을 차례로 안내하고 감지 조건이 맞으면 다음 조작, 끝난 조건이 맞으면 묻고 깨지면 거두기(끝난 조건이 없는 단계는 조작을 다 끝내면 묻기), 마지막 조작을 '다음'으로 넘겼고 끝난 조건이 맞으면 묻지 않고 다음 단계, 단계 옮기기 | 17, 27, 32 |
 | 도우미 | `blender_tutor/conditions.py` | 판정표: 끝난 조건·감지 조건 14종류의 "값의 꼴"과 "맞는지 판정"(지금 상태와 기준 상태를 견줌). 옮기기는 방향(위치 늘어남·줄어듦)이나 방향 없이 바뀜만(위치 바뀜) 본다 | 17, 27, 32 |
 | 도우미 | `blender_tutor/korean_particles.py` | 한국어 조사 고르기: 이름 끝 받침에 따라 "이에요/예요", "으로/로" | 27 |
-| 도우미 | `blender_tutor/timing.py` | 시간 기록: 질문마다 F10 누름·받음·입력 가능·보냄·첫 글자·답 끝 시각, PC 이름, 그때의 엔진 이름·설정(생각 수준 등)을 한 줄로 | 28 |
+| 도우미 | `blender_tutor/timing.py` | 시간 기록: 질문마다 F10 누름·받음·입력 가능·보냄·첫 글자·답 끝 시각, PC 이름, 그때의 엔진 이름·설정(생각 수준 등), 창에 보인 답 글·근거·실패 문구를 한 줄로 | 28, 32 |
 | 도우미 | `blender_tutor/answer_engine.py` | 답 엔진: 질문 + 작업 상태 + 지금 단계 → 질문 바꾸기(`Rewriter.stream` 여럿을 동시에 흘려 받아 `"query"` 칸이 먼저 닫힌 1개(`closed_query`, 칸 순서는 따지지 않음), 호출은 뒤에서 끝까지 읽어 요금을 셈, 긴 지시 `REWRITE_PROMPT`) → 설명서 검색(상위 8개) → 답 글 흐름 + 근거 목록(+ 평가용 검색 결과·붙인 연습 과정). 답변 모델에는 청크 영어 원문과, 지시 끝에 넘기는 청크에 나온 낱말의 용어표 줄(`TERMS`, 예: vertex → 버텍스)만 붙인다 검색 `search(검색어, 벡터)`는 실측 프로그램도 불러 쓰지 않은 검색어를 채점한다 | 21-23, 29, 31, 43, 44 |
 | 도우미 | `blender_tutor/engine_setup.py` | 엔진 만들기 `build_engine(data/, model=None, …, settings=, embedding=)`: `data/vectors/` 설명서 벡터를 읽고 질문·연습 과정만 OpenAI로 임베딩, 질문 바꾸기 luna 3개(`REWRITE_MODEL`·`REWRITE_COUNT`, `rewriters_for`, `rewriters=`로 바꿔 끼울 수 있음), 답변 모델(주지 않으면 진짜, 생각 수준은 `settings.reasoning`). 답변 모델 만들기는 `answer_model_for(settings)` 한 곳(평가 프로그램도 이것으로 만들어 요금을 셈). 엔진 이름(`engine.name`, `text-embedding-3-large+gpt-6-luna×3+gpt-6-luna`, 답변 칸은 끼운 모델 이름)도 여기서 정해 시간 기록·평가가 그대로 남김. 키가 없으면 SystemExit, 벡터 파일이 없으면 FileNotFoundError. 이전의 무료 임시 엔진(`stand_in.py`)은 `archive/`로 옮김 | 26, 29, 31, 33, 44 |
 | 도우미 | `blender_tutor/answer_model.py` | 진짜 답변 모델 `OpenAIAnswerModel(model, key, effort)`: Chat Completions에 `stream`으로 묻고 답 조각을 오는 대로 낸다. 생각 수준을 `reasoning_effort`로 넘김. 조각 사이가 `timeout`초(기본 10초)를 넘으면 TimeoutError, 끝 표시 없이 끊기면 ValueError, 도중 오류 조각이면 RuntimeError(공식 라이브러리와 같은 규칙). 받은 토큰을 세고 `dollars()`로 요금. 흐름 읽기 `events(response, 이름)`는 질문 바꾸기 흘려 받기도 함께 씀 | 33, 44 |
@@ -231,9 +231,10 @@
   {"pc": "DESKTOP-J9LV5HK", "engine": "text-embedding-3-large+gpt-6-luna×3+gpt-6-luna",
    "settings": {"top_k": 8, "timeout": 10.0, "rewrite_timeout": 5.0, "use_bm25": false, "reasoning": "none", "recent_pairs": 3},
    "question": "칼끝은 어떻게 모아요?", "f10_pressed": 1792977551.65, "f10_received": 1792977551.70,
-   "ready": 1792977551.95, "sent": 1792977556.0, "first_piece": 1792977557.5, "done": 1792977559.0, "outcome": "done"}
+   "ready": 1792977551.95, "sent": 1792977556.0, "first_piece": 1792977557.5, "done": 1792977559.0, "outcome": "done",
+   "answer": "에디트 모드(Edit Mode)에서 …", "sources": [{"path": "Merge > At Center", "url": "https://docs.blender.org/manual/en/5.2/…"}], "failure": null}
   ```
-  F10 시각 셋은 F10 뒤 첫 질문에만, 입력 가능 뒤 60초 안에 보냈을 때만 있다. 창이 떠 있는 채 이어 물었거나 F10을 누르고 떠났다 한참 뒤 창을 눌러 물으면 `null`(창을 눌러 묻는 경로는 따로 재지 않음, 보냄 → 답 끝은 모든 질문에 남음). 실패로 끝나면 `outcome`이 `failure`이고 `first_piece`는 `null`일 수 있다. `engine`(엔진 이름, 도우미 창은 지금 `text-embedding-3-large+gpt-6-luna×3+gpt-6-luna`, 생각 수준은 환경 변수 `BLENDER_TUTOR_REASONING`(없으면 none))과 `settings`(답 엔진 설정 + 최근 대화 쌍 수)로 평가 프로그램이 줄을 가른다. 엔진 준비 전에 물은 줄은 둘 다 `null`. 리랭커·임베딩 종류 설정은 생기는 티켓에서 `settings`에 더한다.
+  F10 시각 셋은 F10 뒤 첫 질문에만, 입력 가능 뒤 60초 안에 보냈을 때만 있다. 창이 떠 있는 채 이어 물었거나 F10을 누르고 떠났다 한참 뒤 창을 눌러 물으면 `null`(창을 눌러 묻는 경로는 따로 재지 않음, 보냄 → 답 끝은 모든 질문에 남음). 실패로 끝나면 `outcome`이 `failure`이고 `first_piece`는 `null`일 수 있다. `engine`(엔진 이름, 도우미 창은 지금 `text-embedding-3-large+gpt-6-luna×3+gpt-6-luna`, 생각 수준은 환경 변수 `BLENDER_TUTOR_REASONING`(없으면 none))과 `settings`(답 엔진 설정 + 최근 대화 쌍 수)로 평가 프로그램이 줄을 가른다. 엔진 준비 전에 물은 줄은 둘 다 `null`. `answer`는 창에 보인 답 글(실패면 거기까지 나온 글), `sources`는 근거(실패면 빈 목록), `failure`는 실패 문구(티켓 32에서 더함, 그 전 줄에는 이 세 칸이 없다). 리랭커·임베딩 종류 설정은 생기는 티켓에서 `settings`에 더한다.
 - 흐름 기록(티켓 28): `%APPDATA%\blender_tutor\streams\<켠 시각>.jsonl`. 도우미를 켤 때마다 새 파일, 지우지 않는다. 검수 동안 늘 켜 두고 코드 동결 전에 끈다(`helper.py`의 `RECORD_STREAM`, 티켓 37). 한 줄이 창마다 진행에 넣은 부름 하나(지어낸 예):
 
   ```json
@@ -335,7 +336,7 @@ Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_
 | 연습 과정 파일 | `test_course_check.py` | 파일 → 문제 목록 |
 | 자료 준비 | `test_manual_chunks.py`, `test_menu_names.py` | 손으로 쓴 작은 HTML → 청크·사전 |
 | 작업 상태·받는 쪽·설치 | `test_work_state.py`, `test_receiver.py`, `test_install_addon.py` | 애드온인 척 보낸 봉투 → 창 번호별 상태·F10 누른 시각·켜진 Blender 목록·거절·끝남 |
-| 시간 기록 | `test_timing.py` | 가짜 시계 + 답 사건 → 기록 파일의 한 줄(F10 없이 이어 묻기, 실패, 쓸 수 없는 파일) |
+| 시간 기록 | `test_timing.py` | 가짜 시계 + 답 사건 → 기록 파일의 한 줄(F10 없이 이어 묻기, 실패, 쓸 수 없는 파일, 답 글·근거) |
 | 흐름 기록 | `test_state_stream.py` | 진행에 넣은 봉투·단추를 기록 → 새 진행 관리에 다시 넣으면 같은 말·자리 |
 | 검 검수 회귀 | `test_sword_review.py` | 티켓 32 검수 흐름 파일에서 자른 실제 작업 상태(`tests/fixtures/sword_review_20261102.json`) → 저장소 검 연습 과정의 코등이 줄이기·손잡이·끝장식 옮기기가 그 줄에서 감지됨 |
 | 창 규칙 | `test_window_rules.py` | 화면 모습(앞 프로그램, 최소화, X로 내림) → 맨 위/뒤로/숨김/그대로, 마지막 앞 Blender, 줄바꿈 |
