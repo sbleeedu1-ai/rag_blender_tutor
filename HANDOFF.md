@@ -1,42 +1,44 @@
 # 인수인계
 
-마지막 갱신: 2026-11-02 · Claude Code(Opus 5.5) · 강의실 PC · **PR #32 병합 전에 씀**(브랜치 `feat/44-first-token-tweaks`). 이어받을 때 `git fetch` 뒤 PR #32가 main에 병합됐는지 먼저 본다. 병합됐으면 main에서 새 브랜치로.
+마지막 갱신: 2026-11-02 · Claude Code(Opus 5.5) · 강의실 PC · **PR #34 병합 전에 씀**(브랜치 `feat/32-sword-review`). 이어받을 때 `git fetch` 뒤 PR #34가 main에 병합됐는지 먼저 본다. 병합 안 됐으면 이 브랜치에서 이어 한다(32가 아직 열려 있음).
 
 ## 다음 할 일
 
-1. 32(👤 검 따라 하기 검수): 사용자가 Blender 5.2에서 검 연습 과정을 따라 한다. **막힌 곳은 홀드아웃(34) A 갈래 재료로 모은다**(Ctrl+F10 + 메모, `data\holdout_raw\`, Claude에 붙여 넣지 않음, 티켓 34 Comments).
-2. 36(방패 연습 과정) → 34(홀드아웃 20문항: A 사용자 + B 결과를 못 보는 새 하위 에이전트, 35 고치기 전 측정 **전에** 봉인) → 35(💰 개발 30문항, 고치기 반복으로 적중·정답 올리기, 근거 거르기 [132] 후보) → 37(💰 홀드아웃). 결정은 HISTORY [136].
-3. 닫음·미룸: 38 `wontfix`(검색어 덧붙이기를 뺀 뒤 쓸 곳 없음), 42(집 PC 로컬 트랙)는 나중에.
+1. 32 마무리: **사용자 결정 3개**(티켓 32 Comments 맨 아래 후보 A·B·C, 권하는 답 있음)를 받고, **사용자가 바뀐 단계(1-7·9·11)를 다시 검수**한다. 볼 것: 단계 끝 흐름이 자연스러운지(물음·'다음'·구분선), 1단계 숫자패드 .이 '다음' 없이 감지되는지, 11단계 Material Preview의 한국어 화면 글자, 10단계 "양(Amount)". 그 뒤 고칠 것을 고치고 티켓을 닫아 PR #34 병합(확인받고).
+2. 36(방패 연습 과정) → 34(홀드아웃 20문항, **모두 B 갈래**, HISTORY [138]) → 35 → 37. 순서는 HISTORY [136].
+3. 낮은 우선순위: **Win+E(파일 탐색기)를 누르면 도우미 창이 튀어나옴**(검수 때 사용자 발견, 원인 미조사, 사용자 "우선순위는 낮은편이라 일단은 핸드오프.md 에 남겨만 둬"). 42(집 PC 로컬 트랙)는 나중에.
 
 ## 지금 상태와 검증
 
-- 티켓 44 끝(`Status: resolved`): 질문 바꾸기를 흘려 받아 `"query"` 칸이 닫히면 바로 검색(방법 1)만 남김. 5개 동시·답변 2개 동시는 재 보고 되돌림("ㅇㅇ 방법1만 남겨"). 실측 프로그램 `speed_trial.py`는 다음 시간 측정용으로 남김.
-- 속도(강의실 PC, none, 엔진만, 20문항 × 2회차, 같은 기록으로 계산): 방법 1만 남긴 첫 글자 중앙 1.89초·90% 2.23초·2초 넘음 9/40, 방법 1 없을 때 어림 2.04초. 질문당 약 $0.00058. 도우미 창에서는 아직 재지 않았다.
-- pytest **560 passed**(2026-11-02, 강의실 PC, 2·3 되돌린 뒤 세 번 돌림). 연습 과정 파일·애드온은 바꾸지 않아 course_check·애드온 자체 시험은 돌리지 않았다.
+- 브랜치 `feat/32-sword-review`, 커밋 3개(`5db76a9` 계획 메모, `0d9ee0f` 구현, `a07ecb1` 검토 반영) + 이 HANDOFF 커밋, 모두 원격에 올림. PR #34 열림, 병합 안 함.
+- 바꾼 것: 안내 말의 `[[메뉴 이름]]` → 한국어 화면 글자(`course_desk`·`menu_names`), 단계 끝 흐름(`progress`), 구분선(`helper_window`), 새 감지 `위치 바뀜`(`conditions`), `courses/sword.yaml`·`_common.yaml`, 회귀 테스트 `tests/test_sword_review.py` + `tests/fixtures/`. 자세히는 HISTORY [138]·[139], 티켓 32 Comments.
+- pytest **581 passed**, course_check 문제 0개(2026-11-02, 강의실 PC). 애드온은 바꾸지 않아 애드온 자체 시험은 돌리지 않았다. 실제 도우미 창으로는 아직 안 봤다(다시 검수 몫).
+- 코드 검토 19개(규칙 10·명세 9)는 사용자 말("대부분 검수하고 처리하고 중요한 후보 3개만")대로 Claude가 처리, 처리·보류 이유는 티켓 32.
 
 ## 모르면 실수할 것
 
-- **유료**: 도우미 창 질문마다 질문 바꾸기 3번 + 임베딩 + 답변 모델(none 실측 질문당 약 $0.00058, [135]). 무료로 돌리는 길은 없다(시험은 가짜 부품). `evaluate run`·`speed_trial`은 `--yes` 없이 멈추고 어림 비용만 보인다(평가 none $0.00064·low $0.00065/차례, medium은 어림 안 함). 오늘 쓴 유료 약 $0.059(티켓 33 $0.016 + 44 실측 $0.043).
-- 생각 수준을 창에서 바꾸려면 환경 변수 `BLENDER_TUTOR_REASONING=low`(대문자·오타면 "문제가 생겼어요", 원인은 기록 파일). 도우미는 Blender를 다시 켜야 새 코드로 뜬다.
-- 첫 질문이 약 1초 느리다(원인 미확인, 조사 A: 요금 없는 `GET /v1/models`로 가를 수 있음). 질문 바꾸기는 이제 흘려 받는다: 화면 답이 끝난 뒤에도 질문 바꾸기 호출이 뒤에서 끝까지 읽히고(요금 기록), 그 뒤 실패는 기록 파일에 "검색어를 쓴 뒤 질문 바꾸기 호출이 실패함"으로만 남는다.
-- 답이 나오는 도중 도우미를 끄면 기록에 `RuntimeError: Signal source has been deleted`가 남는다(알려진 것, [130]).
-- "잠시 뒤 다시"·"문제가 생겼어요"가 뜨면 `%TEMP%\blender_tutor_receiver.log`의 "바깥 서비스 오류" 줄로 원인을 본다. 답 도중 OpenAI 오류 조각도 이제 그 메시지로 남는다.
-- 청크 파일을 다시 만들면 설명서 벡터가 안 맞아 도우미가 멈춘다 → `manual_vectors build --yes`(약 $0.13), 그 뒤 `search_compare full-pool`.
-- 검토 결과는 한 항목씩 글로 보인다(사용자 "너무 많다 1개씩 보여줘"). 비용은 시간 목표가 있어도 판단 기준이다(Fast 제외).
-- Git Bash 헤어독으로 파이썬 코드를 넘기면 `\\n`이 줄바꿈으로 들어갈 수 있다. 코드 수정은 Edit 도구.
+- **유료**: 도우미 창 질문마다 약 $0.0006([135]). 연습 과정 글이 바뀌어 도우미 첫 실행 때 연습 과정 임베딩을 한 번 새로 만든다(아주 작음). `evaluate run`·`speed_trial`은 `--yes` 없이 멈추고 어림 비용만 보인다.
+- 도우미는 Blender를 다시 켜야 새 코드·새 연습 과정 글로 뜬다. 메뉴 이름 사전(`data/menu_names/menu_names.json`)이 없으면 안내 말이 영어로만 나온다.
+- 연습 과정 글에서 `[[이름]]` 바로 뒤 조사는 바뀐 글이 영어로 끝나 영어 이름에 맞춘다. 한국어 이름에 "를"이 든 것(모디파이어를 추가)은 "~ 순서로"·"~ 칸을"처럼 쓴다. YAML 줄이 `[[`로 시작하거나 글 안에 `"`가 있으면 문법 오류가 난다(course_check가 잡음).
+- 테스트 자료는 `tests/fixtures/`에 둔다. `.gitignore`의 `data/`가 `tests/data/`도 막는다.
+- 흐름 기록 `%APPDATA%\blender_tutor\streams\`는 계속 쌓인다(검수 흐름은 `20261102-114759.jsonl`). 흐름 전체를 바뀐 연습 과정에 다시 넣으면 버튼 누름이 어긋난다(후보 B).
+- 검토 결과는 원래 한 항목씩 글로 보인다(AGENTS.md). 이번처럼 사용자가 방식을 바꾸면 그 말을 따른다.
+- 답이 나오는 도중 도우미를 끄면 `RuntimeError: Signal source has been deleted`(알려진 것, [130]). 오류 문구가 뜨면 `%TEMP%\blender_tutor_receiver.log`의 "바깥 서비스 오류" 줄.
+- 청크 파일을 다시 만들면 `manual_vectors build --yes`(약 $0.13), 그 뒤 `search_compare full-pool`.
 
 ## Git 제외 자료 (`data/`·`results/`, 커밋 안 함)
 
 | 자료 | 위치 | 다른 PC에서 |
 |---|---|---|
+| 검수 기록·막힌 곳 메모 | `data/holdout_raw/검수기록.txt`·`홀드아웃 메모.txt`(이제 개발용, 35), 스냅샷 `data/snapshots/20261102-115913.*` | 백업 안 함. 집 PC에서 32를 이을 거면 옮긴다 |
+| 검수 때 채팅 원문·그림 | 강의실 PC `다운로드\클로드 채팅 원문.md`·`클로드 채팅 원문 이미지\`·`1.png`·`2.png` | 저장소 밖. 35 문항 만들 때 필요 |
 | 설명서 벡터(115MB) | `data/vectors/manual_text-embedding-3-large.npz` + `.json` | 옮기거나 `manual_vectors build --yes`(약 $0.13) |
-| 검색 비교 질문 | `data/search_compare/questions/` | **드라이브 백업 확인 안 함**. 손으로 만든 것이라 꼭 옮긴다 |
-| 속도 실측 문항 | `data/eval/speed/A1-A10.json` + `state_cube.json` | ai_questions에서 다시 만들 수 있음(HISTORY [131]) |
-| 결과 원본 | `results/20261029/`·`20261030/`·`20261102/`(44 실측 `105750_t44_speed`) | 백업 확인 안 함. 숫자는 HISTORY [113]-[135] |
-| 로컬 모델 | `data/models/` | `local_embeddings prepare`, `prototype/local_llm/llm_bench.sh` |
+| 메뉴 이름 사전 | `data/menu_names/menu_names.json` | 옮기거나 `menu_names`로 다시 만듦. 없으면 안내 말이 영어로만 |
+| 검색 비교 질문 | `data/search_compare/questions/` | 드라이브 백업 확인 안 함. 손으로 만든 것이라 꼭 옮긴다 |
+| 결과 원본 | `results/20261029/`·`20261030/`·`20261102/` | 백업 확인 안 함. 숫자는 HISTORY [113]-[135] |
 
 ## 추천 스킬과 참고
 
-- 32는 사용자가 Blender에서 직접 하는 일. Claude 몫은 막힌 곳을 받아 연습 과정 파일을 고치기. 티켓을 열 때는 `/implement`(사용자 요청). 시간을 다시 잴 때는 `.venv\Scripts\python -m blender_tutor.speed_trial --name <이름> --yes`(20문항 × 2회차 어림 약 $0.02).
-- [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [131]-[136]](HISTORY.md), [티켓 44](.scratch/mvp-roundtrip/issues/44-첫-글자-시간-작은-방법-1-3-실측.md), [조사](.scratch/mvp-roundtrip/research/2026-11-02-첫-글자-시간-줄이기-조사.md).
+- 다시 검수는 사용자가 Blender에서 하는 일. Claude 몫은 후보 결정을 받고 지적을 받아 고치기(`/implement`는 새 티켓을 열 때). 스킬 없이: 티켓 32 Comments 맨 아래를 읽고 후보 A·B·C부터 묻는다.
+- [티켓 32](.scratch/mvp-roundtrip/issues/32-검-따라-하기-검수.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [136]-[139]](HISTORY.md).
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
