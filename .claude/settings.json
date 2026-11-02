@@ -5,11 +5,32 @@
       "Bash(git reset --hard *)",
       "Bash(git clean *)",
       "Bash(git branch -D *)",
+      "Bash(git branch -d *)",
+      "Bash(git branch --delete *)",
+      "Bash(git push --delete *)",
+      "Bash(git push * --delete *)",
       "Bash(rm *)",
       "Bash(rmdir *)",
       "PowerShell(gh pr merge *)",
       "PowerShell(git branch -D *)",
+      "PowerShell(git branch -d *)",
+      "PowerShell(git push * --delete *)",
       "PowerShell(Remove-Item *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/ask_branch_delete.py\"",
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
     ]
   }
 }
