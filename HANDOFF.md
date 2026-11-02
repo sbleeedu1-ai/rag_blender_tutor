@@ -1,43 +1,43 @@
 # 인수인계
 
-마지막 갱신: 2026-10-30 · Claude Code(Opus 5.5) · 강의실 PC · **PR #30 병합 전에 씀**(브랜치 `feat/rewrite-flow`, 사용자가 자동 검사 통과 뒤 병합을 승인). 이어받을 때 `git fetch` 뒤 PR #30이 main에 병합됐는지 먼저 본다. 병합됐으면 main에서 새 브랜치로.
+마지막 갱신: 2026-11-02 · Claude Code(Opus 5.5) · 강의실 PC · **PR #31 병합 전에 씀**(브랜치 `feat/33-answer-model`). 이어받을 때 `git fetch` 뒤 PR #31이 main에 병합됐는지 먼저 본다. 병합됐으면 main에서 새 브랜치로.
 
 ## 다음 할 일
 
-1. 티켓 43은 끝났다(코드 검토 [129], 도우미 창 실측 [130], 티켓 `Status: resolved`), PR #30.
-2. 그다음 티켓 33(실제 답변 모델, [33번](.scratch/mvp-roundtrip/issues/33-유료-생각-수준-실측.md) Comments 먼저) → 42(집 PC) → 32 → 35 → 36·37.
+1. 티켓 44([44번](.scratch/mvp-roundtrip/issues/44-첫-글자-시간-작은-방법-1-3-실측.md)): 비용이 적은 작은 방법 1-3(질문 바꾸기 흘려 받아 query 닫히면 검색 / 동시 3 → 5 / 답변 2개 동시)을 넣고 20문항 × 2회차로 잰다(어림 약 $0.04, 실행 전 확인). Fast는 빼기로 함.
+2. 그다음 42(집 PC) → 32 → 35 → 36·37.
+3. 미뤄 둔 것(HISTORY [132]): "안녕" 같은 질문에도 근거 8개가 붙는 문제. (가) 답변 모델이 실제 쓴 근거 번호만 표시, (나) 질문 바꾸기 JSON에 "찾을 필요 없음" 칸. 44 결과를 본 뒤 정한다(조사 C는 (가) 먼저를 권함).
 
 ## 지금 상태와 검증
 
-- 도우미 검색(커밋 `2f09cea`): 질문(+직전 질문·단계 이름·방금 조작을 참고 줄로) → luna(none, 긴 지시) 3번 동시 → 먼저 온 1개의 영어 검색어 → large 임베딩 → 뜻 검색 상위 8개. 5초 안에 하나도 안 오거나 모두 실패하면 오류 표시로 멈춤. 예열은 `BLENDER_TUTOR_WARM_UP=1`일 때만. 답변은 아직 가짜.
-- 정한 근거([127]): 긴 지시 3개 합침 86.7%·중앙 2.04초·2초 넘음 58% / 먼저 온 1개 85.3%·1.71초·3% / 짧은 지시 77.3% / fast는 약 10%만 빨라 안 씀.
-- pytest **546 passed**(2026-10-30, 커밋 `1baeccf`, 강의실 PC). 이후 커밋은 문서만 바꿨다. 연습 과정 검사는 돌리지 않았다(연습 과정 파일을 바꾸지 않음).
-- 진짜 luna 3문항(도우미 창 없이 엔진만, [128]): 셋 다 정답 쪽 1위, 끝까지 4.20·2.16·1.66초.
+- 티켓 33 끝(`Status: resolved`): 진짜 답변 모델 gpt-6-luna, 생각 수준 none(HISTORY [131]). 엔진 만들기는 `engine_setup.py`, 무료 임시 엔진 `stand_in.py`는 `archive/`. 근거 카드는 "▸ 근거 n개"로 접힘([132]). 코드 검토 17건 판단·반영([134]).
+- 속도(강의실 PC, none): 엔진만 A1-A10 첫 글자 중앙 2.47초·답 끝 3.89초, 창 5문항 창 뜨기 0.02초·첫 글자 2.55초·답 끝 3.55초. 목표 2초는 그대로("목표는 목표로").
+- pytest **550 passed**(2026-11-02, 강의실 PC, 검토 반영 뒤). 연습 과정 파일·애드온은 바꾸지 않아 course_check·애드온 자체 시험은 돌리지 않았다.
+- 첫 글자 시간 조사(하위 에이전트 A·B·C): `.scratch/mvp-roundtrip/research/2026-11-02-첫-글자-시간-줄이기-조사.md`.
 
 ## 모르면 실수할 것
 
-- **유료**: 이제 진짜 임베딩 엔진은 질문마다 luna 3번을 부른다(질문당 약 $0.00025). 도우미 창과 `evaluate run --embedding text-embedding-3-large`가 해당된다. `search_compare rewrite`·`flow`·`run`(large)은 `--yes` 없이 멈춘다. 오늘 쓴 유료는 약 $0.056(오전 $0.03 + 측정 $0.023 + 3문항 $0.0008 + 도우미 창 실측 약 $0.002).
-- 첫 요청이 느리다: 측정·3문항 모두 맨 첫 요청에서 luna 3.5-4.4초, 임베딩 1.9-2.0초가 나왔다. 도우미 창 실측([130])도 첫 질문 2.7-3.0초, 이후 약 1.9초. 원인 미확인. 예열이 이것을 줄이는지는 재지 않았다(사용자가 지금 수치를 받아들임).
-- 답이 나오는 도중 도우미를 끄면 기록에 `RuntimeError: Signal source has been deleted`(`helper.py`의 `_QtWindowSide.show`)가 남고 그 질문의 시간 기록 줄이 빠진다. 알려진 것이고 해롭지 않아 고치지 않았다([130]). 끄는 순간이 아닌데 이 오류가 나면 다른 문제다.
-- "잠시 뒤 다시"가 뜨면 `%TEMP%\blender_tutor_receiver.log`의 "바깥 서비스 오류" 줄로 원인(시간 초과·키·이상한 답)을 본다([129] 3번).
-- 무료 모드(stand_in 낱말 세기)는 메뉴 이름 덧붙이기가 빠져 근거 목록이 엉뚱하게 나온다. 창 동작 확인용으로만 본다.
-- Git Bash 헤어독(`<<'EOF'`)으로 파이썬 코드를 넘기면 문자열 속 `\\n`이 실제 줄바꿈으로 들어가 문법 오류가 났다(오늘 세 번). 코드 수정은 Edit 도구를 쓴다.
-- luna 응답 시간은 시간대마다 다르다. 비교는 같은 실행 안에서 한다.
-- 도우미 창은 OpenAI 키(`OPENAI_API_KEY` 또는 `data/.env`)가 있어야 답한다. Anthropic 키는 없다.
+- **유료**: 이제 도우미 창 질문마다 질문 바꾸기 3번 + 임베딩 + 답변 모델(none 실측 질문당 약 $0.00055). 무료로 돌리는 길은 없다(시험은 가짜 부품). `evaluate run`은 `--yes` 없이 멈추고 어림 비용만 보인다(none $0.0006·low $0.00065/차례, medium은 어림 안 함). 오늘 쓴 유료 약 $0.016.
+- 생각 수준을 창에서 바꾸려면 환경 변수 `BLENDER_TUTOR_REASONING=low`(대문자·오타면 "문제가 생겼어요", 원인은 기록 파일). 도우미는 Blender를 다시 켜야 새 코드로 뜬다.
+- 첫 질문이 약 1초 느리다(원인 미확인, 조사 A: 요금 없는 `GET /v1/models`로 가를 수 있음).
+- 답이 나오는 도중 도우미를 끄면 기록에 `RuntimeError: Signal source has been deleted`가 남는다(알려진 것, [130]).
+- "잠시 뒤 다시"·"문제가 생겼어요"가 뜨면 `%TEMP%\blender_tutor_receiver.log`의 "바깥 서비스 오류" 줄로 원인을 본다. 답 도중 OpenAI 오류 조각도 이제 그 메시지로 남는다.
 - 청크 파일을 다시 만들면 설명서 벡터가 안 맞아 도우미가 멈춘다 → `manual_vectors build --yes`(약 $0.13), 그 뒤 `search_compare full-pool`.
-- 검토 결과는 한 항목씩 사용자 판단(AGENTS.md). 사용자는 Blender 기능을 깊이 모른다. 청크 정답 여부 같은 판단은 Claude가 근거와 권하는 답을 낸다.
+- 검토 결과는 한 항목씩 글로 보인다(사용자 "너무 많다 1개씩 보여줘"). 비용은 시간 목표가 있어도 판단 기준이다(Fast 제외).
+- Git Bash 헤어독으로 파이썬 코드를 넘기면 `\\n`이 줄바꿈으로 들어갈 수 있다. 코드 수정은 Edit 도구.
 
 ## Git 제외 자료 (`data/`·`results/`, 커밋 안 함)
 
 | 자료 | 위치 | 다른 PC에서 |
 |---|---|---|
 | 설명서 벡터(115MB) | `data/vectors/manual_text-embedding-3-large.npz` + `.json` | 옮기거나 `manual_vectors build --yes`(약 $0.13) |
-| 검색 비교 질문·묶음·DB | `data/search_compare/` | **드라이브 백업 전**. 질문 파일은 손으로 만든 것이라 꼭 옮긴다. 설명서 전체 묶음과 large DB는 `search_compare full-pool`로 다시 만든다 |
-| 결과 원본 | `results/20261029/`, `results/20261030/`(오늘 `124302_flow_short_vs_long`·`124708_flow_fast_small` 추가) | 백업 전. 숫자는 HISTORY [113]-[128]에 있다 |
-| 로컬 임베딩·생성 모델 | `data/models/` | `local_embeddings prepare`, `prototype/local_llm/llm_bench.sh`로 다시 받음 |
+| 검색 비교 질문 | `data/search_compare/questions/` | **드라이브 백업 확인 안 함**. 손으로 만든 것이라 꼭 옮긴다 |
+| 속도 실측 문항 | `data/eval/speed/A1-A10.json` + `state_cube.json` | ai_questions에서 다시 만들 수 있음(HISTORY [131]) |
+| 결과 원본 | `results/20261029/`·`20261030/`·`20261102/` | 백업 확인 안 함. 숫자는 HISTORY [113]-[134] |
+| 로컬 모델 | `data/models/` | `local_embeddings prepare`, `prototype/local_llm/llm_bench.sh` |
 
 ## 추천 스킬과 참고
 
-- 1번은 사용자가 고른 방식대로(`code-review` 스킬 또는 직접). 스킬 없이: `git diff main..feat/rewrite-flow`를 AGENTS.md "코드 작성"과 티켓 43 완료 조건에 대어 보고, 항목마다 근거·지금 동작·권하는 답을 낸다.
-- [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [122]-[128]](HISTORY.md), [티켓 43](.scratch/mvp-roundtrip/issues/43-도우미-검색을-새-흐름으로.md).
+- 44는 `tdd` 또는 직접. 스킬 없이: 티켓 44 할 일 1-3을 `answer_engine.py`(`_rewritten`)·`answer_model.py`·`beginner_scope.OpenAIModel`에 넣고, 조사 문서 "실험 하나로 한꺼번에 확인하기" 설계대로 잰다.
+- [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [131]-[134]](HISTORY.md), [조사](.scratch/mvp-roundtrip/research/2026-11-02-첫-글자-시간-줄이기-조사.md).
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`

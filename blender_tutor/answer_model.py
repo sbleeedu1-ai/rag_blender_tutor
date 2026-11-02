@@ -46,6 +46,10 @@ class OpenAIAnswerModel:
                 if data == "[DONE]":
                     return
                 piece = json.loads(data)
+                # 흐름 도중 오류 조각. 공식 라이브러리(openai-python _streaming.py)와 같은 규칙으로 오류를 낸다(버리면 빈 답이 성공처럼 끝남)
+                if error := piece.get("error"):
+                    message = error.get("message") if isinstance(error, dict) else None
+                    raise RuntimeError(f"답변 모델 흐름 도중 오류: {message or '알 수 없는 오류'}")
                 if usage := piece.get("usage"):
                     self._count(usage)
                 for choice in piece.get("choices", []):

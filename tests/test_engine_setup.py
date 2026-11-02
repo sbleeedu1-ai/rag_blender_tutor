@@ -35,6 +35,7 @@ class Rewriter:  # luna 질문 바꾸기 대신
 
 class AnswerModel:  # 진짜 답변 모델 대신: 만들 때 받은 값과 받은 대화 글을 적어 둔다
     def __init__(self, model, key, effort):
+        self.model = model
         self.settings = (model, effort)
         self.sent = []
 
@@ -61,7 +62,7 @@ def fakes(tmp_path, monkeypatch):
     monkeypatch.setattr(engine_setup, "openai_key", lambda: "가짜 키")
     monkeypatch.setattr(manual_vectors, "OpenAIEmbedder", keep("embedder", QuestionEmbedder))
     monkeypatch.setattr(engine_setup, "OpenAIModel", keep("rewriter", Rewriter))
-    monkeypatch.setattr(engine_setup.answer_model, "OpenAIAnswerModel", keep("model", AnswerModel))
+    monkeypatch.setattr(engine_setup, "OpenAIAnswerModel", keep("model", AnswerModel))
     return made
 
 
@@ -82,6 +83,7 @@ def test_답변_모델을_넘기면_그것을_쓴다(tmp_path, fakes):
     engine = build_engine(tmp_path, model=given)
     list(engine.answer("베벨 너비", WorkState.from_json(EDITING), []))
     assert len(given.sent) == 1 and fakes["model"] == []
+    assert engine.name.endswith("+넘긴 것")  # 엔진 이름은 실제로 끼운 답변 모델의 이름
 
 
 def test_연습_과정은_이름_한_줄_설명_비슷한_말을_합친_글로_엔진을_만들_때_한_번_임베딩한다(tmp_path, fakes):

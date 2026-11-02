@@ -289,9 +289,12 @@ class KeywordEmbedder:
 class PricedModel(Model):
     """평가 프로그램이 요금을 묻는 답변 모델."""
 
-    def __init__(self, effort):
+    def __init__(self, settings):
         super().__init__()
-        self.effort = effort
+        self.effort = settings.reasoning.value
+        self.model = "가짜 답변"
+
+    reasoning_tokens = 37
 
     def dollars(self):
         return 0.0012
@@ -311,7 +314,7 @@ def fake_build(data_dir, model, courses, settings, embedding):
 
 
 def main(argv, now):
-    return evaluate.main(argv, now, make_model=lambda effort: made_models.append(PricedModel(effort)) or made_models[-1], build=fake_build)
+    return evaluate.main(argv, now, make_model=lambda settings: made_models.append(PricedModel(settings)) or made_models[-1], build=fake_build)
 
 
 def project(tmp_path):
@@ -338,7 +341,7 @@ def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약
     folder = tmp_path / "results" / "20261026" / "090500_기준"
     settings = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     assert settings["engine"] == "가짜 엔진(text-embedding-3-large)" and settings["임베딩"] == "text-embedding-3-large"
-    assert settings["리랭커"] == "끔" and settings["답변 모델 요금(달러)"] == 0.0012
+    assert settings["리랭커"] == "끔" and settings["답변 모델 요금(달러)"] == 0.0012 and settings["답변 모델 생각 토큰"] == 37
     assert made_models[-1].effort == "low"  # 생각 수준을 답변 모델에 넘긴다
     # 어느 코드로 잰 결과인지(홀드아웃은 동결한 커밋 번호를 적는다). 커밋 안 한 변경이 있으면 뒤에 표시가 붙는다
     assert re.fullmatch(r"[0-9a-f]{40}( \(커밋 안 한 변경 있음\))?", settings["커밋"])
@@ -374,7 +377,10 @@ def test_run은_yes가_없으면_어림_비용만_보이고_돌리지_않는다(
     made_models.clear()
     argv = ["run", *options(tmp_path, "--name", "기준", "--data", str(tmp_path / "data"))]
     assert main(argv, now=datetime(2026, 10, 26, 9, 5)) == 2
-    assert "차례 2개" in capsys.readouterr().err
+    assert "차례 2개 × 약 $0.0006 = 약 $0.0012" in capsys.readouterr().err
+    # 잰 적 없는 생각 수준은 숫자를 지어내지 않는다
+    assert main([*argv, "--reasoning", "medium"], now=datetime(2026, 10, 26, 9, 5)) == 2
+    assert "medium은 잰 적이 없어" in capsys.readouterr().err
     assert made_models == [] and not (tmp_path / "results").exists()
 
 

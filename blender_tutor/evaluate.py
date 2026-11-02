@@ -28,9 +28,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from blender_tutor import answer_model, engine_setup
-from blender_tutor.answer_engine import AnswerEngine, AnswerModel, Done, Failure, Piece, Reasoning, Settings, Source
-from blender_tutor.beginner_scope import openai_key
+from blender_tutor import engine_setup
+from blender_tutor.answer_engine import AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source
+from blender_tutor.answer_model import OpenAIAnswerModel
 from blender_tutor.conversation import RECENT_PAIRS, Conversation, settings_record
 from blender_tutor.manual_chunks import BASE_URL, Chunk
 from blender_tutor.paths import COURSES, PROJECT, default_progress_records
@@ -40,8 +40,9 @@ from blender_tutor.work_state import WorkState
 # 지금 고를 수 있는 임베딩 종류·리랭커. 리랭커와 bge-m3 같은 다른 임베딩은 아직 없어서, 켠 척하지 않게 고를 수 없게 막는다.
 # 생기는 티켓(임베딩은 31, 리랭커는 개발 평가에서 켜 보기로 할 때)에서 값을 더하고 엔진에 실제로 넘긴다
 EMBEDDINGS = engine_setup.EMBEDDINGS
-# 차례 하나의 어림 비용(달러): 답변 약 6천 토큰 입력 + 5백 토큰 출력 + 질문 바꾸기 3번 + 임베딩. 생각 수준 low는 생각 토큰만큼 더 든다
-DOLLARS_PER_TURN = 0.001
+# 차례 하나의 어림 비용(달러, 답변 + 질문 바꾸기 3번 + 임베딩). HISTORY [131] 실측 none $0.00055·low $0.00059에 약 10%를 얹었다
+# (적게 보이지 않게). medium은 잰 적이 없어 숫자를 두지 않는다. 동시 호출 수를 바꾸면(티켓 44) 함께 고친다
+DOLLARS_PER_TURN = {Reasoning.NONE: 0.0006, Reasoning.LOW: 0.00065}
 RERANKERS = ("끔",)
 
 # 칸 이름 → 꼭 있어야 하나. 연습 과정 밖 질문이면 연습 과정·단계를 빼거나 null로 둔다
@@ -319,11 +320,11 @@ def _check_fields(data: object, fields: dict[str, bool]) -> None:
 def main(
     argv: Sequence[str] | None = None,
     now: datetime | None = None,
-    make_model: Callable[[str], AnswerModel] = lambda effort: answer_model.OpenAIAnswerModel(answer_model.MODEL, openai_key(), effort),
+    make_model: Callable[[Settings], OpenAIAnswerModel] = engine_setup.answer_model_for,
     build: Callable[..., AnswerEngine] = engine_setup.build_engine,
 ) -> int:
     """명령 줄 입구. 돌려주는 값은 종료 코드(0 성공, 1 결과 폴더가 이미 있음, 2 run에 --yes가 없음).
-    make_model(생각 수준 → 답변 모델, 요금을 세는 dollars()가 있어야 함)·build(엔진 만들기)는 시험에서 돈이 들지 않는 가짜로 바꾼다."""
+    make_model(설정 → 답변 모델, 요금은 dollars())·build(엔진 만들기)는 시험에서 돈이 들지 않는 가짜로 바꾼다."""
     parser = argparse.ArgumentParser(description="평가 문항을 답 엔진에 넣어 답·검색 적중을 모으거나(run), 시간 기록 통계를 냅니다(times).")
     commands = parser.add_subparsers(dest="command", required=True)
     run_command = commands.add_parser("run", help="문항을 답 엔진에 넣어 답·검색 결과·검색 적중을 모은다")
@@ -352,14 +353,16 @@ def main(
     # 실패할 수 있는 읽기(엔진 만들기·시간 기록)는 폴더를 만들기 전에 한다. 빈 폴더가 남으면 같은 이름으로 다시 돌릴 수 없어서
     if args.command == "run":
         turns = sum(len(dialogue.turns) for dialogue in dialogues)
-        if not args.yes:
-            print(
-                f"차례 {turns}개 × 약 ${DOLLARS_PER_TURN} = 약 ${turns * DOLLARS_PER_TURN:.3f}(어림). "
-                "확인받은 뒤 --yes를 붙여 다시 돌리세요.", file=sys.stderr,
-            )
-            return 2
         settings = Settings(top_k=args.top_k, use_bm25=args.bm25, reasoning=args.reasoning)
-        model = make_model(settings.reasoning.value)
+        if not args.yes:
+            per_turn = DOLLARS_PER_TURN.get(settings.reasoning)
+            estimate = (
+                f"차례 {turns}개 × 약 ${per_turn:.4f} = 약 ${turns * per_turn:.4f}(어림)" if per_turn
+                else f"차례 {turns}개. 생각 수준 {settings.reasoning}은 잰 적이 없어 비용을 어림할 수 없음"
+            )
+            print(f"{estimate}. 확인받은 뒤 --yes를 붙여 다시 돌리세요.", file=sys.stderr)
+            return 2
+        model = make_model(settings)
         engine = build(args.data, model, courses=courses, settings=settings, embedding=args.embedding)
     else:
         timings = args.timings or default_progress_records().parent / "timings.jsonl"
@@ -377,6 +380,7 @@ def main(
         }
         rows = run(dialogues, engine, args.recent)
         about["답변 모델 요금(달러)"] = model.dollars()  # 질문 바꾸기·임베딩은 뺀 값(차례마다 약 $0.00025 더 든다)
+        about["답변 모델 생각 토큰"] = model.reasoning_tokens  # 생각 수준이 실제로 생각을 쓰는지(출력 토큰에 이미 들어 있어 요금은 같음)
         _write_run(folder, args.name, about, rows)
         print(f"답변 모델 요금 ${model.dollars()} (질문 바꾸기·임베딩은 따로, 차례마다 약 $0.00025)")
     else:

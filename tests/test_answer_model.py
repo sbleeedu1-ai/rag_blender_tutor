@@ -1,8 +1,11 @@
 """진짜 답변 모델 연결(티켓 33): 내 PC에 띄운 가짜 OpenAI 서버로 흘려 받기·시간 한도·끊김을 본다(돈이 들지 않음)."""
 
 import json
+import socket
 import threading
 import time
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -81,3 +84,23 @@ def test_끝_표시_없이_흐름이_끊기면_오류(server):
     server["lines"] = [piece("베벨은 ")]
     with pytest.raises(ValueError, match="DONE"):
         list(model_for(server).stream([], timeout=5))
+
+
+def test_연결_단계에서_늦어도_TimeoutError(monkeypatch):
+    # 연결 단계의 시간 초과는 URLError에 싸여 온다(읽기 단계는 위 시험처럼 TimeoutError 그대로)
+    def slow(request, timeout):
+        raise urllib.error.URLError(socket.timeout("timed out"))
+
+    monkeypatch.setattr(urllib.request, "urlopen", slow)
+    with pytest.raises(TimeoutError):
+        list(OpenAIAnswerModel("gpt-6-luna", "fake-key", "none").stream([], timeout=0.3))
+
+
+def test_흐름_도중_오류_조각이_오면_그_메시지로_오류(server):
+    # 공식 라이브러리(openai-python _streaming.py)가 오류로 바꾸는 모양. 버리면 빈 답이 성공처럼 끝난다
+    server["lines"] = [piece("베벨은 "), {"error": {"message": "server overloaded"}}, "data: [DONE]"]
+    pieces = []
+    with pytest.raises(RuntimeError, match="server overloaded"):
+        for text in model_for(server).stream([], timeout=5):
+            pieces.append(text)
+    assert pieces == ["베벨은 "]
