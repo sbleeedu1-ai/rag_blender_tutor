@@ -80,9 +80,10 @@ def events(response: HTTPResponse, label: str) -> Iterator[dict]:
 
 
 class Streaming(Protocol):
-    """FirstOf에 끼울 답변 모델: 답 조각을 흘려 주고(조각 사이 timeout초 한도), 이름과 쌓인 요금을 안다."""
+    """FirstOf에 끼울 답변 모델: 답 조각을 흘려 주고(조각 사이 timeout초 한도), 이름·쌓인 생각 토큰·요금을 안다."""
 
     model: str
+    reasoning_tokens: int
 
     def stream(self, messages: list[dict[str, str]], timeout: float) -> Iterable[str]: ...
 
@@ -92,8 +93,10 @@ class Streaming(Protocol):
 class FirstOf:
     """같은 대화를 답변 모델 여러 개에 동시에 보내, 첫 조각이 가장 먼저 온 흐름만 돌려준다(티켓 44, 헤지 요청).
 
-    나머지 흐름도 뒤에서 끝까지 읽는다(마지막 조각의 토큰 수로 요금을 세려고). 조각 사이 시간 한도는 각 모델이 지키고,
-    첫 조각 전에 실패한 흐름은 건너뛰며 모두 실패하면 첫 오류를 낸다. 고른 흐름이 도중에 실패하면 그 오류를 낸다.
+    나머지 흐름도 뒤에서 끝까지 읽는다(마지막 조각의 토큰 수로 요금을 세려고). 조각 사이 시간 한도는 각 모델이 지킨다.
+    조각 없이 끝나거나 첫 조각 전에 실패한 흐름은 건너뛴다. 모두 그렇게 끝나면 빈 답으로 끝내고(하나라도 정상으로 끝났을 때),
+    모두 실패했으면 첫 오류를 낸다. 고른 흐름이 도중에 실패하면 다른 흐름으로 바꾸지 않고 그 오류를 낸다(이미 보인 글에 다른 답을 잇지 않게).
+    요금·생각 토큰은 나머지 흐름이 아직 읽히는 중이면 그만큼 덜 세진다(평가가 끝에 한 번 읽을 때 마지막 질문 몫).
     """
 
     def __init__(self, models: Sequence[Streaming]):
@@ -104,16 +107,20 @@ class FirstOf:
         arrived: queue.Queue = queue.Queue()  # (몇째 모델, "조각"·"끝"·"오류", 값)
         for index, model in enumerate(self.models):
             threading.Thread(target=_pump, args=(model, messages, timeout, index, arrived), daemon=True).start()
-        chosen, errors = None, []
+        chosen, errors, empty = None, [], 0
         while True:
             index, kind, value = arrived.get()  # 각 모델이 시간 한도를 지키므로 언젠가 반드시 온다
             if chosen is None:
-                if kind == "오류":
-                    errors.append(value)
-                    if len(errors) == len(self.models):
+                if kind == "조각":
+                    chosen = index
+                else:
+                    errors += [value] if kind == "오류" else []
+                    empty += kind == "끝"
+                    if len(errors) + empty == len(self.models):
+                        if empty:
+                            return
                         raise errors[0]
                     continue
-                chosen = index
             if index != chosen:
                 continue
             if kind == "끝":
@@ -121,6 +128,10 @@ class FirstOf:
             if kind == "오류":
                 raise value
             yield value
+
+    @property
+    def reasoning_tokens(self) -> int:
+        return sum(model.reasoning_tokens for model in self.models)
 
     def dollars(self) -> float:
         return round(sum(model.dollars() for model in self.models), 6)

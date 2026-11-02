@@ -379,10 +379,10 @@ def main(
             "pc": platform.node(), "시각": datetime.now().isoformat(timespec="seconds"), "커밋": _commit(),
         }
         rows = run(dialogues, engine, args.recent)
-        about["답변 모델 요금(달러)"] = model.dollars()  # 질문 바꾸기·임베딩은 뺀 값(차례마다 약 $0.00025 더 든다)
+        about["답변 모델 요금(달러)"] = model.dollars()  # 질문 바꾸기·임베딩은 뺀 값(차례마다 약 $0.0004 더 든다, 티켓 44의 5개 기준 어림)
         about["답변 모델 생각 토큰"] = model.reasoning_tokens  # 생각 수준이 실제로 생각을 쓰는지(출력 토큰에 이미 들어 있어 요금은 같음)
         _write_run(folder, args.name, about, rows)
-        print(f"답변 모델 요금 ${model.dollars()} (질문 바꾸기·임베딩은 따로, 차례마다 약 $0.00025)")
+        print(f"답변 모델 요금 ${model.dollars()} (질문 바꾸기·임베딩은 따로, 차례마다 약 $0.0004)")
     else:
         _write_times(folder, args.name, timings, args.questions, timing_summary(lines, dialogues))
     print(f"결과: {folder}")

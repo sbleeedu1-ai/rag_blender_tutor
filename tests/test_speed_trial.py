@@ -1,6 +1,7 @@
 """첫 글자 시간 실측 프로그램(티켓 44): 가짜 부품으로 기록 모양과, 손으로 만든 기록으로 방법별 단축 계산을 본다(돈이 들지 않음)."""
 
 import itertools
+import time
 
 import pytest
 
@@ -13,12 +14,13 @@ from tests.test_answer_engine import ARRAY, BEVEL, CHUNKS, STATE, TOWARD_ARRAY, 
 class Counted:
     """토큰 수를 세는 가짜 모델(질문 바꾸기·답변 둘 다). 부를 때마다 입력 10·출력 2토큰을 더한다."""
 
-    def __init__(self, pieces):
-        self.pieces, self.model = pieces, "luna"
+    def __init__(self, pieces, wait=0.0):
+        self.pieces, self.model, self.wait = pieces, "luna", wait
         self.input_tokens = self.output_tokens = self.reasoning_tokens = 0
 
     def stream(self, messages, timeout=None):
         self.input_tokens, self.output_tokens = self.input_tokens + 10, self.output_tokens + 2
+        time.sleep(self.wait)
         yield from self.pieces
 
     def dollars(self):
@@ -37,7 +39,7 @@ def test_호출마다_시각과_토큰을_남기고_쓰지_않은_검색어도_�
     ticks = itertools.count()
     calls = Calls(clock=lambda: next(ticks))  # 시각을 물을 때마다 1초씩 간다
     rewriters = [TimedRewriter(Counted(['{"query": "array', ' copies", "areas": []}']), calls, 0),
-                 TimedRewriter(Counted(['{"areas": [], "query": "bevel"}']), calls, 1)]
+                 TimedRewriter(Counted(['{"areas": [], "query": "bevel"}'], wait=0.3), calls, 1)]  # 늦게 와서 쓰이지 않는다
     answer = FirstOf([TimedAnswer(Counted(["답"]), calls, 0)])
     engine = AnswerEngine(CHUNKS, VECTORS, Embed(), answer, Settings(top_k=1), rewriters=rewriters)  # 청크가 6개뿐이라 상위 1개로 채점
     keys = {chunk: chunk.address for chunk in CHUNKS}
@@ -82,3 +84,28 @@ def test_방법별_단축을_새_호출_없이_기록에서_가른다():
 def test_실패한_질문은_계산에서_뺀다():
     failed = {**_row([(1.0, 1.1)], [(1.2, 2.0)], first=None), "실패": "문제가 생겼어요"}
     assert summarize([failed])["질문 수(실패 뺌)"] == 0
+
+
+def test_빈_검색어는_닫힘으로_적지_않고_채점하지_않으며_줄마다_바로_넘긴다():
+    ticks = itertools.count()
+    calls = Calls(clock=lambda: next(ticks))
+    rewriters = [TimedRewriter(Counted(['{"query": " ", "areas": []}']), calls, 0),
+                 TimedRewriter(Counted(['{"query": "array"}'], wait=0.1), calls, 1)]
+    engine = AnswerEngine(CHUNKS, VECTORS, Embed(), FirstOf([TimedAnswer(Counted(["답"]), calls, 0)]), Settings(top_k=1), rewriters=rewriters)
+    keys = {chunk: chunk.address for chunk in CHUNKS}
+    question = Question("A1", "배열?", ((ARRAY.address,),))
+    kept = []
+    rows = run(engine, [question], STATE, calls, keys, rounds=2, keep=kept.append)
+    score_queries(rows, [question], engine, Embed().embed, keys)  # 빈 검색어에서 멈추지 않는다
+    assert kept == rows and len(rows) == 2
+    empty = next(r for r in rows[0]["호출"] if r["몇째"] == 0 and r["종류"] == "질문 바꾸기")
+    assert "빈 검색어" in empty and "검색어 닫힘" not in empty and "적중" not in empty
+
+
+def test_첫째_답변이_실패하면_옛_방식_어림에서_빼고_호출_하나의_첫_조각까지를_센다():
+    row = _row([(1.2, 1.5)], [(1.5, 2.2)], first=2.2)
+    row["호출"].append({"종류": "답변", "몇째": 0, "보냄": 1.5, "끝": 1.6, "오류": "OSError()", "생각": 0})
+    row["호출"][1]["몇째"] = 1
+    summary = summarize([row])
+    assert summary["단계(초, 중앙값·최대값)"]["첫 글자(옛 방식 어림)"] == (None, None)
+    assert summary["호출 하나 보냄→첫 조각(초, 중앙값·최소값)"]["답변"] == (pytest.approx(0.7), pytest.approx(0.7))

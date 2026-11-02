@@ -11,6 +11,7 @@ from datetime import datetime
 import pytest
 
 from blender_tutor.answer_engine import AnswerEngine, Settings
+from blender_tutor.answer_model import FirstOf
 from blender_tutor import evaluate
 from blender_tutor.evaluate import Dialogue, Spread, Turn, load_questions, run, timing_summary
 from blender_tutor.manual_chunks import Chunk, load_chunks, save_chunks
@@ -313,8 +314,15 @@ def fake_build(data_dir, model, courses, settings, embedding):
     )
 
 
+def priced_pair(settings):
+    """도우미와 같이 답변 모델 2개를 FirstOf로 묶는다(요금·생각 토큰은 둘을 더한 값)."""
+    pair = [PricedModel(settings) for _ in range(2)]
+    made_models.extend(pair)
+    return FirstOf(pair)
+
+
 def main(argv, now):
-    return evaluate.main(argv, now, make_model=lambda settings: made_models.append(PricedModel(settings)) or made_models[-1], build=fake_build)
+    return evaluate.main(argv, now, make_model=priced_pair, build=fake_build)
 
 
 def project(tmp_path):
@@ -341,7 +349,7 @@ def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약
     folder = tmp_path / "results" / "20261026" / "090500_기준"
     settings = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     assert settings["engine"] == "가짜 엔진(text-embedding-3-large)" and settings["임베딩"] == "text-embedding-3-large"
-    assert settings["리랭커"] == "끔" and settings["답변 모델 요금(달러)"] == 0.0012 and settings["답변 모델 생각 토큰"] == 37
+    assert settings["리랭커"] == "끔" and settings["답변 모델 요금(달러)"] == 0.0024 and settings["답변 모델 생각 토큰"] == 74
     assert made_models[-1].effort == "low"  # 생각 수준을 답변 모델에 넘긴다
     # 어느 코드로 잰 결과인지(홀드아웃은 동결한 커밋 번호를 적는다). 커밋 안 한 변경이 있으면 뒤에 표시가 붙는다
     assert re.fullmatch(r"[0-9a-f]{40}( \(커밋 안 한 변경 있음\))?", settings["커밋"])

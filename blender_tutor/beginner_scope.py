@@ -230,48 +230,44 @@ class OpenAIModel:
         self.tiers: Counter[str] = Counter()  # 응답이 알린 처리 등급별 수(fast를 청해도 몰리면 default로 내려간다)
 
     def ask(self, messages: list[dict[str, str]]) -> str:
-        body = {"model": self.model, "messages": messages, "response_format": {"type": "json_object"}}
-        if self.effort:  # 생각 수준. 주지 않으면 모델 기본값(티켓 30에서 처음 두 번은 주지 않고 돌렸다)
-            body["reasoning_effort"] = self.effort
-        if self.tier:  # 처리 등급. "fast"는 값이 2배이고 더 빠르다(티켓 43)
-            body["service_tier"] = self.tier
-        request = urllib.request.Request(
-            self.url, json.dumps(body).encode("utf-8"),
-            {"Authorization": f"Bearer {self.key}", "Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+        with urllib.request.urlopen(self._request(messages, {}), timeout=self.timeout) as response:
             answer = json.loads(response.read())
         self.requests += 1
-        self.tiers[answer.get("service_tier", "알림 없음")] += 1
-        self.input_tokens += answer["usage"]["prompt_tokens"]
-        self.output_tokens += answer["usage"]["completion_tokens"]  # 생각 토큰을 포함한 출력(이것으로 요금을 매긴다)
-        self.reasoning_tokens += answer["usage"].get("completion_tokens_details", {}).get("reasoning_tokens", 0)
+        self._count(answer)
         return answer["choices"][0]["message"]["content"]
 
     def stream(self, messages: list[dict[str, str]]) -> Iterator[str]:
         """ask와 같은 요청을 흘려 받아 답 글 조각을 오는 대로 돌려준다(질문 바꾸기, 티켓 44). 토큰 수는 마지막 조각에서 센다.
         timeout은 조각 사이 한도다(소켓 읽기 한 번마다 걸림)."""
-        body = {"model": self.model, "messages": messages, "response_format": {"type": "json_object"},
-                "stream": True, "stream_options": {"include_usage": True}}
-        if self.effort:
-            body["reasoning_effort"] = self.effort
-        if self.tier:
-            body["service_tier"] = self.tier
-        request = urllib.request.Request(
-            self.url, json.dumps(body).encode("utf-8"),
-            {"Authorization": f"Bearer {self.key}", "Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+        streaming = {"stream": True, "stream_options": {"include_usage": True}}  # 마지막 조각에 토큰 수가 온다
+        with urllib.request.urlopen(self._request(messages, streaming), timeout=self.timeout) as response:
             self.requests += 1
             for piece in events(response, "질문 바꾸기"):
-                if usage := piece.get("usage"):
-                    self.tiers[piece.get("service_tier", "알림 없음")] += 1
-                    self.input_tokens += usage["prompt_tokens"]
-                    self.output_tokens += usage["completion_tokens"]
-                    self.reasoning_tokens += (usage.get("completion_tokens_details") or {}).get("reasoning_tokens", 0)
+                if piece.get("usage"):
+                    self._count(piece)
                 for choice in piece.get("choices", []):
                     if text := choice.get("delta", {}).get("content"):
                         yield text
+
+    def _request(self, messages: list[dict[str, str]], extra: dict) -> urllib.request.Request:
+        """JSON으로만 답하게 하는 채팅 요청. extra는 본문에 더할 칸(흘려 받기)."""
+        body = {"model": self.model, "messages": messages, "response_format": {"type": "json_object"}, **extra}
+        if self.effort:  # 생각 수준. 주지 않으면 모델 기본값(티켓 30에서 처음 두 번은 주지 않고 돌렸다)
+            body["reasoning_effort"] = self.effort
+        if self.tier:  # 처리 등급. "fast"는 값이 2배이고 더 빠르다(티켓 43)
+            body["service_tier"] = self.tier
+        return urllib.request.Request(
+            self.url, json.dumps(body).encode("utf-8"),
+            {"Authorization": f"Bearer {self.key}", "Content-Type": "application/json"},
+        )
+
+    def _count(self, answer: dict) -> None:
+        """응답(한 번에 받은 답, 또는 흘려 받기의 마지막 조각)의 처리 등급과 토큰 수를 쌓는다."""
+        usage = answer["usage"]
+        self.tiers[answer.get("service_tier", "알림 없음")] += 1
+        self.input_tokens += usage["prompt_tokens"]
+        self.output_tokens += usage["completion_tokens"]  # 생각 토큰을 포함한 출력(이것으로 요금을 매긴다)
+        self.reasoning_tokens += (usage.get("completion_tokens_details") or {}).get("reasoning_tokens", 0)
 
 
 def openai_key(env_file: Path = DATA / ".env") -> str:

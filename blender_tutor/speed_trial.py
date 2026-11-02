@@ -50,13 +50,9 @@ class Question:
 
 def load_questions(paths: Sequence[Path]) -> list[Question]:
     """search_compare 질문 파일들에서 빼기로 하지 않은 질문(정답 열쇠 포함)."""
-    found = []
-    for path in paths:
-        for line in path.read_text(encoding="utf-8").splitlines():
-            row = json.loads(line) if line.strip() else {"dropped": True}
-            if not row.get("dropped"):
-                found.append(Question(row["id"], row["question"], tuple(tuple(g["any_of"]) for g in row["answer_groups"])))
-    return found
+    rows = [json.loads(line) for path in paths for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [Question(row["id"], row["question"], tuple(tuple(g["any_of"]) for g in row["answer_groups"]))
+            for row in rows if not row.get("dropped")]
 
 
 class Calls:
@@ -116,8 +112,9 @@ class TimedRewriter:
             for piece in self.inner.stream(messages):
                 record.setdefault("첫 조각", self.calls.now())
                 text += piece
-                if "검색어 닫힘" not in record and CLOSED_QUERY.search(text):
-                    record["검색어 닫힘"] = self.calls.now()
+                if "검색어 닫힘" not in record and "빈 검색어" not in record and (match := CLOSED_QUERY.search(text)):
+                    # 엔진(closed_query)처럼 빈 검색어는 쓸 수 없는 답으로 둔다
+                    record["검색어 닫힘" if json.loads(match.group(1)).strip() else "빈 검색어"] = self.calls.now()
                 yield piece
         except Exception as error:
             record["오류"] = repr(error)
@@ -149,8 +146,10 @@ class TimedAnswer:
         return self.inner.dollars()
 
 
-def run(engine: AnswerEngine, questions: Sequence[Question], state: WorkState, calls: Calls, keys: dict, rounds: int) -> list[dict]:
-    """질문마다 엔진을 한 번 돌리고, 뒤에서 도는 호출이 모두 끝난 뒤 기록을 한 줄로 묶는다."""
+def run(engine: AnswerEngine, questions: Sequence[Question], state: WorkState, calls: Calls, keys: dict, rounds: int,
+        keep: Callable[[dict], None] = lambda row: None) -> list[dict]:
+    """질문마다 엔진을 한 번 돌리고, 뒤에서 도는 호출이 모두 끝난 뒤 기록을 한 줄로 묶는다.
+    keep은 줄이 생길 때마다 불린다(도중에 멈춰도 돈을 쓴 호출의 기록이 남게 바로 파일에 쓴다)."""
     rows = []
     for round_number in range(1, rounds + 1):
         for question in questions:
@@ -170,6 +169,7 @@ def run(engine: AnswerEngine, questions: Sequence[Question], state: WorkState, c
                 "결과": results, "적중": hit(question.groups, results, engine.settings.top_k).ratio if results else None,
                 "호출": calls.records,
             })
+            keep(rows[-1])
             print(f"{round_number}회차 {question.id}: 첫 글자 {first}초", file=sys.stderr)
     return rows
 
@@ -178,7 +178,7 @@ def score_queries(rows: list[dict], questions: Sequence[Question], engine: Answe
     """모든 질문 바꾸기 호출의 검색어를 같은 검색으로 채점해 호출 기록에 "검색어"·"적중"을 붙인다(쓰지 않은 것도)."""
     groups = {question.id: question.groups for question in questions}
     found = [(row, record, closed_query(record["글"])) for row in rows for record in row["호출"]
-             if record["종류"] == "질문 바꾸기" and CLOSED_QUERY.search(record["글"])]
+             if record["종류"] == "질문 바꾸기" and "검색어 닫힘" in record]
     texts = list(dict.fromkeys(query for _, _, query in found))
     vectors = dict(zip(texts, embed(texts)))
     for row, record, query in found:
@@ -193,6 +193,7 @@ def summarize(rows: Sequence[dict]) -> dict:
               "첫 글자(옛 방식 어림)": [], "답 끝": []}
     hits = {"쓴 검색어(5개 중 먼저 닫힘)": [], "앞 3개 중 먼저 닫힘": [], "옛 방식(앞 3개 중 먼저 끝남)": []}
     query_first, reasoning = [], 0
+    fixed = {"질문 바꾸기": [], "답변": []}  # 호출 하나의 보냄 → 첫 조각(조사 문서의 "고정 몫 약 0.8초")
     for row in rows:
         if row["실패"] or row["첫 글자"] is None:
             continue
@@ -215,9 +216,8 @@ def summarize(rows: Sequence[dict]) -> dict:
         stages["임베딩+검색"].append(sent - used["검색어 닫힘"])
         stages["답변 첫 조각(빠른 쪽)"].append(row["첫 글자"] - sent)
         stages["첫 글자(잰 것)"].append(row["첫 글자"])
-        if front_ended:
-            stages["첫 글자(옛 방식 어림)"].append(
-                row["첫 글자"] + front_ended["끝"] - used["검색어 닫힘"] + (hedge or 0))
+        if front_ended and hedge is not None:  # 첫째 답변이 실패했으면 1개만 쓸 때를 알 수 없어 뺀다
+            stages["첫 글자(옛 방식 어림)"].append(row["첫 글자"] + front_ended["끝"] - used["검색어 닫힘"] + hedge)
         stages["답 끝"].append(row["답 끝"])
         for name, record in (("쓴 검색어(5개 중 먼저 닫힘)", used), ("앞 3개 중 먼저 닫힘", front_closed),
                              ("옛 방식(앞 3개 중 먼저 끝남)", front_ended)):
@@ -227,12 +227,16 @@ def summarize(rows: Sequence[dict]) -> dict:
             if record["글"].lstrip().startswith("{"):
                 query_first.append(record["글"].lstrip().lstrip("{").lstrip().startswith('"query"'))
         reasoning += sum(record.get("생각", 0) for record in row["호출"])
+        for record in row["호출"]:
+            if "첫 조각" in record:
+                fixed[record["종류"]].append(record["첫 조각"] - record["보냄"])
     return {
         "단축(초, 중앙값)": {name: _median(values) for name, values in gains.items()},
         "단축(초, 평균)": {name: round(statistics.mean(values), 4) if values else None for name, values in gains.items()},
         "단계(초, 중앙값·최대값)": {name: (_median(values), max(values) if values else None) for name, values in stages.items()},
         "적중(찾은 비율 평균)": {name: round(statistics.mean(values), 4) if values else None for name, values in hits.items()},
         "적중 견줄 값([127])": BEFORE_HIT,
+        "호출 하나 보냄→첫 조각(초, 중앙값·최소값)": {kind: (_median(v), min(v) if v else None) for kind, v in fixed.items()},
         "query가 첫 칸인 비율": round(sum(query_first) / len(query_first), 4) if query_first else None,
         "생각 토큰 합": reasoning,
         "질문 수(실패 뺌)": len(stages["첫 글자(잰 것)"]),
@@ -259,6 +263,7 @@ def _markdown(name: str, about: dict, summary: dict) -> str:
     lines += [f"| {k} | {m} | {x} |" for k, (m, x) in summary["단계(초, 중앙값·최대값)"].items()]
     lines += ["", "## 적중(상위 8개, 찾은 비율 평균)", "", f"견줄 값 [127]: {BEFORE_HIT}", ""]
     lines += [f"- {k}: {v}" for k, v in summary["적중(찾은 비율 평균)"].items()]
+    lines += [f"- 호출 하나 보냄→첫 조각(중앙값·최소값) {k}: {v}" for k, v in summary["호출 하나 보냄→첫 조각(초, 중앙값·최소값)"].items()]
     lines += ["", f"- query가 첫 칸인 비율: {summary['query가 첫 칸인 비율']}", f"- 생각 토큰 합: {summary['생각 토큰 합']}"]
     return "\n".join(lines) + "\n"
 
@@ -289,7 +294,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     keys = {piece.chunk: piece.key for piece in pieces(load_chunks(args.data / "chunks" / "manual_chunks.jsonl"))}
     state = WorkState.from_json(json.loads(STATE.read_text(encoding="utf-8")))
-    rows = run(engine, questions, state, calls, keys, args.rounds)
+    folder.mkdir(parents=True)
+    with (folder / "실행.jsonl").open("w", encoding="utf-8") as file:
+        def keep(row: dict) -> None:
+            file.write(json.dumps(row, ensure_ascii=False) + "\n")
+            file.flush()
+
+        rows = run(engine, questions, state, calls, keys, args.rounds, keep)
     scorer = manual_vectors.OpenAIEmbedder(manual_vectors.MODEL, key)
     score_queries(rows, questions, engine, lambda texts: scorer.embed(texts, 30.0), keys)
     rewrite_in = sum(model.input_tokens for model in inner_rewriters)
@@ -307,9 +318,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     summary = summarize(rows)
     about = {"엔진": engine.name, "질문 수": len(questions), "회차": args.rounds, "어림": guess, "실제 비용(달러)": paid,
              "pc": platform.node(), "시작 시각": now.isoformat(timespec="seconds"), "요약": summary}
-    folder.mkdir(parents=True)
     (folder / "설정.json").write_text(json.dumps(about, ensure_ascii=False, indent=2), encoding="utf-8")
-    with (folder / "실행.jsonl").open("w", encoding="utf-8") as file:
+    with (folder / "채점.jsonl").open("w", encoding="utf-8") as file:  # 실행.jsonl 줄 + 검색어마다 채점
         for row in rows:
             file.write(json.dumps(row, ensure_ascii=False) + "\n")
     (folder / "요약.md").write_text(_markdown(args.name, about, summary), encoding="utf-8")

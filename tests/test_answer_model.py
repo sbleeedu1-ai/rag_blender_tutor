@@ -135,6 +135,7 @@ class Paced:
 
     def __init__(self, pieces=(), wait=0.0, error=None, tail=None):
         self.model, self.pieces, self.wait, self.error, self.tail = "luna", pieces, wait, error, tail
+        self.reasoning_tokens = 3
         self.finished = threading.Event()
 
     def stream(self, messages, timeout):
@@ -156,7 +157,12 @@ def test_첫_조각이_먼저_온_흐름만_돌려주고_늦은_흐름도_끝까
     hedged = FirstOf([slow, Paced(["빠른 ", "답"])])
     assert list(hedged.stream([], timeout=5)) == ["빠른 ", "답"]
     assert slow.finished.wait(5)  # 요금을 세려고 늦은 흐름도 끝까지 읽는다
-    assert hedged.model == "luna×2" and hedged.dollars() == pytest.approx(0.002)
+    assert hedged.model == "luna×2" and hedged.dollars() == pytest.approx(0.002) and hedged.reasoning_tokens == 6
+
+
+def test_조각_없이_먼저_끝난_흐름은_고르지_않고_모두_비면_빈_답():
+    assert list(FirstOf([Paced([]), Paced(["답"], wait=0.1)]).stream([], timeout=5)) == ["답"]
+    assert list(FirstOf([Paced([]), Paced(error=OSError("끊김"), wait=0.1)]).stream([], timeout=5)) == []
 
 
 def test_첫_조각_전에_실패한_흐름은_건너뛰고_모두_실패하면_첫_오류():
