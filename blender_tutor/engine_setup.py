@@ -13,7 +13,7 @@ from blender_tutor.answer_engine import AnswerEngine, Rewriter, Settings
 from blender_tutor.answer_model import OpenAIAnswerModel
 from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.manual_chunks import load_chunks
-from blender_tutor.menu_names import MenuNames
+from blender_tutor.menu_names import load_menu_names
 from blender_tutor.paths import PROJECT
 from blender_tutor.progress import Course
 
@@ -30,16 +30,6 @@ def answer_model_for(settings: Settings) -> OpenAIAnswerModel:
 def rewriters_for(settings: Settings, key: str) -> list[OpenAIModel]:
     """질문 바꾸기 모델 REWRITE_COUNT개. 동시에 부르므로 하나씩 따로 둔다(받은 토큰 수를 셀 때 서로 덮어쓰지 않게)."""
     return [OpenAIModel(REWRITE_MODEL, key, REWRITE_EFFORT, settings.rewrite_timeout) for _ in range(REWRITE_COUNT)]
-
-
-def load_menu_names(
-    data_dir: Path, menu_choices: Path = PROJECT / "menu_choices.json", menu_titles: Path = PROJECT / "menu_titles.json"
-) -> MenuNames | None:
-    """메뉴 이름 사전(data_dir/menu_names/menu_names.json과 저장소의 고정 짝·통과 제목). 사전 파일이 없으면 None(영어 그대로 보임)."""
-    names_path = data_dir / "menu_names" / "menu_names.json"
-    if not names_path.exists():
-        return None
-    return MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles))
 
 
 def build_engine(

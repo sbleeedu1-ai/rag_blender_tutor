@@ -32,7 +32,8 @@ from blender_tutor.progress import Course, load_courses
 from blender_tutor.question_flow import QuestionFlow
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
 from blender_tutor.manual_vectors import MODEL as EMBEDDING
-from blender_tutor.engine_setup import build_engine, load_menu_names
+from blender_tutor.engine_setup import build_engine
+from blender_tutor.menu_names import load_menu_names
 from blender_tutor.state_stream import RecordingDesk
 from blender_tutor.timing import Stopwatch
 from blender_tutor.window_rules import FrontBlender, Place, Screen, needs_move, place

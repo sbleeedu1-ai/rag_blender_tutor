@@ -58,6 +58,8 @@
           - scene_layout/object/editing/transform/scale.html#scale
           - scene_layout/object/editing/transform/control/axis_locking.html#axis-locking
           - scene_layout/object/properties/transforms.html#transform
+        자주 막히는 곳:
+          - 옆 패널에 길이·폭·두께라는 글자가 없고 X·Y·Z만 보인다. X가 폭, Y가 두께, Z가 길이다.
         # 옆 패널(N)에서 치수를 고치면 조작 기록이 남지 않아, 방금 조작과 묶지 않고 비율만 본다.
         끝난 조건:
           - 크기 비율: 3
@@ -182,6 +184,8 @@
         먼저 볼 소제목:
           - modeling/meshes/primitives.html#cylinder
           - scene_layout/object/editing/transform/scale.html#scale
+        자주 막히는 곳:
+          - 칼날·코등이를 위로 옮겨 두었으면 손잡이도 아래가 아니라 위로 옮겨야 코등이 밑에 붙는다. 숫자패드 1이나 3으로 옆에서 보며 맞춘다.
         끝난 조건:
           - 물체 수 늘어남: 1
 
@@ -215,6 +219,8 @@
         먼저 볼 소제목:
           - modeling/meshes/primitives.html#uv-sphere
           - scene_layout/object/editing/transform/move.html#move
+        자주 막히는 곳:
+          - 앞 부품을 옮겨 두었으면 공도 위로 옮겨야 할 수 있다. 옆에서 보며 손잡이 맨 아래에 맞춘다.
         끝난 조건:
           - 물체 수 늘어남: 1
 
@@ -242,6 +248,8 @@
               - 방금 조작: object.join
         먼저 볼 소제목:
           - scene_layout/object/editing/join.html#join
+        자주 막히는 곳:
+          - A를 누르면 카메라·조명까지 골라진다. 그대로 Ctrl + J를 해도 메시만 합쳐지고 카메라·조명은 따로 남는다.
         끝난 조건:
           - 방금 조작: object.join
 
@@ -279,7 +287,7 @@
           - 설명: Bevel 모디파이어 더하기
             메뉴: Properties > Modifiers > Add Modifier > Generate > Bevel
             단축키: 없음
-            안내: "화면 오른쪽 아래, 아이콘 탭이 세로로 늘어선 창이 [[Properties]] 창이에요. 파란 렌치 모양 탭을 열고 [[Add Modifier > Generate > Bevel]]을 골라 보세요. 모서리가 살짝 깎여요."
+            안내: "화면 오른쪽 아래, 아이콘 탭이 세로로 늘어선 창이 [[Properties]] 창이에요. 파란 렌치 모양 탭을 열고 [[Add Modifier > Generate > Bevel]] 순서로 골라 보세요. 모서리가 살짝 깎여요."
             감지:
               - 모디파이어: BEVEL
           - 설명: 깎는 폭 줄이기
@@ -289,6 +297,8 @@
         먼저 볼 소제목:
           - modeling/modifiers/introduction.html#interface
           - modeling/modifiers/generate/bevel.html#bevel-modifier
+        자주 막히는 곳:
+          - 어디가 [[Properties]] 창인지 못 찾는다. 화면 오른쪽 아래, 아이콘 탭이 세로로 늘어선 창이다. 렌치(모디파이어)·빨간 공(머티리얼) 탭이 여기 있다.
         끝난 조건:
           - 모디파이어: BEVEL
 
@@ -342,7 +352,7 @@
               - 방금 조작: object.material_slot_assign
         먼저 볼 소제목:
           - render/materials/assignment.html#material-slots
-          - modeling/meshes/selecting/linked.html#linked
+          - render/materials/assignment.html#edit-mode
           - editors/3dview/display/shading.html#material-preview
         자주 막히는 곳:
           - 색을 바꿨는데 화면이 회색 그대로다. 기본 화면(솔리드)은 재질 색을 보이지 않아서다. Z를 누르고 [[Material Preview]]를 고른다.
