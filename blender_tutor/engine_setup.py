@@ -13,7 +13,7 @@ from blender_tutor.answer_engine import AnswerEngine, Rewriter, Settings
 from blender_tutor.answer_model import OpenAIAnswerModel
 from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.manual_chunks import load_chunks
-from blender_tutor.menu_names import MenuNames
+from blender_tutor.menu_names import load_menu_names
 from blender_tutor.paths import PROJECT
 from blender_tutor.progress import Course
 
@@ -58,12 +58,7 @@ def build_engine(
     embedder = manual_vectors.OpenAIEmbedder(embedding, key)
     rewriters = list(rewriters or rewriters_for(settings, key))
     model = model or answer_model_for(settings)
-    names_path = data_dir / "menu_names" / "menu_names.json"
-    names = (
-        MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles))
-        if names_path.exists()
-        else None
-    )
+    names = load_menu_names(data_dir, menu_choices, menu_titles)
     texts = [course.search_text for course in courses]
     course_vectors = manual_vectors.cached(texts, embedder, manual_vectors.courses_path_for(embedding, data_dir), settings.timeout)
     name = f"{embedding}+{REWRITE_MODEL}×{len(rewriters)}+{model.model}"

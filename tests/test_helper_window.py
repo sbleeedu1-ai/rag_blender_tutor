@@ -238,6 +238,13 @@ def test_안내_말과_알림은_대화에_한_줄씩_붙는다(window):
     assert texts(window, "notice") == ["이 파일에서 검 연습 과정을 다 마쳤어요."]
 
 
+def test_단계_시작_줄은_구분선이_있는_따로_된_모양으로_붙는다(window):
+    # 단계가 바뀐 자리를 대화에서 찾기 쉽게(티켓 32 검수, 사용자 1.png). 대화는 지우지 않아 앞 안내를 다시 볼 수 있다
+    window.show_line(Line(LineKind.STEP, "3단계, 정육면체를 늘려 칼날 모양 잡기예요."))
+    assert texts(window, "step") == ["3단계, 정육면체를 늘려 칼날 모양 잡기예요."]
+    assert "border-top" in window.styleSheet().split("#step {")[1].split("}")[0]
+
+
 def test_연습_과정을_하나도_읽지_못했으면_고르기_카드에_그렇다고_보인다(window):
     # 연습 과정 파일이 깨졌을 때(helper._courses가 빈 목록을 줌). 원래 연습 과정이 없는 프로그램처럼 보이지 않게
     window.show_progress(StepView(None, 0, None, None), [])

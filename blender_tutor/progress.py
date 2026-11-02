@@ -210,11 +210,7 @@ class Progress:
         첫 조작만으로 끝난 조건이 맞는 단계가 있어서다(예: 길게 늘이기만 해도 크기 비율 3, 2026-10-23 사용자 눈 확인).
         조작을 다 끝내기 전에 넘어가고 싶으면 '다음'을 이어 누르거나 '단계' 목록에서 고른다.
         """
-        met = (
-            self.operation is None
-            and bool(step.conditions)
-            and all(CONDITIONS[kind].is_met(value, state, self._step_started_at) for kind, value in step.conditions)
-        )
+        met = self.operation is None and self._conditions_met(step, state)
         if met and not self._asking and step.label not in self._declined:
             self._asking = True
             if self._index + 1 < len(self._steps):
@@ -226,6 +222,15 @@ class Progress:
             self._asking = False
             return [Withdraw(step.label)]
         return []
+
+    def _conditions_met(self, step: Step, state: WorkState) -> bool:
+        """끝난 조건이 모두 맞나. 끝난 조건이 없는 단계는 조작을 다 끝낸 것을 끝난 것으로 본다(조작도 없으면 묻지 않음).
+
+        공통 준비의 화면 익히기처럼 끝난 조건이 없는 단계도 다른 단계와 같게 물음으로 끝내려는 것이다(티켓 32 검수).
+        """
+        if not step.conditions:
+            return bool(step.operations)
+        return all(CONDITIONS[kind].is_met(value, state, self._step_started_at) for kind, value in step.conditions)
 
     def on_answer(self, yes: bool) -> list[Command]:
         """띄운 물음에 [네]/[아니요]로 답했을 때. 답한 물음은 창이 스스로 닫는다."""
@@ -269,12 +274,15 @@ class Progress:
         return commands
 
     def next_operation(self) -> list[Command]:
-        """'다음' 버튼·감지: 지금 조작을 끝낸 것으로 치고 다음 조작으로 간다. 조작을 다 끝냈으면 그대로."""
+        """'다음' 버튼: 지금 조작을 끝낸 것으로 치고 다음 조작으로 간다. 조작을 다 끝냈으면 그대로.
+
+        마지막 조작을 넘겼는데 끝난 조건이 이미 맞아 있으면 묻지 않고 다음 단계로 간다. '다음'을 누른 것이 이미
+        "다 했다"는 확인이라 [네]를 한 번 더 누르게 하지 않는다(티켓 32 검수). 안 맞으면 다 끝낸 자리에 머문다.
+        """
         if not self._advance():
             return []
-        # 마지막 조작을 끝냈는데 끝난 조건이 이미 맞아 있으면 다음 작업 상태를 기다리지 않고 묻는다
-        if self.operation is None and self._latest is not None:
-            return self._ask_if_done(self.step, self._latest)
+        if self.operation is None and self._latest is not None and self._conditions_met(self.step, self._latest):
+            return self.next_step()
         return []
 
     def _advance(self) -> bool:

@@ -33,6 +33,7 @@ from blender_tutor.question_flow import QuestionFlow
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
 from blender_tutor.manual_vectors import MODEL as EMBEDDING
 from blender_tutor.engine_setup import build_engine
+from blender_tutor.menu_names import load_menu_names
 from blender_tutor.state_stream import RecordingDesk
 from blender_tutor.timing import Stopwatch
 from blender_tutor.window_rules import FrontBlender, Place, Screen, needs_move, place
@@ -67,7 +68,8 @@ class Helper:
         self._conversation = Conversation()
         self._courses = _courses()
         records = default_progress_records()
-        self._desk = _recording(CourseDesk(self._courses, records), records, records.parent / "streams")
+        self._course_desk = CourseDesk(self._courses, records)  # 메뉴 이름 사전은 _prepare_engine이 읽어 넣는다
+        self._desk = _recording(self._course_desk, records, records.parent / "streams")
         self._stopwatch = Stopwatch(records.parent / "timings.jsonl", platform.node())
         self._own_pid = os.getpid()
         self._moved: tuple[Place, int] | None = None  # 지난번에 옮긴 (자리, 그때 앞 창 번호)
@@ -104,6 +106,8 @@ class Helper:
         started = time.perf_counter()
         try:
             # 모르는 생각 수준이면 ValueError → 아래에서 기록에 남기고 "문제가 생겼어요"를 보인다
+            # 연습 과정 안내 말의 메뉴 이름도 화면 언어로(티켓 32). 답 엔진을 못 만들어도(키 없음 등) 안내 말은 바뀌게 먼저 넣는다
+            self._course_desk.menu_names = load_menu_names(PROJECT / "data")
             settings = Settings(reasoning=os.environ.get(REASONING_ENV, Settings().reasoning))
             self._conversation.engine = build_engine(PROJECT / "data", courses=self._courses, settings=settings, embedding=EMBEDDING)
         except SystemExit as error:  # OpenAI 키가 없음(openai_key). 스레드 안이라 잡지 않으면 '읽는 중'에 머문다

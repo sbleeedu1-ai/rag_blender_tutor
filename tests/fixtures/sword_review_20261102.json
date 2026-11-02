@@ -1,0 +1,2243 @@
+{
+ "설명": "티켓 32 검수(2026-11-02) 흐름 파일 20261102-114759.jsonl에서 그 조작을 안내하던 동안 받은 작업 상태. 조작이 확정된 상태(running_operators 빔)만, 바로 앞과 같은 상태는 빼고, 시점(view)은 비웠다. 첫 상태가 조작 안내를 시작한 때다.",
+ "구간": {
+  "guard-add": [
+   {
+    "줄": 232,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "큐브",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "dimensions": [
+       2.0,
+       2.0,
+       2.0
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "큐브"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 4,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "object.editmode_toggle",
+      "mesh.primitive_cube_add",
+      "view3d.select"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 236,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "큐브",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.21515804529190063,
+       0.21515804529190063,
+       0.21515804529190063
+      ],
+      "dimensions": [
+       0.43031609058380127,
+       0.43031609058380127,
+       0.43031609058380127
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "큐브"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 4,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "mesh.primitive_cube_add",
+      "view3d.select",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 242,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "큐브",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "dimensions": [
+       2.0,
+       2.0,
+       2.0
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "큐브"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 4,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "mesh.primitive_cube_add",
+      "view3d.select",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 243,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "Cube",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.08284485340118408,
+       0.10110288858413696,
+       1.0
+      ],
+      "dimensions": [
+       0.16568970680236816,
+       0.20220577716827393,
+       2.4843337535858154
+      ],
+      "material_slot_count": 1,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "Cube"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 3,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "mesh.primitive_cube_add",
+      "view3d.select",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 244,
+    "상태": {
+     "mode": "EDIT_MESH",
+     "active_object": {
+      "name": "Cube",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.08284485340118408,
+       0.10110288858413696,
+       1.0
+      ],
+      "dimensions": [
+       0.16568970680236816,
+       0.20220577716827393,
+       2.4843337535858154
+      ],
+      "material_slot_count": 1,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "Cube"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 3,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {
+      "VERT": 0
+     },
+     "recent_operators": [
+      "mesh.primitive_cube_add",
+      "view3d.select",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 245,
+    "상태": {
+     "mode": "EDIT_MESH",
+     "active_object": {
+      "name": "Cube",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.08284485340118408,
+       0.10110288858413696,
+       1.0
+      ],
+      "dimensions": [
+       0.16568970680236816,
+       0.20220577716827393,
+       2.4843337535858154
+      ],
+      "material_slot_count": 1,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "Cube"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 3,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {
+      "VERT": 0
+     },
+     "recent_operators": [
+      "view3d.select",
+      "transform.resize",
+      "view3d.select"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 246,
+    "상태": {
+     "mode": "EDIT_MESH",
+     "active_object": {
+      "name": "Cube",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.08284485340118408,
+       0.10110288858413696,
+       1.0
+      ],
+      "dimensions": [
+       0.16568970680236816,
+       0.20220577716827393,
+       2.4843337535858154
+      ],
+      "material_slot_count": 1,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "Cube"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 3,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {
+      "VERT": 0
+     },
+     "recent_operators": [
+      "transform.resize",
+      "view3d.select",
+      "view3d.select"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 247,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "Cube",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.08284485340118408,
+       0.10110288858413696,
+       1.0
+      ],
+      "dimensions": [
+       0.16568970680236816,
+       0.20220577716827393,
+       2.4843337535858154
+      ],
+      "material_slot_count": 1,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "Cube"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 3,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select",
+      "view3d.select",
+      "object.editmode_toggle"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 251,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "큐브",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "dimensions": [
+       2.0,
+       2.0,
+       2.0
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "큐브"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 4,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select",
+      "object.editmode_toggle",
+      "mesh.primitive_cube_add"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 266,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "큐브",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.5879030227661133,
+       1.0,
+       1.0
+      ],
+      "dimensions": [
+       1.1758060455322266,
+       2.0,
+       2.0
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "큐브"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 4,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "object.editmode_toggle",
+      "mesh.primitive_cube_add",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 267,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "큐브",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "dimensions": [
+       2.0,
+       2.0,
+       2.0
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "큐브"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 4,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "object.editmode_toggle",
+      "mesh.primitive_cube_add",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 269,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "큐브",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "dimensions": [
+       2.0,
+       2.0,
+       2.0
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "큐브"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 4,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "mesh.primitive_cube_add",
+      "transform.resize",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 278,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "큐브",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       1.0,
+       0.9550948143005371,
+       1.0
+      ],
+      "dimensions": [
+       2.0,
+       1.9101896286010742,
+       2.0
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "큐브"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 4,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.resize",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 289,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "큐브",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       1.0,
+       0.9550948143005371,
+       0.033203721046447754
+      ],
+      "dimensions": [
+       2.0,
+       1.9101896286010742,
+       0.06640744209289551
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "큐브"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 4,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.resize",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 298,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "큐브",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       1.0,
+       0.3620394766330719,
+       0.033203717321157455
+      ],
+      "dimensions": [
+       2.0,
+       0.7240789532661438,
+       0.06640743464231491
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "큐브"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 4,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.resize",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 303,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "큐브",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.1159583330154419,
+       0.3620394766330719,
+       0.033203717321157455
+      ],
+      "dimensions": [
+       0.2319166660308838,
+       0.7240789532661438,
+       0.06640743464231491
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "큐브"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 4,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.resize",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 309,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "큐브",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.1159583330154419,
+       0.3620394766330719,
+       0.033203717321157455
+      ],
+      "dimensions": [
+       0.2319166660308838,
+       0.7240789532661438,
+       0.06640743464231491
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       -1.0088311433792114
+      ]
+     },
+     "selected_objects": [
+      "큐브"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 4,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.resize",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   }
+  ],
+  "grip-add": [
+   {
+    "줄": 352,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275042057037354,
+       0.10275042057037354,
+       0.10275042057037354
+      ],
+      "dimensions": [
+       0.20550084114074707,
+       0.20550084114074707,
+       0.20550084114074707
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select",
+      "mesh.primitive_cylinder_add",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 369,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.10275041311979294,
+       0.22416600584983826
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.20550082623958588,
+       0.4483320116996765
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "mesh.primitive_cylinder_add",
+      "transform.resize",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 376,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.10275041311979294,
+       0.22416600584983826
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.20550082623958588,
+       0.4483320116996765
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.25967302918434143
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.resize",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 382,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.10275041311979294,
+       0.22416600584983826
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.20550082623958588,
+       0.4483320116996765
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.25967302918434143
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.translate",
+      "view3d.select_box"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 386,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.10275041311979294,
+       0.22416600584983826
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.20550082623958588,
+       0.4483320116996765
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.04429146647453308,
+       0.4842599034309387
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.translate",
+      "view3d.select_box",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 399,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.10275041311979294,
+       0.22416600584983826
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.20550082623958588,
+       0.4483320116996765
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.04429146647453308,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select_box",
+      "transform.translate",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 409,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.10275041311979294,
+       0.22416600584983826
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.20550082623958588,
+       0.4483320116996765
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.5569198727607727,
+       0.04429146647453308,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.translate",
+      "transform.translate",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 410,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.10275041311979294,
+       0.22416600584983826
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.20550082623958588,
+       0.4483320116996765
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.04429146647453308,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.translate",
+      "transform.translate",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 415,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.10275041311979294,
+       0.22416600584983826
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.20550082623958588,
+       0.4483320116996765
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.06111513450741768,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.translate",
+      "transform.translate",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 432,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.10275041311979294,
+       0.22416600584983826
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.20550082623958588,
+       0.4483320116996765
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.06111513450741768,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.translate",
+      "transform.translate",
+      "view3d.select"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 433,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.10275041311979294,
+       0.22416600584983826
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.20550082623958588,
+       0.4483320116996765
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.06111513450741768,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.translate",
+      "view3d.select",
+      "view3d.select"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 440,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.2928442358970642,
+       0.2928442358970642,
+       0.6388852000236511
+      ],
+      "dimensions": [
+       0.5856884717941284,
+       0.5856884717941284,
+       1.2777704000473022
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.06111513450741768,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select",
+      "view3d.select",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 441,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.10275041311979294,
+       0.22416600584983826
+      ],
+      "dimensions": [
+       2.0,
+       2.0,
+       2.0
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.06111513450741768,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select",
+      "view3d.select",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 442,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.10275041311979294,
+       0.22416600584983826
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.20550082623958588,
+       0.4483320116996765
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.06111513450741768,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select",
+      "view3d.select",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 449,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.0700027123093605,
+       0.22416599094867706
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.140005424618721,
+       0.4483319818973541
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.06111513450741768,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select",
+      "transform.resize",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 458,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.09871596843004227,
+       0.06725408881902695,
+       0.2153642326593399
+      ],
+      "dimensions": [
+       0.19743193686008453,
+       0.1345081776380539,
+       0.4307284653186798
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.06111513450741768,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.resize",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 459,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10275041311979294,
+       0.0700027123093605,
+       0.22416599094867706
+      ],
+      "dimensions": [
+       0.20550082623958588,
+       0.140005424618721,
+       0.4483319818973541
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.06111513450741768,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.resize",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 465,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.023846492171287537,
+       0.0700027123093605,
+       0.22416599094867706
+      ],
+      "dimensions": [
+       0.04769298434257507,
+       0.140005424618721,
+       0.4483319818973541
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.06111513450741768,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.resize",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 476,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.03529304638504982,
+       0.0700027123093605,
+       0.22416599094867706
+      ],
+      "dimensions": [
+       0.07058609277009964,
+       0.140005424618721,
+       0.4483319818973541
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.06111513450741768,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [
+      "실린더"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.resize",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 489,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "실린더",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.03529304638504982,
+       0.0700027123093605,
+       0.22416599094867706
+      ],
+      "dimensions": [
+       0.07058609277009964,
+       0.140005424618721,
+       0.4483319818973541
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4957255721092224,
+       0.06111513450741768,
+       0.501448392868042
+      ]
+     },
+     "selected_objects": [],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 5,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.resize",
+      "view3d.select"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   }
+  ],
+  "pommel-add": [
+   {
+    "줄": 501,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.04739224910736084,
+       0.04739224910736084,
+       0.04739224910736084
+      ],
+      "dimensions": [
+       0.0947844386100769,
+       0.0947844609618187,
+       0.09478449821472168
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "selected_objects": [
+      "구체"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select",
+      "mesh.primitive_uv_sphere_add",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 505,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.04739224910736084,
+       0.04739224910736084,
+       0.04739224910736084
+      ],
+      "dimensions": [
+       0.0947844386100769,
+       0.0947844609618187,
+       0.09478449821472168
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.15619699656963348,
+       0.23516513407230377,
+       0.3428918719291687
+      ]
+     },
+     "selected_objects": [
+      "구체"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "mesh.primitive_uv_sphere_add",
+      "transform.resize",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 520,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.04739224910736084,
+       0.04739224910736084,
+       0.04739224910736084
+      ],
+      "dimensions": [
+       0.0947844386100769,
+       0.0947844609618187,
+       0.09478449821472168
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.15619699656963348,
+       0.06010258197784424,
+       0.2345198094844818
+      ]
+     },
+     "selected_objects": [
+      "구체"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.translate",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 527,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.04739224910736084,
+       0.04739224910736084,
+       0.04739224910736084
+      ],
+      "dimensions": [
+       0.0947844386100769,
+       0.0947844609618187,
+       0.09478449821472168
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4649324417114258,
+       -0.022718079388141632,
+       0.2683984339237213
+      ]
+     },
+     "selected_objects": [
+      "구체"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.translate",
+      "transform.translate",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 532,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.04739224910736084,
+       0.04739224910736084,
+       0.04739224910736084
+      ],
+      "dimensions": [
+       0.0947844386100769,
+       0.0947844609618187,
+       0.09478449821472168
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.5050719380378723,
+       0.07196130603551865,
+       0.24886713922023773
+      ]
+     },
+     "selected_objects": [
+      "구체"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.translate",
+      "transform.translate",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 538,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10113365203142166,
+       0.10113365203142166,
+       0.10113365203142166
+      ],
+      "dimensions": [
+       0.20226718485355377,
+       0.20226722955703735,
+       0.20226730406284332
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.5050719380378723,
+       0.07196130603551865,
+       0.24886713922023773
+      ]
+     },
+     "selected_objects": [
+      "구체"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.translate",
+      "transform.translate",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 542,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.10113365203142166,
+       0.10113365203142166,
+       0.10113365203142166
+      ],
+      "dimensions": [
+       0.20226718485355377,
+       0.20226722955703735,
+       0.20226730406284332
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.501045823097229,
+       0.06179240345954895,
+       0.24886713922023773
+      ]
+     },
+     "selected_objects": [
+      "구체"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.translate",
+      "transform.resize",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 557,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.07252329587936401,
+       0.07252329587936401,
+       0.07252329587936401
+      ],
+      "dimensions": [
+       0.14504650235176086,
+       0.14504654705524445,
+       0.14504659175872803
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.501045823097229,
+       0.06179240345954895,
+       0.24886713922023773
+      ]
+     },
+     "selected_objects": [
+      "구체"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "transform.translate",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 560,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.07252329587936401,
+       0.07252329587936401,
+       0.07252329587936401
+      ],
+      "dimensions": [
+       0.14504650235176086,
+       0.14504654705524445,
+       0.14504659175872803
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.501045823097229,
+       0.06179240345954895,
+       0.24886713922023773
+      ]
+     },
+     "selected_objects": [],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.translate",
+      "transform.resize",
+      "view3d.select"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 568,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.07252329587936401,
+       0.07252329587936401,
+       0.07252329587936401
+      ],
+      "dimensions": [
+       0.14504650235176086,
+       0.14504654705524445,
+       0.14504659175872803
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.501045823097229,
+       0.06179240345954895,
+       0.24886713922023773
+      ]
+     },
+     "selected_objects": [
+      "구체"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.resize",
+      "view3d.select",
+      "view3d.select"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 573,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.07252329587936401,
+       0.07252329587936401,
+       0.07252329587936401
+      ],
+      "dimensions": [
+       0.14504650235176086,
+       0.14504654705524445,
+       0.14504659175872803
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4951106011867523,
+       0.06179240345954895,
+       0.24886713922023773
+      ]
+     },
+     "selected_objects": [
+      "구체"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select",
+      "view3d.select",
+      "transform.translate"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 575,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.07252329587936401,
+       0.07252329587936401,
+       0.07252329587936401
+      ],
+      "dimensions": [
+       0.14504650235176086,
+       0.14504654705524445,
+       0.14504659175872803
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4951106011867523,
+       0.06179240345954895,
+       0.24886713922023773
+      ]
+     },
+     "selected_objects": [],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select",
+      "transform.translate",
+      "view3d.select"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 580,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.07252329587936401,
+       0.07252329587936401,
+       0.07252329587936401
+      ],
+      "dimensions": [
+       0.14504650235176086,
+       0.14504654705524445,
+       0.14504659175872803
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4951106011867523,
+       0.06179240345954895,
+       0.24886713922023773
+      ]
+     },
+     "selected_objects": [
+      "구체"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "transform.translate",
+      "view3d.select",
+      "view3d.select"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 584,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.08184872567653656,
+       0.08184872567653656,
+       0.08184872567653656
+      ],
+      "dimensions": [
+       0.16369734704494476,
+       0.16369739174842834,
+       0.16369745135307312
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4951106011867523,
+       0.06179240345954895,
+       0.24886713922023773
+      ]
+     },
+     "selected_objects": [
+      "구체"
+     ],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select",
+      "view3d.select",
+      "transform.resize"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   },
+   {
+    "줄": 585,
+    "상태": {
+     "mode": "OBJECT",
+     "active_object": {
+      "name": "구체",
+      "type": "MESH",
+      "modifiers": [],
+      "scale": [
+       0.08184872567653656,
+       0.08184872567653656,
+       0.08184872567653656
+      ],
+      "dimensions": [
+       0.16369734704494476,
+       0.16369739174842834,
+       0.16369745135307312
+      ],
+      "material_slot_count": 0,
+      "location": [
+       0.4951106011867523,
+       0.06179240345954895,
+       0.24886713922023773
+      ]
+     },
+     "selected_objects": [],
+     "language": "ko_KR",
+     "translate_interface": true,
+     "file_path": "",
+     "scene_object_count": 6,
+     "blender_version": "5.2.2 LTS",
+     "edit_selected": {},
+     "recent_operators": [
+      "view3d.select",
+      "transform.resize",
+      "view3d.select"
+     ],
+     "running_operators": [],
+     "view": null
+    }
+   }
+  ]
+ }
+}

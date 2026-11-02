@@ -9,7 +9,17 @@ from pathlib import Path
 import pytest
 
 from blender_tutor.manual_chunks import Chunk
-from blender_tutor.menu_names import MenuName, MenuNames, Source, Status, Translation, build_menu_names, read_po
+from blender_tutor.menu_names import (
+    MenuName,
+    MenuNames,
+    Source,
+    Status,
+    Translation,
+    build_menu_names,
+    load_menu_names,
+    read_po,
+    screen_marks,
+)
 
 PO = r'''
 msgid ""
@@ -175,6 +185,24 @@ def test_쪽_제목_소제목은_ko_po에_있을_때만_담고_뒤의_Modifier_�
     ]
 
 
+def test_소제목_앞의_줄표를_떼고_짝짓는다():
+    # 설명서의 화면 표시 방식 소제목은 "– Material Preview"처럼 줄표로 시작한다(티켓 32 다시 검수에서 사전에 빠진 것을 찾음)
+    po = PO + '\nmsgid "Material Preview"\nmsgstr "머티리얼 미리보기"\n'
+    page = Chunk(
+        page_path="editors/3dview/display/shading",
+        anchor="material-preview",
+        field="editors",
+        group="editors/3dview/display",
+        page_title="Viewport Shading",
+        headings=("– Material Preview",),
+        body="Body.",
+    )
+
+    names = build_menu_names([page], po)
+
+    assert names.get("Material Preview").translations == (Translation("머티리얼 미리보기", ("*",)),)
+
+
 def test_철자_표에_있는_이름은_화면_철자로_ko_po를_찾는다():
     # 지어낸 사전: 설명서는 "Wandsphere", 화면 메뉴는 "Wand Sphere"(Operator 문맥)를 쓴다고 치고
     po = PO + (
@@ -329,3 +357,27 @@ def test_저장소의_고정_짝과_통과_제목은_실제_사전과_맞는다(
     choices = MenuNames.load_choices(REPO / "menu_choices.json")
     titles = MenuNames.load_titles(REPO / "menu_titles.json")
     MenuNames.load(dictionary, choices, titles)  # 틀리면 ValueError
+
+
+# 메뉴 이름 표시 바꾸기(답 엔진과 연습 과정 안내 말이 함께 씀, 티켓 23·32)
+SCREEN = MenuNames([
+    MenuName("Add", (Translation("추가", ("*",)),), 1, "", (Source.UI,)),
+    MenuName("Mesh", (Translation("메시", ("*",)),), 1, "", (Source.UI,)),
+    MenuName("X-Ray", (Translation("X-Ray", ("*",)),), 1, "", (Source.UI,)),
+])
+
+
+def test_표시를_한국어_화면이면_한국어와_영어로_바꾸고_화면_글자가_영어와_같으면_한_번만_쓴다():
+    text = "[[Add > Mesh]]에서 고르고 [[X-Ray]]와 [[At Center]]를 보세요."
+    assert screen_marks(text, SCREEN) == "추가(Add) > 메시(Mesh)에서 고르고 X-Ray와 At Center를 보세요."
+    assert screen_marks(text, None) == "Add > Mesh에서 고르고 X-Ray와 At Center를 보세요."
+
+
+def test_사전_파일이_있으면_고정_짝과_함께_읽고_없으면_None(tmp_path):
+    assert load_menu_names(tmp_path) is None
+    (tmp_path / "menu_names").mkdir()
+    SCREEN.save(tmp_path / "menu_names" / "menu_names.json")
+    (tmp_path / "choices.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "titles.json").write_text("[]", encoding="utf-8")
+    names = load_menu_names(tmp_path, tmp_path / "choices.json", tmp_path / "titles.json")
+    assert names.korean("Mesh") == "메시"

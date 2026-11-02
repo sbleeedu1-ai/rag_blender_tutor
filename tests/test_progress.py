@@ -271,7 +271,7 @@ def test_단계마다_먼저_볼_소제목과_답변_모델에_넘길_단계_내
 def test_검사가_받아들이는_끝난_조건_종류는_모두_판정할_수_있다():
     values = {"모드": "OBJECT", "방금 조작": "object.join", "물체 수 늘어남": 1, "모디파이어": "BEVEL",
               "재질 슬롯 수": 2, "배율": [1, 1, 1], "크기 비율": 3, "화면": "확대",
-              "배율 늘어남": "Z", "배율 줄어듦": ["X", "Y"], "위치 늘어남": "X", "위치 줄어듦": "Z", "배율 그대로": ["X", "Y"]}  # fmt: skip
+              "배율 늘어남": "Z", "배율 줄어듦": ["X", "Y"], "위치 늘어남": "X", "위치 줄어듦": "Z", "배율 그대로": ["X", "Y"], "위치 바뀜": "Z"}  # fmt: skip
     assert set(values) == set(CONDITIONS)
     for kind, value in values.items():
         Progress([Step("any", "아무 단계", ((kind, value),))]).on_state(IDLE)  # 판정 규칙이 값과 작업 상태로 오류 없이 돈다
@@ -513,6 +513,18 @@ def test_옮기기는_그_조작을_안내한_때보다_어느_방향으로_옮�
     assert progress.operations_done == 1
 
 
+def test_위치_바뀜은_그_방향으로_위든_아래든_옮기면_알아챈다():
+    # 손잡이·끝장식은 앞 부품을 어디 두었나에 따라 올려야 할 수도 있다(티켓 32 검수: 칼날·코등이를 함께 위로 올린 뒤 손잡이를 올림)
+    step = Step("grip-add", "손잡이 붙이기", operations=(
+        Operation("옮기기", "Object > Transform > Move", "G", "G Z로 옮겨 보세요.", (("위치 바뀜", "Z"),)),
+    ))
+    progress = Progress([step], latest=IDLE)
+    progress.on_state(with_object(location=(1.5, 0.0, 0.0)))  # 옆으로만 옮김
+    assert progress.operations_done == 0
+    progress.on_state(with_object(location=(1.5, 0.0, 0.5)))  # 위로 올림
+    assert progress.operations_done == 1
+
+
 def test_크기를_조절하는_동안에는_넘어가지_않고_확정한_뒤에_넘어간다():
     # S를 누르면 Blender는 확정 전에도 마우스대로 배율을 바꿔 보인다(2026-10-23 사용자 눈 확인에서 찾음)
     progress = Progress([STRETCH_AXES], latest=IDLE)
@@ -555,13 +567,39 @@ def test_조작을_다_끝내기_전에는_끝난_조건이_맞아도_묻지_않
     assert progress.operations_done == 1
 
 
-def test_마지막_조작을_했어요로_끝냈을_때_끝난_조건이_맞아_있으면_바로_묻는다():
+def test_마지막_조작을_다음으로_넘길_때_끝난_조건이_맞아_있으면_묻지_않고_다음_단계로_간다():
+    # '다음'을 누른 것이 이미 "다 했다"는 확인이라 [네]를 한 번 더 누르게 하지 않는다(티켓 32 검수, 2026-11-02)
     progress = Progress([STRETCH_WITH_END, JOIN_PARTS], latest=IDLE)
     progress.on_state(STRETCHED)
     progress.next_operation()
-    assert progress.next_operation() == [
+    assert progress.next_operation() == []
+    assert (progress.step, progress.finished) == (JOIN_PARTS, ("blade-stretch",))
+
+
+def test_마지막_조작을_다음으로_넘겨도_끝난_조건이_안_맞으면_그_단계의_다_끝낸_자리에_머문다():
+    progress = Progress([STRETCH_WITH_END, JOIN_PARTS], latest=IDLE, operations_done=2)
+    assert progress.next_operation() == []
+    assert (progress.step, progress.operations_done, progress.finished) == (STRETCH_WITH_END, 3, ())
+
+
+def test_끝난_조건이_없는_단계는_마지막_조작을_다음으로_넘기면_다음_단계로_간다():
+    progress = Progress([STRETCH, JOIN_PARTS], latest=IDLE, operations_done=2)
+    progress.next_operation()
+    assert progress.step == JOIN_PARTS
+
+
+def test_끝난_조건이_없는_단계도_마지막_조작이_감지되면_묻는다():
+    # 공통 준비의 화면 익히기처럼 끝난 조건이 없는 단계도, 다른 단계와 같게 물음으로 끝낸다(티켓 32 검수)
+    one = replace(STRETCH_AXES, operations=STRETCH_AXES.operations[:1])
+    progress = Progress([one, JOIN_PARTS], latest=IDLE)
+    assert progress.on_state(STRETCHED) == [
         Ask("blade-stretch", "'칼날 모양 잡기' 단계를 끝낸 것 같아요. 다음 단계(부품 합치기)로 갈까요?")
     ]
+
+
+def test_조작도_끝난_조건도_없는_단계는_묻지_않는다():
+    progress = Progress([Step("join-parts", "부품 합치기"), BLADE_TIP], latest=IDLE)
+    assert progress.on_state(MERGED) == []
 
 
 def test_마지막_조작이_감지로_끝나고_끝난_조건이_맞으면_그때_묻는다():

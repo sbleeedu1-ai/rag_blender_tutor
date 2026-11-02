@@ -1,6 +1,7 @@
 # 공통 준비: 모든 연습 과정이 맨 앞에서 함께 하는 단계.
 # 각 연습 과정 파일이 "먼저 할 것: _common.yaml"로 가리킨다.
 # 글은 우리 말로 새로 쓰고, 설명서는 소제목 주소로만 가리킨다.
+# 화면에 보이는 메뉴·버튼 이름은 [[Edit > Preferences]]처럼 감싼다. 도우미가 한국어 화면이면 "편집(Edit) > 환경 설정(Preferences)"으로 바꿔 보인다(티켓 32).
 이름표: common
 이름: 공통 준비
 한 줄 설명: 만들기 전에 화면을 돌리고 당기고 옮기는 법을 익히고, 화면 언어를 확인한다.
@@ -14,7 +15,8 @@
         쉬운 설명: >-
           물체를 만들기 전에 보는 방향부터 익힌다.
           마우스 가운데 버튼(휠을 누르는 것)으로 화면을 돌리고, 휠을 굴려 당기거나 밀고, Shift와 함께 끌어 옆으로 옮긴다.
-          길을 잃으면 Home 키로 장면 전체를 다시 화면에 담는다.
+          길을 잃으면 물체를 고른 채 숫자패드 .(점)을 눌러 그 물체를 화면 가운데로 맞춘다([[View > Frame Selected]]).
+          Home([[View > Frame All]])은 카메라·조명까지 장면 전체를 담아서 물체가 가운데 오지 않을 수 있다.
         조작:
           - 설명: 화면 돌리기
             메뉴: View > Navigation > Orbit
@@ -40,18 +42,19 @@
             안내: "Shift를 누른 채 가운데 버튼으로 끌면 화면이 옆으로 옮겨져요. 한번 해 보시겠어요?"
             감지:
               - 화면: 옮김
-          - 설명: 장면 전체를 다시 화면에 담기
-            메뉴: View > Frame All
-            단축키: Home
-            안내: "혹시 정육면체가 화면 밖으로 나가 길을 잃었다면 Home 키를 눌러 보세요. 장면 전체가 다시 화면에 들어와요."
+          - 설명: 고른 물체를 화면 가운데로 맞추기
+            메뉴: View > Frame Selected
+            단축키: 숫자패드 .
+            안내: "길을 잃었을 때 돌아오는 법이에요. 정육면체를 고른 채 숫자패드의 .(점)을 눌러 보세요. 정육면체가 화면 가운데로 와요. 숫자패드가 없으면 3D 화면 위쪽 [[View]] 메뉴에서 [[Frame Selected]] 항목을 눌러도 돼요."
             감지:
               - 화면: 전체
         먼저 볼 소제목:
           - editors/3dview/navigate/navigation.html#orbit
-          - editors/3dview/navigate/navigation.html#zoom-in-out
           - editors/3dview/navigate/navigation.html#pan
+          - editors/3dview/navigate/navigation.html#frame-selected
         자주 막히는 곳:
-          - 노트북 터치패드처럼 가운데 버튼이 없으면 환경 설정의 Input > Mouse에서 Emulate 3 Button Mouse를 켜고 Alt + 왼쪽 버튼으로 돌린다.
+          - 노트북 터치패드처럼 가운데 버튼이 없으면 [[Preferences]]의 [[Input]]에서 [[Emulate 3 Button Mouse]] 칸을 켜고 Alt + 왼쪽 버튼으로 돌린다.
+          - Home을 눌렀는데 만드는 물체가 가운데 오지 않는다. Home은 카메라·조명까지 모두 담기 때문이다. 물체를 고르고 숫자패드 .(점)을 누른다.
 
   - 이름: 화면 언어 확인
     단계:
@@ -66,10 +69,10 @@
           - 설명: 환경 설정 창 열기
             메뉴: Edit > Preferences
             단축키: 없음
-            안내: "이번엔 Blender 메뉴가 어떤 언어로 보이는지 확인할게요. 맨 위 Edit 메뉴에서 Preferences를 열어 보세요."
+            안내: "이번엔 Blender 메뉴가 어떤 언어로 보이는지 확인할게요. 맨 위 [[Edit]] 메뉴에서 [[Preferences]] 창을 열어 보세요. 한국어 화면이면 도우미가 메뉴 이름을 편집(Edit)처럼 한국어와 영어로 함께 알려 드려요."
           - 설명: Interface 쪽에서 언어와 메뉴 번역 켜짐 확인
             메뉴: Edit > Preferences > Interface > Language
             단축키: 없음
-            안내: "열린 창 왼쪽에서 Interface를 고르고 Language 칸을 보세요. 한국어든 영어든 괜찮아요. 어느 쪽인지 보셨으면 창을 닫아 주세요."
+            안내: "열린 창 왼쪽에서 [[Interface]]를 고르고 [[Language]] 칸을 보세요. 한국어든 영어든 괜찮아요. 어느 쪽인지 보셨으면 창을 닫아 주세요."
         먼저 볼 소제목:
           - editors/preferences/interface.html#language

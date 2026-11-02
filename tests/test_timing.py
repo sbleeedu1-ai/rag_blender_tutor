@@ -5,7 +5,7 @@
 
 import json
 
-from blender_tutor.answer_engine import Done, Failure, Piece
+from blender_tutor.answer_engine import Done, Failure, Piece, Source
 from blender_tutor.timing import Stopwatch
 
 DONE = Done((), ())
@@ -48,6 +48,9 @@ def test_F10부터_답_끝까지_시각을_한_줄로_남긴다(tmp_path):
             "first_piece": 106.5,
             "done": 108.0,
             "outcome": "done",
+            "answer": "먼저 버텍스를",
+            "sources": [],
+            "failure": None,
         }
     ]
 
@@ -74,6 +77,20 @@ def test_실패로_끝난_답은_첫_글자_없이_실패로_남긴다(tmp_path)
     lap.saw(Failure("도우미가 설명서를 읽는 중이에요."))
     [line] = lines(path)
     assert (line["engine"], line["settings"], line["first_piece"], line["done"], line["outcome"]) == (None, None, None, 11.0, "failure")
+    assert (line["answer"], line["sources"], line["failure"]) == ("", [], "도우미가 설명서를 읽는 중이에요.")
+
+
+def test_답_글과_근거를_함께_남긴다(tmp_path):
+    """창에 보인 답을 캡처 없이 다시 보려고 답 글과 근거(쪽 제목 > 소제목, 주소)를 남긴다(티켓 32 다시 검수)."""
+    path = tmp_path / "timings.jsonl"
+    watch = Stopwatch(path, pc="집", clock=Clock(1.0, 2.0, 3.0))
+    lap = watch.asked("엑스레이 모드 뭐였지?", ENGINE)
+    source = Source("Introduction > Display & Shading", "https://docs.blender.org/manual/en/5.2/editors/3dview/introduction.html#display-shading", False, False, ())
+    for event in (Piece("Alt-Z로 "), Piece("켜요."), Done((source,), ())):
+        lap.saw(event)
+    [line] = lines(path)
+    assert (line["answer"], line["failure"]) == ("Alt-Z로 켜요.", None)
+    assert line["sources"] == [{"path": source.path, "url": source.url}]
 
 
 def test_기록_파일을_쓸_수_없어도_멈추지_않는다(tmp_path):

@@ -17,7 +17,12 @@ from blender_tutor.manual_chunks import Chunk, chunk_manual
 DEFAULT_CONTEXT = "*"  # 문맥 없는 일반 문구. Blender Python도 이렇게 적는다(bpy.app.translations.contexts.default)
 _PATH_SEP = "‣"  # 설명서 메뉴 경로의 구분 글자(Add ‣ Mesh)
 ALIASES = Path(__file__).resolve().parents[1] / "menu_aliases.json"  # 설명서 철자 → 화면 철자 표(티켓 31)
+CHOICES = Path(__file__).resolve().parents[1] / "menu_choices.json"  # 고정 짝(영어 이름 → 문맥, 티켓 31)
+TITLES = Path(__file__).resolve().parents[1] / "menu_titles.json"  # 통과 제목(티켓 31)
 _TITLE_TAIL = re.compile(r" (Modifier|Node|Tool|Constraint)$")  # 쪽 제목 "Array Modifier"의 블렌더 표기는 "Array"
+# 메뉴 이름 표시. 답변 모델의 답(티켓 23)과 연습 과정 안내 말(티켓 32)이 메뉴 이름을 감싸고, 화면 언어에 맞게 바꾼다
+MARK_OPEN, MARK_CLOSE = "[[", "]]"
+_MARK = re.compile(r"\[\[(.+?)\]\]")
 
 
 class Source(StrEnum):
@@ -230,6 +235,37 @@ def _by_count(names: Iterable[MenuName]) -> list[MenuName]:
 _Catalog = dict[str, dict[str, list[str]]]  # ko.po: 영어 → 한국어 → 문맥들
 
 
+def screen_path(path: str, names: "MenuNames | None") -> str:
+    """메뉴 이름 표시 하나의 속(Add > Mesh)을 화면 글로 바꾼다.
+
+    names가 있으면(한국어 화면에 번역 켜짐) 단마다 "추가(Add)"처럼 한국어(영어)로, 영어로 보이는 단과 화면 글자가 영어와
+    같은 단(X-Ray)은 영어 하나로. names가 없으면 영어 그대로.
+    """
+    parts = [part.strip() for part in re.split(r"[>‣]", path)]
+    if names:
+        parents = ["", *parts[:-1]]  # 단마다 바로 앞 단(같은 이름도 메뉴마다 글자가 달라서, 티켓 31)
+        parts = [
+            f"{korean}({part})" if (korean := names.korean(part, parent)) and korean != part else part
+            for part, parent in zip(parts, parents)
+        ]
+    return " > ".join(parts)
+
+
+def screen_marks(text: str, names: "MenuNames | None") -> str:
+    """글 속 [[메뉴 이름]] 표시를 모두 화면 글로 바꾼다(한 번에 다 있는 글, 예: 연습 과정 안내 말)."""
+    return _MARK.sub(lambda match: screen_path(match.group(1), names), text)
+
+
+def load_menu_names(
+    data_dir: Path, menu_choices: Path = CHOICES, menu_titles: Path = TITLES
+) -> MenuNames | None:
+    """메뉴 이름 사전(data_dir/menu_names/menu_names.json과 저장소의 고정 짝·통과 제목). 사전 파일이 없으면 None(영어 그대로 보임)."""
+    names_path = data_dir / "menu_names" / "menu_names.json"
+    if not names_path.exists():
+        return None
+    return MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles))
+
+
 def build_menu_names(
     chunks: Iterable[Chunk], po_text: str, full_po_text: str = "", aliases: Mapping[str, str] = {}
 ) -> MenuNames:
@@ -325,6 +361,7 @@ def _screen_names(chunk: Chunk, catalog: _Catalog) -> list[tuple[str, Source]]:
     names = [(part.strip(), Source.UI) for name in chunk.ui_names for part in name.split(_PATH_SEP)]
     names += [(option, Source.OPTION) for option in chunk.options]
     for title in (chunk.page_title, *chunk.headings):
+        title = title.removeprefix("– ")  # 화면 표시 방식 소제목은 "– Material Preview"처럼 줄표로 시작한다
         for candidate in dict.fromkeys((title, _TITLE_TAIL.sub("", title))):
             if _english_key(candidate) in catalog:
                 names.append((candidate, Source.TITLE))
