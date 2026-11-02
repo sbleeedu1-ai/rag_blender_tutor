@@ -11,8 +11,9 @@ from datetime import datetime
 import pytest
 
 from blender_tutor.answer_engine import AnswerEngine, Settings
-from blender_tutor.evaluate import Dialogue, Spread, Turn, load_questions, main, run, timing_summary
-from blender_tutor.manual_chunks import Chunk, save_chunks
+from blender_tutor import evaluate
+from blender_tutor.evaluate import Dialogue, Spread, Turn, load_questions, run, timing_summary
+from blender_tutor.manual_chunks import Chunk, load_chunks, save_chunks
 from blender_tutor.progress import Course, Step
 from blender_tutor.work_state import WorkState
 from tests.examples import EDITING
@@ -275,7 +276,46 @@ def test_앞_차례까지_질문_글이_같은_문항은_잘못_만든_것이라
     assert len(load_questions(write(tmp_path, [SCENARIO, other]), [SWORD])) == 2
 
 
-# ---- 명령 줄: 작은 청크 파일 + 임시 엔진(stand_in)으로 끝까지
+# ---- 명령 줄: 작은 청크 파일 + 가짜 엔진(돈이 드는 부품 없이)으로 끝까지
+
+
+class KeywordEmbedder:
+    """글에 save가 있으면 SAVE 쪽 벡터, 아니면 BEVEL 쪽 벡터."""
+
+    def embed(self, texts, timeout):
+        return [[0.0, 0.0, 1.0] if "save" in text else [1.0, 0.0, 0.0] for text in texts]
+
+
+class PricedModel(Model):
+    """평가 프로그램이 요금을 묻는 답변 모델."""
+
+    def __init__(self, settings):
+        super().__init__()
+        self.effort = settings.reasoning.value
+        self.model = "가짜 답변"
+
+    reasoning_tokens = 37
+
+    def dollars(self):
+        return 0.0012
+
+
+made_models: list[PricedModel] = []
+
+
+def fake_build(data_dir, model, courses, settings, embedding):
+    """진짜 엔진 만들기 대신: data_dir의 청크 파일을 읽어(없으면 FileNotFoundError) 가짜 임베딩으로 엔진을 만든다."""
+    chunks = load_chunks(data_dir / "chunks" / "manual_chunks.jsonl")
+    vectors = [VECTORS[CHUNKS.index(chunk)] for chunk in chunks]
+    return AnswerEngine(
+        chunks, vectors, KeywordEmbedder(), model, settings, courses=courses,
+        course_vectors=[[1.0, 0.0, 0.0]] * len(courses), name=f"가짜 엔진({embedding})",
+    )
+
+
+def main(argv, now):
+    return evaluate.main(argv, now, make_model=lambda settings: made_models.append(PricedModel(settings)) or made_models[-1], build=fake_build)
+
 
 def project(tmp_path):
     """청크 파일 하나인 data/, 빈 courses/, 연습 과정 밖 문항 둘인 문항 파일."""
@@ -293,21 +333,23 @@ def options(tmp_path, *more):
 
 
 def run_options(tmp_path, *more):
-    return options(tmp_path, "--data", str(tmp_path / "data"), *more)
+    return options(tmp_path, "--data", str(tmp_path / "data"), "--yes", *more)
 
 
 def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약을_쓴다(tmp_path):
     assert main(["run", *run_options(tmp_path, "--name", "기준", "--reasoning", "low", "--recent", "5")], now=datetime(2026, 10, 26, 9, 5)) == 0
     folder = tmp_path / "results" / "20261026" / "090500_기준"
     settings = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
-    assert settings["engine"] == "stand_in" and settings["임베딩"] == "stand_in" and settings["리랭커"] == "끔"
+    assert settings["engine"] == "가짜 엔진(text-embedding-3-large)" and settings["임베딩"] == "text-embedding-3-large"
+    assert settings["리랭커"] == "끔" and settings["답변 모델 요금(달러)"] == 0.0012 and settings["답변 모델 생각 토큰"] == 37
+    assert made_models[-1].effort == "low"  # 생각 수준을 답변 모델에 넘긴다
     # 어느 코드로 잰 결과인지(홀드아웃은 동결한 커밋 번호를 적는다). 커밋 안 한 변경이 있으면 뒤에 표시가 붙는다
     assert re.fullmatch(r"[0-9a-f]{40}( \(커밋 안 한 변경 있음\))?", settings["커밋"])
     assert settings["settings"] == {"top_k": 8, "timeout": 10.0, "rewrite_timeout": 5.0, "use_bm25": False, "reasoning": "low", "recent_pairs": 5}
     rows = [json.loads(text) for text in (folder / "답.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [(row["번호"], row["적중 순위"]) for row in rows] == [("D01", 1), ("D02", None)]
     assert rows[0]["검색 결과"][0]["주소"] == "files/blend/save.html#save"
-    assert rows[0]["답"].startswith("(임시 답)")
+    assert rows[0]["답"] == "답1"
     assert rows[1]["붙인 연습 과정"] == [] and rows[1]["답에 나온 연습 과정"] == []  # courses/가 비어 있음
     summary = (folder / "요약.md").read_text(encoding="utf-8")
     assert "검색 적중: 1 / 1" in summary
@@ -331,6 +373,17 @@ def test_아직_없는_리랭커나_임베딩은_고를_수_없다(tmp_path):
             main(["run", *run_options(tmp_path, "--name", "기준", *more)], now=datetime(2026, 10, 26, 9, 5))
 
 
+def test_run은_yes가_없으면_어림_비용만_보이고_돌리지_않는다(tmp_path, capsys):
+    made_models.clear()
+    argv = ["run", *options(tmp_path, "--name", "기준", "--data", str(tmp_path / "data"))]
+    assert main(argv, now=datetime(2026, 10, 26, 9, 5)) == 2
+    assert "차례 2개 × 약 $0.0006 = 약 $0.0012" in capsys.readouterr().err
+    # 잰 적 없는 생각 수준은 숫자를 지어내지 않는다
+    assert main([*argv, "--reasoning", "medium"], now=datetime(2026, 10, 26, 9, 5)) == 2
+    assert "medium은 잰 적이 없어" in capsys.readouterr().err
+    assert made_models == [] and not (tmp_path / "results").exists()
+
+
 def test_times는_시간_기록_파일에서_통계를_써_둔다(tmp_path):
     timings = tmp_path / "timings.jsonl"
     timings.write_text("\n".join(json.dumps(record, ensure_ascii=False) for record in [
@@ -347,7 +400,7 @@ def test_times는_시간_기록_파일에서_통계를_써_둔다(tmp_path):
 
 def test_엔진을_만들거나_시간_기록을_읽다_실패하면_결과_폴더를_만들지_않는다(tmp_path):
     with pytest.raises(FileNotFoundError):
-        main(["run", *options(tmp_path, "--name", "기준", "--data", str(tmp_path / "없는 폴더"))], now=datetime(2026, 10, 26, 9, 5))
+        main(["run", *options(tmp_path, "--name", "기준", "--data", str(tmp_path / "없는 폴더"), "--yes")], now=datetime(2026, 10, 26, 9, 5))
     with pytest.raises(FileNotFoundError):
         main(["times", *options(tmp_path, "--name", "시간", "--timings", str(tmp_path / "없음.jsonl"))], now=datetime(2026, 10, 26, 9, 5))
     assert not (tmp_path / "results").exists()

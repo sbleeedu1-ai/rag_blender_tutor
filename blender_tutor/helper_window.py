@@ -51,6 +51,8 @@ QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::su
 #card {{ background: rgba(255,255,255,0.08); border-radius: 14px; }}
 #cardTitle {{ color: rgba(235,235,245,0.45); font-size: 11px; font-weight: 700; }}
 #source {{ font-size: 13px; }}
+#sourcesToggle {{ background: transparent; border: none; color: rgba(235,235,245,0.55); font-size: 12px; font-weight: 700; text-align: left; padding: 0; }}
+#sourcesToggle:hover {{ color: rgba(235,235,245,0.85); }}
 #input {{ background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px;
           padding: 0 16px; font-size: 15px; color: white; selection-background-color: rgba(120,140,255,0.6); }}
 #input:focus {{ border: 1px solid rgba(160,175,255,0.45); }}
@@ -453,15 +455,29 @@ def _home() -> QRect:
 
 
 def _sources_card(sources: tuple[Source, ...]) -> QFrame:
-    """근거 카드: 소제목 경로마다 설명서 링크와 그림·영상 표시."""
+    """근거 카드: 처음에는 접힌 한 줄(근거 n개 · 출처)만 보이고, 누르면 소제목 경로마다 설명서 링크와 그림·영상 표시가 펼쳐진다.
+    답 끝에 긴 목록이 붙어 답이 위로 밀려나지 않게 접어 둔다(2026-11-02 사용자 요청)."""
     card = QFrame()
     card.setObjectName("card")
     layout = QVBoxLayout(card)
-    layout.setContentsMargins(14, 10, 14, 12)
+    layout.setContentsMargins(14, 8, 14, 8)
     layout.setSpacing(4)
-    title = QLabel("근거 · Blender 5.2 설명서 (CC BY-SA 4.0)")
-    title.setObjectName("cardTitle")
-    layout.addWidget(title)
+    closed = f"▸ 근거 {len(sources)}개 · Blender 5.2 설명서 (CC BY-SA 4.0)"
+    toggle = _button(closed, "sourcesToggle")
+    layout.addWidget(toggle)
+    links = QWidget()
+    links.setObjectName("sourceLinks")
+    links_layout = QVBoxLayout(links)
+    links_layout.setContentsMargins(0, 2, 0, 4)
+    links_layout.setSpacing(4)
+    links.hide()
+    layout.addWidget(links)
+
+    def flip() -> None:
+        links.setHidden(not links.isHidden())  # isVisible은 창이 숨어 있으면 늘 False라 isHidden(펼침 상태 자체)으로 본다
+        toggle.setText(closed if links.isHidden() else closed.replace("▸", "▾", 1))
+
+    toggle.clicked.connect(flip)
     for source in sources:
         notes = " · ".join(note for note, has in (("그림 있음", source.has_image), ("영상 있음", source.has_video)) if has)
         note = f" <span style='color:rgba(235,235,245,0.45)'>· {notes}</span>" if notes else ""
@@ -472,7 +488,7 @@ def _sources_card(sources: tuple[Source, ...]) -> QFrame:
         label.setObjectName("source")
         label.setWordWrap(True)
         label.setOpenExternalLinks(True)  # 누르면 기본 브라우저로 설명서 그 소제목이 열린다
-        layout.addWidget(label)
+        links_layout.addWidget(label)
     return card
 
 

@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")  # QApplication보다 먼�
 import pytest
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
 from blender_tutor.answer_engine import Done, Failure, Piece, Source
 from blender_tutor.course_desk import Line, LineKind, StepView
@@ -80,14 +80,21 @@ def test_답_조각을_이어_붙이고_문장마다_줄을_바꾼다(window):
     assert texts(window, "answer") == ["Tab을 눌러요.\nBlender 5.2에서도 같아요."]
 
 
-def test_근거는_끝에_한꺼번에_링크와_그림_영상_표시로_붙고_다시_보낼_수_있다(window):
+def test_근거는_끝에_접힌_한_줄로_붙고_누르면_링크와_그림_영상_표시가_펼쳐지며_다시_보낼_수_있다(window):
     type_and_enter(window, "가")
     window.show_answer_event(Piece("답이에요."))
     window.show_answer_event(Done((BEVEL, ARRAY), ()))
+    [toggle] = window.findChildren(QPushButton, "sourcesToggle")
+    [links] = window.findChildren(QWidget, "sourceLinks")
+    assert toggle.text().startswith("▸ 근거 2개") and links.isHidden()  # 답이 위로 밀려나지 않게 처음엔 접혀 있다
+    QTest.mouseClick(toggle, Qt.LeftButton)
+    assert toggle.text().startswith("▾ 근거 2개") and not links.isHidden()
     [bevel, array] = texts(window, "source")
     assert f"href='{BEVEL.url}'" in bevel and "Bevel Modifier &gt; Options" in bevel and "그림 있음 · 영상 있음" in bevel
     assert f"href='{ARRAY.url}'" in array and "있음" not in array
     assert all(label.openExternalLinks() for label in window.findChildren(QLabel, "source"))  # 누르면 브라우저로 설명서가 열린다
+    QTest.mouseClick(toggle, Qt.LeftButton)
+    assert links.isHidden()  # 다시 누르면 접힌다
     type_and_enter(window, "나")
     assert window.asked_questions == ["가", "나"]
 
