@@ -60,6 +60,8 @@ QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::su
 #stepHeader, #pickTitle {{ color: rgba(235,235,245,0.55); font-size: 12px; font-weight: 700; }}
 #stepName {{ font-size: 16px; font-weight: 700; }}
 #guide {{ color: white; font-size: 15px; background: rgba(120,140,255,0.12); border-radius: 12px; padding: 8px 12px; }}
+#step {{ color: rgba(235,235,245,0.7); font-size: 13px; font-weight: 700; border-top: 1px solid rgba(255,255,255,0.22);
+         padding-top: 10px; margin-top: 6px; }}
 #hint {{ color: rgba(235,235,245,0.55); font-size: 12px; }}
 #notice {{ color: rgba(190,205,255,0.85); font-size: 13px; }}
 #promptBar {{ background: rgba(120,140,255,0.18); border-radius: 14px; }}
@@ -271,7 +273,7 @@ class HelperWindow(QWidget):
         self.prompt.setVisible(view.prompt is not None)  # 창을 앞으로 끌어오지 않고 창 안에만 띄운다
 
     def show_line(self, line: Line) -> None:
-        """도우미 안내 말(guide)이나 진행 관리의 알림(notice) 한 줄을 대화에 붙인다."""
+        """도우미 안내 말(guide)·단계 시작 줄(step, 위에 구분선)·진행 관리의 알림(notice) 한 줄을 대화에 붙인다."""
         self._label(line.text, line.kind)
 
     def _set_courses(self, courses: list[Course]) -> None:

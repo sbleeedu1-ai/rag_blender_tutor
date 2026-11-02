@@ -7,6 +7,8 @@
 from pathlib import Path
 
 from blender_tutor.course_desk import CourseDesk, Line, LineKind, StepView
+from blender_tutor.menu_names import MenuName, MenuNames, Translation
+from blender_tutor.menu_names import Source as MenuSource
 from blender_tutor.progress import Course, Operation, Step
 from blender_tutor.receiver import FileEvent
 from blender_tutor.work_state import WorkState
@@ -177,7 +179,7 @@ def test_연습_과정을_고르면_인사와_단계_시작과_첫_조작_안내
     desk = guided(tmp_path)
     assert desk.choose(A, "guided") == [
         Line(LineKind.GUIDE, "단순한 검 연습 과정을 시작할게요."),
-        Line(LineKind.GUIDE, "1단계, 정육면체를 늘려 칼날 모양 잡기예요."),
+        Line(LineKind.STEP, "1단계, 정육면체를 늘려 칼날 모양 잡기예요."),
         Line(LineKind.GUIDE, f"{GRAB.say} 다 되면 '다음'을 눌러 주세요."),
     ]
     assert desk.view(A).operating  # 안내 중인 조작이 있어 버튼은 '다음'
@@ -194,7 +196,8 @@ def test_다음을_누르면_다음_조작_안내만_붙고_감지되면_그다�
     desk.choose(A, "guided")
     assert desk.forward(A) == [Line(LineKind.GUIDE, SCALE.say)]
     assert desk.on_message(A, IDLE) == []  # 같은 자리면 다시 말하지 않는다
-    assert desk.on_message(A, RESIZED) == [Line(LineKind.GUIDE, "이 단계에서 할 조작은 다 했어요. 다 됐으면 '다음 단계'를 눌러 주세요.")]
+    assert desk.on_message(A, RESIZED) == []  # 마지막 조작이 감지되면 물음이 대신 묻는다(같은 뜻의 말을 붙이지 않음, 티켓 32)
+    assert desk.view(A).prompt == "'정육면체를 늘려 칼날 모양 잡기' 단계를 끝낸 것 같아요. 다음 단계(부품 합치기)로 갈까요?"
     assert not desk.view(A).operating  # 버튼은 '다음 단계'
 
 
@@ -202,9 +205,8 @@ def test_다음_단계로_가면_단계_시작을_알리고_조작이_없으면_
     desk = guided(tmp_path)
     desk.choose(A, "guided")
     desk.forward(A)
-    desk.forward(A)
-    assert desk.forward(A) == [
-        Line(LineKind.GUIDE, "2단계, 부품 합치기예요."),
+    assert desk.forward(A) == [  # 마지막 조작을 '다음'으로 넘기면 바로 다음 단계(끝난 조건이 없는 단계)
+        Line(LineKind.STEP, "2단계, 부품 합치기예요."),
         Line(LineKind.GUIDE, "이 단계는 다 되면 '다음 단계'를 눌러 넘어가요."),
     ]
     assert not desk.view(A).operating
@@ -218,7 +220,7 @@ def test_뒤로_가면_그_자리의_안내를_다시_말한다(tmp_path):
     assert desk.back(A) == [Line(LineKind.GUIDE, f"{GRAB.say} 다 되면 '다음'을 눌러 주세요.")]
     desk.skip_to(A, "join")
     assert desk.back(A) == [  # 앞 단계의 조작을 다 끝낸 자리
-        Line(LineKind.GUIDE, "1단계, 정육면체를 늘려 칼날 모양 잡기예요."),
+        Line(LineKind.STEP, "1단계, 정육면체를 늘려 칼날 모양 잡기예요."),
         Line(LineKind.GUIDE, "이 단계에서 할 조작은 다 했어요. 다 됐으면 '다음 단계'를 눌러 주세요."),
     ]
 
@@ -234,7 +236,7 @@ def test_이어_하면_이어서_한다고_말하고_그_조작부터_안내한�
     reopened.on_message(A, IDLE, FileEvent("opened", BLEND))
     assert reopened.answer(A, True) == [
         Line(LineKind.GUIDE, "단순한 검 연습 과정을 이어서 할게요."),
-        Line(LineKind.GUIDE, "1단계, 정육면체를 늘려 칼날 모양 잡기예요."),
+        Line(LineKind.STEP, "1단계, 정육면체를 늘려 칼날 모양 잡기예요."),
         Line(LineKind.GUIDE, SCALE.say),
     ]
 
@@ -279,3 +281,28 @@ def test_단추로_답했을_때_진행_관리가_돌려준_알림도_대화_말
     assert reopened.answer(A, True) == [
         Line(LineKind.NOTICE, "이 파일에서 검 연습 과정을 다 마쳤어요. 다음엔 다른 연습 과정을 골라 볼까요?")
     ]
+
+
+# 연습 과정 안내 말의 [[메뉴 이름]] 표시(티켓 32 검수: 한국어 화면인데 안내가 영어 메뉴 이름이라 찾기 어려웠음)
+SCREEN_NAMES = MenuNames([
+    MenuName("Edit", (Translation("편집", ("*",)),), 1, "", (MenuSource.UI,)),
+    MenuName("Preferences", (Translation("환경 설정", ("*",)),), 1, "", (MenuSource.UI,)),
+    MenuName("X-Ray", (Translation("X-Ray", ("*",)),), 1, "", (MenuSource.UI,)),
+])
+OPEN_PREFS = Operation("환경 설정 열기", "Edit > Preferences", "없음", "[[Edit]] 메뉴에서 [[Preferences]]를 열어 보세요. [[X-Ray]]는 그대로예요.")
+PREFS = Course("prefs", "설정", (Step("open", "설정 열기", operations=(OPEN_PREFS,)),))
+KOREAN = WorkState("OBJECT", None, (), "ko_KR", True, "", 3, "5.2.2", {}, ())
+ENGLISH_ON_KOREAN = WorkState("OBJECT", None, (), "ko_KR", False, "", 3, "5.2.2", {}, ())  # 한국어지만 인터페이스 번역 꺼짐
+
+
+def test_안내_말의_메뉴_이름_표시는_한국어_화면이면_한국어와_영어를_함께_보인다(tmp_path):
+    desk = CourseDesk([PREFS], tmp_path, SCREEN_NAMES)
+    desk.on_message(A, KOREAN, FileEvent("opened", ""))
+    said = desk.choose(A, "prefs")[-1].text
+    assert said.startswith("편집(Edit) 메뉴에서 환경 설정(Preferences)를 열어 보세요. X-Ray는 그대로예요.")  # 화면 글자가 영어와 같으면 한 번만
+
+
+def test_영어_화면이거나_사전이_없으면_표시만_떼고_영어로_보인다(tmp_path):
+    for desk, state in ((CourseDesk([PREFS], tmp_path, SCREEN_NAMES), IDLE), (CourseDesk([PREFS], tmp_path, SCREEN_NAMES), ENGLISH_ON_KOREAN), (CourseDesk([PREFS], tmp_path), KOREAN)):
+        desk.on_message(A, state, FileEvent("opened", ""))
+        assert desk.choose(A, "prefs")[-1].text.startswith("Edit 메뉴에서 Preferences를 열어 보세요. X-Ray는 그대로예요.")

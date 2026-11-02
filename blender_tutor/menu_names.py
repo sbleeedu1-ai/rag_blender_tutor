@@ -18,6 +18,9 @@ DEFAULT_CONTEXT = "*"  # 문맥 없는 일반 문구. Blender Python도 이렇�
 _PATH_SEP = "‣"  # 설명서 메뉴 경로의 구분 글자(Add ‣ Mesh)
 ALIASES = Path(__file__).resolve().parents[1] / "menu_aliases.json"  # 설명서 철자 → 화면 철자 표(티켓 31)
 _TITLE_TAIL = re.compile(r" (Modifier|Node|Tool|Constraint)$")  # 쪽 제목 "Array Modifier"의 블렌더 표기는 "Array"
+# 메뉴 이름 표시. 답변 모델의 답(티켓 23)과 연습 과정 안내 말(티켓 32)이 메뉴 이름을 감싸고, 화면 언어에 맞게 바꾼다
+MARK_OPEN, MARK_CLOSE = "[[", "]]"
+_MARK = re.compile(r"\[\[(.+?)\]\]")
 
 
 class Source(StrEnum):
@@ -228,6 +231,27 @@ def _by_count(names: Iterable[MenuName]) -> list[MenuName]:
 
 
 _Catalog = dict[str, dict[str, list[str]]]  # ko.po: 영어 → 한국어 → 문맥들
+
+
+def screen_path(path: str, names: "MenuNames | None") -> str:
+    """메뉴 이름 표시 하나의 속(Add > Mesh)을 화면 글로 바꾼다.
+
+    names가 있으면(한국어 화면에 번역 켜짐) 단마다 "추가(Add)"처럼 한국어(영어)로, 영어로 보이는 단과 화면 글자가 영어와
+    같은 단(X-Ray)은 영어 하나로. names가 없으면 영어 그대로.
+    """
+    parts = [part.strip() for part in re.split(r"[>‣]", path)]
+    if names:
+        parents = ["", *parts[:-1]]  # 단마다 바로 앞 단(같은 이름도 메뉴마다 글자가 달라서, 티켓 31)
+        parts = [
+            f"{korean}({part})" if (korean := names.korean(part, parent)) and korean != part else part
+            for part, parent in zip(parts, parents)
+        ]
+    return " > ".join(parts)
+
+
+def screen_marks(text: str, names: "MenuNames | None") -> str:
+    """글 속 [[메뉴 이름]] 표시를 모두 화면 글로 바꾼다(한 번에 다 있는 글, 예: 연습 과정 안내 말)."""
+    return _MARK.sub(lambda match: screen_path(match.group(1), names), text)
 
 
 def build_menu_names(

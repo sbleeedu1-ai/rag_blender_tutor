@@ -52,6 +52,11 @@ class WorkState:
     running_operators: tuple[str, ...] = ()
     view: View | None = None  # 가장 큰 3D 화면의 시점. 3D 화면이 없으면 None. 테스트에서 줄여 쓰도록 기본값을 둔다
 
+    @property
+    def korean_screen(self) -> bool:
+        """한국어 화면에 인터페이스 번역이 켜져 있나(메뉴 이름을 한국어로 보일지)."""
+        return self.language.startswith("ko") and self.translate_interface
+
     @classmethod
     def from_json(cls, data: object) -> "WorkState":
         """애드온이 보낸 JSON(사전)을 읽는다. 빠진 칸·모르는 칸·꼴이 틀린 칸이 있으면 ValueError."""

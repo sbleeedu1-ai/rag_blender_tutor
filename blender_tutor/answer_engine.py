@@ -20,7 +20,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
-from blender_tutor.menu_names import MenuNames
+from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, MenuNames, screen_path
 from blender_tutor.progress import Course, Step
 from blender_tutor.work_state import WorkState
 
@@ -52,7 +52,6 @@ def area_of(page_path: str) -> str:
     return "/".join(parts[:2]) if parts[0] in BIG_FIELDS and len(parts) > 1 else parts[0]
 
 
-MARK_OPEN, MARK_CLOSE = "[[", "]]"  # 답변 모델이 메뉴 이름을 감싸는 표시. 엔진이 화면 언어에 맞게 바꾼다(티켓 23)
 MARK_LIMIT = 80  # 표시가 열린 뒤 이만큼(글자) 닫히지 않으면 표시가 아닌 글로 보고 그대로 낸다
 
 TIMEOUT_MESSAGE = "답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
@@ -293,7 +292,7 @@ class AnswerEngine:
         sent = list(dict.fromkeys(preview + results))
         similar = self._similar_courses(vectors[-1]) if recommend else []
         messages = _messages(question, state, recent, self._widened(sent, preview), similar, step)
-        marks = _MenuMarks(self._menu_names if _translated(state) else None)
+        marks = _MenuMarks(self._menu_names if state.korean_screen else None)
         try:
             for text in self._model.stream(messages, self._settings.timeout):
                 if text := marks.feed(text):
@@ -457,11 +456,6 @@ def _read_rewrite(rewriter: Rewriter, messages: list[dict[str, str]], found: Fut
         found.set_exception(ValueError(f"검색어가 없는 질문 바꾸기 답 {text!r}"))
 
 
-def _translated(state: WorkState) -> bool:
-    """한국어 화면에 인터페이스 번역이 켜져 있나."""
-    return state.language.startswith("ko") and state.translate_interface
-
-
 class _MenuMarks:
     """답 글 속 [[Add > Mesh]] 표시를 화면 글로 바꾼다(티켓 23). 표시가 조각 사이에 갈려 와도 닫힐 때까지 모아 둔다.
 
@@ -489,7 +483,7 @@ class _MenuMarks:
             elif end < 0:
                 break  # 닫힐 때까지 모은다
             else:
-                shown += [held[:start], self._screen(held[inner:end])]
+                shown += [held[:start], screen_path(held[inner:end], self._names)]
                 held = held[end + len(MARK_CLOSE) :]
         else:
             start = len(held) - 1 if held.endswith(MARK_OPEN[0]) else len(held)
@@ -500,17 +494,6 @@ class _MenuMarks:
         """답이 끝났거나 끊겼을 때 남은 글. 닫히지 않은 표시는 기호만 뗀다(사용자에게 [[가 보이지 않게)."""
         held, self._held = self._held, ""
         return held.replace(MARK_OPEN, "", 1)
-
-    def _screen(self, path: str) -> str:
-        parts = [part.strip() for part in re.split(r"[>‣]", path)]
-        if self._names:
-            parents = ["", *parts[:-1]]  # 단마다 바로 앞 단(같은 이름도 메뉴마다 글자가 달라서, 티켓 31)
-            parts = [
-                f"{korean}({part})" if (korean := self._names.korean(part, parent)) else part
-                for part, parent in zip(parts, parents)
-            ]
-        return " > ".join(parts)
-
 
 def _failure(error: Exception, results: list[Chunk]) -> Failure:
     """바깥 서비스 오류를 짧은 오류 표시로. 시간 초과면 그 문구로. 원래 오류는 도우미 기록에 남긴다(무엇이 실패했는지 가르려고)."""

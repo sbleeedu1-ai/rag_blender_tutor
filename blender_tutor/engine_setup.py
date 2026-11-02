@@ -32,6 +32,16 @@ def rewriters_for(settings: Settings, key: str) -> list[OpenAIModel]:
     return [OpenAIModel(REWRITE_MODEL, key, REWRITE_EFFORT, settings.rewrite_timeout) for _ in range(REWRITE_COUNT)]
 
 
+def load_menu_names(
+    data_dir: Path, menu_choices: Path = PROJECT / "menu_choices.json", menu_titles: Path = PROJECT / "menu_titles.json"
+) -> MenuNames | None:
+    """메뉴 이름 사전(data_dir/menu_names/menu_names.json과 저장소의 고정 짝·통과 제목). 사전 파일이 없으면 None(영어 그대로 보임)."""
+    names_path = data_dir / "menu_names" / "menu_names.json"
+    if not names_path.exists():
+        return None
+    return MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles))
+
+
 def build_engine(
     data_dir: Path,
     model: OpenAIAnswerModel | None = None,
@@ -58,12 +68,7 @@ def build_engine(
     embedder = manual_vectors.OpenAIEmbedder(embedding, key)
     rewriters = list(rewriters or rewriters_for(settings, key))
     model = model or answer_model_for(settings)
-    names_path = data_dir / "menu_names" / "menu_names.json"
-    names = (
-        MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles))
-        if names_path.exists()
-        else None
-    )
+    names = load_menu_names(data_dir, menu_choices, menu_titles)
     texts = [course.search_text for course in courses]
     course_vectors = manual_vectors.cached(texts, embedder, manual_vectors.courses_path_for(embedding, data_dir), settings.timeout)
     name = f"{embedding}+{REWRITE_MODEL}×{len(rewriters)}+{model.model}"

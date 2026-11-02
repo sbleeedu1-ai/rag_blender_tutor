@@ -5,6 +5,7 @@ Blender 둘을 오가도 창을 바꿀 때 "파일 열림"이 오지 않으므�
 도우미 창(helper)은 사건과 버튼을 여기 넘기고, 돌려받은 말(Line)을 대화에 붙이고 view로 단계 카드를 다시 그린다.
 
 대화에 붙이는 말: 연습 과정을 시작하거나 이어 할 때 인사, 단계가 바뀌면 단계 시작, 조작마다 연습 과정 파일의 안내 말.
+안내 말의 [[메뉴 이름]] 표시는 그 Blender의 화면 언어에 맞게 바꾼다(한국어 화면이면 "편집(Edit)", 티켓 32).
 조작은 감지 조건이 맞거나 카드의 '다음'을 누르면 다음으로 간다. 감지 조건이 없는 조작은 안내 말 끝에 '다음'을 누르라는 말을 붙인다.
 """
 
@@ -15,6 +16,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from blender_tutor.korean_particles import has_final
+from blender_tutor.menu_names import MenuNames, screen_marks
 from blender_tutor.progress import Course, Step
 from blender_tutor.progress_record import ManagerCommand, Notice, ProgressManager
 from blender_tutor.receiver import FileEvent
@@ -41,7 +43,8 @@ class StepView:
 class LineKind(StrEnum):
     """대화 말 종류. 정해 둔 이름만 쓴다(오타를 내면 바로 오류가 난다). 창은 이 이름으로 글씨 모양을 고른다."""
 
-    GUIDE = "guide"  # 도우미 안내 말(인사·단계 시작·조작 안내)
+    GUIDE = "guide"  # 도우미 안내 말(인사·조작 안내)
+    STEP = "step"  # 단계 시작 줄("3단계, ~예요."). 창은 위에 구분선을 긋는다(티켓 32 검수)
     NOTICE = "notice"  # 진행 관리의 알림
 
 
@@ -56,8 +59,12 @@ class Line:
 class CourseDesk:
     """Blender 창 번호마다 진행 관리 하나. 함수마다 대화에 붙일 말 목록을 돌려준다."""
 
-    def __init__(self, courses: list[Course], record_dir: Path, now: Callable[[], datetime] = datetime.now):
+    def __init__(
+        self, courses: list[Course], record_dir: Path, menu_names: MenuNames | None = None, now: Callable[[], datetime] = datetime.now
+    ):
+        """menu_names는 안내 말의 [[메뉴 이름]]을 한국어 화면 글자로 바꿀 사전(없으면 영어 그대로). 도우미가 켜진 뒤 넣어도 된다."""
         self.courses = courses
+        self.menu_names = menu_names
         self._record_dir = record_dir
         self._now = now
         self._managers: dict[int, ProgressManager] = {}
@@ -65,6 +72,8 @@ class CourseDesk:
         self._said: dict[int, tuple[Course | None, Step | None, int]] = {}
         # 창 번호마다 뒤에 있을 때 생긴 알림(옮겨 오면 보인다)
         self._held: dict[int, list[Line]] = {}
+        # 창 번호마다 마지막 작업 상태가 한국어 화면이었나(안내 말의 메뉴 이름을 어느 말로 보일지)
+        self._korean: dict[int, bool] = {}
 
     def on_message(self, window: int, state: WorkState, event: FileEvent | None = None, shown: bool = True) -> list[Line]:
         """Blender에서 봉투가 왔을 때. 파일 사건을 먼저 넘기고 작업 상태를 넘긴다.
@@ -74,6 +83,7 @@ class CourseDesk:
         switched_to가 보이고, 안내 말은 그때의 자리로 다시 말한다.
         """
         manager = self._manager(window)
+        self._korean[window] = state.korean_screen
         lines = []
         if event is not None and event.kind == "opened":
             lines += self._apply(window, manager.on_file_opened(event.path))
@@ -96,7 +106,7 @@ class CourseDesk:
         if step is None:
             return lines + [Line(LineKind.GUIDE, f"이 Blender는 {course.name} 연습 과정을 다 마쳤어요.")]
         lines.append(Line(LineKind.GUIDE, f"이 Blender는 {course.name} {manager.number}단계, {_is(step.name)}."))
-        return lines + self._operation_line(manager)
+        return lines + self._on_screen(window, self._operation_line(manager))
 
     def choose(self, window: int, label: str) -> list[Line]:
         """연습 과정 고르기(처음 고르기·바꾸기). 떠 있는 물음을 어떻게 할지는 진행 관리가 정한다."""
@@ -124,6 +134,7 @@ class CourseDesk:
             del self._managers[window]
             self._said.pop(window, None)
             self._held.pop(window, None)
+            self._korean.pop(window, None)
 
     def step(self, window: int) -> Step | None:
         """그 창의 지금 단계(답 엔진에 넘김)."""
@@ -145,7 +156,12 @@ class CourseDesk:
         물음(띄우기·거두기)은 진행 관리가 들고 있어 view가 prompt로 읽는다.
         """
         lines = [Line(LineKind.NOTICE, command.text) for command in commands if isinstance(command, Notice)]
-        return lines + self._narrate(window)
+        return lines + self._on_screen(window, self._narrate(window))
+
+    def _on_screen(self, window: int, lines: list[Line]) -> list[Line]:
+        """안내 말의 [[메뉴 이름]] 표시를 그 창의 화면 언어 글로 바꾼다. 작업 상태를 아직 못 받았으면 영어로."""
+        names = self.menu_names if self._korean.get(window, False) else None
+        return [Line(line.kind, screen_marks(line.text, names)) for line in lines]
 
     def _narrate(self, window: int) -> list[Line]:
         """지난번 말한 자리에서 바뀐 만큼 안내 말을 만든다: 연습 과정 시작·이어 함, 단계 시작, 조작 안내, 마침."""
@@ -163,17 +179,22 @@ class CourseDesk:
         if step is None:
             return lines + [Line(LineKind.GUIDE, f"{course.name} 연습 과정을 다 마쳤어요. 수고하셨어요!")]
         if step != said_step or course != said_course:
-            lines.append(Line(LineKind.GUIDE, f"{number}단계, {_is(step.name)}."))
+            lines.append(Line(LineKind.STEP, f"{number}단계, {_is(step.name)}."))
         elif operations_done == said_done:
             return lines
         return lines + self._operation_line(manager)
 
     @staticmethod
     def _operation_line(manager: ProgressManager) -> list[Line]:
-        """지금 조작의 안내 말(감지 조건이 없으면 '다음'을 누르라는 말을 붙임). 조작을 다 끝냈거나 조작이 없는 단계면 '다음 단계'를 누르라는 말."""
+        """지금 조작의 안내 말(감지 조건이 없으면 '다음'을 누르라는 말을 붙임). 조작을 다 끝냈거나 조작이 없는 단계면 '다음 단계'를 누르라는 말.
+
+        단계 끝 물음이 떠 있으면 '다음 단계'를 누르라는 말은 붙이지 않는다. 물음이 같은 것을 묻고 있어서다(티켓 32 검수).
+        """
         operation = manager.operation
         if operation is not None:
             return [Line(LineKind.GUIDE, operation.say if operation.detect else f"{operation.say} {PRESS_NEXT}")]
+        if manager.prompt is not None:
+            return []
         return [Line(LineKind.GUIDE, ALL_OPERATIONS_DONE if manager.step.operations else NO_OPERATIONS)]
 
 
