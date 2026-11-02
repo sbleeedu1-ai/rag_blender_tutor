@@ -185,6 +185,24 @@ def test_쪽_제목_소제목은_ko_po에_있을_때만_담고_뒤의_Modifier_�
     ]
 
 
+def test_소제목_앞의_줄표를_떼고_짝짓는다():
+    # 설명서의 화면 표시 방식 소제목은 "– Material Preview"처럼 줄표로 시작한다(티켓 32 다시 검수에서 사전에 빠진 것을 찾음)
+    po = PO + '\nmsgid "Material Preview"\nmsgstr "머티리얼 미리보기"\n'
+    page = Chunk(
+        page_path="editors/3dview/display/shading",
+        anchor="material-preview",
+        field="editors",
+        group="editors/3dview/display",
+        page_title="Viewport Shading",
+        headings=("– Material Preview",),
+        body="Body.",
+    )
+
+    names = build_menu_names([page], po)
+
+    assert names.get("Material Preview").translations == (Translation("머티리얼 미리보기", ("*",)),)
+
+
 def test_철자_표에_있는_이름은_화면_철자로_ko_po를_찾는다():
     # 지어낸 사전: 설명서는 "Wandsphere", 화면 메뉴는 "Wand Sphere"(Operator 문맥)를 쓴다고 치고
     po = PO + (

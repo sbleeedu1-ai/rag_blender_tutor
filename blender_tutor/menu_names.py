@@ -361,6 +361,7 @@ def _screen_names(chunk: Chunk, catalog: _Catalog) -> list[tuple[str, Source]]:
     names = [(part.strip(), Source.UI) for name in chunk.ui_names for part in name.split(_PATH_SEP)]
     names += [(option, Source.OPTION) for option in chunk.options]
     for title in (chunk.page_title, *chunk.headings):
+        title = title.removeprefix("– ")  # 화면 표시 방식 소제목은 "– Material Preview"처럼 줄표로 시작한다
         for candidate in dict.fromkeys((title, _TITLE_TAIL.sub("", title))):
             if _english_key(candidate) in catalog:
                 names.append((candidate, Source.TITLE))
