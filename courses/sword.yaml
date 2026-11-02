@@ -344,6 +344,9 @@
             메뉴: Properties > Material > Material Slots > Remove Material Slot
             단축키: 없음
             안내: "이제 색을 입힐게요. 화면 오른쪽 아래 [[Properties]] 창에서 빨간 공 모양의 [[Material]] 탭을 열어 보세요. 부품을 합쳐서 목록에 이름 있는 칸과 빈 칸이 함께 있어요. 빈 칸을 누르고 목록 오른쪽의 − 버튼으로 지워 보세요. 그러면 검 전체가 남은 칸 하나를 써요. 빈 칸이 없으면 그대로 두세요."
+            # 다시 검수(2026-11-02) 흐름에서 − 버튼이 object.material_slot_remove로 잡히는 것을 확인했다
+            감지:
+              - 방금 조작: object.material_slot_remove
           - 설명: 재질 칸 하나 더하기
             메뉴: Properties > Material > Material Slots > Add Material Slot
             단축키: 없음
