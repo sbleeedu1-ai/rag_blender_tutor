@@ -1,48 +1,51 @@
 # 인수인계
 
-마지막 갱신: 2026-11-03 · Claude Code(Opus 5.5) · 강의실 PC · 브랜치 `docs/agent-desktop-trial` · PR #38 병합 전에 씀. 이어받을 때 PR #38이 병합됐는지 git으로 먼저 본다.
+마지막 갱신: 2026-11-03 · Claude Code(Opus 5.5) · 강의실 PC · 브랜치 `feat/35-dev-eval` · PR #39 병합 전에 씀. 이어받을 때 PR #39가 병합됐는지 git으로 먼저 본다.
 
 ## 다음 할 일
 
-1. (집 PC, Claude 데스크톱 앱) 컴퓨터 유즈로 Blender·도우미 창 다뤄 보기(사용자 "대충 시나리오 너 스스로 짜서 컴퓨터 유즈로 해보라고"). 먼저 `anthropic-skills:computer-use` 스킬을 읽는다. 시나리오는 이어받은 AI가 짜되, 오늘 agent-desktop에서 막힌 것([157])을 다시 본다: ① Blender 메뉴로 큐브 추가(마우스로 메뉴 고르기) ② 큐브를 X로 정확히 1.5 m 옮기기(소수점 입력) ③ 같은 이동을 5번 이어서 하고 속성 칸 숫자를 읽어 맞는지(빠짐·잘못 읽기) ④ F10으로 도우미 창을 불러 "둥근 방패"를 고르고 안내 말을 읽기 ⑤ 도중에 다른 창이 앞에 오면 어떻게 되나. 도우미 창에 질문은 보내지 않는다(유료). 결과(된 것·걸린 시간·잘못 읽은 것)를 HISTORY에 남기고, 오늘 방법(agent-desktop·UI Automation)과 견준다. 프로젝트 코드는 바꾸지 않는다.
-2. 티켓 35(개발 30문항, GPT 빈손, 고치기 전 측정 → 고치기 반복) → 37. 45(화면 위치 표)는 35의 고치기 후보.
-3. 다음에 도우미를 켤 때 화면으로 볼 것: 방패 [153] 참고값(장식 S 0.15, 손잡이 S 0.12·G Z -0.13), 안내 말 줄바꿈·문단, 1단계 "'단계 ▼'에서 2단계를 골라" 안내, 검 7단계 `위치 바뀜: Z` 감지.
-4. 낮은 우선순위: Win+E(파일 탐색기)를 누르면 도우미 창이 튀어나옴(원인 미조사). 42(집 PC 로컬 트랙)는 나중에. 채팅창 그림 띄우기·스크린샷 올리기는 명세 범위 밖([151]-9).
-5. 티켓을 모두 끝낸 뒤(사용자 계획, [156]): 이 저장소를 비공개로 복사해 pstack(원본 `cursor/plugins`)으로 에이전트만 돌리고 되돌릴 수 없는 결정만 내려 보기. 준비할 것: `data/`·`.env`는 복사로 안 따라감(벡터 다시 만들면 약 $0.13), 실험용 OpenAI 키와 사용 한도, 확인 훅·AGENTS.md 검토 규칙과 pstack "never-block-on-the-human"이 부딪침, `data/holdout/`·`holdout_work/`는 옮기지 않음.
+1. **티켓 35 이어서: 고치기 전 기준 [E1b] 채점 확정 → 고치기 반복.** `docs/experiment.md`를 먼저 읽는다(체크리스트·[E1]·[E1b]).
+   - [E1b] 채점이 "미완"이면: 새 하위 에이전트에게 `docs/experiment.md` 체크리스트대로 `results/20261103/172801_dev30_before_fixed_scenes/답.jsonl` 34차례를 채점시킨다(문항 `data/eval/dev30/questions.json`, 상태 `data/eval/dev30/states/`, 연습 과정 `courses/`, 청크 `data/chunks/manual_chunks.jsonl`). [E1] 오답노트는 주지 않는다(독립 채점). 결과를 [E1] 메인 채점과 견줘 다른 것만 사용자에게 보이고 판단을 받는다.
+   - 그다음 고치기, 하나씩 고치고 다시 잰다(차례 34개 약 $0.022, 돌리기 전 확인). 권한 순서: ① D05 연습 과정 '모서리 깎기' 자주 막히는 곳에 "방향마다 다르게 깎이면 앞 단계 크기 확정을 안 한 것"(검·방패) ② N2·N5 연습 과정 권하기 지시문(`answer_engine.py` SIMILAR_NOTE와 INSTRUCTIONS의 "가장 가까운 내용" 줄이 부딪침) ③ D03 엔진: 쪽 안 공통 소제목(Common Options)을 함께 넘기기 ④ B2는 설명서에 순서가 있는지 먼저 확인.
+   - 같은 문항을 다시 돌려도 결과가 흔들린다([E1] 적중 25 → [E1b] 27, N5는 권함이 바뀜). 고친 문항만 3번씩 돌리는 등 다루는 법을 사용자와 정한다.
+   - 사용자가 직접 할 것: GPT 빈손 [E0], 도우미 창 시간 10문항(후보 D01·D06·D07·M1·B1·T2 + S2·S3 차례 4개). 안내 파일이 필요하면 만들어 준다고 말해 둠.
+2. (집 PC, Claude 데스크톱 앱) 컴퓨터 유즈로 Blender·도우미 창 다뤄 보기. 지난 HANDOFF 1번 그대로(시나리오 ①-⑤는 HISTORY [157]·[158] 참고). 이번 세션은 CLI라 못 함. agent-desktop 실제 입력이 최근 조작 기록에 남는 것은 [158]에서 확인됨.
+3. 티켓 37(홀드아웃). 45(화면 위치 표)는 35의 고치기 후보.
+4. 낮은 우선순위: Win+E로 도우미 창이 튀어나옴(원인 미조사). 42(집 PC 로컬 트랙). pstack 실험(티켓을 모두 끝낸 뒤, [156]).
 
 ## 지금 상태와 검증
 
-- PR #37 병합됨(브랜치 로컬·원격 지움). agent-desktop 1.1.0을 이 PC에 전역 설치하고 시험함: Blender 버튼은 접근성 트리에 안 잡히고, `--headed` 실제 키·마우스 입력은 조작 기록에 남음. 도우미 창은 agent-desktop이 못 찾지만 Windows UI Automation으로는 글·단추가 읽히고 눌림. 긴 키 입력은 앞 창이 바뀌면 엉뚱한 창으로 가는 등 믿기 어려움(HISTORY [157]). 지우려면 `npm uninstall -g agent-desktop`.
-- 티켓 34 닫음(resolved). 홀드아웃 20문항이 `data/holdout/`에 봉인됨(2026-11-03, 파일 49개, 전체 해시 `b032f169…ca23a8f55`, 다시 계산하는 명령은 HISTORY [155]). 메인 세션은 내용을 보지 않았다.
-- 확인(2026-11-03, 강의실 PC): `evaluate run data/holdout/questions.json --name holdout_check`(`--yes` 없이)가 "차례 23개 × 약 $0.00064 = 약 $0.01472(어림)"에서 멈춤 = 형식 통과, 비용 없음. 해시를 따로 다시 계산해 하위 에이전트 보고와 같음. 이번 PR은 기록 문서만 바꿔 pytest·course_check는 다시 돌리지 않았다(직전 PR #36 기준 596 passed, 문제 0개).
+- 이번 PR: 기록 문서(`docs/experiment.md` 새로, HISTORY [158]·[159], 티켓 35 Comments, HANDOFF)만. 프로그램 코드는 바꾸지 않아 pytest·course_check는 다시 돌리지 않았다(직전 PR #36 기준 596 passed, 문제 0개).
+- 유료 실행 두 번(사용자 확인 뒤): `evaluate run data/eval/dev30/questions.json --yes` → [E1] `results/20261103/171030_dev30_before`(답변 모델 $0.0124), [E1b] `results/20261103/172801_dev30_before_fixed_scenes`($0.0122). 질문 바꾸기·임베딩은 따로(어림 합계 각 약 $0.022).
+- [E1]은 장면 실수(합친 검의 빈 재질 칸을 스크립트가 지움)가 있어 기준으로 쓰지 않는다. 장면 4개를 고쳐 [E1b]를 다시 쟀다.
 
 ## 모르면 실수할 것
 
-- **홀드아웃 열지 않기**: `data/holdout/`·`data/holdout_work/`는 37에서 코드를 동결하기 전까지 열지 않는다(Claude·Codex·사용자 모두). 35에서 고칠 때 보면 홀드아웃의 뜻이 없어진다. 37에서 열기 전에 해시가 같은지 본다. 출처 쏠림·실행 확인 절반은 37에서 열어 보고 아쉬우면 다시 짠다(사용자).
-- **스크립트로 한 Blender 조작은 최근 조작 기록에 안 남는다**(창을 띄워도, `event_simulate`도 반응 없음). 그래서 홀드아웃 3문항은 그 칸을 손으로 채웠다.
-- **유료**: 도우미 창 질문마다 약 $0.0006([135]). `evaluate run`·`speed_trial`은 `--yes` 없이 멈추고 어림 비용만 보인다.
-- **API 키**: 만료되면 401 `expired_secret_key`. 도우미는 켜질 때만 키를 읽어, `data/.env`를 바꾼 뒤 Blender를 **모두** 닫았다 켠다. 키 확인은 무료 `GET /v1/models`.
-- 도우미는 Blender를 다시 켜야 새 코드·새 연습 과정 글로 뜬다. 메뉴 이름 사전(`data/menu_names/menu_names.json`)이 없으면 안내 말이 영어로만 나온다.
-- **연습 과정 YAML 고치기**: 목록 줄이 `[[`로 시작하면 문법 오류. 안내 말 문단 나눔 `\n\n`은 Git Bash 히어독이나 `python -c`로 넣으면 실제 줄바꿈이 되니 Edit 도구나 Write로 만든 스크립트로 넣는다.
-- 방패 안내 숫자는 한 묶음(판 0.07 → 장식 0.15·0.5·0.04 → 손잡이 0.12·-0.13). 앞 숫자를 바꾸면 화면 없는 Blender로 높이를 다시 본다(`shield.yaml` 머리 주석).
-- 검토 결과는 원래 한 항목씩 글로 보인다(AGENTS.md). 사용자가 방식을 바꾸면 그 말을 따른다.
-- 답이 나오는 도중 도우미를 끄면 `RuntimeError: Signal source has been deleted`(알려진 것, [130]).
+- **개발 문항은 Git 밖**: `data/eval/dev30/`(문항·장면 `.blend`·상태 JSON/PNG·스크립트 `build_scenes.py`·`capture.py`·`make_questions.py`). 질문을 고치면 `문항초안.md`를 고치고 `make_questions.py`로 `questions.json`을 다시 만든다. 장면을 고치면 `build_scenes.py` → `capture.py`(장면마다 화면 있는 Blender가 떴다 꺼짐, 머티리얼 미리보기 장면은 `slow`).
+- **장면은 연습 과정대로 실제와 같아야 한다**(체크리스트). 스크립트가 손으로는 안 생기는 정리를 하면 채점이 틀린다.
+- **D01·T2 상태는 agent-desktop 실제 입력**으로 찍었다(`capture.py -- <이름> wait` 뒤 입력, `<이름>.go` 파일로 저장). 실제 입력 중에는 PC 마우스·키보드를 쓰면 안 된다.
+- **홀드아웃 열지 않기**: `data/holdout/`·`data/holdout_work/`는 37에서 코드를 동결하기 전까지 열지 않는다(해시는 HISTORY [155]).
+- **유료**: `evaluate run`은 `--yes` 없이 어림 비용만 보이고 멈춘다. 도우미 창 질문마다 약 $0.0006.
+- API 키는 `data/.env`. 도우미는 켜질 때만 읽어, 바꾼 뒤 Blender를 모두 닫았다 켠다.
+- 검토 결과는 한 항목씩 글로 보인다(AGENTS.md). 사용자가 방식을 바꾸면 그 말을 따른다.
 
 ## Git 제외 자료 (`data/`·`results/`, 커밋 안 함)
 
-| 자료 | 위치 | 다른 PC에서 |
+2026-11-03에 사용자가 `data/models/`·`data/hf_cache/`를 뺀 전부를 구글 드라이브 `개인 프로젝트/블렌더_RAG/data`·`results`에 올림(Claude가 대표 파일 크기로 대조, 하위 파일 수는 다 세지 않음). 다른 PC에서는 거기서 받아 같은 위치에 둔다.
+
+| 자료 | 위치 | 비고 |
 |---|---|---|
-| API 키 | `data/.env` | 옮기지 말고 그 PC에서 새로 넣는다 |
-| **홀드아웃 봉인** | `data/holdout/`(49파일) + 작업 자료 `data/holdout_work/` | 백업 안 함. 37을 다른 PC에서 하면 통째로 옮기고 해시를 본다. 잃으면 다시 써야 한다 |
-| 검·방패 검수 자료 | `data/review/20261102_검/`·`20261103_방패/` | 백업 안 함. 35 문항 만들 때 필요 |
-| 검 검수 기록·막힌 곳 메모 | `data/holdout_raw/`(이제 개발용, 35), 스냅샷 `data/snapshots/20261102-115913.*` | 백업 안 함 |
-| 설명서 벡터(115MB) | `data/vectors/manual_text-embedding-3-large.npz` + `.json` | 옮기거나 `manual_vectors build --yes`(약 $0.13) |
-| 메뉴 이름 사전 | `data/menu_names/menu_names.json` | 옮기거나 `menu_names`로 다시 만듦(무료) |
-| 검색 비교 질문 | `data/search_compare/questions/` | 손으로 만든 것이라 꼭 옮긴다 |
-| 결과 원본 | `results/20261029/`·`20261030/`·`20261102/` | 백업 확인 안 함. 숫자는 HISTORY [113]-[135] |
+| API 키 | `data/.env` | 드라이브에도 있음 |
+| 개발 30문항·장면·상태 | `data/eval/dev30/` | 티켓 35 |
+| 홀드아웃 봉인 | `data/holdout/`(49파일), `data/holdout_work/` | 열지 않기 |
+| 검·방패 검수 자료 | `data/review/`, `data/holdout_raw/`, `data/snapshots/` | |
+| 설명서 벡터·연습 과정 벡터 | `data/vectors/` | 벡터는 `manual_vectors build --yes`(약 $0.13)로도 다시 만듦 |
+| 메뉴 이름 사전 | `data/menu_names/menu_names.json` | 11-02 판 |
+| 결과 원본 | `results/20261029/`-`20261103/` | 숫자는 HISTORY·`docs/experiment.md` |
+| 로컬 임베딩 모델 | `data/models/`, `data/hf_cache/` | 드라이브에 없음, 지금 안 씀, 다시 내려받을 수 있음 |
 
 ## 추천 스킬과 참고
 
-- 35는 `/implement`가 아니라 평가 문항 만들기 + 유료 측정이라, 티켓 35 Comments와 명세 "평가" 절을 먼저 읽는다. 스킬 없이: 개발 30문항을 만들고, 어림 비용을 보여 확인받은 뒤 `evaluate run --yes`로 고치기 전을 잰다.
-- [티켓 34](.scratch/mvp-roundtrip/issues/34-홀드아웃-10문항-쓰고-봉인.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [티켓 37](.scratch/mvp-roundtrip/issues/37-유료-홀드아웃-실행.md), [티켓 45](.scratch/mvp-roundtrip/issues/45-화면-위치-표.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [155]-[157]](HISTORY.md).
+- 35 고치기는 고치기마다 `/implement`가 맞지만, 평가(유료)와 채점이 끼어 있어 티켓 35 Comments와 `docs/experiment.md`를 먼저 읽는다. 스킬 없이: 고치기 하나 → `evaluate run --name <이름>`(어림 보고 확인 뒤 `--yes`) → 하위 에이전트 채점 → `docs/experiment.md`에 [E번호].
+- [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [티켓 37](.scratch/mvp-roundtrip/issues/37-유료-홀드아웃-실행.md), [실험 기록](docs/experiment.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [157]-[159]](HISTORY.md).
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
