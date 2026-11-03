@@ -1564,3 +1564,11 @@
 - agent-desktop(vercel-labs): 명령 줄로 데스크톱 앱을 다루는 도구. 기본은 접근성 트리로 마우스를 움직이지 않고(백그라운드), 실제 키·마우스 입력은 `--headed`가 필요(README). Blender 버튼이 접근성 트리에 잡히는지는 미확인. 사용자 "다 끝나면 한번 테스트 해볼만한 가치는 있어보여서" → 티켓 34 뒤 설치 확인을 받고 `snapshot`으로 시험.
 - Cloudflare security-audit-skill: 코딩 AI용 보안 감사 스킬. 사용자 "딱히 필요없네". ponytail: 꼭 필요한 코드만 쓰게 하는 규칙 스킬, AGENTS.md "코드 작성"·내장 `/simplify`와 겹쳐 권하지 않음.
 - pstack(poteto): Claude가 처음에 "원본은 Cursor용, Claude Code는 남이 옮긴 판"이라 했다가 원본 README(`cursor/plugins` pstack, Claude Code 설치 명령·안내 문서 있음)를 보고 바로잡음. 사용자 계획: 티켓을 다 끝낸 뒤 이 저장소를 비공개로 복사해 pstack 에이전트로만 돌리고 되돌릴 수 없는 결정만 내려 보기("애초에 우리 티켓 다 끝나고 할거였음").
+
+### [157] 2026-11-03 · 도우미 시험·검수를 자동으로 돌릴 수 있는지 보기 위해, agent-desktop으로 Blender를 다뤄 본다
+
+- 설치: Claude가 1.1.0이 그날 나온 판이라 4일 전 판 1.0.2를 권함 → 사용자 "ㄴㄴ 최신판으로 가자". postinstall(GitHub 릴리스에서 실행 파일을 받아 체크섬 확인)을 읽은 뒤 `npm install -g agent-desktop@1.1.0`. npm이 postinstall을 막아 Node를 거쳐 돌지만(호출마다 약 0.1초 더) 동작함. 프로젝트 코드는 바꾸지 않음.
+- 접근성 트리: Blender 5.2.2 창에서 `snapshot`이 잡은 것은 제목 표시줄(시스템 메뉴·최소화·복원·닫기) 5개뿐. 메뉴·버튼·속성 칸은 하나도 안 잡힘. → 버튼 이름으로 누르거나 화면 글을 읽는 쓰임은 안 됨.
+- 백그라운드 키 입력: `press g --app blender.exe`(기본, 창을 앞으로 안 가져옴)는 "Windows SendInput cannot deliver to a background process"로 거부됨.
+- 실제 입력(`--headed`): 창을 앞으로 가져와 Esc(시작 화면 닫기) → G → Enter를 보내자 왼쪽 아래에 "이동" 마지막 조작 조정 패널이 생기고 제목에 `*`가 붙음. 이 패널은 조작 기록(`window_manager.operators`)의 마지막 조작으로 그리므로, 스크립트 조작과 달리([155]) 사람이 누른 것처럼 기록된다고 봄(애드온·도우미 창으로 직접 읽어 보지는 않음). `mouse-move`는 `--app`을 받지 않아 실패해, 큐브는 움직이지 않음(이동 거리 0).
+- 뜻: 실제 입력은 쓰는 동안 이 PC의 마우스·키보드를 차지하고, 화면 내용은 스크린샷으로만 볼 수 있다. 홀드아웃처럼 최근 조작 칸을 손으로 채워야 했던 경우를 실제 입력으로 채울 수 있는 길은 생김. 스크린샷: Claude 세션 임시 폴더(커밋 안 함).
