@@ -1,4 +1,4 @@
-"""파일 지우기 확인 훅(.claude/hooks/ask_file_delete.py, HISTORY [144]): 임시 git 저장소로 본다."""
+"""파일 지우기 확인 훅(.claude/hooks/ask_file_delete.py, HISTORY [144]·[145]): 임시 git 저장소로 본다."""
 
 import importlib.util
 import subprocess
@@ -39,30 +39,49 @@ def reason(command, cwd):
 
 def test_대상마다_되살릴_수_있는지_알려_준다(repo):
     text = reason("rm saved.txt edited.txt new.txt 없는것.txt", repo)
-    assert "휴지통으로 가지 않고" in text
-    assert "saved.txt: (파일) 모두 git에 저장돼 있어 git으로 되살릴 수 있습니다." in text
-    assert "edited.txt: (파일) 모두 git에 저장돼 있어 git으로 되살릴 수 있습니다. 그중 1개는" in text
-    assert "new.txt: (파일) git에 저장되지 않은 것이라 지우면 되살릴 수 없습니다." in text
-    assert "없는것.txt: 지금 없는 것이라" in text
+    assert text.startswith("[영구 삭제] 지우면 휴지통에 남지 않습니다.")
+    assert "- saved.txt (파일): 되살릴 수 있음 (git에 저장됨)\n위치: " in text
+    assert "- edited.txt (파일): 되살릴 수 있음, 단 마지막 커밋 뒤 고친 내용은 사라짐" in text
+    assert "- new.txt (파일): 되살릴 수 없음 (git 기록 없음)" in text
+    assert "- 없는것.txt: 지금 없음 (지워질 것 없음)" in text
+    assert f"위치: {Path(repo).resolve().as_posix()}" in text
 
 
 def test_폴더는_안의_파일을_세어_나눈다(repo):
-    assert "box: (폴더, 안에 파일 2개) 1개는 git으로 되살릴 수 있고, 나머지 1개는 git에 없어" in reason("rm -rf box", repo)
+    text = reason("rm -rf box", repo)
+    assert "- box (폴더, 파일 2개): 1개만 되살릴 수 있음, 1개는 git 기록 없음" in text
 
 
 def test_PowerShell_명령과_Windows_경로도_읽는다(repo):
     absolute = str(Path(repo) / "new.txt")  # C:\...\new.txt 처럼 \ 가 든 경로
     text = reason(f"Remove-Item -LiteralPath {absolute} -Force -Confirm:$false", repo)
-    assert "되살릴 수 없습니다" in text and "지금 없는 것" not in text
-    assert "saved.txt: (파일) 모두 git에" in reason('Remove-Item -Path "saved.txt"', repo)
+    assert "- new.txt (파일): 되살릴 수 없음" in text
+    assert "- saved.txt (파일): 되살릴 수 있음" in reason('Remove-Item -Path "saved.txt"', repo)
 
 
 def test_와일드카드_변수_섞인_명령(repo):
-    assert "*.txt: 3개(" in reason("rm *.txt", repo)
-    assert "변수라 정확히" in reason("rm $TARGET", repo)
+    text = reason("rm *.txt", repo)
+    assert all(f"- {n} (파일)" in text for n in ("saved.txt", "edited.txt", "new.txt"))
+    assert "- $TARGET: 미리 알 수 없음 (경로에 변수가 있음)" in reason("rm $TARGET", repo)
     assert "다른 명령 1개도 함께" in reason("rm new.txt && git status", repo)
 
 
+def test_git_reset_hard는_버려지는_파일을_보인다(repo):
+    text = reason("git reset --hard", repo)
+    assert text.startswith("[고친 내용 버리기]")
+    assert "- 버려지는 파일 1개: edited.txt" in text
+    assert "커밋으로 옮깁니다" not in text
+    assert "- 지금 브랜치를 HEAD~1 커밋으로 옮깁니다." in reason("git reset --hard HEAD~1", repo)
+
+
+def test_git_clean은_지워질_것을_미리_본다(repo):
+    text = reason("git clean -fd", repo)
+    assert text.startswith("[git 밖 파일 지우기]")
+    assert "- 지워지는 것 2개: box/loose.txt, new.txt" in text
+    assert "- 지워지는 것 1개: new.txt" in reason("git clean -f new.txt", repo)
+
+
 def test_지우지_않는_명령에는_관여하지_않는다(repo):
-    for command in ("git rm --cached x", "ls -rm", 'echo "rm new.txt"', "git status", "python -m pytest"):
+    for command in ("git rm --cached x", "ls -rm", 'echo "rm new.txt"', "git status", "python -m pytest",
+                    "git reset HEAD x", "git clean -n", "git clean --dry-run -d"):
         assert hook.decide(command, repo) is None, command
