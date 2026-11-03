@@ -1,18 +1,18 @@
 # 인수인계
 
-마지막 갱신: 2026-11-03 · Claude Code(Opus 5.5) · 강의실 PC · 브랜치 `feat/34-holdout` · PR #37 병합 전에 씀. 이어받을 때 PR #37이 병합됐는지 git으로 먼저 본다.
+마지막 갱신: 2026-11-03 · Claude Code(Opus 5.5) · 강의실 PC · 브랜치 `docs/agent-desktop-trial` · PR #38 병합 전에 씀. 이어받을 때 PR #38이 병합됐는지 git으로 먼저 본다.
 
 ## 다음 할 일
 
-1. PR #37 병합(사용자 확인 뒤). `gh pr checks 37 --watch`로 CI를 기다리고, MERGED를 확인한 뒤에 로컬·원격 브랜치를 지운다(한 단계씩).
-2. agent-desktop 시험(사용자 "다 끝나면 한번 테스트 해볼만한 가치는 있어보여서", HISTORY [156]). `npm install -g agent-desktop`은 실행 전에 확인받는다. Blender를 띄우고 `agent-desktop snapshot`으로 Blender 버튼이 접근성 트리에 잡히는지 → 안 잡히면 `--headed`로 키 하나를 눌러 최근 조작(`window_manager.operators`)이 채워지는지 본다. 프로젝트 코드는 바꾸지 않고 결과만 HISTORY에.
-3. 티켓 35(개발 30문항, GPT 빈손, 고치기 전 측정 → 고치기 반복) → 37. 45(화면 위치 표)는 35의 고치기 후보.
-4. 다음에 도우미를 켤 때 화면으로 볼 것: 방패 [153] 참고값(장식 S 0.15, 손잡이 S 0.12·G Z -0.13), 안내 말 줄바꿈·문단, 1단계 "'단계 ▼'에서 2단계를 골라" 안내, 검 7단계 `위치 바뀜: Z` 감지.
-5. 낮은 우선순위: Win+E(파일 탐색기)를 누르면 도우미 창이 튀어나옴(원인 미조사). 42(집 PC 로컬 트랙)는 나중에. 채팅창 그림 띄우기·스크린샷 올리기는 명세 범위 밖([151]-9).
-6. 티켓을 모두 끝낸 뒤(사용자 계획, [156]): 이 저장소를 비공개로 복사해 pstack(원본 `cursor/plugins`)으로 에이전트만 돌리고 되돌릴 수 없는 결정만 내려 보기. 준비할 것: `data/`·`.env`는 복사로 안 따라감(벡터 다시 만들면 약 $0.13), 실험용 OpenAI 키와 사용 한도, 확인 훅·AGENTS.md 검토 규칙과 pstack "never-block-on-the-human"이 부딪침, `data/holdout/`·`holdout_work/`는 옮기지 않음.
+1. (집 PC, Claude 데스크톱 앱) 컴퓨터 유즈로 Blender·도우미 창 다뤄 보기(사용자 "대충 시나리오 너 스스로 짜서 컴퓨터 유즈로 해보라고"). 먼저 `anthropic-skills:computer-use` 스킬을 읽는다. 시나리오는 이어받은 AI가 짜되, 오늘 agent-desktop에서 막힌 것([157])을 다시 본다: ① Blender 메뉴로 큐브 추가(마우스로 메뉴 고르기) ② 큐브를 X로 정확히 1.5 m 옮기기(소수점 입력) ③ 같은 이동을 5번 이어서 하고 속성 칸 숫자를 읽어 맞는지(빠짐·잘못 읽기) ④ F10으로 도우미 창을 불러 "둥근 방패"를 고르고 안내 말을 읽기 ⑤ 도중에 다른 창이 앞에 오면 어떻게 되나. 도우미 창에 질문은 보내지 않는다(유료). 결과(된 것·걸린 시간·잘못 읽은 것)를 HISTORY에 남기고, 오늘 방법(agent-desktop·UI Automation)과 견준다. 프로젝트 코드는 바꾸지 않는다.
+2. 티켓 35(개발 30문항, GPT 빈손, 고치기 전 측정 → 고치기 반복) → 37. 45(화면 위치 표)는 35의 고치기 후보.
+3. 다음에 도우미를 켤 때 화면으로 볼 것: 방패 [153] 참고값(장식 S 0.15, 손잡이 S 0.12·G Z -0.13), 안내 말 줄바꿈·문단, 1단계 "'단계 ▼'에서 2단계를 골라" 안내, 검 7단계 `위치 바뀜: Z` 감지.
+4. 낮은 우선순위: Win+E(파일 탐색기)를 누르면 도우미 창이 튀어나옴(원인 미조사). 42(집 PC 로컬 트랙)는 나중에. 채팅창 그림 띄우기·스크린샷 올리기는 명세 범위 밖([151]-9).
+5. 티켓을 모두 끝낸 뒤(사용자 계획, [156]): 이 저장소를 비공개로 복사해 pstack(원본 `cursor/plugins`)으로 에이전트만 돌리고 되돌릴 수 없는 결정만 내려 보기. 준비할 것: `data/`·`.env`는 복사로 안 따라감(벡터 다시 만들면 약 $0.13), 실험용 OpenAI 키와 사용 한도, 확인 훅·AGENTS.md 검토 규칙과 pstack "never-block-on-the-human"이 부딪침, `data/holdout/`·`holdout_work/`는 옮기지 않음.
 
 ## 지금 상태와 검증
 
+- PR #37 병합됨(브랜치 로컬·원격 지움). agent-desktop 1.1.0을 이 PC에 전역 설치하고 시험함: Blender 버튼은 접근성 트리에 안 잡히고, `--headed` 실제 키·마우스 입력은 조작 기록에 남음. 도우미 창은 agent-desktop이 못 찾지만 Windows UI Automation으로는 글·단추가 읽히고 눌림. 긴 키 입력은 앞 창이 바뀌면 엉뚱한 창으로 가는 등 믿기 어려움(HISTORY [157]). 지우려면 `npm uninstall -g agent-desktop`.
 - 티켓 34 닫음(resolved). 홀드아웃 20문항이 `data/holdout/`에 봉인됨(2026-11-03, 파일 49개, 전체 해시 `b032f169…ca23a8f55`, 다시 계산하는 명령은 HISTORY [155]). 메인 세션은 내용을 보지 않았다.
 - 확인(2026-11-03, 강의실 PC): `evaluate run data/holdout/questions.json --name holdout_check`(`--yes` 없이)가 "차례 23개 × 약 $0.00064 = 약 $0.01472(어림)"에서 멈춤 = 형식 통과, 비용 없음. 해시를 따로 다시 계산해 하위 에이전트 보고와 같음. 이번 PR은 기록 문서만 바꿔 pytest·course_check는 다시 돌리지 않았다(직전 PR #36 기준 596 passed, 문제 0개).
 
@@ -44,5 +44,5 @@
 ## 추천 스킬과 참고
 
 - 35는 `/implement`가 아니라 평가 문항 만들기 + 유료 측정이라, 티켓 35 Comments와 명세 "평가" 절을 먼저 읽는다. 스킬 없이: 개발 30문항을 만들고, 어림 비용을 보여 확인받은 뒤 `evaluate run --yes`로 고치기 전을 잰다.
-- [티켓 34](.scratch/mvp-roundtrip/issues/34-홀드아웃-10문항-쓰고-봉인.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [티켓 37](.scratch/mvp-roundtrip/issues/37-유료-홀드아웃-실행.md), [티켓 45](.scratch/mvp-roundtrip/issues/45-화면-위치-표.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [155]-[156]](HISTORY.md).
+- [티켓 34](.scratch/mvp-roundtrip/issues/34-홀드아웃-10문항-쓰고-봉인.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [티켓 37](.scratch/mvp-roundtrip/issues/37-유료-홀드아웃-실행.md), [티켓 45](.scratch/mvp-roundtrip/issues/45-화면-위치-표.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [155]-[157]](HISTORY.md).
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
