@@ -1,18 +1,18 @@
 # 인수인계
 
-마지막 갱신: 2026-11-02 · Claude Code(Opus 5.5) · 강의실 PC · **PR #34 병합 전에 씀**(브랜치 `feat/32-sword-review`). 이어받을 때 `git fetch` 뒤 PR #34가 main에 병합됐는지 먼저 본다. 병합됐으면 main에서 새 브랜치로 36을 시작한다. 안 됐으면 사용자에게 병합 확인을 받는다.
+마지막 갱신: 2026-11-03 · Claude Code(Opus 5.5) · 강의실 PC · 브랜치 `chore/delete-confirm-ko`, PR #35 병합 전에 씀(새 세션 확인 끝, 병합만 남음). PR #34는 2026-11-02 병합됐고 브랜치도 지워짐.
 
 ## 다음 할 일
 
-1. PR #34 병합(사용자 확인 뒤). 병합이 MERGED인지 본 뒤에만 브랜치를 로컬·원격에서 지운다.
-2. 36(방패 연습 과정) → 34(홀드아웃 20문항, **모두 B 갈래**, HISTORY [138]) → 35 → 37. 순서는 HISTORY [136]. 45(화면 위치 표, 답 조사 겹침)는 35의 고치기 후보.
-3. 낮은 우선순위: **Win+E(파일 탐색기)를 누르면 도우미 창이 튀어나옴**(원인 미조사, 사용자 "우선순위는 낮은편이라 일단은 핸드오프.md 에 남겨만 둬"). 확인 창(`rm` 등)에 한국어 설명을 붙이려면 `rm` 검사를 훅으로 옮겨야 함(설정 `"ask"`에는 설명을 못 붙임, 버튼 글자는 영어 그대로) — Claude가 "지금은 그대로" 권함, 사용자 답 없음. 42(집 PC 로컬 트랙)는 나중에.
+1. **PR #35 병합을 사용자에게 묻는다.** 새 세션 확인은 끝났다(HISTORY [146], 네 명령 모두 한국어 설명이 뜸). 병합 뒤 브랜치를 지울 때 브랜치 훅 창도 한 번 보인다.
+2. 36(방패 연습 과정) → 34(홀드아웃 20문항, **모두 B 갈래**, HISTORY [138]) → 35 → 37. 순서는 HISTORY [136]. 45(화면 위치 표, 답 조사 겹침)는 35의 고치기 후보. 36은 main에서 새 브랜치로(이 브랜치가 병합되기 전이면 main 기준).
+3. 낮은 우선순위: **Win+E(파일 탐색기)를 누르면 도우미 창이 튀어나옴**(원인 미조사, 사용자 "우선순위는 낮은편이라 일단은 핸드오프.md 에 남겨만 둬"). 검 1단계 숫자패드 `.` 감지와 7단계 `위치 바뀜: Z` 감지는 실제 조작으로 확인한 기록이 없음(방패 검수 때 검 1·7단계를 한 번씩 해 보면 됨). 42(집 PC 로컬 트랙)는 나중에.
 
 ## 지금 상태와 검증
 
-- 티켓 32 닫음(resolved). 브랜치 `feat/32-sword-review`의 커밋은 모두 원격에 있음. PR #34 열림, 병합 안 함.
-- 이번 세션에 바꾼 것: `courses/sword.yaml`(4-7·10·11단계, HISTORY [141]·[143]), `blender_tutor/menu_names.py`(소제목 앞 "– " 떼기), `blender_tutor/timing.py`(시간 기록에 답 글·근거·실패 문구), `blender_tutor/answer_engine.py`(마크다운 기호 쓰지 않기, [142]), `STRUCTURE.md`, 티켓 32·35·45.
-- pytest **583 passed**, course_check 문제 0개(2026-11-02, 강의실 PC). 두 번째 다시 검수 흐름(`%APPDATA%\blender_tutor\streams\20261102-173428.jsonl`)을 지금 연습 과정으로 다시 돌려 4·5·6·11단계 감지 확인. 애드온은 바꾸지 않아 애드온 자체 시험은 돌리지 않음.
+- 브랜치 `chore/delete-confirm-ko`: 훅 `.claude/hooks/ask_file_delete.py`가 `rm`·`rmdir`·`Remove-Item`(대상마다 무엇인지·되살릴 수 있는지·위치), `git reset --hard`(버려지는 파일), `git clean`(지워질 것)을 묻는다. `.claude/settings.json`에는 이제 훅만 있고 권한 규칙(`permissions.ask`)은 없다. 브랜치 삭제·PR 병합은 브랜치 훅이 맡는다.
+- pytest **590 passed**(2026-11-03, 강의실 PC). `git reset --hard`·`git clean` 처리를 빼면 새 시험 2개가 실패함을 돌려 봄.
+- 실제 창: 새 세션에서 `rmdir`·`Remove-Item`·`git reset --hard`·`git clean -f` 모두 한국어 설명이 뜸(2026-11-03, 사용자 "ㅇㅇ 잘 뜸"). 끝의 `[settings] … settings.json to update hooks`는 Claude Code 고정 문구.
 
 ## 모르면 실수할 것
 
@@ -41,5 +41,5 @@
 ## 추천 스킬과 참고
 
 - 36은 `/implement`(티켓 하나 구현). 스킬 없이: 티켓 36을 읽고 `courses/sword.yaml`을 본보기로 방패 연습 과정 초안을 쓴 뒤 course_check와 pytest를 돌린다.
-- [티켓 32](.scratch/mvp-roundtrip/issues/32-검-따라-하기-검수.md), [티켓 36](.scratch/mvp-roundtrip/issues/36-방패-연습-과정.md), [티켓 45](.scratch/mvp-roundtrip/issues/45-화면-위치-표.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [136]-[143]](HISTORY.md).
+- [티켓 32](.scratch/mvp-roundtrip/issues/32-검-따라-하기-검수.md), [티켓 36](.scratch/mvp-roundtrip/issues/36-방패-연습-과정.md), [티켓 45](.scratch/mvp-roundtrip/issues/45-화면-위치-표.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [136]-[146]](HISTORY.md).
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
