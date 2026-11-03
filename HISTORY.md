@@ -1483,3 +1483,9 @@
 
 - 계기: 사용자 "메인에 합쳐" → 병합이 main 보호 규칙("test" 통과 필수)에 막힘. CI(windows-latest)에서 `tests/test_file_delete_hook.py` 7개가 준비 단계에서 `UnicodeEncodeError: 'charmap' codec`(580 passed, 3 skipped, 7 errors). 시험이 `write_text("고침")`처럼 인코딩 없이 한글을 써서, CI 기본 cp1252가 한글을 못 쓴 것. 강의실 PC는 cp949라 통과했었다. PR #35 첫 실행부터 같은 실패.
 - 고침: 그 시험의 `write_text`에 모두 `encoding="utf-8"`. 강의실 PC pytest 590 passed.
+
+### [148] 2026-11-03 · CI가 끝나기 전에 병합을 시도하지 않도록, 브랜치 훅이 CI 시험이 진행 중이거나 실패한 PR의 병합을 거부한다
+
+- 계기: PR #35 병합([147]) 때 Claude가 CI 상태를 보지 않고 병합을 시도해 GitHub에 막혔고, 기다려 보니 CI가 첫 푸시부터 실패하고 있었다. 훅은 CI 상태를 창에 붙이기만 했다. 사용자 "아니 메인 병합전에 그건 미리 체크 못하니? 순서를 ci test 가 돌고 있는지 체크하고 병합을 시도하게 하면 되지 않나". Claude가 "Claude가 순서를 지키기"와 "훅이 막기"를 견줘 훅을 권함 → 사용자 "ㅇㅇ 훅이 막는쪽으로 티켓 브랜치 팠을때 진행하도록해".
+- 구현(티켓 36 브랜치 `feat/36-shield-course`): `.claude/hooks/ask_branch_delete.py`에서 PR 정보 받기(`pr_view`)와 CI 상태 가리기(`ci_state`)를 나누고, `merge_answer`가 "진행 중"이면 `gh pr checks --watch`로 기다리라고, "실패"면 실패한 시험부터 고치라고 거부한다. 통과·시험 없음·정보를 못 받음은 전처럼 묻는다(막는 것은 main 보호 규칙에 맡김).
+- 시험: 브랜치 훅 시험 10개(CI 거부·정보 없음 2개 더함). 거부 두 줄을 "묻기"로 바꾸면 CI 거부 시험이 실패함을 돌려 봄. 전체 pytest 592 passed.

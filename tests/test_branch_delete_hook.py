@@ -68,11 +68,33 @@ def test_병합하며_같이_지우는_명령과_API_삭제는_거부한다(repo
     assert hook.decide("gh api -X DELETE repos/o/r/git/refs/heads/x", repo)["permissionDecision"] == "deny"
 
 
-def test_병합_명령은_PR_설명을_붙여_묻고_섞이면_거부한다(repo, monkeypatch):
-    monkeypatch.setattr(hook, "pr_summary", lambda cwd, number: f"PR #{number} 설명")
-    assert hook.decide("gh pr merge 32 --merge", repo) == {
-        "hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": "[PR 병합 확인] PR #32 설명"}
-    assert hook.decide("gh pr merge 32 --merge && git log", repo)["permissionDecision"] == "deny"
+def _pr(status, conclusion):
+    """gh pr view --json 이 돌려주는 모양(PR #35에서 실제로 본 값)."""
+    return {"number": 35, "title": "설정", "statusCheckRollup": [{"name": "test", "status": status, "conclusion": conclusion}]}
+
+
+def test_병합_명령은_CI가_통과했으면_PR_설명을_붙여_묻고_섞이면_거부한다(repo, monkeypatch):
+    monkeypatch.setattr(hook, "pr_view", lambda cwd, number: _pr("COMPLETED", "SUCCESS"))
+    assert hook.decide("gh pr merge 35 --merge", repo) == {
+        "hookEventName": "PreToolUse", "permissionDecision": "ask",
+        "permissionDecisionReason": '[PR 병합 확인] PR #35 "설정"을(를) main에 합칩니다. CI 시험: 통과.'}
+    assert hook.decide("gh pr merge 35 --merge && git log", repo)["permissionDecision"] == "deny"
+
+
+def test_CI가_아직_돌거나_실패했으면_병합을_거부한다(repo, monkeypatch):
+    """2026-11-03 PR #35: CI가 도는 중에 병합을 시도해 GitHub에 막혔고, 기다려 보니 실패였다(HISTORY [148])."""
+    monkeypatch.setattr(hook, "pr_view", lambda cwd, number: _pr("IN_PROGRESS", ""))
+    running = hook.decide("gh pr merge 35 --merge", repo)
+    assert running["permissionDecision"] == "deny" and "진행 중" in running["permissionDecisionReason"]
+    monkeypatch.setattr(hook, "pr_view", lambda cwd, number: _pr("COMPLETED", "FAILURE"))
+    failed = hook.decide("gh pr merge 35 --merge", repo)
+    assert failed["permissionDecision"] == "deny" and "실패" in failed["permissionDecisionReason"]
+
+
+def test_CI_정보가_없으면_묻기만_한다(repo, monkeypatch):
+    """막는 것은 GitHub의 main 보호 규칙에 맡긴다."""
+    monkeypatch.setattr(hook, "pr_view", lambda cwd, number: None)
+    assert hook.decide("gh pr merge 35 --merge", repo)["permissionDecision"] == "ask"
 
 
 def test_따옴표_안_글과_heredoc_본문은_명령으로_보지_않는다(repo):
