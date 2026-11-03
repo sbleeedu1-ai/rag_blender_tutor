@@ -1572,3 +1572,5 @@
 - 백그라운드 키 입력: `press g --app blender.exe`(기본, 창을 앞으로 안 가져옴)는 "Windows SendInput cannot deliver to a background process"로 거부됨.
 - 실제 입력(`--headed`): 창을 앞으로 가져와 Esc(시작 화면 닫기) → G → Enter를 보내자 왼쪽 아래에 "이동" 마지막 조작 조정 패널이 생기고 제목에 `*`가 붙음. 이 패널은 조작 기록(`window_manager.operators`)의 마지막 조작으로 그리므로, 스크립트 조작과 달리([155]) 사람이 누른 것처럼 기록된다고 봄(애드온·도우미 창으로 직접 읽어 보지는 않음). `mouse-move`는 `--app`을 받지 않아 실패해, 큐브는 움직이지 않음(이동 거리 0).
 - 뜻: 실제 입력은 쓰는 동안 이 PC의 마우스·키보드를 차지하고, 화면 내용은 스크린샷으로만 볼 수 있다. 홀드아웃처럼 최근 조작 칸을 손으로 채워야 했던 경우를 실제 입력으로 채울 수 있는 길은 생김. 스크린샷: Claude 세션 임시 폴더(커밋 안 함).
+- 이어서(사용자 "ㄱㄱ"): `mouse-move --xy … --headed`(`--app` 없이)는 됨. G를 누른 채 마우스를 오른쪽으로 200픽셀 옮기고 Enter → 큐브 위치 X 1.3594 m·Y 3.0777 m로 실제로 움직임.
+- 도우미 창: F10(실제 입력)으로 떴지만 agent-desktop `list-apps`·`list-windows`에 안 나오고 `snapshot --app pythonw.exe`는 `APP_NOT_FOUND`(작업 표시줄에 안 뜨는 창이라 빠진 것으로 봄, 원인 미확인). Windows 접근성 기능(UI Automation, PowerShell)으로 도우미 프로세스를 직접 보면 창 `HelperWindow` 아래 요소 11개: "연습 과정 고르기" 글, 안내 문장, "둥근 방패"·"단순한 검" 단추, 닫기 단추, 입력 칸. → 도우미 창 글·단추는 읽을 수 있지만 agent-desktop이 아닌 다른 길로 읽어야 함.

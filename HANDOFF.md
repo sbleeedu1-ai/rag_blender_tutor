@@ -11,7 +11,7 @@
 
 ## 지금 상태와 검증
 
-- PR #37 병합됨(브랜치 로컬·원격 지움). agent-desktop 1.1.0을 이 PC에 전역 설치하고 시험함: Blender 버튼은 접근성 트리에 안 잡히고, `--headed` 실제 키 입력은 조작 기록에 남음(HISTORY [157]). 지우려면 `npm uninstall -g agent-desktop`.
+- PR #37 병합됨(브랜치 로컬·원격 지움). agent-desktop 1.1.0을 이 PC에 전역 설치하고 시험함: Blender 버튼은 접근성 트리에 안 잡히고, `--headed` 실제 키·마우스 입력은 조작 기록에 남음. 도우미 창은 agent-desktop이 못 찾지만 Windows UI Automation으로는 글·단추가 읽힘(HISTORY [157]). 지우려면 `npm uninstall -g agent-desktop`.
 - 티켓 34 닫음(resolved). 홀드아웃 20문항이 `data/holdout/`에 봉인됨(2026-11-03, 파일 49개, 전체 해시 `b032f169…ca23a8f55`, 다시 계산하는 명령은 HISTORY [155]). 메인 세션은 내용을 보지 않았다.
 - 확인(2026-11-03, 강의실 PC): `evaluate run data/holdout/questions.json --name holdout_check`(`--yes` 없이)가 "차례 23개 × 약 $0.00064 = 약 $0.01472(어림)"에서 멈춤 = 형식 통과, 비용 없음. 해시를 따로 다시 계산해 하위 에이전트 보고와 같음. 이번 PR은 기록 문서만 바꿔 pytest·course_check는 다시 돌리지 않았다(직전 PR #36 기준 596 passed, 문제 0개).
 
