@@ -283,7 +283,7 @@ def test_저장소의_검_연습_과정으로_저장하고_이어_할_수_있다
     manager.skip_to("blade-stretch")
     manager.on_file_saved(BLEND)
     assert make(tmp_path, courses=(sword,)).on_file_opened(BLEND) == [
-        AskResume(f"지난번 3단계({sword.steps[2].name})까지 했어요. 이어 할까요?")
+        AskResume(f"지난번 2단계({sword.steps[1].name})까지 했어요. 이어 할까요?")
     ]
 
 
