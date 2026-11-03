@@ -1,10 +1,10 @@
 # 인수인계
 
-마지막 갱신: 2026-11-03 · Claude Code(Opus 5.5) · 강의실 PC · 브랜치 `chore/delete-confirm-ko`, PR #35 병합 전에 씀(새 세션 확인 뒤 병합). PR #34는 2026-11-02 병합됐고 브랜치도 지워짐.
+마지막 갱신: 2026-11-03 · Claude Code(Opus 5.5) · 강의실 PC · 브랜치 `chore/delete-confirm-ko`, PR #35 병합 전에 씀(새 세션 확인 끝, 병합만 남음). PR #34는 2026-11-02 병합됐고 브랜치도 지워짐.
 
 ## 다음 할 일
 
-1. **새 세션에서 지우기·되돌리기 확인 창이 한국어 설명으로 뜨는지 본다**(HISTORY [145]). 권한 규칙을 모두 뺐는데 규칙은 세션 시작 때만 읽혀 이전 세션에서는 볼 수 없었다. 임시 폴더(Claude 세션 scratchpad)에서 버릴 파일·폴더로 `rmdir`, PowerShell `Remove-Item`을 한 번씩 하고, 버릴 git 저장소(`git init`)를 만들어 `git reset --hard`·`git clean -f`를 한 번씩 한다. 창에 "[영구 삭제]"·"[고친 내용 버리기]"·"[git 밖 파일 지우기]"가 보이면 성공(Claude는 창을 볼 수 없어 사용자에게 묻는다). 영어 규칙 문구("Ask rule …")가 보이면 남은 규칙 위치를 `/permissions`에서 찾는다. 창 없이 실행되면 바로 알리고 `.claude/settings.json`에 해당 `permissions.ask` 규칙을 되살린다. 확인되면 PR #35 병합을 사용자에게 묻는다.
+1. **PR #35 병합을 사용자에게 묻는다.** 새 세션 확인은 끝났다(HISTORY [146], 네 명령 모두 한국어 설명이 뜸). 병합 뒤 브랜치를 지울 때 브랜치 훅 창도 한 번 보인다.
 2. 36(방패 연습 과정) → 34(홀드아웃 20문항, **모두 B 갈래**, HISTORY [138]) → 35 → 37. 순서는 HISTORY [136]. 45(화면 위치 표, 답 조사 겹침)는 35의 고치기 후보. 36은 main에서 새 브랜치로(이 브랜치가 병합되기 전이면 main 기준).
 3. 낮은 우선순위: **Win+E(파일 탐색기)를 누르면 도우미 창이 튀어나옴**(원인 미조사, 사용자 "우선순위는 낮은편이라 일단은 핸드오프.md 에 남겨만 둬"). 검 1단계 숫자패드 `.` 감지와 7단계 `위치 바뀜: Z` 감지는 실제 조작으로 확인한 기록이 없음(방패 검수 때 검 1·7단계를 한 번씩 해 보면 됨). 42(집 PC 로컬 트랙)는 나중에.
 
@@ -12,7 +12,7 @@
 
 - 브랜치 `chore/delete-confirm-ko`: 훅 `.claude/hooks/ask_file_delete.py`가 `rm`·`rmdir`·`Remove-Item`(대상마다 무엇인지·되살릴 수 있는지·위치), `git reset --hard`(버려지는 파일), `git clean`(지워질 것)을 묻는다. `.claude/settings.json`에는 이제 훅만 있고 권한 규칙(`permissions.ask`)은 없다. 브랜치 삭제·PR 병합은 브랜치 훅이 맡는다.
 - pytest **590 passed**(2026-11-03, 강의실 PC). `git reset --hard`·`git clean` 처리를 빼면 새 시험 2개가 실패함을 돌려 봄.
-- 실제 창: 이 세션(규칙을 이미 뺀 `rm`)에서 새 문구가 뜨는 것을 사용자가 봄. 끝의 `[settings] … settings.json to update hooks`는 Claude Code 고정 문구.
+- 실제 창: 새 세션에서 `rmdir`·`Remove-Item`·`git reset --hard`·`git clean -f` 모두 한국어 설명이 뜸(2026-11-03, 사용자 "ㅇㅇ 잘 뜸"). 끝의 `[settings] … settings.json to update hooks`는 Claude Code 고정 문구.
 
 ## 모르면 실수할 것
 
@@ -41,5 +41,5 @@
 ## 추천 스킬과 참고
 
 - 36은 `/implement`(티켓 하나 구현). 스킬 없이: 티켓 36을 읽고 `courses/sword.yaml`을 본보기로 방패 연습 과정 초안을 쓴 뒤 course_check와 pytest를 돌린다.
-- [티켓 32](.scratch/mvp-roundtrip/issues/32-검-따라-하기-검수.md), [티켓 36](.scratch/mvp-roundtrip/issues/36-방패-연습-과정.md), [티켓 45](.scratch/mvp-roundtrip/issues/45-화면-위치-표.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [136]-[143]](HISTORY.md).
+- [티켓 32](.scratch/mvp-roundtrip/issues/32-검-따라-하기-검수.md), [티켓 36](.scratch/mvp-roundtrip/issues/36-방패-연습-과정.md), [티켓 45](.scratch/mvp-roundtrip/issues/45-화면-위치-표.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [136]-[146]](HISTORY.md).
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
