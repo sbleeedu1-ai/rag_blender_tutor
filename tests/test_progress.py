@@ -184,6 +184,15 @@ def test_활성_물체가_없으면_활성_물체_조건은_맞지_않는다(con
     assert [type(c) for c in progress.on_state(with_object(modifiers=("BEVEL",)))] == [Ask]
 
 
+def test_고른_면_수는_편집_모드에서_면_고르기로_고른_개수가_같을_때만_맞는다():
+    # 방패 검수(2026-11-03) 흐름: 3을 누르면 면 34개가 골라져 있다가, 윗면을 누르면 1개가 된다
+    step = Step("any", "아무 단계", (("고른 면 수", 1),))
+    progress = Progress([step, GUARD_ADD])
+    assert progress.on_state(replace(IDLE, mode="EDIT_MESH", edit_selected={"FACE": 34})) == []
+    assert progress.on_state(replace(IDLE, mode="EDIT_MESH", edit_selected={"VERT": 1})) == []  # 점 고르기 방식의 1개는 아니다
+    assert [type(c) for c in progress.on_state(replace(IDLE, mode="EDIT_MESH", edit_selected={"FACE": 1}))] == [Ask]
+
+
 def test_적힌_끝난_조건이_모두_맞아야_묻는다():
     progress = Progress([BLADE_TIP, GUARD_ADD])
     assert progress.on_state(replace(MERGED, mode="OBJECT")) == []
@@ -271,7 +280,7 @@ def test_단계마다_먼저_볼_소제목과_답변_모델에_넘길_단계_내
 def test_검사가_받아들이는_끝난_조건_종류는_모두_판정할_수_있다():
     values = {"모드": "OBJECT", "방금 조작": "object.join", "물체 수 늘어남": 1, "모디파이어": "BEVEL",
               "재질 슬롯 수": 2, "배율": [1, 1, 1], "크기 비율": 3, "화면": "확대",
-              "배율 늘어남": "Z", "배율 줄어듦": ["X", "Y"], "위치 늘어남": "X", "위치 줄어듦": "Z", "배율 그대로": ["X", "Y"], "위치 바뀜": "Z"}  # fmt: skip
+              "배율 늘어남": "Z", "배율 줄어듦": ["X", "Y"], "위치 늘어남": "X", "위치 줄어듦": "Z", "배율 그대로": ["X", "Y"], "위치 바뀜": "Z", "고른 면 수": 1}  # fmt: skip
     assert set(values) == set(CONDITIONS)
     for kind, value in values.items():
         Progress([Step("any", "아무 단계", ((kind, value),))]).on_state(IDLE)  # 판정 규칙이 값과 작업 상태로 오류 없이 돈다
@@ -279,14 +288,14 @@ def test_검사가_받아들이는_끝난_조건_종류는_모두_판정할_수_
 
 def test_저장소의_검_연습_과정을_읽어_첫_단계부터_시작한다():
     steps = load_steps(COURSES / "sword.yaml")
-    assert [s.label for s in steps[:3]] == ["view-navigate", "interface-language", "blade-stretch"]
+    assert [s.label for s in steps[:3]] == ["view-navigate", "blade-stretch", "blade-tip"]
     assert Progress(steps).step.label == "view-navigate"
 
 
 def test_연습_과정_폴더에서_공통_준비_파일을_뺀_연습_과정을_이름_차례로_읽는다():
     courses = load_courses(COURSES)
-    assert [course.label for course in courses] == ["sword"]
-    assert courses[0].steps[0].label == "view-navigate"  # 공통 준비는 각 연습 과정 맨 앞에 들어 있다
+    assert [course.label for course in courses] == ["shield", "sword"]  # 파일 이름 차례
+    assert all(course.steps[0].label == "view-navigate" for course in courses)  # 공통 준비는 각 연습 과정 맨 앞에 들어 있다
 
 
 # 조작 셋을 차례로 안내하는 단계. 둘째 조작만 감지 조건이 있다(나머지는 [했어요]로 넘어감).

@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from blender_tutor.answer_engine import Done, Event, Failure, Piece, Source
-from blender_tutor.course_desk import Line, StepView
+from blender_tutor.course_desk import Line, LineKind, StepView
 from blender_tutor.progress import Course
 from blender_tutor.window_rules import by_sentence
 
@@ -273,8 +273,9 @@ class HelperWindow(QWidget):
         self.prompt.setVisible(view.prompt is not None)  # 창을 앞으로 끌어오지 않고 창 안에만 띄운다
 
     def show_line(self, line: Line) -> None:
-        """도우미 안내 말(guide)·단계 시작 줄(step, 위에 구분선)·진행 관리의 알림(notice) 한 줄을 대화에 붙인다."""
-        self._label(line.text, line.kind)
+        """도우미 안내 말(guide)·단계 시작 줄(step, 위에 구분선)·진행 관리의 알림(notice) 한 줄을 대화에 붙인다.
+        안내 말은 답처럼 문장마다 줄을 바꾼다. 연습 과정 파일에 넣은 빈 줄은 문단으로 그대로 남는다(티켓 36 다시 검수)."""
+        self._label(by_sentence(line.text) if line.kind == LineKind.GUIDE else line.text, line.kind)
 
     def _set_courses(self, courses: list[Course]) -> None:
         """고르기 버튼과 바꾸기 메뉴는 연습 과정 목록이 바뀌었을 때만 다시 만든다(진행 모양은 자주 다시 그린다)."""

@@ -238,6 +238,12 @@ def test_안내_말과_알림은_대화에_한_줄씩_붙는다(window):
     assert texts(window, "notice") == ["이 파일에서 검 연습 과정을 다 마쳤어요."]
 
 
+def test_안내_말은_문장마다_줄을_바꾸고_파일에_넣은_빈_줄은_문단으로_남긴다(window):
+    # 방패 다시 검수(2026-11-03): 안내가 줄바꿈 없이 붙어 나와 읽기 어려웠다. 답과 같은 규칙(HISTORY [18])을 쓴다
+    window.show_line(Line(LineKind.GUIDE, "S 다음 Z를 눌러 보세요. 0.07을 쳐도 돼요.\n\n숫자는 참고값이에요."))
+    assert texts(window, "guide") == ["S 다음 Z를 눌러 보세요.\n0.07을 쳐도 돼요.\n\n숫자는 참고값이에요."]
+
+
 def test_단계_시작_줄은_구분선이_있는_따로_된_모양으로_붙는다(window):
     # 단계가 바뀐 자리를 대화에서 찾기 쉽게(티켓 32 검수, 사용자 1.png). 대화는 지우지 않아 앞 안내를 다시 볼 수 있다
     window.show_line(Line(LineKind.STEP, "3단계, 정육면체를 늘려 칼날 모양 잡기예요."))

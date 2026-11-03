@@ -3,7 +3,7 @@
 - 브랜치 삭제나 병합이 다른 명령과 한 줄에 섞여 있으면 거부한다(따로 한 명령씩 보내게).
 - 브랜치 삭제는 GitHub에서 최신 상태를 받아, 그 브랜치 내용이 main에 모두 들어갔을 때만 쉬운 말로 묻는다.
   아직 안 들어갔거나 확인하지 못하면(인터넷 끊김 등) 거부한다.
-- PR 병합은 PR 제목과 CI 시험 상태를 붙여 묻는다.
+- PR 병합은 CI 시험이 아직 돌거나 실패했으면 거부하고, 아니면 PR 제목과 CI 상태를 붙여 묻는다.
 그 밖의 명령에는 아무것도 하지 않는다(출력 없음 = 평소 권한 규칙대로).
 """
 
@@ -114,26 +114,44 @@ def merged(cwd: str, found: dict) -> tuple[bool, str]:
     return True, "이 브랜치의 내용은 이미 main에 모두 들어가 있습니다."
 
 
-def pr_summary(cwd: str, number: str | None) -> str:
-    """PR 제목·상태·CI 시험 결과를 쉬운 말로. 확인하지 못하면 그렇다고 적는다."""
-    args = ["gh", "pr", "view", *([number] if number else []), "--json", "number,title,state,statusCheckRollup"]
+def pr_view(cwd: str, number: str | None) -> dict | None:
+    """GitHub에서 PR 번호·제목·CI 시험 결과를 받는다. 받지 못하면 None."""
+    args = ["gh", "pr", "view", *([number] if number else []), "--json", "number,title,statusCheckRollup"]
     try:
         shown = subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", timeout=FETCH_SECONDS)
     except (subprocess.TimeoutExpired, FileNotFoundError):
-        return "PR 정보를 확인하지 못했습니다."
+        return None
     if shown.returncode != 0:
-        return "PR 정보를 확인하지 못했습니다."
-    data = json.loads(shown.stdout)
+        return None
+    return json.loads(shown.stdout)
+
+
+def ci_state(data: dict) -> str:
+    """CI 시험 상태: "통과"·"진행 중"·"실패"·"없음"."""
     checks = data.get("statusCheckRollup") or []
     if not checks:
-        ci = "CI 시험 결과가 없습니다"
-    elif all((c.get("conclusion") or "").upper() == "SUCCESS" for c in checks):
-        ci = "CI 시험: 통과"
-    elif any((c.get("status") or "").upper() != "COMPLETED" for c in checks):
-        ci = "CI 시험: 아직 진행 중(끝나기 전에는 병합이 막힙니다)"
-    else:
-        ci = "CI 시험: 실패한 것이 있습니다"
-    return f"PR #{data['number']} \"{data['title']}\"을(를) main에 합칩니다. {ci}."
+        return "없음"
+    if all((c.get("conclusion") or "").upper() == "SUCCESS" for c in checks):
+        return "통과"
+    if any((c.get("status") or "").upper() != "COMPLETED" for c in checks):
+        return "진행 중"
+    return "실패"
+
+
+def merge_answer(data: dict | None) -> dict:
+    """PR 병합 명령의 답. CI가 아직 돌거나 실패했으면 병합을 시도하지 않게 거부한다(HISTORY [148])."""
+    if data is None:
+        return _answer("ask", "[PR 병합 확인] PR 정보를 확인하지 못했습니다.")
+    title = f"PR #{data['number']} \"{data['title']}\""
+    state = ci_state(data)
+    if state == "진행 중":
+        return _answer("deny", f"[PR 병합 거부] {title}의 CI 시험이 아직 진행 중입니다. "
+                               "`gh pr checks --watch`로 끝나기를 기다린 뒤, 통과하면 다시 병합하세요.")
+    if state == "실패":
+        return _answer("deny", f"[PR 병합 거부] {title}의 CI 시험에 실패한 것이 있습니다. "
+                               "`gh pr checks`로 실패한 시험을 찾아 고친 뒤 다시 병합하세요.")
+    ci = "CI 시험: 통과" if state == "통과" else "CI 시험 결과가 없습니다"
+    return _answer("ask", f"[PR 병합 확인] {title}을(를) main에 합칩니다. {ci}.")
 
 
 def decide(command: str, cwd: str) -> dict | None:
@@ -152,7 +170,7 @@ def decide(command: str, cwd: str) -> dict | None:
         if info["같이 삭제"]:
             return _answer("deny", "[PR 병합 거부] 병합하면서 브랜치를 같이 지우는 명령입니다. "
                                    "병합이 끝난 것(MERGED)을 확인한 뒤 브랜치는 따로 지우세요.")
-        return _answer("ask", f"[PR 병합 확인] {pr_summary(cwd, info['PR'])}")
+        return merge_answer(pr_view(cwd, info["PR"]))
     found = deletions[0][1]
     if found["곳"] == "모름":
         return _answer("deny", "[브랜치 지우기 거부] GitHub API로 직접 지우는 명령은 확인할 수 없어 막았습니다. git 명령으로 지우세요.")

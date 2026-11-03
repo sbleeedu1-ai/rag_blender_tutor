@@ -193,6 +193,12 @@ CONDITIONS: dict[str, ConditionKind] = {
         "방향 하나(예: Z)나 방향 목록입니다. 기준 때와 그 방향 좌표가 모두 달라졌나(위든 아래든).",
         _changed("location", grew=EITHER_WAY),
     ),
+    # 면 고르기 방식(3)에서 면을 몇 개 골랐나. 3을 누르면 처음엔 전체가 골라져 있어, 면 하나를 누른 것을 1개로 알아챈다(티켓 36 검수)
+    "고른 면 수": ConditionKind(
+        _is_positive_int,
+        "1 이상의 정수입니다(편집 모드의 면 고르기 방식에서 고른 면 개수).",
+        lambda v, state, start: state.edit_selected.get("FACE") == v,
+    ),
     "화면": ConditionKind(
         lambda v: v in VIEW_CHANGES,
         f"화면 조작입니다({', '.join(VIEW_CHANGES)}).",
