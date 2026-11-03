@@ -285,8 +285,8 @@ def test_저장소의_검_연습_과정을_읽어_첫_단계부터_시작한다(
 
 def test_연습_과정_폴더에서_공통_준비_파일을_뺀_연습_과정을_이름_차례로_읽는다():
     courses = load_courses(COURSES)
-    assert [course.label for course in courses] == ["sword"]
-    assert courses[0].steps[0].label == "view-navigate"  # 공통 준비는 각 연습 과정 맨 앞에 들어 있다
+    assert [course.label for course in courses] == ["shield", "sword"]  # 파일 이름 차례
+    assert all(course.steps[0].label == "view-navigate" for course in courses)  # 공통 준비는 각 연습 과정 맨 앞에 들어 있다
 
 
 # 조작 셋을 차례로 안내하는 단계. 둘째 조작만 감지 조건이 있다(나머지는 [했어요]로 넘어감).

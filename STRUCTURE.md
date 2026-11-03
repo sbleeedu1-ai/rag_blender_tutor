@@ -120,7 +120,7 @@
 | 시험용 | `prototype/local_llm/llm_bench.sh`·`local_rewrite.py` | 로컬 생성 모델(llama.cpp) 속도 측정과 질문 바꾸기 초벌 시험(무료, 손으로 돌림). 모델은 `data/models/llm/`, 결과는 `results/`. 기본 시험 밖이며 도우미와 연결되지 않는다(HISTORY [122], 티켓 42) | 42 |
 | 평가 | `blender_tutor/local_embeddings.py` | 로컬 후보 3개(granite 97m r2·e5-small·EmbeddingGemma)를 고정한 버전으로 `data/models/`에 준비하고 CPU float32로 실행한다. 다운로드와 모델 불러오기를 분리하며, 질문·문서의 접두어를 구분한다. `search_compare`에 연결되며 도우미의 검색 모델은 바꾸지 않는다 | 41 |
 | 만드는 사람 | `blender_tutor/course_check.py` | 연습 과정 파일 검사. 설명서 자료와 맞댈 때 청크 파일은 답 엔진과 같은 `manual_chunks.load_chunks`로 읽는다 | 15, 24, 31 |
-| 만드는 사람 | `courses/*.yaml` | 연습 과정(검 `sword.yaml`, 공통 준비 `_common.yaml`). 화면에 보이는 메뉴·버튼 이름은 `[[Edit > Preferences]]`처럼 감싸 쓴다(바뀐 글은 늘 영어 이름으로 끝나 조사는 영어 이름에 맞춘다. 한국어 이름에 "를"이 든 것(모디파이어를 추가)은 뒤에 "~ 칸을"·"~ 순서로"처럼 이름씨를 넣어 조사가 겹치지 않게). 검은 티켓 32에서 사용자가 따라 하며 고침 | 16, 32 |
+| 만드는 사람 | `courses/*.yaml` | 연습 과정(검 `sword.yaml`, 방패 `shield.yaml`, 공통 준비 `_common.yaml`). 파일 하나를 더하면 코드를 고치지 않고 연습 과정이 늘어난다(티켓 36에서 확인). 화면에 보이는 메뉴·버튼 이름은 `[[Edit > Preferences]]`처럼 감싸 쓴다(바뀐 글은 늘 영어 이름으로 끝나 조사는 영어 이름에 맞춘다. 한국어 이름에 "를"이 든 것(모디파이어를 추가)은 뒤에 "~ 칸을"·"~ 순서로"처럼 이름씨를 넣어 조사가 겹치지 않게). 검은 티켓 32에서 사용자가 따라 하며 고침. 방패는 AI 초안이고 티켓 36에서 검수 예정 | 16, 32, 36 |
 | 설치 | `blender_tutor/install_addon.py` | 애드온을 Blender 애드온 폴더에 복사하고 `config.json`(도우미 켜는 법·비밀 글자)을 적음 | 25 |
 | 공통 | `blender_tutor/paths.py` | 프로젝트 폴더 위치(`PROJECT`), 연습 과정 폴더, 진행 기록 폴더 고르기(설정 폴더에 쓸 수 없으면 사용자 폴더). 함께 쓰는 경로가 늘면 여기에 | 26 뒤, 27 |
 | 시험 | `tests/` | 기본 테스트(API 키·Blender 없이) | 각 티켓 |
