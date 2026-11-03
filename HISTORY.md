@@ -1478,3 +1478,8 @@
 ### [146] 2026-11-03 · 권한 규칙을 모두 뺀 효과를 보려고, 새 세션에서 지우기·되돌리기 명령 네 개의 확인 창을 확인한다
 
 - 확인: 새 세션에서 임시 폴더(scratchpad)의 버릴 폴더·파일과 버릴 git 저장소로 `rmdir`, PowerShell `Remove-Item`, `git reset --hard`, `git clean -f`를 한 번씩 실행. 네 창 모두 훅의 한국어 설명이 떴다(사용자 "ㅇㅇ 잘 뜸"). 영어 규칙 문구는 없었다. 브랜치 삭제 창은 이번에 따로 보지 않았다(브랜치 훅 [137]이 맡음, PR #35 병합 뒤 브랜치를 지울 때 보인다).
+
+### [147] 2026-11-03 · PR #35를 병합하기 위해, 영어 Windows CI에서 깨지던 파일 훅 시험이 한글을 UTF-8로 쓰게 고친다
+
+- 계기: 사용자 "메인에 합쳐" → 병합이 main 보호 규칙("test" 통과 필수)에 막힘. CI(windows-latest)에서 `tests/test_file_delete_hook.py` 7개가 준비 단계에서 `UnicodeEncodeError: 'charmap' codec`(580 passed, 3 skipped, 7 errors). 시험이 `write_text("고침")`처럼 인코딩 없이 한글을 써서, CI 기본 cp1252가 한글을 못 쓴 것. 강의실 PC는 cp949라 통과했었다. PR #35 첫 실행부터 같은 실패.
+- 고침: 그 시험의 `write_text`에 모두 `encoding="utf-8"`. 강의실 PC pytest 590 passed.

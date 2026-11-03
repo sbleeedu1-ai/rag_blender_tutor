@@ -21,13 +21,13 @@ def repo(tmp_path):
     subprocess.run(["git", "init", "-q", str(mine)], check=True)
     for name, text in (("saved.txt", "a"), ("edited.txt", "a"), ("box/kept.txt", "a")):
         (mine / name).parent.mkdir(exist_ok=True)
-        (mine / name).write_text(text)
+        (mine / name).write_text(text, encoding="utf-8")
     subprocess.run(["git", "-C", str(mine), "add", "."], check=True)
     subprocess.run(["git", "-C", str(mine), "-c", "user.email=t@e", "-c", "user.name=t", "commit", "-q", "-m", "처음"],
                    check=True)
-    (mine / "edited.txt").write_text("고침")
-    (mine / "new.txt").write_text("새것")
-    (mine / "box" / "loose.txt").write_text("새것")
+    (mine / "edited.txt").write_text("고침", encoding="utf-8")
+    (mine / "new.txt").write_text("새것", encoding="utf-8")
+    (mine / "box" / "loose.txt").write_text("새것", encoding="utf-8")
     return str(mine)
 
 
