@@ -1586,4 +1586,5 @@
 - 계기: 사용자 "뭔가 지저분해진거같아" → Claude가 폴더를 훑어 정리 후보 7개를 보이고, 루트의 `menu_aliases.json`·`menu_choices.json`·`menu_titles.json`은 코드 경로를 고쳐야 해서 기록 PR과 섞지 않고 따로 하자고 권함. 사용자 "ㅇㅋ 일단 그럼 새 브랜치파서 할까?"
 - 바꾼 것: 세 파일을 `menu_tables/`로 옮기고(git mv), 6개 모듈이 따로 만들던 경로를 `paths.py`의 `MENU_ALIASES`·`MENU_CHOICES`·`MENU_TITLES`로 모음. `STRUCTURE.md` 경로 고침. 이 PR은 [160](PR #39, 아직 병합 전) 뒤 번호.
 - 확인: pytest 596 passed(옮기기 전과 같은 수), course_check 문제 0개, 실제 사전(`data/menu_names`)을 새 경로의 표로 읽음.
+- 함께 옮긴 것(사용자 "ㅇㅇ"): 번역을 도우미에 쓰지 않기로 한 뒤([104]) 가리키는 곳이 없는 조사 문서 2개(`2026-10-28-다국어-RAG와-선번역-근거.md`·`2026-10-28-한국어-번역-도입-경위.md`)를 `.scratch/mvp-roundtrip/research/`에서 `archive/research/`로. 같은 번역 조사라도 `31-번역-모델-조사.md`는 코드가 가격 근거로 가리켜 둠.
 - 함께 한 것: Git 밖의 빈 폴더 `prototype/helper_window_ui/`(옛 캐시 파일 하나뿐)를 지움. `data/` 루트의 낱개 기록 6개는 HISTORY·티켓이 경로를 가리켜 그대로 둠. `data/models/`(약 6.9GB)는 티켓 42에서 쓸 수 있어 둠. 홀드아웃 폴더는 새 홀드아웃을 만들 때 `archive/`로.
