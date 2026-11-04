@@ -5,6 +5,10 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 COURSES = PROJECT / "courses"
+# 메뉴 이름 검수로 정한 표(번역 글자가 없어 저장소에 커밋한다, 티켓 23·31)
+MENU_ALIASES = PROJECT / "menu_tables" / "menu_aliases.json"  # 설명서 철자 → 화면 철자
+MENU_CHOICES = PROJECT / "menu_tables" / "menu_choices.json"  # 번역이 여러 개인 이름의 고정 짝(영어 이름 → 문맥)
+MENU_TITLES = PROJECT / "menu_tables" / "menu_titles.json"  # 제목에서만 뽑은 이름 중 검수를 통과한 것
 
 
 def progress_records(app_data: Path | None, home: Path) -> Path:

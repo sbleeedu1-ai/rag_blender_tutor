@@ -14,7 +14,7 @@ from blender_tutor.answer_model import OpenAIAnswerModel
 from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.manual_chunks import load_chunks
 from blender_tutor.menu_names import load_menu_names
-from blender_tutor.paths import PROJECT
+from blender_tutor.paths import MENU_CHOICES, MENU_TITLES
 from blender_tutor.progress import Course
 
 EMBEDDINGS = (manual_vectors.MODEL,)  # 고를 수 있는 임베딩(bge-m3는 생기는 티켓에서 더한다)
@@ -35,8 +35,8 @@ def rewriters_for(settings: Settings, key: str) -> list[OpenAIModel]:
 def build_engine(
     data_dir: Path,
     model: OpenAIAnswerModel | None = None,
-    menu_choices: Path = PROJECT / "menu_choices.json",
-    menu_titles: Path = PROJECT / "menu_titles.json",
+    menu_choices: Path = MENU_CHOICES,
+    menu_titles: Path = MENU_TITLES,
     courses: Sequence[Course] = (),
     settings: Settings = Settings(),
     embedding: str = manual_vectors.MODEL,

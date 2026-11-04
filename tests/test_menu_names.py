@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from blender_tutor.manual_chunks import Chunk
+from blender_tutor.paths import MENU_ALIASES, MENU_CHOICES, MENU_TITLES
 from blender_tutor.menu_names import (
     MenuName,
     MenuNames,
@@ -222,7 +223,7 @@ def test_철자_표에_있는_이름은_화면_철자로_ko_po를_찾는다():
 
 
 def test_철자_표_파일을_읽고_저장소의_표는_실제_ko_po에_있다():
-    aliases = MenuNames.load_aliases(REPO / "menu_aliases.json")
+    aliases = MenuNames.load_aliases(MENU_ALIASES)
     po = REPO / "data" / "ui_ko_5.2" / "ko.po"
     if not po.exists():
         pytest.skip("data/에 ko.po가 없음(커밋하지 않는 자료)")
@@ -354,8 +355,8 @@ def test_저장소의_고정_짝과_통과_제목은_실제_사전과_맞는다(
     dictionary = REPO / "data" / "menu_names" / "menu_names.json"
     if not dictionary.exists():
         pytest.skip("data/에 메뉴 이름 사전이 없음(커밋하지 않는 자료)")
-    choices = MenuNames.load_choices(REPO / "menu_choices.json")
-    titles = MenuNames.load_titles(REPO / "menu_titles.json")
+    choices = MenuNames.load_choices(MENU_CHOICES)
+    titles = MenuNames.load_titles(MENU_TITLES)
     MenuNames.load(dictionary, choices, titles)  # 틀리면 ValueError
 
 

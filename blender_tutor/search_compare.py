@@ -40,7 +40,7 @@ from blender_tutor import manual_vectors
 from blender_tutor.manual_chunks import Chunk, load_chunks
 from blender_tutor.manual_vectors import PRICE_PER_MILLION, OpenAIEmbedder  # 요금표에 있는 모델만 돈이 든다
 from blender_tutor.menu_names import MenuNames
-from blender_tutor.paths import PROJECT
+from blender_tutor.paths import MENU_CHOICES, MENU_TITLES, PROJECT
 from blender_tutor.local_embeddings import MODELS as LOCAL_MODELS, LocalEmbedder
 from blender_tutor.translate import _tokens, pieces
 from blender_tutor.translation_check import reviewed
@@ -686,8 +686,8 @@ def _real_embedder(model: str) -> Embedder:
 
 
 def _load_names() -> MenuNames:
-    titles = MenuNames.load_titles(PROJECT / "menu_titles.json")
-    return MenuNames.load(DATA / "menu_names" / "menu_names.json", MenuNames.load_choices(PROJECT / "menu_choices.json"), titles)
+    titles = MenuNames.load_titles(MENU_TITLES)
+    return MenuNames.load(DATA / "menu_names" / "menu_names.json", MenuNames.load_choices(MENU_CHOICES), titles)
 
 
 def main(
