@@ -1,52 +1,57 @@
 # 인수인계
 
-마지막 갱신: 2026-11-03 · Claude Code(Opus 5.5) · 강의실 PC · 브랜치 `feat/35-dev-eval` · PR #39 병합 전에 씀. 이어받을 때 PR #39가 병합됐는지 git으로 먼저 본다.
+마지막 갱신: 2026-11-04 · Claude Code(Opus 5.5) · PC DESKTOP-J9LV5HK(강의실) · 브랜치 `feat/35-dev-eval` · PR #39 병합 전에 씀. PR #40(`chore/tidy-menu-json`)도 병합 전. 이어받을 때 두 PR이 병합됐는지 git으로 먼저 본다.
 
 ## 다음 할 일
 
-1. **티켓 35 이어서: 고치기 전 기준 [E1b] 채점 확정 → 고치기 반복.** `docs/experiment.md`를 먼저 읽는다(체크리스트·[E1]·[E1b]).
-   - [E1b] 하위 에이전트 채점은 끝남(맞음 24 / 부분 7 / 틀림 3, 전문 `results/20261103/172801_dev30_before_fixed_scenes/채점_하위에이전트.md`). **사용자 판단 전**: `docs/experiment.md` [E1b]의 판단 대상 9개를 한 항목씩 글로 보이고 정한다(AGENTS.md 검토 규칙).
-   - 장면 실수가 더 나왔다(D06 솔리드에서 색이 보임, D02 골라진 점 수, S1 선택 점 수, S3 장면 설명·핵심 글). `build_scenes.py`를 고쳐 다시 찍고(체크리스트 장면 1-3), 고치기 전을 한 번 더 잰 뒤 기준을 확정한다. 채점은 같은 식으로 새 하위 에이전트에게(체크리스트 + 자료 경로만, 이전 채점은 주지 않음).
-   - 그다음 고치기, 하나씩 고치고 다시 잰다(차례 34개 약 $0.022, 돌리기 전 확인). 권한 순서: ① D05 연습 과정 '모서리 깎기' 자주 막히는 곳에 "방향마다 다르게 깎이면 앞 단계 크기 확정을 안 한 것"(검·방패) ② N2·N5 연습 과정 권하기 지시문(`answer_engine.py` SIMILAR_NOTE와 INSTRUCTIONS의 "가장 가까운 내용" 줄이 부딪침) ③ D03 엔진: 쪽 안 공통 소제목(Common Options)을 함께 넘기기 ④ B2는 설명서에 순서가 있는지 먼저 확인.
-   - 같은 문항을 다시 돌려도 결과가 흔들린다([E1] 적중 25 → [E1b] 27, N5는 권함이 바뀜). 고친 문항만 3번씩 돌리는 등 다루는 법을 사용자와 정한다.
-   - 사용자가 직접 할 것: GPT 빈손 [E0], 도우미 창 시간 10문항(후보 D01·D06·D07·M1·B1·T2 + S2·S3 차례 4개). 안내 파일이 필요하면 만들어 준다고 말해 둠.
-2. (집 PC, Claude 데스크톱 앱) 컴퓨터 유즈로 Blender·도우미 창 다뤄 보기. 지난 HANDOFF 1번 그대로(시나리오 ①-⑤는 HISTORY [157]·[158] 참고). 이번 세션은 CLI라 못 함. agent-desktop 실제 입력이 최근 조작 기록에 남는 것은 [158]에서 확인됨.
-3. 티켓 37(홀드아웃). 45(화면 위치 표)는 35의 고치기 후보.
-4. 낮은 우선순위: Win+E로 도우미 창이 튀어나옴(원인 미조사). 42(집 PC 로컬 트랙). pstack 실험(티켓을 모두 끝낸 뒤, [156]).
+1. **티켓 35: 새 개발셋 50문항 쓰기.** 프로토타입 30문항(`data/eval/dev30/`, 기록 `archive/experiment_prototype.md`)은 접고 새로 짠다(HISTORY [160]).
+   - 종류·문항 수는 [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md) 6절 제안표 + 끝의 "사용자와 정한 것"을 따른다: 개발 50 / 홀드아웃 22, 기본 수는 "전체 비율과 처음만 비율의 평균", 고급 묶음 3문항, 엔진 8문항 = Blender 쪽 원인 6 + 엔진 규칙(설명서에 없음) 2. 판단 축(연습 과정 단계·작업 상태 읽기·메뉴 위치·시점·시나리오·함정·설명서에 없음·권하기·범위 밖)은 문항 수에 더하지 않고 겹쳐 붙인다.
+   - 문항은 실제 질문(원자료 `data/research_raw/20261104_질문모음/`, 분류 `classify/use.json`)을 바탕으로 **비슷하게** 쓴다(똑같이 아님). 정답 위치는 하위 에이전트가 한 번 더 확인한다.
+   - 장면은 `docs/experiment.md` 체크리스트 5절대로: **스크립트도 사람이 누르는 Blender 기능(연산자)으로**, 손으로 만들 수 있는 상황만. 질문 본문에 없는 상태는 답글에서 밝혀진 원인에 맞춰 정하고 근거를 적는다.
+2. **새 홀드아웃 22문항**: 결과를 볼 수 없는 새 하위 에이전트가 같은 종류 구성으로 문항·장면을 쓰고 봉인(해시). 개발셋 질문·링크는 주지 않는다. 옛 `data/holdout/`·`data/holdout_work/`는 열지 않고 `archive/`로 옮긴다(**옮기기 전 사용자 확인**). "이겼다" 기준은 새 홀드아웃을 보기 전에 다시 적는다.
+3. **PR #39 마무리·병합 → PR #40에 더할 정리 정하기 → PR #40 병합**(사용자가 정한 순서). #40에 더할 후보: `data/eval/dev30/` 이름을 프로토타입으로, 옛 홀드아웃 `archive/`로. 두 PR 모두 HISTORY.md 끝에 덧붙여 나중 병합 쪽에서 충돌이 한 번 난다([160]·[162]·[163]은 #39, [161]은 #40).
+4. **새 개발셋으로 고치기 전 측정**(1회차, 유료, 돌리기 전 확인). 채점은 `docs/experiment.md` 체크리스트를 받은 새 하위 에이전트. 그 뒤 고치기 후보 15개(`archive/experiment_prototype.md` [E1b] 끝 + 조사 문서 5절 표)를 새 결과와 맞춰 순서를 정한다. 고치는 중엔 고친 문항만 3번, 결과표 숫자는 묶음마다 전체 1번(체크리스트 6절).
+5. 사용자가 직접 할 것: `data/research_raw/20261104_질문모음/`을 구글 드라이브에 올리기(아직 안 올림), 새 셋으로 GPT 빈손 [E0]·도우미 창 시간 10문항.
+6. 그 밖(뒤로): 집 PC 데스크톱 앱 컴퓨터 유즈 시나리오(HISTORY [157]·[158]), 티켓 37(홀드아웃 실행), 45(화면 위치 표), Win+E로 도우미 창이 튀어나옴(원인 미조사), 42(집 PC 로컬 트랙), pstack 실험(티켓을 모두 끝낸 뒤, [156]). 강사님의 "실무 기능 커리큘럼"은 나중 확장 계획으로 명세 Out of Scope에 적어 둠([162]).
 
 ## 지금 상태와 검증
 
-- 이번 PR: 기록 문서(`docs/experiment.md` 새로, HISTORY [158]·[159], 티켓 35 Comments, HANDOFF)만. 프로그램 코드는 바꾸지 않아 pytest·course_check는 다시 돌리지 않았다(직전 PR #36 기준 596 passed, 문제 0개).
-- 유료 실행 두 번(사용자 확인 뒤): `evaluate run data/eval/dev30/questions.json --yes` → [E1] `results/20261103/171030_dev30_before`(답변 모델 $0.0124), [E1b] `results/20261103/172801_dev30_before_fixed_scenes`($0.0122). 질문 바꾸기·임베딩은 따로(어림 합계 각 약 $0.022).
-- [E1]은 장면 실수(합친 검의 빈 재질 칸을 스크립트가 지움)가 있어 기준으로 쓰지 않는다. 장면 4개를 고쳐 [E1b]를 다시 쟀다.
+- PR #39(`feat/35-dev-eval`): 오늘 더한 커밋은 기록·조사 문서뿐(체크리스트 다시 정리와 프로토타입 기록 보관 `0170ffc`, 커리큘럼 아이디어 `b41ef38`, 질문 조사 `949202f`, 이 HANDOFF). 프로그램 코드는 바꾸지 않아 이 브랜치에서 pytest를 다시 돌리지 않았다(PR #36 기준 596 passed).
+- PR #40(`chore/tidy-menu-json`): 메뉴 이름 표 3개를 `menu_tables/`로, 경로를 `paths.py` 한 곳으로, 번역 조사 문서 2개를 `archive/research/`로. pytest 596 passed, course_check 문제 0개, 실제 사전을 새 경로로 읽음을 확인. 실제 도우미 창(Blender)으로는 안 켜 봄.
+- [E1b] 판단 대상 9개는 사용자와 정함(HISTORY [160]). 체크리스트는 명세·티켓 45개·HISTORY [1]-[159]의 결정을 모아 다시 썼다.
+- 질문 조사: 공개 장소 질문 12,694개(중복 지운 뒤) → 무작위 표본 본문 1,600개 → 사용 질문 1,165개 → 32종류(HISTORY [163]). API 비용 없음.
 
 ## 모르면 실수할 것
 
-- **개발 문항은 Git 밖**: `data/eval/dev30/`(문항·장면 `.blend`·상태 JSON/PNG·스크립트 `build_scenes.py`·`capture.py`·`make_questions.py`). 질문을 고치면 `문항초안.md`를 고치고 `make_questions.py`로 `questions.json`을 다시 만든다. 장면을 고치면 `build_scenes.py` → `capture.py`(장면마다 화면 있는 Blender가 떴다 꺼짐, 머티리얼 미리보기 장면은 `slow`).
-- **장면은 연습 과정대로 실제와 같아야 한다**(체크리스트). 스크립트가 손으로는 안 생기는 정리를 하면 채점이 틀린다.
-- **D01·T2 상태는 agent-desktop 실제 입력**으로 찍었다(`capture.py -- <이름> wait` 뒤 입력, `<이름>.go` 파일로 저장). 실제 입력 중에는 PC 마우스·키보드를 쓰면 안 된다.
-- **홀드아웃 열지 않기**: `data/holdout/`·`data/holdout_work/`는 37에서 코드를 동결하기 전까지 열지 않는다(해시는 HISTORY [155]).
-- **유료**: `evaluate run`은 `--yes` 없이 어림 비용만 보이고 멈춘다. 도우미 창 질문마다 약 $0.0006.
-- API 키는 `data/.env`. 도우미는 켜질 때만 읽어, 바꾼 뒤 Blender를 모두 닫았다 켠다.
-- 검토 결과는 한 항목씩 글로 보인다(AGENTS.md). 사용자가 방식을 바꾸면 그 말을 따른다.
+- **`docs/experiment.md`는 이제 체크리스트만** 있다(문항 번호 없음). [E1]·[E1b]·판단 9개·고치기 후보는 `archive/experiment_prototype.md`. HISTORY [158]·[159]의 링크도 보관본을 가리킨다.
+- **장면의 "골라진 점 5개" 같은 이상한 값은 애드온 탓이 아니었다**: 스크립트가 bmesh로 선택 표시를 직접 고쳐 앞뒤가 안 맞는 상태가 저장됐다. 실제 조작에서는 애드온이 맞게 읽는다(화면 없는 Blender로 확인).
+- **브라우저(Claude in Chrome)**: 세션을 확장 연결 전에 켰으면 `/chrome` → Reconnect extension, 안 되면 `claude --continue --chrome`. 확장이 reddit.com·네이버 카페·네이버 검색을 "safety restrictions"로 막는다(로그인과 무관). 아카라이브는 명령 줄·웹 가져오기는 403이지만 크롬으로는 읽힌다. 브라우저 도구는 쿼리 문자열이 든 출력을 막고, 긴 출력은 잘려서 페이지 글로 바꿔 `get_page_text`로 읽었다.
+- **차단 우회 금지**: 하위 에이전트가 우회 요청을 한 번 시도했다가 권한에서 막힘. 디시 댓글은 브라우저처럼 보이는 머리말(`X-Requested-With`·`Referer`)을 붙여 받아 회색지대 → 댓글에서 온 원인·해결은 쓰지 않기로 함. 하위 에이전트 지시에 "우회 금지·rm 금지"를 꼭 넣는다(지우기 확인 훅이 rm을 붙잡는다).
+- **디시 CG·3D 갤의 "블렌더" 글은 자동 생성(역류기) 의심**이라 빈도에서 뺐다(`suspect_bot`). 디시 블렌더 갤 원본 쪽은 표본 400개 중 0개.
+- **Stack Exchange API**는 키 없이 하루 300번, 25쪽까지만(2023년 이후 23,427개 중 5,110개만 받음).
+- **사이트 비중**: 처음 수준 상위 네 종류는 무게를 바꿔도 그대로지만 엔진 쪽은 3.7-11.1%로 흔들린다(조사 문서 끝 절).
+- **홀드아웃 열지 않기**: 옛 `data/holdout/`·`data/holdout_work/`는 열지 않는다(해시 HISTORY [155]).
+- **유료**: `evaluate run`은 `--yes` 없이 어림만 보이고 멈춘다. API 키는 `data/.env`(도우미는 켤 때만 읽음).
+- 검토 결과·판단은 한 항목씩 글로, 설명은 문단 단위로 쪼개서(끝에 "이해되세요?" 붙이지 않기) — Claude 메모리에 있음.
 
 ## Git 제외 자료 (`data/`·`results/`, 커밋 안 함)
 
-2026-11-03에 사용자가 `data/models/`·`data/hf_cache/`를 뺀 전부를 구글 드라이브 `개인 프로젝트/블렌더_RAG/data`·`results`에 올림(Claude가 대표 파일 크기로 대조, 하위 파일 수는 다 세지 않음). 다른 PC에서는 거기서 받아 같은 위치에 둔다.
+11-03에 `data/models/`·`data/hf_cache/`를 뺀 전부를 구글 드라이브 `개인 프로젝트/블렌더_RAG/data`·`results`에 올림. **11-04에 만든 `data/research_raw/20261104_질문모음/`은 아직 안 올림.**
 
 | 자료 | 위치 | 비고 |
 |---|---|---|
 | API 키 | `data/.env` | 드라이브에도 있음 |
-| 개발 30문항·장면·상태 | `data/eval/dev30/` | 티켓 35 |
-| 홀드아웃 봉인 | `data/holdout/`(49파일), `data/holdout_work/` | 열지 않기 |
-| 검·방패 검수 자료 | `data/review/`, `data/holdout_raw/`, `data/snapshots/` | |
-| 설명서 벡터·연습 과정 벡터 | `data/vectors/` | 벡터는 `manual_vectors build --yes`(약 $0.13)로도 다시 만듦 |
-| 메뉴 이름 사전 | `data/menu_names/menu_names.json` | 11-02 판 |
-| 결과 원본 | `results/20261029/`-`20261103/` | 숫자는 HISTORY·`docs/experiment.md` |
-| 로컬 임베딩 모델 | `data/models/`, `data/hf_cache/` | 드라이브에 없음, 지금 안 씀, 다시 내려받을 수 있음 |
+| 질문 조사 원자료·표시·분류 | `data/research_raw/20261104_질문모음/` | `README.md`, 목록 원본(`se/`·`ba/`·`eng/`·`kr/`), 합친 것 `all_merged.jsonl`, 표시 `tags/*.jsonl`, 표본 본문, 분류 스크립트·숫자 `classify/`. **드라이브에 안 올림** |
+| 프로토타입 개발 30문항·장면 | `data/eval/dev30/` | 새 셋을 만들면 이름을 프로토타입으로 바꿀지 정함 |
+| 옛 홀드아웃 봉인 | `data/holdout/`(49파일), `data/holdout_work/` | 열지 않기, 새 홀드아웃 때 `archive/`로(확인 뒤) |
+| 검·방패 검수 자료 | `data/review/`, `data/holdout_raw/`, `data/snapshots/` | D02 실제 사진은 `data/review/20261102_검/클로드 채팅 원문 이미지/1.png` |
+| 설명서 벡터·연습 과정 벡터 | `data/vectors/` | `manual_vectors build --yes`(약 $0.13)로도 다시 만듦 |
+| 메뉴 이름 사전 | `data/menu_names/menu_names.json` | 옵션 아래 값(Origin to Geometry 등)이 빠짐(고치기 후보) |
+| 결과 원본 | `results/20261029/`-`20261103/` | |
+| 로컬 임베딩 모델 | `data/models/`, `data/hf_cache/` | 약 6.9GB, 드라이브에 없음, 티켓 42에서 쓸 수 있어 둠 |
 
 ## 추천 스킬과 참고
 
-- 35 고치기는 고치기마다 `/implement`가 맞지만, 평가(유료)와 채점이 끼어 있어 티켓 35 Comments와 `docs/experiment.md`를 먼저 읽는다. 스킬 없이: 고치기 하나 → `evaluate run --name <이름>`(어림 보고 확인 뒤 `--yes`) → 하위 에이전트 채점 → `docs/experiment.md`에 [E번호].
-- [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [티켓 37](.scratch/mvp-roundtrip/issues/37-유료-홀드아웃-실행.md), [실험 기록](docs/experiment.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [157]-[159]](HISTORY.md).
+- 새 개발셋 쓰기는 스킬 없이: 종류별 수를 표로 → 종류마다 실제 질문에서 후보를 골라 비슷하게 다시 쓰기 → 핵심·정답 위치(하위 에이전트 확인) → 장면 스크립트(연산자) → 체크리스트 5절로 장면 확인. 홀드아웃은 같은 구성표만 넘겨 새 하위 에이전트가 쓴다.
+- [체크리스트](docs/experiment.md), [프로토타입 기록](archive/experiment_prototype.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [질문 장소 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-장소.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [티켓 37](.scratch/mvp-roundtrip/issues/37-유료-홀드아웃-실행.md), [명세](.scratch/mvp-roundtrip/spec.md), [구조](STRUCTURE.md), [경과 [160]-[163]](HISTORY.md).
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
