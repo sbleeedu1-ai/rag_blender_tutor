@@ -15,7 +15,7 @@ from pathlib import Path
 
 from blender_tutor.beginner_scope import DATA
 from blender_tutor.menu_names import MenuNames
-from blender_tutor.paths import PROJECT
+from blender_tutor.paths import MENU_CHOICES, MENU_TITLES
 from blender_tutor.translate import BodyNames, Piece, _in_scope, glossary, load_translations, screen_words
 
 _PATH_SEP = "‣"
@@ -122,8 +122,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
 
-    titles = MenuNames.load_titles(PROJECT / "menu_titles.json")
-    names = MenuNames.load(args.names, MenuNames.load_choices(PROJECT / "menu_choices.json"), titles)
+    titles = MenuNames.load_titles(MENU_TITLES)
+    names = MenuNames.load(args.names, MenuNames.load_choices(MENU_CHOICES), titles)
     body = BodyNames(screen_words(names, titles, args.po.read_text(encoding="utf-8")))
     translations = reviewed(args.translations)
     todo = _in_scope(args.chunks, args.scope)

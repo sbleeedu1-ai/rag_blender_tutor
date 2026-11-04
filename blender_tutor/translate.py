@@ -17,7 +17,7 @@ from pathlib import Path
 from blender_tutor.beginner_scope import CHARS_PER_TOKEN, DATA, Estimate, Model, OpenAIModel, openai_key
 from blender_tutor.manual_chunks import Chunk, load_chunks
 from blender_tutor.menu_names import MenuNames, Source, read_po
-from blender_tutor.paths import PROJECT
+from blender_tutor.paths import MENU_CHOICES, MENU_TITLES
 
 _PATH_SEP = "‣"  # 설명서 메뉴 경로의 구분 글자(Add ‣ Mesh)
 BATCH = 5  # 한 번에 묻는 청크 수(지시문을 덜 되풀이하려고 묶는다)
@@ -281,8 +281,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_command.add_argument("--effort", help="생각 수준(none·medium 등). 없으면 모델 기본값")
     args = parser.parse_args(argv)
 
-    titles = MenuNames.load_titles(PROJECT / "menu_titles.json")
-    names = MenuNames.load(args.names, MenuNames.load_choices(PROJECT / "menu_choices.json"), titles)
+    titles = MenuNames.load_titles(MENU_TITLES)
+    names = MenuNames.load(args.names, MenuNames.load_choices(MENU_CHOICES), titles)
     body = BodyNames(screen_words(names, titles, args.po.read_text(encoding="utf-8")))
     todo = _in_scope(args.chunks, args.scope)
     if args.sample:

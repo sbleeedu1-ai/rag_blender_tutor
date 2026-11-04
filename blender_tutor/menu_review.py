@@ -20,7 +20,8 @@ from enum import StrEnum
 from pathlib import Path
 
 from blender_tutor.manual_chunks import load_chunks
-from blender_tutor.menu_names import ALIASES, MenuName, MenuNames, Source, Status, _english_key, build_menu_names
+from blender_tutor.menu_names import MenuName, MenuNames, Source, Status, _english_key, build_menu_names
+from blender_tutor.paths import MENU_ALIASES
 
 BLENDER = r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
 LABELS_SCRIPT = Path(__file__).with_name("blender_ui_labels.py")
@@ -96,7 +97,7 @@ def scope_names(chunks_path: Path, scope_path: Path, po: Path, full_po: Path, na
                 include.add(row["path"])
     chunks = [chunk for chunk in load_chunks(chunks_path) if chunk.page_path in include]
     in_scope = build_menu_names(
-        chunks, po.read_text(encoding="utf-8"), full_po.read_text(encoding="utf-8"), MenuNames.load_aliases(ALIASES)
+        chunks, po.read_text(encoding="utf-8"), full_po.read_text(encoding="utf-8"), MenuNames.load_aliases(MENU_ALIASES)
     )
     whole = MenuNames.load(names_path)
     many, titles = [], []
