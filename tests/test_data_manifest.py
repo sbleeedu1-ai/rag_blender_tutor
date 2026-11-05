@@ -51,6 +51,17 @@ def test_compare_finds_changed_and_missing_but_skips_not_uploaded(tmp_path, caps
     assert "큰것.bin" not in out
 
 
+def test_compare_shows_same_size_with_newer_date_here_and_only_counts_the_other_way():
+    from blender_tutor.data_manifest import Entry
+
+    mine = {"a": Entry("a", 1, 5, "2026-11-05 10:00"), "b": Entry("b", 1, 5, "2026-11-01 10:00"), "c": Entry("c", 1, 5, "2026-11-01 10:00")}
+    other = {"a": Entry("a", 1, 5, "2026-11-04 10:00"), "b": Entry("b", 1, 5, "2026-11-05 10:00"), "c": Entry("c", 1, 5, "2026-11-01 10:00")}
+    found = compare(mine, other)
+    assert found["크기 같고 여기 날짜가 새로움"] == ["a: 여기 2026-11-05 10:00 / 다른 쪽 2026-11-04 10:00"]
+    assert found["크기 같고 다른 쪽 날짜가 새로움"] == ["b"]
+    assert found["다름"] == []
+
+
 def test_compare_reports_holdout_as_count_and_size():
     from blender_tutor.data_manifest import Entry
 
