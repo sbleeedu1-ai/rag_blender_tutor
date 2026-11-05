@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SUMMARY_NAME = "MANIFEST_요약.md"
 LIST_NAME = "MANIFEST.tsv"
 SEALED = ("holdout", "holdout_work", "holdout_pool", "holdout_raw", "archive/holdout_20261103")  # 내용이 드러나지 않게 수·크기만
-NOT_UPLOADED = ("models", "hf_cache")  # 다시 받을 수 있어 드라이브에 올리지 않는 폴더(HISTORY [162] 부근, 사용자가 이 둘을 뺀 나머지를 올림)
+NOT_UPLOADED = ("models", "hf_cache")  # 다시 받을 수 있어 드라이브에 올리지 않는 폴더(HISTORY [159], 사용자가 이 둘을 뺀 나머지를 올림)
 
 
 @dataclass(frozen=True)
