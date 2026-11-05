@@ -19,7 +19,7 @@
 4. 고친 뒤 개발셋을 2-3번 돌려 **약 5개 넘게** 나아지는지 본다(지금 방식 범위 38-46개, 1-2개라던 옛 기준은 틀림). 받은 청크 수는 같은 때 함께 돌린 값끼리 견주고 문항별 변화도 본다. 답까지 재는 측정은 다 고친 뒤.
 5. 홀드아웃 "이겼다" 기준을 새 홀드아웃을 보기 전에 다시 적는다(옛 기준 HISTORY [155]).
 6. PR #39 → #40 병합(사용자 확인 뒤, 병합은 훅이 막음 → 사용자가 직접). HISTORY 끝에서 충돌 한 번([161]은 #40).
-7. 사용자가 직접 할 것: 아래 표의 11-04·11-05 자료를 구글 드라이브에 올리기(아직 안 올림), 새 셋으로 GPT 빈손 [E0]·도우미 창 시간 10문항.
+7. 사용자가 직접 할 것: 아래 '드라이브와 견주기'의 올릴 것을 구글 드라이브에 올리기, 새 셋으로 GPT 빈손 [E0]·도우미 창 시간 10문항.
 8. 그 밖(뒤로): 컴퓨터 유즈 시나리오(HISTORY [157]·[158]), 티켓 37·45, Win+E로 도우미 창이 튀어나옴, 42, pstack, 연습 과정 글 고치기(HISTORY [164]). 수집 자료로 원인 횟수 세기는 보류(홀드아웃 글 번호를 읽어야 해 승인 필요, HISTORY [178]).
 
 ## 지금 상태와 검증
@@ -45,9 +45,9 @@
 
 ## Git 제외 자료 (`data/`·`results/`, 커밋 안 함)
 
-**드라이브와 견주기**: `.venv\Scripts\python -m blender_tutor.data_manifest`로 **로컬 상태**를 `data/MANIFEST_요약.md`(폴더별 수·크기·가장 새 날짜, results 날짜별)와 `data/MANIFEST.tsv`(파일별 크기·날짜)에 적는다. 이것은 로컬 파악용이라 드라이브에 올리지 않는다. 드라이브 상태는 드라이브에서 따로 읽어(같은 모양의 tsv로 적어) `--compare`로 대조한다. 폴더까지만 보지 말고 파일 크기·날짜까지 본다. 드라이브 날짜는 올린 시각일 수 있다(어느 도구로 올렸는지에 따라 다름, 확인 안 함). 견주기 직전에 목록을 다시 만든다. results는 날짜 폴더째 올린다.
+**드라이브와 견주기**: 하루 마무리 때 `.venv\Scripts\python -m blender_tutor.data_manifest`로 **로컬 상태**를 `data/MANIFEST_요약.md`와 `data/MANIFEST.tsv`(파일별 크기·날짜)에 적는다(로컬 파악용, 드라이브에 안 올림). 드라이브 도구로 최근 올린 시각(`createdTime`)을 찾고, 로컬에서 그 뒤에 바뀐 파일만 추리면 올릴 것이 나온다. 드라이브의 `modifiedTime`은 원본 수정 시각을 그대로 유지하고 `createdTime`이 올린 시각이다(2026-11-05 확인). results는 날짜 폴더째 올린다.
 
-11-03까지의 자료는 구글 드라이브 `개인 프로젝트/블렌더_RAG/data`·`results`에 있음. **11-04·11-05에 만든 아래 자료는 아직 안 올림. 다른 PC에서 이어 가려면 먼저 올린다. `results/20261105/`만 약 630MB이고 대부분 `135703_bpy_dump2`다.**
+**2026-11-05 17:33 대조 결과(드라이브 마지막 업로드 11-04 17:50 KST)**: 올릴 것은 `results/20261105/`(661MB), `data/eval/dev50/`의 스크립트 8개(search_h4_q19·h4_chunk·h5·h6·h7·h8, state_diff, state_diff_run), `data/eval/state_generic/` 4개. 그 전부터 드라이브에 없는 것: `data/holdout_work/`(99파일, 26MB), `data/manual_en_5.2/`(5,548파일, 1.7GB). 표 아래 위치 중 나머지 11-04 자료는 드라이브에 있다(날짜로 판단, 파일을 하나씩 세지는 않음).
 
 | 자료 | 위치 | 비고 |
 |---|---|---|
@@ -63,6 +63,6 @@
 
 ## 참고
 
-- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[179]](HISTORY.md), [구조](STRUCTURE.md).
+- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[181]](HISTORY.md), [구조](STRUCTURE.md).
 - 검색 흐름 코드: `blender_tutor/answer_engine.py`(`REWRITE_PROMPT`, `answer`, `_rewritten`, `search`, `_widened`), `engine_setup.py`. 공식 API 문서: `https://docs.blender.org/api/5.2/`.
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
