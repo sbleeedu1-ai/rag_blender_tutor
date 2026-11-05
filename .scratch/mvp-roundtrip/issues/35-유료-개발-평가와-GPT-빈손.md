@@ -55,3 +55,4 @@ Status: ready-for-agent
   - **자동 시험 도구의 역할(사용자 정리를 다듬음)**: `event_simulate` Blender 안 입력(장면 만들기·자동 시험, `--enable-event-simulate` 필요, 시험 전용, Q18-1 장면을 채울 수 있을지도) / Windows UI Automation 도우미 창 글·단추 / agent-desktop 실제 키보드·마우스(마지막 확인).
   - **구현 전 실제 환경 확인**(고른 칸만, 사용자 "세팅하고 하나씩 보는게 낫다"): 마우스 위치별 F10의 `context.space_data`, 3D 화면 2개·사분할·전체 화면(지금은 가장 큰 3D 화면을 씀), Navigation Controls 끔·다른 애드온 켬(임시 설정 폴더), 큰 모델의 시간·멈춤, 조각 직후 마스크. 원본 `NodeLink.is_hidden`을 칸으로 쓸 때만 크래시 여부를 시험하고, `is_overridable`(대신 `ID.override_library`, `ID.library`, `ID.is_editable`)과 `Panel.custom_data`의 `tags`는 다시 볼 필요 없다(사용자 동의).
   - **새 하위 에이전트로 칸을 나눌 때 지킬 것**: 실패 원인과 기대 결과를 넘기지 않는다. 문서의 타입 이름을 그대로 쓰고 쉬운 묶음 이름을 함께 적는다(사용자 "어느정도 분류 시 우리도 따르는게 좋긴하겠네"). 칸 11,226개 모두 어딘가에 들어가고 뺀 이유가 남는다. 메인 세션이 표본을 뽑아 대조한다.
+  - 2026-11-05 오후 Claude: 분류와 후보 표 초안을 만들었다(HISTORY [174], `.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md`). 칸 수는 번들 애드온을 켠 3차 조사 기준 11,449개다. 아직 고르지 않았고 사용자 판단 7개가 그 문서 7절에 있다.
