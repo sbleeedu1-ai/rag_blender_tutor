@@ -45,6 +45,8 @@
 
 ## Git 제외 자료 (`data/`·`results/`, 커밋 안 함)
 
+**드라이브와 견주기**: `.venv\Scripts\python -m blender_tutor.data_manifest`가 `data/MANIFEST_요약.md`(폴더별 수·크기, results 날짜별)와 `data/MANIFEST.tsv`(파일별)를 만든다. 올릴 때 자료를 다 올린 뒤 다시 만들어 이 두 파일을 마지막에 올린다. 견줄 때 드라이브의 요약부터 보고, 다르면 드라이브의 `MANIFEST.tsv`를 받아 `--compare`로 대조한다. 드라이브에 이 파일이 생기기 전에는 쓸 수 없다. 목록은 올린 사람이 적은 것이라 올리다 빠진 것은 못 잡으니, 지우거나 옮기기 전에는 드라이브 폴더의 수·크기를 직접 본다. results는 날짜 폴더째 올린다.
+
 11-03까지의 자료는 구글 드라이브 `개인 프로젝트/블렌더_RAG/data`·`results`에 있음. **11-04·11-05에 만든 아래 자료는 아직 안 올림. 다른 PC에서 이어 가려면 먼저 올린다. `results/20261105/`만 약 630MB이고 대부분 `135703_bpy_dump2`다.**
 
 | 자료 | 위치 | 비고 |
@@ -61,6 +63,6 @@
 
 ## 참고
 
-- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[178]](HISTORY.md), [구조](STRUCTURE.md).
+- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[179]](HISTORY.md), [구조](STRUCTURE.md).
 - 검색 흐름 코드: `blender_tutor/answer_engine.py`(`REWRITE_PROMPT`, `answer`, `_rewritten`, `search`, `_widened`), `engine_setup.py`. 공식 API 문서: `https://docs.blender.org/api/5.2/`.
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
