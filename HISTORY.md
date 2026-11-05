@@ -1580,3 +1580,11 @@
   - 정리: 긴 입력은 (1) 앞 창이 바뀌면 키가 엉뚱한 창(이번엔 Claude Code 터미널)으로 감, (2) `ok`는 "보냈다"일 뿐 반영 여부는 스크린샷으로만 앎, (3) 한 단계가 어긋나면 뒤 단계가 다른 뜻이 됨(G 대신 삭제 확인). 사용자 "흠.. 한계점이 많네".
 - 이어서: 사용자 "말만 들어선 UI 오토메이션이 훨씬 강력해보이는데?" → Claude가 agent-desktop도 Windows에서는 UI Automation을 쓰며, 차이는 대상(Qt로 만든 도우미 창은 정보를 내줌, Blender는 버튼을 스스로 그림)이라고 설명하고 직접 확인("ㅇㅇ"). UI Automation으로 Blender 창(`GHOST_WindowClass`)을 보면 하위 요소 0개, '파일' 메뉴 자리(40,35)를 물어도 Blender 창 자체만 나옴(제목 표시줄 단추도 안 나옴). → Blender 안의 메뉴·단추는 어느 쪽으로도 읽을 수 없음.
 - 다음: 사용자가 "근데 이게 지금 cli 여서 그렇지 데스크톱 앱 클로드 코드로 하면 자체 내장된 컴퓨터 유즈로 다 할수 있는거?"라고 물음 → Claude는 컴퓨터 유즈도 스크린샷 + 실제 입력이라 Blender 단추를 글로 읽지 못하고 PC를 차지하는 것은 같으며, 보고-누르기가 한 흐름이라 덜 번거로울 수 있다고 답함(CLI라 써 보지 못한 짐작). 사용자 "집에가서 해봐야겠네 ㅇㅇ 대충 시나리오 너 스스로 짜서 컴퓨터 유즈로 해보라고" → HANDOFF 다음 할 일 1번으로.
+
+### [182] 2026-11-05 · `python` 명령이 없는 PC에서도 터미널 명령이 막히지 않도록, 확인 훅을 프로젝트 `.venv`의 Python으로 돌린다
+
+- 번호: `feat/35-dev-eval`(PR #39)이 [181]까지 써서 겹치지 않게 [182]로 둔다. 이 브랜치는 main에서 갈라졌다.
+- 계기: 집 PC에서 main을 138커밋 당기자 `.claude/settings.json`의 훅 명령 `python …`이 "Python was not found"로 실패했고, 실패하면 막는 설정(`onFailure: block`)이라 Bash·PowerShell 명령이 모두 막혔다. 이 PC의 `.venv`는 Blender 안의 Python으로 만들어져 있고(`.venv\pyvenv.cfg`), 기본 설치 폴더(`AppData\Local\Programs\Python`)에는 Python이 없다.
+- 결정: Claude가 훅 명령을 `.venv/Scripts/python.exe`로 바꾸자고 권하고, PATH에 직접 넣는 방법을 대안으로 냄. 사용자 "블렌더 파이썬으로 돌린다는거지? 맞으면 고치고".
+- 확인: 고친 뒤 터미널 명령이 다시 돌고, `git branch -d no-such-branch-for-hook-check`가 "[브랜치 지우기 거부]"로 막혀 훅이 실제로 검사함을 봄. 병합된 `feat/31-translate-embed`는 지워짐. pytest 596 passed.
+- 알아둘 것: `.venv`가 없는 곳(새로 복제한 직후, 새 worktree)에서는 훅이 실패해 터미널 명령이 막힌다. 그때는 터미널을 직접 열어 프로젝트 준비 명령으로 `.venv`를 먼저 만든다. 강의실 PC에서는 아직 확인하지 않았다. `feat/35-dev-eval`의 설정은 아직 `python`이라, 이 PR을 합치기 전에는 이 PC에서 그 브랜치로 옮기면 다시 막힌다.
