@@ -1763,3 +1763,11 @@
 - 확인: 드라이브 마지막 업로드는 11-04 17:40-17:50 KST(`createdTime`). 그 뒤 만든 파일 없음. `modifiedTime`은 원본 시각을 유지함(`questions.json` 드라이브 08:31:56Z·43375바이트 = 로컬 17:31·43375바이트, `search_h3.py`·`extra_state.py`도 크기·시각 같음). [180]의 "드라이브 날짜는 올린 시각일 수 있다"는 지금 도구에서는 해당 없음.
 - **고친 틀린 기록**: HANDOFF가 11-04 자료를 "아직 안 올림"이라 적어 왔는데 11-04 업로드가 이미 되어 있었다. 올릴 것을 약 990MB로 말한 것도 틀림.
 - 결과: 올릴 것은 `results/20261105/`, 스크립트 12개. 그 전부터 드라이브 `data` 바로 아래에 없는 것 `holdout_work`(새 홀드아웃 작업 자료), `manual_en_5.2`. 파일 8,711줄을 하나씩 드라이브와 대조한 것은 아니고 날짜로 잘랐다. 표본 3개만 크기까지 확인했다. 홀드아웃은 내용을 열지 않았다(제목 검색에 드라이브 홀드아웃 `questions.json`의 이름·크기가 함께 나옴).
+
+### [182] 2026-11-05 · `python` 명령이 없는 PC에서도 터미널 명령이 막히지 않도록, 확인 훅을 프로젝트 `.venv`의 Python으로 돌린다
+
+- 번호: `feat/35-dev-eval`(PR #39)이 [181]까지 써서 겹치지 않게 [182]로 둔다. 이 브랜치는 main에서 갈라졌다.
+- 계기: 집 PC에서 main을 138커밋 당기자 `.claude/settings.json`의 훅 명령 `python …`이 "Python was not found"로 실패했고, 실패하면 막는 설정(`onFailure: block`)이라 Bash·PowerShell 명령이 모두 막혔다. 이 PC의 `.venv`는 Blender 안의 Python으로 만들어져 있고(`.venv\pyvenv.cfg`), 기본 설치 폴더(`AppData\Local\Programs\Python`)에는 Python이 없다.
+- 결정: Claude가 훅 명령을 `.venv/Scripts/python.exe`로 바꾸자고 권하고, PATH에 직접 넣는 방법을 대안으로 냄. 사용자 "블렌더 파이썬으로 돌린다는거지? 맞으면 고치고".
+- 확인: 고친 뒤 터미널 명령이 다시 돌고, `git branch -d no-such-branch-for-hook-check`가 "[브랜치 지우기 거부]"로 막혀 훅이 실제로 검사함을 봄. 병합된 `feat/31-translate-embed`는 지워짐. pytest 596 passed.
+- 알아둘 것: `.venv`가 없는 곳(새로 복제한 직후, 새 worktree)에서는 훅이 실패해 터미널 명령이 막힌다. 그때는 터미널을 직접 열어 프로젝트 준비 명령으로 `.venv`를 먼저 만든다. 강의실 PC에서는 아직 확인하지 않았다. `feat/35-dev-eval`의 설정은 아직 `python`이라, 이 PR을 합치기 전에는 이 PC에서 그 브랜치로 옮기면 다시 막힌다.
