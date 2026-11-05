@@ -24,7 +24,7 @@
 
 ## 지금 상태와 검증
 
-- 오늘 한 것(모두 PR #39 브랜치): 검색 가설 4·5·6·7·8 측정과 결론(`docs/experiment.md`, HISTORY [168]-[172]), `experiment.md`의 "차례"를 문항·질문으로 고침, `bpy` 조사 세 번과 공식 문서 대조(HISTORY [173]), 분류와 후보 표 초안(HISTORY [174]), 공장값 비교 시험(HISTORY [175]), 범용 시험 계획과 H2·H3(HISTORY [176]), 진짜 충돌과 메타볼 확인(HISTORY [177]), 숫자는 `docs/experiment.md` 작업 상태 가설 1·2. 프로그램 코드는 바꾸지 않아 pytest를 다시 돌리지 않았다(PR #36 기준 596 passed). 집 PC에서 위 스크립트를 돌린 적은 없다(Blender 경로 `C:\Program Files\Blender Foundation\Blender 5.2lender.exe`를 스크립트에 고정함, 다르면 고칠 것).
+- 오늘 한 것(모두 PR #39 브랜치): 검색 가설 4·5·6·7·8 측정과 결론(`docs/experiment.md`, HISTORY [168]-[172]), `experiment.md`의 "차례"를 문항·질문으로 고침, `bpy` 조사 세 번과 공식 문서 대조(HISTORY [173]), 분류와 후보 표 초안(HISTORY [174]), 공장값 비교 시험(HISTORY [175]), 범용 시험 계획과 H2·H3(HISTORY [176]), 진짜 충돌과 메타볼 확인(HISTORY [177]), 숫자는 `docs/experiment.md` 작업 상태 가설 1·2. 프로그램 코드는 바꾸지 않아 pytest를 다시 돌리지 않았다(PR #36 기준 596 passed). 집 PC에서 위 스크립트를 돌린 적은 없다(Blender 경로 `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`를 스크립트에 고정함, 다르면 고칠 것).
 - 공식 문서 대조: `objects.inv`(5.2.4 RC)를 Claude가 따로 받아 조사 자료와 맞춤. 조작 2,497 전부 있음, 타입 1,789 전부 있음(RNA 밖 9개는 RNA 아닌 이름 목록), 타입 안 이름 17,237 중 없음 2개(`Context.texture_slot`, `Operator.bl_property`).
 - 뒤집힌 면 세기 오류와 편집 모드의 낡은 `obj.data`는 Claude가 화면 없는 Blender로 재현함.
 - 오늘 측정 비용(어림 포함): 가설 8 약 $0.075, 6 약 $0.04, 7 약 $0.02, 5 약 $0.02. 실행 전 잔액 $2.12(가설 8 전), 사용자 대조는 아직.
