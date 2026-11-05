@@ -4,14 +4,14 @@
 
 ## 지금 돌아가는 일과 사용자 복귀 전 범위
 
-- **돌아가는 하위 에이전트는 없다.** 사용자와 함께 작업 중. 방향이 바뀌었다: 칸을 등급으로 고르는 대신 **공장값과 달라진 값만 넘기는 방식**을 시험했다(HISTORY [175], `results/20261105/164619_state_diff/`). 결과를 함께 본 뒤 [후보 초안](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md)을 다시 쓴다. 잔액 대조(약 $1.985 예상)도 남음.
+- **돌아가는 하위 에이전트는 없다.** 방향: 칸을 등급으로 고르지 않고 값이 움직이는 모양으로 나눈다. [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md)을 사용자와 봄(사용자 "적당히 괜찮아 보이는데"). H2·H3만 재었고(HISTORY [176]) 나머지는 안 돌림. 사용자가 답할 것: 조작 전수 실행 승인, 기준 숫자, 사용자 설정 복사본·실제 파일, 실행 시간대. 잔액 대조(약 $1.985 예상)도 남음.
 - 끝낸 일(비용 없음): 3차 조사, 전체 칸·함수·조작 분류, RNA 밖 이름·계산 값 분류, 표본 대조, E2 실패와 맞춘 후보 표 초안. 경과는 HISTORY [174].
 - **사용자 판단 전에 하지 않는 것**: 칸 확정, 애드온·프로그램 코드 수정, 돈이 드는 호출, PR 병합, 사용자 설정 변경.
 
 ## 다음 할 일
 
 1. **작업 상태 칸을 고른다.** 순서(사용자와 정함):
-   1. 전체 분석과 분류는 끝남. 공장값 비교 결과를 사용자와 보고, 읽을 범위·늘 보낼 목록·계산 값·luna에 넘길지를 정해 후보 초안을 다시 쓴다.
+   1. 전체 분석과 분류는 끝남. 범용 시험 계획을 안전 장치(크래시 시험을 진짜 충돌로 다시), 크래시 → 값 움직임 나누기 → 나머지 순서로 돌린다. 개발 장면은 규칙을 고정한 뒤 점검으로만 쓴다. 후보 초안은 그 결과로 다시 쓴다.
    2. 고른 칸만 실제 환경에서 확인: 마우스 위치별 F10, 여러 창·사분할·전체 화면, 사용자 설정(임시 설정 폴더), 큰 모델, 조각 직후. `event_simulate`로 상당수 자동 시험 가능.
    3. 구현: 애드온 `read_state`(확인한 칸 목록만 읽음), `work_state.py`(평소와 다를 때만 넘길지 판별), 질문 바꾸기로 넘기기. 티켓을 나눌지 정한다.
    4. 검색을 다시 재고 부작용을 본다.
@@ -24,7 +24,7 @@
 
 ## 지금 상태와 검증
 
-- 오늘 한 것(모두 PR #39 브랜치): 검색 가설 4·5·6·7·8 측정과 결론(`docs/experiment.md`, HISTORY [168]-[172]), `experiment.md`의 "차례"를 문항·질문으로 고침, `bpy` 조사 세 번과 공식 문서 대조(HISTORY [173]), 분류와 후보 표 초안(HISTORY [174]), 공장값 비교 시험(HISTORY [175]). 프로그램 코드는 바꾸지 않아 pytest를 다시 돌리지 않았다(PR #36 기준 596 passed).
+- 오늘 한 것(모두 PR #39 브랜치): 검색 가설 4·5·6·7·8 측정과 결론(`docs/experiment.md`, HISTORY [168]-[172]), `experiment.md`의 "차례"를 문항·질문으로 고침, `bpy` 조사 세 번과 공식 문서 대조(HISTORY [173]), 분류와 후보 표 초안(HISTORY [174]), 공장값 비교 시험(HISTORY [175]), 범용 시험 계획과 H2·H3(HISTORY [176]). 프로그램 코드는 바꾸지 않아 pytest를 다시 돌리지 않았다(PR #36 기준 596 passed).
 - 공식 문서 대조: `objects.inv`(5.2.4 RC)를 Claude가 따로 받아 조사 자료와 맞춤. 조작 2,497 전부 있음, 타입 1,789 전부 있음(RNA 밖 9개는 RNA 아닌 이름 목록), 타입 안 이름 17,237 중 없음 2개(`Context.texture_slot`, `Operator.bl_property`).
 - 뒤집힌 면 세기 오류와 편집 모드의 낡은 `obj.data`는 Claude가 화면 없는 Blender로 재현함.
 - 오늘 측정 비용(어림 포함): 가설 8 약 $0.075, 6 약 $0.04, 7 약 $0.02, 5 약 $0.02. 실행 전 잔액 $2.12(가설 8 전), 사용자 대조는 아직.
@@ -48,18 +48,18 @@
 
 | 자료 | 위치 | 비고 |
 |---|---|---|
-| 새 개발셋 | `data/eval/dev50/` | 문항초안.md, questions.json, scenes/·states/, 검색 실험 스크립트 search_h1·h1b·h2·h2_pairs·h3·h4_q19·h4_chunk·h5·h6·h7·h8.py, state_diff.py·state_diff_run.py, extra_state.py·extra/, verify/, 후보_본문.md(남의 글 발췌) |
+| 새 개발셋 | `data/eval/dev50/` | 문항초안.md, questions.json, scenes/·states/, 검색 실험 스크립트 search_h1·h1b·h2·h2_pairs·h3·h4_q19·h4_chunk·h5·h6·h7·h8.py, state_diff.py·state_diff_run.py, `data/eval/state_generic/`(probe.py·base_check.py), extra_state.py·extra/, verify/, 후보_본문.md(남의 글 발췌) |
 | 새 홀드아웃 봉인·작업 자료 | `data/holdout/`(57파일), `data/holdout_work/` | 열지 않기 |
 | 옛 홀드아웃 | `data/archive/holdout_20261103/` | 열지 않기 |
 | 홀드아웃용 질문 모음 | `data/holdout_pool/use_holdout.json` | 개발셋 글 51개를 뺀 1,115개 |
 | 질문 조사 원자료 | `data/research_raw/20261104_질문모음/` | |
 | 결과 11-04 | `results/20261104/` | 145409_dev50_before, 160743_search_h1, 161724_search_h1b, search_h2_log.txt, search_h2_pairs_log.txt, 165335_search_h3 |
-| 결과 11-05 | `results/20261105/` | 092459_search_h4_q19, 095146_search_h4_chunk, 100827_search_h5, 102254_search_h8, 103759_search_h6, 105605_search_h7, 120433_bpy_dump(약 155MB), 135703_bpy_dump2(약 430MB), 142218_bpy_classify, 145831_bpy_classify2, 164329_state_diff, 164619_state_diff |
+| 결과 11-05 | `results/20261105/` | 092459_search_h4_q19, 095146_search_h4_chunk, 100827_search_h5, 102254_search_h8, 103759_search_h6, 105605_search_h7, 120433_bpy_dump(약 155MB), 135703_bpy_dump2(약 430MB), 142218_bpy_classify, 145831_bpy_classify2, 164329_state_diff, 164619_state_diff, 170618_state_base_check |
 | 프로토타입 개발셋 | `data/eval/dev30/` | 기록은 `archive/experiment_prototype.md` |
 | API 키·벡터·모델 | `data/.env`, `data/vectors/`, `data/models/` | 앞과 같음 |
 
 ## 참고
 
-- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [칸 후보 초안](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[175]](HISTORY.md), [구조](STRUCTURE.md).
+- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [칸 후보 초안](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[176]](HISTORY.md), [구조](STRUCTURE.md).
 - 검색 흐름 코드: `blender_tutor/answer_engine.py`(`REWRITE_PROMPT`, `answer`, `_rewritten`, `search`, `_widened`), `engine_setup.py`. 공식 API 문서: `https://docs.blender.org/api/5.2/`.
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
