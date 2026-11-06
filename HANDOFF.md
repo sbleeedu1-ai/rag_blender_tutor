@@ -4,7 +4,7 @@
 
 ## 지금 상태 한눈에
 
-- **2026-11-06 오후: 가설 8 진행 중, 지금은 8-2(`docs/experiment.md` 맨 끝)를 재는 단계다. 공식 문서 대조 하위 에이전트 4개는 끝났고 보고서는 `.scratch/mvp-roundtrip/research/2026-11-06-공식문서-대조-*.md`.** 2026-11-06에 어제 판정을 다시 봐 **H1-2의 "미달" 결론을 철회했고**([188]-[191]), **측정 구멍을 고쳤다**([195], `docs/experiment.md` 가설 7, 통과). 앞의 시험 1·2, H1-1, H1-2 결과는 옛 도구로 잰 것이라 칸 목록을 그대로 쓰지 않는다.
+- **돌아가는 시험 없음. 가설 8-2에서 멈췄다: 값 읽기 7판을 만들기로 정했고 코드는 안 고쳤다(`op_walk.py`는 6판). 계획은 `docs/experiment.md` 맨 끝. 공식 문서 대조 하위 에이전트 4개는 끝났고 보고서는 `.scratch/mvp-roundtrip/research/2026-11-06-공식문서-대조-*.md`.** 2026-11-06에 어제 판정을 다시 봐 **H1-2의 "미달" 결론을 철회했고**([188]-[191]), **측정 구멍을 고쳤다**([195], `docs/experiment.md` 가설 7, 통과). 앞의 시험 1·2, H1-1, H1-2 결과는 옛 도구로 잰 것이라 칸 목록을 그대로 쓰지 않는다.
 - **목표(사용자 확인)**: "API 에서 찾아낸 값중 어떤것을 효율적으로 보내면 좋을까?". 세 묶음은 '늘 바뀌는 값' / '계산이 필요한 값' / '그 외 나머지'. 효율은 "정해진 줄 수 안에서, 필요한 값을 놓치지 않고 보내는 것". **줄 수 한도는 아직 없다**(90%·중앙 30줄은 근거가 약해 철회). 비용과 묻힘은 예상일 뿐 재지 않았다.
 - 훅이 `.venv/Scripts/python.exe`로 돈다(PR #41 병합됨, [182]). `.venv`가 없는 곳에서는 터미널 명령이 막히니 직접 터미널을 열어 만든다. 강의실 PC는 `.venv`가 있고 명령이 정상으로 돈다.
 - **방향이 바뀌었다(HISTORY [175]-[177]).** 칸을 상·중·하로 고르지 않는다(사용자 "애초에 이젠 등급을 빼기로 했으니"). 값이 움직이는 모양으로 나눈다: 늘 바뀌는 값·계산해야 아는 값은 매번(계산 값 보내는 규칙은 시험 뒤) / 일부러 바꿔야 바뀌는 값은 공장값과 다를 때만 / 그 외는 무엇이 있는지 파악. 범용으로 만들고 연습 과정 감지에도 쓴다. 사용자 "우리 범용적으로 쓸거 만드는거다".
@@ -12,7 +12,8 @@
 
 ## 다음 할 일
 
-1. **가설 8을 마친다**(`docs/experiment.md` 가설 8, 8-1, 8-2, HISTORY [197]·[198]·[202]). 대조 "다름"은 원문·실행으로 처리함(8-1). 값 읽기 6판(`op_walk.py`, 이전 판 `op_walk_v5_커스텀없음.py`)을 만들었다. 순서: ① 8-2 재측정: `case_run.py 3`(64·65번이 잡히나, `active` 포인터 안 따라가기), `flow_run.py`로 시간 711초 기준과 **자리 이동 점검**(없어진 칸과 생긴 칸 이름이 겹치는 걸음. 사용자 "안전 시험으로 막아볼수 있겠지?"에 안전 시험만으로는 못 막는다고 답함), `crash_run.py --script snap_safety.py`로 새 충돌과 사라진 칸(앞 판 칸 목록과 대조) ② 스컬프트 `stroke`, 네모 선택 등을 호출과 `agent-desktop drag`로 대조, 끌기 도중 값 ③ 넘어간 것 표, 실행 뒤 독립 검토(스킬 지시문 그대로), 판정 ④ 판정 뒤 애드온 안건을 **한 항목씩** 묻는다: 스레드, 쿼드 뷰·카메라 시점에서 시점 값 누락, `region_3d`가 `None`이면 그 회차 전체 실패, 사본 저장 경로, "REGISTER만 기록에 남는다" 주석·`STRUCTURE.md`, 키맵·`opened` 주석, `blender_manifest.toml`. 비용과 묻힘 측정, 줄 수 한도는 아직 안 정했다.
+1. **값 읽기 7판을 만들고 다시 잰다(집 PC).** 사용자 "원인을 알고 고칠 방법을 아는데 고치긴하는게 맞아보임". 먼저 드라이브에서 아래 표의 스크립트를 받아 `data/eval/state_generic/`이 강의실 판인지 본다(`op_walk.py`에 `CUSTOM_OK`와 `read_custom`이 있어야 6판, 18,912바이트). 할 일과 기준은 `docs/experiment.md` 가설 8-2 맨 끝 "7판 계획" 1-5번. 약 1시간 20분(강의실 기준, 돈 안 듦). 시험을 돌리는 동안 `op_walk.py`를 고치지 않는다.
+   그 뒤 가설 8을 마친다: ① 스컬프트 `stroke`, 네모 선택 등을 호출과 `agent-desktop drag`로 대조, 끌기 도중 값 ② 넘어간 것 표, 실행 뒤 독립 검토(스킬 지시문 그대로), 판정 ③ 판정 뒤 애드온 안건을 **한 항목씩** 묻는다: 스레드, 쿼드 뷰·카메라 시점에서 시점 값 누락, `region_3d`가 `None`이면 그 회차 전체 실패, 사본 저장 경로, "REGISTER만 기록에 남는다" 주석·`STRUCTURE.md`, 키맵·`opened` 주석, `blender_manifest.toml`. 비용과 묻힘 측정, 줄 수 한도는 아직 안 정했다.
 2. **있는 조작을 다 써 보는 시험을 만든다**(사용자 "있는건 다 써보는 테스트 만들어야 하지 않을까?"). 11-05 시험 2는 옛 도구·기본 입력이고 2,605개 중 1,552개만 실행됐다. 고친 도구와 `undo=True`로 다시 돌리고, 못 돈 조작은 조작마다 까닭을 적고, 입력 칸(`ops.json`, 공식 문서)으로 끌기 조작도 채운다. 그 뒤 '늘 바뀌는 값' 시험(아래 3-2)을 체크리스트대로 다시 잰다.
 3. **범용 시험을 이어 간다.** [계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md)(0절이 진행 상황). 사용자 "진행해 ㄱㄱ"(전수 실행, 기준 숫자 제안값, 설정 복사본 승인).
    1. **진행 순서(사용자가 정함)**: 가설 → 결과 보기 전에 기준 적기 → 실험 → 결과 → 이 시험의 목적 다시 보기 → 통과하면 실험 자체 점검 → 다음. `experiment-checklist` 스킬의 체크리스트를 채운다. 실패했다고 원인을 안 재고 방법만 바꿔 고르게 하지 않는다(HISTORY [185]). 있는지 확인하지 않은 자료에 기대지 않는다.
@@ -24,7 +25,7 @@
 6. 고친 뒤 개발셋을 2-3번 돌려 **약 5개 넘게** 나아지는지 본다(지금 방식 범위 38-46개, 1-2개라던 옛 기준은 틀림). 받은 청크 수는 같은 때 함께 돌린 값끼리 견주고 문항별 변화도 본다. 답까지 재는 측정은 다 고친 뒤.
 7. 홀드아웃 "이겼다" 기준을 새 홀드아웃을 보기 전에 다시 적는다(옛 기준 HISTORY [155]).
 8. PR #39 → #40 병합(사용자 확인 뒤, 병합은 훅이 막음 → 사용자가 직접). HISTORY 끝에서 충돌 한 번([161]은 #40).
-9. 사용자가 직접 할 것: 아래 표의 2026-11-06 자료를 구글 드라이브에 올리기, **집 PC에서 `new-setup` 적용**(main을 받고 `install.cmd -SkipMatt`, `install-optional.cmd experiment-checklist`, `install-optional.cmd session-search`, new-setup HISTORY [27]), 새 셋으로 GPT 빈손 [E0]·도우미 창 시간 10문항.
+9. 사용자가 직접 할 것: 아래 표의 2026-11-06 자료를 구글 드라이브에 올리기, **집 PC에서 `new-setup` 적용**(main을 받고 `install.cmd -SkipMatt`, 자동 압축 600k도 이때 들어가고 켜 둔 세션은 `/exit` 뒤 `claude --continue`로 반영, `install-optional.cmd experiment-checklist`, `install-optional.cmd session-search`, new-setup HISTORY [27]), 새 셋으로 GPT 빈손 [E0]·도우미 창 시간 10문항.
 10. 그 밖(뒤로): 컴퓨터 유즈 시나리오(HISTORY [157]·[158]), 티켓 37·45, Win+E로 도우미 창이 튀어나옴, 42, pstack, 연습 과정 글 고치기(HISTORY [164]). 수집 자료로 원인 횟수 세기는 보류(홀드아웃 글 번호를 읽어야 해 승인 필요, HISTORY [178]).
 
 ## 지금 상태와 검증
@@ -68,8 +69,8 @@
 | 결과 11-04 | 강의실, 드라이브 | `results/20261104/` | 145409_dev50_before, 160743_search_h1, 161724_search_h1b, search_h2_log.txt, search_h2_pairs_log.txt, 165335_search_h3 |
 | 결과 11-05 | 강의실, 드라이브 | `results/20261105/` | 092459_search_h4_q19, 095146_search_h4_chunk, 100827_search_h5, 102254_search_h8, 103759_search_h6, 105605_search_h7, 120433_bpy_dump(약 155MB), 135703_bpy_dump2(약 430MB), 142218_bpy_classify, 145831_bpy_classify2, 164329_state_diff, 164619_state_diff, 170618_state_base_check, 171644_state_safety_meta |
 | 시험 스크립트 11-05 밤 (드라이브에 있음, 강의실 PC에도 받음) | 집, 강의실, 드라이브 | `data/eval/state_generic/` | crash_walk·crash_run, op_walk(3판)·op_run·op_table, flow_walk·flow_run, reach_table, type_bases, 앞 판 op_walk_v1·v2, op_table_v1 |
-| **시험 스크립트 11-06 (강의실 PC에만, 드라이브에 올릴 것)** | **강의실만** | `data/eval/state_generic/` | sim_walk·sim_run·sim_min·sim_min_run, hole_probe·hole_run, flow_run(창 위치 x=0으로 고침) |
-| **시험 결과 11-06 (강의실 PC에만, 드라이브에 올릴 것)** | **강의실만** | `results/20261106/` | 092251_flow_walk, 094230_event_sim, 094525_event_sim_focus, 094732_event_sim_min, 095840_hole_probe |
+| **시험 스크립트 11-06 (강의실 PC에만, 드라이브에 올릴 것, 집 PC 1번에 꼭 필요)** | **강의실만** | `data/eval/state_generic/` | **폴더 전체**(896KB). 11-06 오전 것과 오후에 고친 `op_walk.py`(6판), `op_walk_v5_커스텀없음.py`, `case_walk.py`, `crash_walk.py`, `flow_walk.py`, `doc_walk.py`, `doc_run.py`, `input_*`, `sim_cause*` 포함. 2026-11-06 17시쯤 드라이브 검색에 `doc_walk`, `op_walk_v5` 없음 |
+| **시험 결과 11-06 (강의실 PC에만, 드라이브에 올릴 것)** | **강의실만** | `results/20261106/` | 폴더째(162MB, `165659_h8_2_safety_bg` 36MB는 멈춘 실행이라 빼도 됨). 8-2 대조에 `113739_h7_safety_bg`, `122610_h7_safety_window`, `144527_h8_safety_bg`, `144550_h8_safety_window`, `163538_h7_cases`, `165659_flow_walk`가 필요 |
 | 시험 결과 11-05 밤 (드라이브에 있음, 강의실 PC에도 받음) | 집, 강의실, 드라이브 | `results/20261105/` | 기록에 숫자로 쓴 것: 191121_crash_walk2, 191735_crash_walk_window, 193217_crash_walk_wide, 193426_crash_walk_wide_line, 193446_crash_walk_wide_bg, 194118_crash_walk_reopen_bg, 194616_crash_walk_reopen_window, 200541_reach_table, 212340_op_walk3_bg, 215835_op_walk3_window, 225533_flow_walk, 225752_flow_walk. 비교용 앞 판: 201233_op_walk, 205827_op_walk2, 214347_op_walk3_window_try, 225247_flow_walk. 안 옮겨도 됨: 190443, 190510, 191518, 200732, 205253, 211823, 214219 |
 | 프로토타입 개발셋 | 강의실 | `data/eval/dev30/` | 기록은 `archive/experiment_prototype.md` |
 | API 키·벡터·모델 | PC마다 따로 | `data/.env`, `data/vectors/`, `data/models/` | 앞과 같음 |
