@@ -5,8 +5,9 @@
 - `docs/experiment.md` 마지막 절: `- [x] 목표 검토:`가 있고 `- [x] 결과:`가 아직 없어야 한다. 결과가 적힌 절은 끝난 실험이라 새 절을 요구한다.
 - `목표 검토` 칸이 있는 앞 절: 실행 뒤 칸을 모두 채웠어야 한다. 이 칸이 없는 옛 절은 보지 않는다.
 - 세션 기록: 두 검토마다 프롬프트에 절 제목과 칸 이름이 든 하위 에이전트 호출이 있어야 한다. 이 PC의 최근 세션만 찾는다.
+- 공식 문서: 마지막 절에 `도구의 동작` 칸이 있어야 하고, 그 칸의 `bpy.` 이름마다 `.claude/tools/api_doc.py`를 돌린 명령이 세션 기록에 있어야 한다(HISTORY [214]).
 - `목표 검토` 칸에 "판정에 안 씀"이라고 적은 절은 칸만 보고 세션 기록과 실행 뒤 칸은 보지 않는다.
-- 호출이 있었는지만 본다. 답의 내용이나 칸에 그대로 옮겼는지는 보지 못한다.
+- 호출이 있었는지만 본다. 답의 내용이나 칸에 그대로 옮겼는지, 문서를 제대로 읽었는지, 칸에 적지 않은 이름은 보지 못한다.
 """
 
 import json
@@ -20,6 +21,9 @@ _GOAL = "목표 검토"
 _AFTER_REVIEW = "실행 뒤 독립 검토"
 _AFTER_CELLS = ("결과", "목적 다시 보기", "실험 점검", "결과를 본 뒤 바꾼 것", "넘어간 것", _AFTER_REVIEW)
 _NOT_FOR_VERDICT = "판정에 안 씀"
+_DOC_CELL = "도구의 동작"
+_DOC_TOOL = "api_doc.py"
+_DOC_NAME = re.compile(r"bpy(?:\.\w+)+", re.ASCII)  # 이름 바로 뒤에 붙은 조사를 이름에 넣지 않는다
 _RECENT_SESSIONS = 10  # 세션 기록 하나가 10MB가 넘을 수 있어 훅 제한 시간 안에 읽을 만큼만 본다
 _HOW_TO_GOAL = (
     "experiment-checklist 스킬대로 기대 결과를 모르는 하위 에이전트에게 최종 목표 원문을 주고 "
@@ -70,7 +74,18 @@ def _unfinished(section: list[str], prompts: list[str]) -> str | None:
     return _unasked(section, _AFTER_REVIEW, prompts)
 
 
-def missing_step(record: str, prompts: list[str]) -> str | None:
+def _unread_docs(section: list[str], doc_commands: list[str]) -> str | None:
+    """`도구의 동작` 칸이 없거나, 칸에 적은 이름을 문서 도구로 보지 않았을 때의 설명."""
+    cell = _cell(section, _DOC_CELL)
+    if cell is None:
+        return f"마지막 실험 절에 `- [x] {_DOC_CELL}:` 칸이 없습니다. 시험이 기대는 동작의 근거를 적으세요."
+    unread = [name for name in dict.fromkeys(_DOC_NAME.findall(cell)) if not any(name in command for command in doc_commands)]
+    if unread:
+        return f"`{_DOC_CELL}` 칸의 {', '.join(unread)}를 문서 도구로 본 기록이 없습니다. 이 세션에서 `.venv\\Scripts\\python .claude\\tools\\api_doc.py <이름>`으로 항목 전체를 읽으세요."
+    return None
+
+
+def missing_step(record: str, prompts: list[str], doc_commands: list[str]) -> str | None:
     """시험 전에 빠진 절차를 설명하는 글. 시험을 돌려도 되면 None."""
     sections = _sections(record)
     if not sections:
@@ -86,31 +101,39 @@ def missing_step(record: str, prompts: list[str]) -> str | None:
     if _needs_after_cells(last):
         if problem := _unasked(last, _GOAL, prompts):
             return f"{problem} {_HOW_TO_GOAL}"
+        return _unread_docs(last, doc_commands)
     return None
 
 
-def agent_prompts(transcript_path: str) -> list[str]:
-    """이 프로젝트의 최근 세션 기록에서 하위 에이전트에게 준 프롬프트를 모은다."""
+def session_calls(transcript_path: str) -> tuple[list[str], list[str]]:
+    """이 프로젝트의 최근 세션 기록에서 하위 에이전트 프롬프트와 문서 도구 명령을 모은다."""
     folder = Path(transcript_path).parent
     logs = sorted(folder.glob("*.jsonl"), key=lambda log: log.stat().st_mtime, reverse=True)[:_RECENT_SESSIONS]
-    prompts = []
+    prompts, doc_commands = [], []
     for log in logs:
         # 지금 쓰이는 세션은 마지막 줄이 덜 적혀 있을 수 있어 완성된 줄만 읽는다
         complete = log.read_text(encoding="utf-8", errors="replace").rpartition("\n")[0]
         for line in complete.splitlines():
-            if '"Agent"' not in line:
+            if '"Agent"' not in line and _DOC_TOOL not in line:
                 continue
             content = (json.loads(line).get("message") or {}).get("content")
-            if isinstance(content, list):
-                prompts += [part["input"].get("prompt", "") for part in content if isinstance(part, dict) and part.get("type") == "tool_use" and part.get("name") == "Agent"]
-    return prompts
+            if not isinstance(content, list):
+                continue
+            for part in content:
+                if not isinstance(part, dict) or part.get("type") != "tool_use":
+                    continue
+                if part.get("name") == "Agent":
+                    prompts.append(part["input"].get("prompt", ""))
+                elif part.get("name") in ("Bash", "PowerShell") and _DOC_TOOL in part["input"].get("command", ""):
+                    doc_commands.append(part["input"]["command"])
+    return prompts, doc_commands
 
 
 def decide(command: str, cwd: str, record_path: Path, transcript_path: str) -> dict | None:
     """훅의 답(hookSpecificOutput) 또는 None(관여하지 않음)."""
     if not starts_experiment(command, cwd):
         return None
-    problem = missing_step(record_path.read_text(encoding="utf-8"), agent_prompts(transcript_path))
+    problem = missing_step(record_path.read_text(encoding="utf-8"), *session_calls(transcript_path))
     if problem is None:
         return None
     reason = f"[실험 절차 상기] 사용자가 내내 볼 수 없어 이 훅이 대신 멈췄습니다. {problem}"

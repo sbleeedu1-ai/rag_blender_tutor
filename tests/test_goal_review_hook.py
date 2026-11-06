@@ -15,8 +15,10 @@ RUN = "python data/eval/state_generic/flow_run.py"
 TITLE = "[E2] 이번 시험"
 OLD = "### [E2] 옛 시험\n- [x] 결과: 끝\n\n"
 AFTER = "- [x] 결과: 끝\n- [x] 목적 다시 보기: 답\n- [x] 실험 점검: 함\n- [x] 결과를 본 뒤 바꾼 것: 없음\n- [x] 넘어간 것: 표\n- [x] 실행 뒤 독립 검토: 함\n"
-OPEN = f"### {TITLE}\n- [x] 목적: 말\n- [x] 목표 검토: 통과면 목록이 줄고 실패면 그대로\n"
+OPEN = f"### {TITLE}\n- [x] 목적: 말\n- [x] 목표 검토: 통과면 목록이 줄고 실패면 그대로\n- [x] 도구의 동작: 실행으로 확인\n"
 ASKED = [f"{TITLE} 목표 검토를 해 주세요"]
+GOAL_ONLY = f"### {TITLE}\n- [x] 목표 검토: 답\n"
+NAMED = GOAL_ONLY + "- [x] 도구의 동작: 공식 문서 `bpy.ops.sculpt.brush_stroke`, `bpy.types.Window`의 `event_simulate`\n"
 
 
 @pytest.mark.parametrize("command", [
@@ -56,7 +58,7 @@ def test_폴더_안에서_이름만_적어도_알아본다():
     (f"### [E2] 앞 시험\n- [x] 목표 검토: 답\n{AFTER}\n" + OPEN, ASKED + ["[E2] 앞 시험의 실행 뒤 독립 검토"]),
 ])
 def test_절차를_밟았으면_통과한다(record, prompts):
-    assert hook.missing_step(record, prompts) is None
+    assert hook.missing_step(record, prompts, []) is None
 
 
 @pytest.mark.parametrize("record, prompts, word", [
@@ -72,7 +74,23 @@ def test_절차를_밟았으면_통과한다(record, prompts):
     (f"### [E2] 앞 시험\n- [x] 목표 검토: 답\n{AFTER}\n" + OPEN, ASKED, "실행 뒤 독립 검토"),
 ])
 def test_빠진_절차를_알려_준다(record, prompts, word):
-    assert word in hook.missing_step(record, prompts)
+    assert word in hook.missing_step(record, prompts, [])
+
+
+def test_문서_칸이_없으면_막는다():
+    assert "도구의 동작" in hook.missing_step(GOAL_ONLY, ASKED, [])
+
+
+def test_칸의_이름을_문서_도구로_다_봐야_통과한다():
+    problem = hook.missing_step(NAMED, ASKED, ["python .claude/tools/api_doc.py bpy.ops.sculpt.brush_stroke"])
+    assert "bpy.types.Window" in problem and "brush_stroke" not in problem
+    commands = ["python .claude/tools/api_doc.py bpy.ops.sculpt.brush_stroke", "python .claude/tools/api_doc.py bpy.types.Window.event_simulate"]
+    assert hook.missing_step(NAMED, ASKED, commands) is None
+
+
+def test_판정에_안_쓰는_확인은_문서_도구를_보지_않는다():
+    record = f"### {TITLE}\n- [x] 목표 검토: {hook._NOT_FOR_VERDICT}\n- [x] 도구의 동작: `bpy.types.Window`\n"
+    assert hook.missing_step(record, [], []) is None
 
 
 def _log(path, *rows):
@@ -88,7 +106,17 @@ def test_세션_기록에서_하위_에이전트_프롬프트만_모은다(tmp_p
     _log(tmp_path / "이번.jsonl", _call("Agent", "이번 세션 호출"), _call("Read", "Agent 아님"), {"type": "user", "message": {"content": "\"Agent\"라는 글자"}})
     with (tmp_path / "이번.jsonl").open("a", encoding="utf-8") as log:
         log.write('{"type": "assistant", "덜 적힌 "Agent" 줄')
-    assert sorted(hook.agent_prompts(str(tmp_path / "이번.jsonl"))) == ["이번 세션 호출", "지난 세션 호출"]
+    assert sorted(hook.session_calls(str(tmp_path / "이번.jsonl"))[0]) == ["이번 세션 호출", "지난 세션 호출"]
+
+
+def _command(name, command):
+    return {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": name, "input": {"command": command}}]}}
+
+
+def test_세션_기록에서_문서_도구_명령만_모은다(tmp_path):
+    used = "python .claude/tools/api_doc.py bpy.types.Window"
+    _log(tmp_path / "세션.jsonl", _command("PowerShell", used), _command("Bash", "git status"), _call("Read", "api_doc 글자"))
+    assert hook.session_calls(str(tmp_path / "세션.jsonl"))[1] == [used]
 
 
 def test_막을_때는_묻지_않고_까닭을_알린다(tmp_path):
