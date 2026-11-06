@@ -1,10 +1,10 @@
 # 인수인계
 
-마지막 갱신: 2026-11-06 오후 · Claude Code(Opus 5.5) · 강의실 PC(DESKTOP-J9LV5HK) · 브랜치 `feat/35-dev-eval` · PR #39 병합 전에 씀. PR #40(`chore/tidy-menu-json`)도 병합 전. 이어받을 때 두 PR이 병합됐는지 git으로 먼저 본다.
+마지막 갱신: 2026-11-06 저녁 · Claude Code(Opus 5.5) · 집 PC(B783D5080) · 브랜치 `feat/35-dev-eval` · PR #39 병합 전에 씀. PR #40(`chore/tidy-menu-json`)도 병합 전. 이어받을 때 두 PR이 병합됐는지 git으로 먼저 본다.
 
 ## 지금 상태 한눈에
 
-- **돌아가는 시험 없음. 가설 8-2에서 멈췄다: 값 읽기 7판을 만들기로 정했고 코드는 안 고쳤다(`op_walk.py`는 6판). 계획은 `docs/experiment.md` 맨 끝. 공식 문서 대조 하위 에이전트 4개는 끝났고 보고서는 `.scratch/mvp-roundtrip/research/2026-11-06-공식문서-대조-*.md`.** 2026-11-06에 어제 판정을 다시 봐 **H1-2의 "미달" 결론을 철회했고**([188]-[191]), **측정 구멍을 고쳤다**([195], `docs/experiment.md` 가설 7, 통과). 앞의 시험 1·2, H1-1, H1-2 결과는 옛 도구로 잰 것이라 칸 목록을 그대로 쓰지 않는다.
+- **돌아가는 시험 없음. 가설 8-2에서 멈췄다: 값 읽기 7판을 만들기로 정했고 코드는 안 고쳤다(`op_walk.py`는 6판, 체크리스트도 아직 안 채움). 집 PC 준비는 끝났다(자료 대조, 공식 문서, 스킬 2개). 계획은 `docs/experiment.md` 맨 끝. 공식 문서 대조 하위 에이전트 4개는 끝났고 보고서는 `.scratch/mvp-roundtrip/research/2026-11-06-공식문서-대조-*.md`.** 2026-11-06에 어제 판정을 다시 봐 **H1-2의 "미달" 결론을 철회했고**([188]-[191]), **측정 구멍을 고쳤다**([195], `docs/experiment.md` 가설 7, 통과). 앞의 시험 1·2, H1-1, H1-2 결과는 옛 도구로 잰 것이라 칸 목록을 그대로 쓰지 않는다.
 - **목표(사용자 확인)**: "API 에서 찾아낸 값중 어떤것을 효율적으로 보내면 좋을까?". 세 묶음은 '늘 바뀌는 값' / '계산이 필요한 값' / '그 외 나머지'. 효율은 "정해진 줄 수 안에서, 필요한 값을 놓치지 않고 보내는 것". **줄 수 한도는 아직 없다**(90%·중앙 30줄은 근거가 약해 철회). 비용과 묻힘은 예상일 뿐 재지 않았다.
 - 훅이 `.venv/Scripts/python.exe`로 돈다(PR #41 병합됨, [182]). `.venv`가 없는 곳에서는 터미널 명령이 막히니 직접 터미널을 열어 만든다. 강의실 PC는 `.venv`가 있고 명령이 정상으로 돈다.
 - **방향이 바뀌었다(HISTORY [175]-[177]).** 칸을 상·중·하로 고르지 않는다(사용자 "애초에 이젠 등급을 빼기로 했으니"). 값이 움직이는 모양으로 나눈다: 늘 바뀌는 값·계산해야 아는 값은 매번(계산 값 보내는 규칙은 시험 뒤) / 일부러 바꿔야 바뀌는 값은 공장값과 다를 때만 / 그 외는 무엇이 있는지 파악. 범용으로 만들고 연습 과정 감지에도 쓴다. 사용자 "우리 범용적으로 쓸거 만드는거다".
@@ -12,7 +12,12 @@
 
 ## 다음 할 일
 
-1. **값 읽기 7판을 만들고 다시 잰다(집 PC).** 사용자 "원인을 알고 고칠 방법을 아는데 고치긴하는게 맞아보임". 공식 문서(`data/blender_api_5.2/`)가 집 PC에 없으니 먼저 받는다: `mkdir data\blender_api_5.2`, `curl -L -o data\blender_api_5.2\api.zip https://docs.blender.org/api/5.2/blender_python_reference_5_2.zip`, `.venv\Scripts\python data\eval\state_generic\api_to_text.py`. 강의실 판은 zip 99,938,764바이트, `txt` 2,191개다(공식 문서가 갱신됐으면 다를 수 있어 숫자를 견줘 알린다). 드라이브에서 아래 표의 스크립트를 받아 `data/eval/state_generic/`이 강의실 판인지 본다(`op_walk.py`에 `CUSTOM_OK`와 `read_custom`이 있어야 6판, 18,912바이트). 할 일과 기준은 `docs/experiment.md` 가설 8-2 맨 끝 "7판 계획" 1-5번. 약 1시간 20분(강의실 기준, 돈 안 듦). 시험을 돌리는 동안 `op_walk.py`를 고치지 않는다.
+1. **값 읽기 7판을 만들고 다시 잰다(집 PC, 준비 끝).** 사용자 "원인을 알고 고칠 방법을 아는데 고치긴하는게 맞아보임". 할 일과 기준은 `docs/experiment.md` 가설 8-2 맨 끝 "7판 계획". 돈 안 듦. 시험을 돌리는 동안 `op_walk.py`를 고치지 않는다.
+   1. **먼저 `experiment-checklist` 스킬을 불러** 실행 전 체크리스트를 `docs/experiment.md` 새 절에 채운다(아직 안 채움, 빈칸이 있으면 실행하지 않는다). 계획에는 "8-2의 체크리스트를 그대로"라고 적었지만 측정 대상이 바뀌었으니 가설·지표·기준을 7판에 맞춰 적는다. 판정이 다음 시험에 이 도구를 쓸지를 정하므로 설계 독립 검토는 하위 에이전트에게 맡긴다(8-2는 작은 확장이라 건너뜀, 기대 결과를 알리지 않는다). 지표와 기준은 결과를 보기 전에 사용자에게 보인다.
+   2. **쪼개서 단계마다 결과를 보고 넘어간다**(시간은 강의실 시간을 1.7로 나눈 어림값): ① `op_walk.py`를 `op_walk_v6_먼저닿은길.py`로 보관하고 7판으로 수정(5분) ② 작은 시험, 판정에 안 씀, 돌린 사실만 기록: `case_run.py 1`, `flow_run.py 검`(4분) ③ `case_run.py 3`(7분) ④ `flow_run.py`, 시간을 재므로 단독 실행(5분) ⑤ `crash_run.py --stage bg --script snap_safety.py --name <이름>`과 `--stage window`를 함께(약 23분, 상태 231개) ⑥ 칸 목록 대조. 합쳐 약 45분. 명령 앞에 `.venv\Scripts\python data\eval\state_generic\`, 창 위치는 환경 변수 `STATE_WINDOW_X=-1920`(옆 모니터, 기본값 0은 주 화면).
+   3. **실행 방식**: 세션도 하위 에이전트도 쓰지 않고 이 세션의 뒤에서 도는 명령으로 돌린다. 진행은 출력 파일로 답한다(안전 시험은 상태마다 `[n/231]` 한 줄, 정답 변화는 회마다, 흐름은 흐름마다 한 번 출력). 수정과 판정은 메인이 한다. 실행 뒤 독립 검토는 스킬대로 하위 에이전트.
+   4. **자리 이동 점검**: `flow_walk.py`가 `moved_gone`·`moved_made`에 실제 자리를 남긴다. 비교할 앞 결과는 `results/20261106/165659_flow_walk`이고 닿는 길 이동은 방패 1번 `object.delete`, 섞음 17번 노드 잇기다.
+   5. **이 PC에서 조심할 것**: 6판 시간은 이 PC에서 재지 않는다(사용자 "어 빼고해"). 기준 711초와 6판 529초는 강의실 값이라 이 PC에서는 기준이 느슨하다. 7판 예상은 약 310초(529 ÷ 1.7, 1.7배는 흐름 1번 비교)이고, 크게 길면 그때 6판을 재서 같은 PC끼리 견준다(넘는 선은 안 정함, 체크리스트에 결과 보기 전에 적는다). 칸 대조의 앞 결과도 강의실 것이라, 차이가 나오면 7판 때문인지 PC 때문인지 바로 못 가른다. 그때 이 PC에서 6판 안전 시험을 돌려 가른다(약 23분).
    그 뒤 가설 8을 마친다: ① 스컬프트 `stroke`, 네모 선택 등을 호출과 `agent-desktop drag`로 대조, 끌기 도중 값 ② 넘어간 것 표, 실행 뒤 독립 검토(스킬 지시문 그대로), 판정 ③ 판정 뒤 애드온 안건을 **한 항목씩** 묻는다: 스레드, 쿼드 뷰·카메라 시점에서 시점 값 누락, `region_3d`가 `None`이면 그 회차 전체 실패, 사본 저장 경로, "REGISTER만 기록에 남는다" 주석·`STRUCTURE.md`, 키맵·`opened` 주석, `blender_manifest.toml`. 비용과 묻힘 측정, 줄 수 한도는 아직 안 정했다.
 2. **있는 조작을 다 써 보는 시험을 만든다**(사용자 "있는건 다 써보는 테스트 만들어야 하지 않을까?"). 11-05 시험 2는 옛 도구·기본 입력이고 2,605개 중 1,552개만 실행됐다. 고친 도구와 `undo=True`로 다시 돌리고, 못 돈 조작은 조작마다 까닭을 적고, 입력 칸(`ops.json`, 공식 문서)으로 끌기 조작도 채운다. 그 뒤 '늘 바뀌는 값' 시험(아래 3-2)을 체크리스트대로 다시 잰다.
 3. **범용 시험을 이어 간다.** [계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md)(0절이 진행 상황). 사용자 "진행해 ㄱㄱ"(전수 실행, 기준 숫자 제안값, 설정 복사본 승인).
@@ -24,12 +29,13 @@
 5. 나머지 고칠 후보를 정한다. 표는 HISTORY [173] 앞의 설명과 `docs/experiment.md`. 권한 순서: 칸 보강 → 청크 쪽 한 번에(옵션 떼어 내기, 분야·묶음 이름, 같은 글 합치기, 벡터 다시 만들기 약 $0.13) → 지시문(사족 줄이기, 연습 과정 목록) → 마지막 조정(3개 합치기, 칸 12-16개). 뺀 것: 검색어 짧게(가설 6), 번역 합치기(가설 7). 보류: `low`(첫 글자 2초 목표를 바꿀 때만), 더 큰 모델(이름 선택, 안 잼).
 6. 고친 뒤 개발셋을 2-3번 돌려 **약 5개 넘게** 나아지는지 본다(지금 방식 범위 38-46개, 1-2개라던 옛 기준은 틀림). 받은 청크 수는 같은 때 함께 돌린 값끼리 견주고 문항별 변화도 본다. 답까지 재는 측정은 다 고친 뒤.
 7. 홀드아웃 "이겼다" 기준을 새 홀드아웃을 보기 전에 다시 적는다(옛 기준 HISTORY [155]).
-8. PR #39 → #40 병합(사용자 확인 뒤, 병합은 훅이 막음 → 사용자가 직접). HISTORY 끝에서 충돌 한 번([161]은 #40).
-9. 사용자가 직접 할 것: **집 PC에서 `new-setup` 적용**(main을 받고 `install.cmd -SkipMatt`, 자동 압축 600k도 이때 들어가고 켜 둔 세션은 `/exit` 뒤 `claude --continue`로 반영, `install-optional.cmd experiment-checklist`, `install-optional.cmd session-search`, new-setup HISTORY [27]), 새 셋으로 GPT 빈손 [E0]·도우미 창 시간 10문항.
+8. PR #39 → #40 병합(사용자 확인 뒤, 병합은 훅이 막음 → 사용자가 직접). HISTORY 끝에서 충돌 한 번([161]은 #40). 2026-11-06 저녁 `gh pr view`로 #39는 충돌 없음, #40은 `CONFLICTING`(어느 파일인지 안 봄).
+9. 사용자가 직접 할 것: 새 셋으로 GPT 빈손 [E0]·도우미 창 시간 10문항. 집 PC `new-setup` 적용은 끝남(아래 검증).
 10. 그 밖(뒤로): 컴퓨터 유즈 시나리오(HISTORY [157]·[158]), 티켓 37·45, Win+E로 도우미 창이 튀어나옴, 42, pstack, 연습 과정 글 고치기(HISTORY [164]). 수집 자료로 원인 횟수 세기는 보류(홀드아웃 글 번호를 읽어야 해 승인 필요, HISTORY [178]).
 
 ## 지금 상태와 검증
 
+- 집 PC에서 확인한 것(2026-11-06 저녁, 강의실 커밋 27개를 받은 뒤): pytest 637 passed. `data/eval/state_generic/` 54개 790,661바이트, `results/20261106/` 1,633개 165,904,348바이트로 기록과 같음(내용까지는 안 봄), `op_walk.py` 18,912바이트에 `CUSTOM_OK`·`read_custom` 있음(6판). 대조에 쓸 폴더 7개와 안전 시험 입력 `results/20261105/142218_bpy_classify/funcs_classified.csv` 있음. 공식 문서를 받음: zip 99,938,764바이트, `txt` 2,191개로 강의실 판과 같음. 개인설정 설치본이 `new-setup` 원본과 해시까지 같고 `autoCompactWindow` 600000 있음(`/context` 표시는 안 봄). `experiment-checklist`, `session-search`를 `install-optional.cmd`로 설치함(Claude Code·Codex·안티그래비티 모두에 들어감). 그 뒤 기록만 바꿨다.
 - 강의실 PC에서 한 것(2026-11-06 오전): 집 PC 커밋 7개를 받고 pytest 601 passed. 사용자가 드라이브에서 받은 스크립트·결과를 대조(폴더 12개, 크기 본 파일 17개 일치, 빈 파일 없음, `겹침.json`에서 0.51 재현. 나머지 파일은 하나씩 안 맞춤). 이 PC에서 `flow_run.py` 재실행으로 재현과 속도 확인. 입력 흉내 시험, 측정 구멍 조사. 그 뒤 프로그램 코드는 안 바꿈. 시험 전후 진짜 설정 파일 같음(`flow_run` 재실행은 뒤에 시각으로 확인, 그 밖에 `data/eval/state_generic/__pycache__` 2개 갱신).
 - 집 PC에서 한 것(2026-11-05 밤): main의 훅 수정을 이 브랜치에 합침(pytest 601 passed, 그 뒤 문서·`data/` 스크립트만 바꿔 다시 안 돌림). 시험 7: 충돌 자리 2개 재현(평가본 `NodeLink.is_hidden`, 다시 연 파일의 `local_view` 안의 `local_view`), H7 기준 미달 → 허용 목록. 시험 1·2 결과는 `docs/experiment.md`. 시험 스크립트는 전후로 진짜 설정·`quit.blend`·`data/`·개발 장면 폴더가 같은 것을 비교했다.
 - 강의실 PC에서 한 것(모두 PR #39 브랜치): 검색 가설 4·5·6·7·8 측정과 결론(`docs/experiment.md`, HISTORY [168]-[172]), `experiment.md`의 "차례"를 문항·질문으로 고침, `bpy` 조사 세 번과 공식 문서 대조(HISTORY [173]), 분류와 후보 표 초안(HISTORY [174]), 공장값 비교 시험(HISTORY [175]), 범용 시험 계획과 H2·H3(HISTORY [176]), 진짜 충돌과 메타볼 확인(HISTORY [177]), 숫자는 `docs/experiment.md` 작업 상태 가설 1·2. 프로그램 코드는 바꾸지 않아 pytest를 다시 돌리지 않았다(PR #36 기준 596 passed). 집 PC에서 위 스크립트를 돌린 적은 없다(Blender 경로 `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`를 스크립트에 고정함, 다르면 고칠 것).
@@ -39,6 +45,8 @@
 
 ## 모르면 실수할 것
 
+- **저장소를 받은 세션은 옛 규칙을 들고 있다**: 세션을 시작할 때 읽은 `AGENTS.md`는 `git pull` 뒤에도 그대로라, 규칙 파일이나 훅이 바뀌는 커밋을 받으면 새 세션을 연다(2026-11-06 저녁 실제로 옛 판과 달랐다, HISTORY [204]).
+- **세션과 하위 에이전트**: 오래 걸리고 도중 상태가 궁금한 일은 부모 아래 들여써 보이는 세션, 금방 끝나고 결과만 필요한 일은 하위 에이전트, 판단 없이 프로그램만 도는 시험은 뒤에서 도는 명령. 이유와 확인 범위는 HISTORY [204]. 사용량 차이는 안 쟀다.
 - **규칙이 있는 곳(2026-11-06 옮김)**: 공통 규칙은 `new-setup`의 `개인설정.md`(설치된 `~/.claude/CLAUDE.md`를 직접 고치지 않는다), 프로젝트 규칙은 `AGENTS.md`와 `docs/agents/review.md`, 실험 절차는 `experiment-checklist` 스킬이다. Claude 메모리에는 규칙을 쌓지 않는다(옮긴 파일은 `C:\WORK\trash\20261106`). 직접 입력한 `/compact`는 기록이 빠지면 훅이 한 번 막고, 10분 안에 다시 입력하면 통과한다. 훅 설정은 새 세션부터 읽힐 수 있다.
 - **측정 구멍(2026-11-06)**: 시험 1·2, H1-1, H1-2 결과와 칸 표에는 모음 자체의 칸 91개가 빠져 있고, 새 물체 값은 빈도에 안 들어가며, 긴 모음은 앞 50개만 읽는다. 사람 기록 비율을 칸 표에 그대로 곱하면 안 된다(`view3d.select`가 표에서는 입력이 없어 취소됨, 좌표를 주면 됨).
 - **사람 기록**: `%APPDATA%\blender_tutor\streams\`는 강의실 PC에 있다(183파일 2.8MB, 집 PC에는 없음). 큰 파일 5개가 사용자의 검·방패 검수 기록이다. 한 사람, 우리 연습 과정, 물체·편집 모드뿐이라 범용 근거로 쓰지 않고 조작 비율 참고로만 쓴다.
@@ -73,8 +81,9 @@
 | 결과 11-04 | 강의실, 드라이브 | `results/20261104/` | 145409_dev50_before, 160743_search_h1, 161724_search_h1b, search_h2_log.txt, search_h2_pairs_log.txt, 165335_search_h3 |
 | 결과 11-05 | 강의실, 드라이브 | `results/20261105/` | 092459_search_h4_q19, 095146_search_h4_chunk, 100827_search_h5, 102254_search_h8, 103759_search_h6, 105605_search_h7, 120433_bpy_dump(약 155MB), 135703_bpy_dump2(약 430MB), 142218_bpy_classify, 145831_bpy_classify2, 164329_state_diff, 164619_state_diff, 170618_state_base_check, 171644_state_safety_meta |
 | 시험 스크립트 11-05 밤 (드라이브에 있음, 강의실 PC에도 받음) | 집, 강의실, 드라이브 | `data/eval/state_generic/` | crash_walk·crash_run, op_walk(3판)·op_run·op_table, flow_walk·flow_run, reach_table, type_bases, 앞 판 op_walk_v1·v2, op_table_v1 |
-| 시험 스크립트 11-06 (집 PC 1번에 꼭 필요) | 강의실, 드라이브 | `data/eval/state_generic/` | **폴더 전체**(896KB). 11-06 오전 것과 오후에 고친 `op_walk.py`(6판), `op_walk_v5_커스텀없음.py`, `case_walk.py`, `crash_walk.py`, `flow_walk.py`, `doc_walk.py`, `doc_run.py`, `input_*`, `sim_cause*` 포함. `api_to_text.py`(공식 문서 본문 뽑기)도 들어 있음 |
-| 시험 결과 11-06 | 강의실, 드라이브 | `results/20261106/` | 폴더째(162MB, `165659_h8_2_safety_bg` 36MB는 멈춘 실행이라 빼도 됨). 8-2 대조에 `113739_h7_safety_bg`, `122610_h7_safety_window`, `144527_h8_safety_bg`, `144550_h8_safety_window`, `163538_h7_cases`, `165659_flow_walk`가 필요 |
+| 공식 파이썬 문서 | 강의실, 집 (드라이브 없음) | `data/blender_api_5.2/` | 받는 법: `mkdir data\blender_api_5.2`, `curl -L -o data\blender_api_5.2\api.zip https://docs.blender.org/api/5.2/blender_python_reference_5_2.zip`, `.venv\Scripts\python data\eval\state_generic\api_to_text.py` |
+| 시험 스크립트 11-06 (집 PC 1번에 꼭 필요) | 강의실, 집, 드라이브 | `data/eval/state_generic/` | **폴더 전체**(896KB). 11-06 오전 것과 오후에 고친 `op_walk.py`(6판), `op_walk_v5_커스텀없음.py`, `case_walk.py`, `crash_walk.py`, `flow_walk.py`, `doc_walk.py`, `doc_run.py`, `input_*`, `sim_cause*` 포함. `api_to_text.py`(공식 문서 본문 뽑기)도 들어 있음 |
+| 시험 결과 11-06 | 강의실, 집, 드라이브 | `results/20261106/` | 폴더째(162MB, `165659_h8_2_safety_bg` 36MB는 멈춘 실행이라 빼도 됨). 8-2 대조에 `113739_h7_safety_bg`, `122610_h7_safety_window`, `144527_h8_safety_bg`, `144550_h8_safety_window`, `163538_h7_cases`, `165659_flow_walk`가 필요 |
 | 시험 결과 11-05 밤 (드라이브에 있음, 강의실 PC에도 받음) | 집, 강의실, 드라이브 | `results/20261105/` | 기록에 숫자로 쓴 것: 191121_crash_walk2, 191735_crash_walk_window, 193217_crash_walk_wide, 193426_crash_walk_wide_line, 193446_crash_walk_wide_bg, 194118_crash_walk_reopen_bg, 194616_crash_walk_reopen_window, 200541_reach_table, 212340_op_walk3_bg, 215835_op_walk3_window, 225533_flow_walk, 225752_flow_walk. 비교용 앞 판: 201233_op_walk, 205827_op_walk2, 214347_op_walk3_window_try, 225247_flow_walk. 안 옮겨도 됨: 190443, 190510, 191518, 200732, 205253, 211823, 214219 |
 | 프로토타입 개발셋 | 강의실 | `data/eval/dev30/` | 기록은 `archive/experiment_prototype.md` |
 | API 키·벡터·모델 | PC마다 따로 | `data/.env`, `data/vectors/`, `data/models/` | 앞과 같음 |
@@ -82,6 +91,6 @@
 
 ## 참고
 
-- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[198]](HISTORY.md), [구조](STRUCTURE.md).
+- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[204]](HISTORY.md), [구조](STRUCTURE.md).
 - 검색 흐름 코드: `blender_tutor/answer_engine.py`(`REWRITE_PROMPT`, `answer`, `_rewritten`, `search`, `_widened`), `engine_setup.py`. 공식 API 문서: `https://docs.blender.org/api/5.2/`.
-- 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
+- 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해. 시험 전에 experiment-checklist 스킬로 체크리스트부터 채워.`
