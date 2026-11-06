@@ -46,6 +46,23 @@ def take_note(cwd: Path) -> str:
     return f"[직전 세션 기록 확인] {data['time']}에 세션이 끝날 때({data['reason']}) 다음 기록이 빠져 있었다. 첫 답에서 사용자에게 알리고 채운다.\n{lines}\n대화 기록 파일: {data['transcript']}"
 
 
+def unsaved_now(cwd: Path, now: datetime) -> str:
+    """지금 커밋하지 않은 파일. 끝날 때 훅이 실패했어도 잡으려고 시작할 때 직접 본다.
+    HANDOFF 날짜는 보지 않는다. 매일 첫 세션마다 울리면 습관처럼 넘기게 된다."""
+    items = [item for item in missing_records(_top(cwd), now) if item.startswith("커밋하지 않은 파일")]
+    if not items:
+        return ""
+    return "[지금 커밋하지 않은 파일] 첫 답에서 사용자에게 알린다.\n" + "\n".join(f"- {item}" for item in items[:50])
+
+
+def start_notice(cwd: Path, now: datetime) -> str:
+    """새 세션에 보낼 글. Claude의 문맥과 사용자 화면 양쪽에 보내, Claude가 말을 안 해도 사용자가 본다."""
+    text = "\n\n".join(part for part in (take_note(cwd), unsaved_now(cwd, now)) if part)
+    if not text:
+        return ""
+    return json.dumps({"systemMessage": text, "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": text}}, ensure_ascii=False)
+
+
 def main() -> None:
     sys.stdin.reconfigure(encoding="utf-8")
     sys.stdout.reconfigure(encoding="utf-8")
@@ -54,7 +71,7 @@ def main() -> None:
     if payload.get("hook_event_name") == "SessionEnd":
         save_note(cwd, payload.get("transcript_path", ""), payload.get("reason", ""), datetime.now())
     else:
-        print(take_note(cwd), end="")
+        print(start_notice(cwd, datetime.now()), end="")
 
 
 if __name__ == "__main__":

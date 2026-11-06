@@ -1898,3 +1898,11 @@
 - 만든 것: 자동 압축은 막지 않고 빠진 기록을 요약 지시문으로 넘김(`check_records_before_compact.py`). 세션이 끝날 때 빠진 기록과 대화 기록 위치를 `.git`에 적어 두고 `/clear` 직후나 다음 새 세션에 Claude에게 넘김(`notice_after_clear.py`, `SessionEnd`, `SessionStart`의 `startup|clear`). 직접 입력한 `/compact`는 전처럼 한 번 막음. 실제 `/compact`에서 막는 모습을 이날 처음 봤고(폴더 8개가 기록에 없어 막음), 줄여 적은 폴더를 기록에 채웠다(`6b29455`).
 - 시험: `tests/test_compact_check_hook.py`에 더함, 먼저 실패를 봄. 실제 `/clear`, 세션 종료, 자동 압축에서는 아직 안 눌러 봄. `SessionStart`는 `resume`에는 걸지 않았다.
 - 공식 문서 대조(Sonnet 3개): 결과를 받은 그대로 `.scratch/mvp-roundtrip/research/2026-11-06-공식문서-대조-값읽기.md`, `-조작.md`, `-애드온.md`에 둠. 판정: 값 읽기 52행(다름 2), 조작 38행(다름 1), 애드온 73행(다름 7). 사용자가 "다시보면되고"라 해서 **전체 검토는 아직 안 함.** Claude가 원문으로 본 것: 스레드("Python threads cause Blender to crash", 애드온 Sender는 도는 내내 살아 있음), 쿼드 뷰의 `region_3d`("the camera region"), 키맵("create a new one if it does not exist yet"), UI 변경 지연(`Area.ui_type`), `load_post`(시작 파일은 빈 글자), `session_uid`, `Object.local_view_get` 등. 애드온 코드는 안 고침.
+
+### [199] 2026-11-06 · 훅 일부가 실패하거나 Claude가 말을 안 해도 빠진 기록을 알 수 있게 하기 위해, 시작할 때 직접 다시 검사하고 사용자 화면에도 띄운다
+
+- 사용자: "시스템 메시지를 넣어도 훅이 실패하면 기록 안남기고 넘어가는건 동일한거잖아?", "너가 말을 안하는 케이스도 모두 고려하는게 낫겠다 안전장치란 그런거니".
+- 고침(`notice_after_clear.py`): 시작할 때 커밋하지 않은 파일을 직접 본다(끝날 때 훅이 실패한 경우). `systemMessage`와 `additionalContext` 양쪽으로 보낸다(Claude가 말을 안 하는 경우). HANDOFF 날짜는 시작 때 안 본다(매일 첫 세션마다 울리면 습관처럼 넘김).
+- 못 막는 것: 시작할 때 훅도 실패하면(`.venv`가 없는 PC 등) 알림이 없다. `/clear`를 미리 막는 길이 문서에 없어서 진짜 안전장치는 자주 커밋하는 것이다. 대화 기록 파일은 디스크에 남는다.
+- 시험: 먼저 실패를 봄. 실제 `/clear`에서 `systemMessage`가 화면에 뜨는지는 아직 안 봄.
+- `c21ee35`는 시험 2개가 실패한 채 올라갔다(명령을 실패에서 멈추게 묶지 않음). `b4664ab`에서 고침. 이후 시험 통과를 커밋 조건으로 묶는다.

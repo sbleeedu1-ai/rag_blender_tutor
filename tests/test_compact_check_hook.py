@@ -155,11 +155,31 @@ def test_기록이_빠진_채_클리어하면_새_세션에_알린다(repo):
     assert "C:/기록/세션.jsonl" in done.stdout
 
 
-def test_알림은_한_번만_한다(repo):
+def test_직전_세션_알림은_한_번만_한다(repo):
     (repo / "새파일.md").write_text("x", encoding="utf-8")
     end(repo)
-    assert "새파일.md" in start(repo).stdout
-    assert start(repo).stdout.strip() == ""
+    assert "직전 세션 기록 확인" in start(repo).stdout
+    assert "직전 세션 기록 확인" not in start(repo).stdout
+
+
+def test_끝날_때_훅이_실패했어도_시작할_때_커밋_안_한_파일을_알린다(repo):
+    (repo / "새파일.md").write_text("x", encoding="utf-8")
+    done = start(repo)  # 끝날 때 적어 둔 것이 없다
+    assert done.returncode == 0
+    assert "새파일.md" in done.stdout
+
+
+def test_시작_알림은_Claude와_사용자_화면_양쪽에_보낸다(repo):
+    (repo / "새파일.md").write_text("x", encoding="utf-8")
+    end(repo)
+    data = json.loads(start(repo).stdout)
+    assert "새파일.md" in data["hookSpecificOutput"]["additionalContext"]
+    assert data["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "새파일.md" in data["systemMessage"]
+
+
+def test_시작할_때는_HANDOFF_날짜만으로_알리지_않는다(repo):
+    assert start(repo).stdout.strip() == ""  # 매일 첫 세션마다 울리면 습관처럼 넘긴다
 
 
 def test_세션을_끝낸_뒤_새로_열어도_알린다(repo):
