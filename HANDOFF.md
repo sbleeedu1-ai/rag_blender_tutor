@@ -12,10 +12,10 @@
 
 ## 다음 할 일
 
-1. **Claude가 권한 다음 순서**: 기록(끝남) → 사용자가 `/retro` → `/compact` → `/grill-with-docs`로 줄 수 한도를 어떻게 정할지, 비용과 묻힘을 소액으로 먼저 잴지 정리 → 측정 구멍 고치기. 사용자는 아직 "1번부터 일단 남겨"까지만 답했다. **고치기는 사용자가 말할 때까지 시작하지 않는다.**
+1. **회고 정리는 끝났다(HISTORY [193]).** 다음은 2번 측정 구멍 고치기이고, 사용자 "3단계는 기다려봐"에 따라 **사용자가 말하면 시작한다.** 줄 수 한도를 어떻게 정할지, 비용과 묻힘을 소액으로 먼저 잴지도 아직 안 정했다.
 2. **측정 구멍 고치기 3단계**(대기): 91칸을 시험 7의 상태들에서 읽어 안 죽는지 확인 → 시험 도구(`data/`, 애드온 아님)가 모음 칸을 읽고 긴 모음은 전체로 비교, 새 물체 값은 따로 셈 → 정답을 아는 변화(활성 물체, 활성 수정자, 51번째 뒤 점, 작업 상태 14칸)가 전부 잡히는지 점검. 기준은 전부 잡힘.
 3. **범용 시험을 이어 간다.** [계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md)(0절이 진행 상황). 사용자 "진행해 ㄱㄱ"(전수 실행, 기준 숫자 제안값, 설정 복사본 승인).
-   1. **진행 순서(사용자가 정함)**: 가설 → 결과 보기 전에 기준 적기 → 실험 → 결과 → 이 시험의 목적 다시 보기 → 통과하면 실험 자체 점검 → 다음. 실패했다고 원인을 안 재고 방법만 바꿔 고르게 하지 않는다(메모리 `experiment-loop`, HISTORY [185]). 있는지 확인하지 않은 자료에 기대지 않는다.
+   1. **진행 순서(사용자가 정함)**: 가설 → 결과 보기 전에 기준 적기 → 실험 → 결과 → 이 시험의 목적 다시 보기 → 통과하면 실험 자체 점검 → 다음. `experiment-checklist` 스킬의 체크리스트를 채운다. 실패했다고 원인을 안 재고 방법만 바꿔 고르게 하지 않는다(HISTORY [185]). 있는지 확인하지 않은 자료에 기대지 않는다.
    2. **늘 바뀌는 값 다음 시험(안)**: 가설은 "몇 가지 작업에서 모은 작은 목록이 목록을 만들 때 쓰지 않은 작업에서 자주 바뀌는 값도 대부분 잡는다". 성격이 다른 작업 6개, 지표는 덮는 비율과 크기. 사람 기록을 참고해 선택(좌표 지정)과 시점 돌리기를 넣고, 흐름은 목록을 모르는 Sonnet 하위 에이전트가 쓴다. 숫자 기준은 사용자와 정한다.
    3. 남은 순서: 공장값 나머지(3) → 긴 작업(4, 목록 경계를 옮기면 줄 수가 변하나도 봄) → 늘 보이는 칸(5) → 계산 값(6) → 언제 읽나(8, 타이머 안에서는 `bpy.context`에 창이 없어 `objects_in_mode`가 없음) → 감지(9, 입력 흉내 원인도 여기서) → 규칙 고정 → 개발 문항 점검(10). 걸린 시간(집 PC): 시험 7 약 37분, 시험 2 화면 없음 19분(10개 동시) · 창 51분(8개 동시, CPU 80%), 흐름 3개 약 2분 20초. **강의실 PC는 약 1.7배 느리고**(같은 흐름 237초), 모니터가 1대라 창이 화면을 가린다. 창 8개 동시 시험은 집 PC 권함. `flow_run.py`는 창 위치를 x=0으로 고쳤고, 나머지 스크립트는 아직 x=-1920이다(옆 모니터가 있는 집 PC 기준).
    4. 결과는 `docs/experiment.md`에 앞 가설들과 같은 모양으로 남기고 [칸 후보 초안](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md)을 다시 쓴다.
@@ -24,7 +24,7 @@
 6. 고친 뒤 개발셋을 2-3번 돌려 **약 5개 넘게** 나아지는지 본다(지금 방식 범위 38-46개, 1-2개라던 옛 기준은 틀림). 받은 청크 수는 같은 때 함께 돌린 값끼리 견주고 문항별 변화도 본다. 답까지 재는 측정은 다 고친 뒤.
 7. 홀드아웃 "이겼다" 기준을 새 홀드아웃을 보기 전에 다시 적는다(옛 기준 HISTORY [155]).
 8. PR #39 → #40 병합(사용자 확인 뒤, 병합은 훅이 막음 → 사용자가 직접). HISTORY 끝에서 충돌 한 번([161]은 #40).
-9. 사용자가 직접 할 것: 아래 표의 2026-11-06 자료를 구글 드라이브에 올리기, 집 PC 전역 설정에 trash 규칙 넣기(Claude가 집 PC에서 하면 됨, HISTORY [191]), 새 셋으로 GPT 빈손 [E0]·도우미 창 시간 10문항.
+9. 사용자가 직접 할 것: 아래 표의 2026-11-06 자료를 구글 드라이브에 올리기, **집 PC에서 `new-setup` 적용**(main을 받고 `install.cmd -SkipMatt`, `install-optional.cmd experiment-checklist`, `install-optional.cmd session-search`, new-setup HISTORY [27]), 새 셋으로 GPT 빈손 [E0]·도우미 창 시간 10문항.
 10. 그 밖(뒤로): 컴퓨터 유즈 시나리오(HISTORY [157]·[158]), 티켓 37·45, Win+E로 도우미 창이 튀어나옴, 42, pstack, 연습 과정 글 고치기(HISTORY [164]). 수집 자료로 원인 횟수 세기는 보류(홀드아웃 글 번호를 읽어야 해 승인 필요, HISTORY [178]).
 
 ## 지금 상태와 검증
@@ -38,8 +38,7 @@
 
 ## 모르면 실수할 것
 
-- **사용자 방식**: 체크리스트 같은 기준이 있는 검토 결과는 Claude가 기준대로 판단·반영하고 정말 중요한 것 2개 안팎만 보인다(메모리). 설명은 문단 단위로, "이해되세요?" 붙이지 않기. **"차례"라고 쓰지 않고 문항·질문으로 말한다.** **조사 범위를 임의로 줄이지 않는다**("초보자 범위 밖"으로 빼지 않기, 줄이려면 먼저 묻기. 사용자 "너 멋대로 곡해한게 문제지"). 하위 에이전트 지시에 기대 결과를 넣지 않는다.
-- **사용자 방식(2026-11-06 추가)**: 지울 파일은 `C:\WORK\trash\<날짜>\<시각>_<원래 이름>`으로 옮기고 `trash/기록.txt`에 한 줄 남긴다(`rm`을 명령에 넣지 않기). 지난 얘기를 찾으라고 하면 HISTORY → 세션 기록(하루 전 → 이틀 전). 하위 에이전트는 판단하에 적극적으로, 모델·노력치는 일에 맞춰 섞어 쓴다. 기준 숫자는 다른 기준에서 빌려 오지 않고 근거를 댄다. 설명은 쉽고 짧게. **메모리와 전역 설정은 PC마다 따로다**(이 PC에 `experiment-loop`이 없었음).
+- **규칙이 있는 곳(2026-11-06 옮김)**: 공통 규칙은 `new-setup`의 `개인설정.md`(설치된 `~/.claude/CLAUDE.md`를 직접 고치지 않는다), 프로젝트 규칙은 `AGENTS.md`와 `docs/agents/review.md`, 실험 절차는 `experiment-checklist` 스킬이다. Claude 메모리에는 규칙을 쌓지 않는다(옮긴 파일은 `C:\WORK\trash\20261106`). 직접 입력한 `/compact`는 기록이 빠지면 훅이 한 번 막고, 10분 안에 다시 입력하면 통과한다. 훅 설정은 새 세션부터 읽힐 수 있다.
 - **측정 구멍(2026-11-06)**: 시험 1·2, H1-1, H1-2 결과와 칸 표에는 모음 자체의 칸 91개가 빠져 있고, 새 물체 값은 빈도에 안 들어가며, 긴 모음은 앞 50개만 읽는다. 사람 기록 비율을 칸 표에 그대로 곱하면 안 된다(`view3d.select`가 표에서는 입력이 없어 취소됨, 좌표를 주면 됨).
 - **사람 기록**: `%APPDATA%\blender_tutor\streams\`는 강의실 PC에 있다(183파일 2.8MB, 집 PC에는 없음). 큰 파일 5개가 사용자의 검·방패 검수 기록이다. 한 사람, 우리 연습 과정, 물체·편집 모드뿐이라 범용 근거로 쓰지 않고 조작 비율 참고로만 쓴다.
 - **`bpy` 쓰임**: 애드온은 읽기만 한다. `bpy.ops`와 `new`·`remove`는 부르지 않는다. 값을 자동으로 전부 훑으면 Blender가 죽을 수 있다(`is_overridable`, 평가본 `NodeLink.is_hidden` 등) → 확인한 칸 목록만 읽는다. 편집 모드 메시는 `bmesh.from_edit_mesh`로 읽고, 뒤집힌 면 계산은 복사본에서 한다(원본에 하면 사용자 메시가 고쳐짐). 뒤집힌 면 세기는 평평한 메시에서 틀린다. 공식 문서(`docs.blender.org/api/5.2`)는 도우미 검색 자료가 아니라 개발 참고용이다(명세가 뺌).
@@ -59,24 +58,25 @@
 
 **2026-11-05 저녁 상태**: 사용자가 `results/20261105/`, `data/holdout_work/`, 스크립트 12개를 올렸다고 함(드라이브에 폴더 3개 만들어진 것 확인, 08:35-08:37 UTC). **파일 단위 대조는 끝을 못 봤을 수 있어 2026-11-06 아침에 다시 한다**: 로컬 732개와 드라이브를 경로·크기·시각으로 맞춤. 스크래치 `drive_check/local.tsv`는 임시라 `data_manifest` 목록과 드라이브 도구로 다시 만든다. `data/manual_en_5.2/`는 드라이브에 zip으로만 있고 집 PC에는 폴더가 있다(사용자 말, zip은 이름 검색에 안 나와 확인 못 함). 나머지 약 3,000개는 하나씩 보지 않고 날짜로 잘랐다. 어제 업로드에서 빠진 파일은 못 잡으니, 지우기 전에는 그 폴더를 하나씩 대조한다. 전체 대조를 싸게 하려면 Google Drive 데스크톱 앱(`G:`)이 있는지 볼 것(안 물어봄).
 
-| 자료 | 위치 | 비고 |
-|---|---|---|
-| 새 개발셋 | `data/eval/dev50/` | 문항초안.md, questions.json, scenes/·states/, 검색 실험 스크립트 search_h1·h1b·h2·h2_pairs·h3·h4_q19·h4_chunk·h5·h6·h7·h8.py, state_diff.py·state_diff_run.py, `data/eval/state_generic/`(probe.py·base_check.py·probe2.py·check2.py), extra_state.py·extra/, verify/, 후보_본문.md(남의 글 발췌) |
-| 새 홀드아웃 봉인·작업 자료 | `data/holdout/`(57파일), `data/holdout_work/` | 열지 않기 |
-| 옛 홀드아웃 | `data/archive/holdout_20261103/` | 열지 않기 |
-| 홀드아웃용 질문 모음 | `data/holdout_pool/use_holdout.json` | 개발셋 글 51개를 뺀 1,115개 |
-| 질문 조사 원자료 | `data/research_raw/20261104_질문모음/` | |
-| 결과 11-04 | `results/20261104/` | 145409_dev50_before, 160743_search_h1, 161724_search_h1b, search_h2_log.txt, search_h2_pairs_log.txt, 165335_search_h3 |
-| 결과 11-05 | `results/20261105/` | 092459_search_h4_q19, 095146_search_h4_chunk, 100827_search_h5, 102254_search_h8, 103759_search_h6, 105605_search_h7, 120433_bpy_dump(약 155MB), 135703_bpy_dump2(약 430MB), 142218_bpy_classify, 145831_bpy_classify2, 164329_state_diff, 164619_state_diff, 170618_state_base_check, 171644_state_safety_meta |
-| 시험 스크립트 11-05 밤 (드라이브에 있음, 강의실 PC에도 받음) | `data/eval/state_generic/` | crash_walk·crash_run, op_walk(3판)·op_run·op_table, flow_walk·flow_run, reach_table, type_bases, 앞 판 op_walk_v1·v2, op_table_v1 |
-| **시험 스크립트 11-06 (강의실 PC에만, 드라이브에 올릴 것)** | `data/eval/state_generic/` | sim_walk·sim_run·sim_min·sim_min_run, hole_probe·hole_run, flow_run(창 위치 x=0으로 고침) |
-| **시험 결과 11-06 (강의실 PC에만, 드라이브에 올릴 것)** | `results/20261106/` | 092251_flow_walk, 094230_event_sim, 094525_event_sim_focus, 094732_event_sim_min, 095840_hole_probe |
-| 시험 결과 11-05 밤 (드라이브에 있음, 강의실 PC에도 받음) | `results/20261105/` | 기록에 숫자로 쓴 것: 191121_crash_walk2, 191735_crash_walk_window, 193217_crash_walk_wide, 193426_crash_walk_wide_line, 193446_crash_walk_wide_bg, 194118_crash_walk_reopen_bg, 194616_crash_walk_reopen_window, 200541_reach_table, 212340_op_walk3_bg, 215835_op_walk3_window, 225533_flow_walk, 225752_flow_walk. 비교용 앞 판: 201233_op_walk, 205827_op_walk2, 214347_op_walk3_window_try, 225247_flow_walk. 안 옮겨도 됨: 190443, 190510, 191518, 200732, 205253, 211823, 214219 |
-| 프로토타입 개발셋 | `data/eval/dev30/` | 기록은 `archive/experiment_prototype.md` |
-| API 키·벡터·모델 | `data/.env`, `data/vectors/`, `data/models/` | 앞과 같음 |
+| 자료 | 있는 곳 | 위치 | 비고 |
+|---|---|---|---|
+| 새 개발셋 | 강의실, 드라이브 | `data/eval/dev50/` | 문항초안.md, questions.json, scenes/·states/, 검색 실험 스크립트 search_h1·h1b·h2·h2_pairs·h3·h4_q19·h4_chunk·h5·h6·h7·h8.py, state_diff.py·state_diff_run.py, `data/eval/state_generic/`(probe.py·base_check.py·probe2.py·check2.py), extra_state.py·extra/, verify/, 후보_본문.md(남의 글 발췌) |
+| 새 홀드아웃 봉인·작업 자료 | 강의실, 드라이브 | `data/holdout/`(57파일), `data/holdout_work/` | 열지 않기 |
+| 옛 홀드아웃 | 강의실, 드라이브 | `data/archive/holdout_20261103/` | 열지 않기 |
+| 홀드아웃용 질문 모음 | 강의실, 드라이브 | `data/holdout_pool/use_holdout.json` | 개발셋 글 51개를 뺀 1,115개 |
+| 질문 조사 원자료 | 강의실, 드라이브 | `data/research_raw/20261104_질문모음/` | |
+| 결과 11-04 | 강의실, 드라이브 | `results/20261104/` | 145409_dev50_before, 160743_search_h1, 161724_search_h1b, search_h2_log.txt, search_h2_pairs_log.txt, 165335_search_h3 |
+| 결과 11-05 | 강의실, 드라이브 | `results/20261105/` | 092459_search_h4_q19, 095146_search_h4_chunk, 100827_search_h5, 102254_search_h8, 103759_search_h6, 105605_search_h7, 120433_bpy_dump(약 155MB), 135703_bpy_dump2(약 430MB), 142218_bpy_classify, 145831_bpy_classify2, 164329_state_diff, 164619_state_diff, 170618_state_base_check, 171644_state_safety_meta |
+| 시험 스크립트 11-05 밤 (드라이브에 있음, 강의실 PC에도 받음) | 집, 강의실, 드라이브 | `data/eval/state_generic/` | crash_walk·crash_run, op_walk(3판)·op_run·op_table, flow_walk·flow_run, reach_table, type_bases, 앞 판 op_walk_v1·v2, op_table_v1 |
+| **시험 스크립트 11-06 (강의실 PC에만, 드라이브에 올릴 것)** | **강의실만** | `data/eval/state_generic/` | sim_walk·sim_run·sim_min·sim_min_run, hole_probe·hole_run, flow_run(창 위치 x=0으로 고침) |
+| **시험 결과 11-06 (강의실 PC에만, 드라이브에 올릴 것)** | **강의실만** | `results/20261106/` | 092251_flow_walk, 094230_event_sim, 094525_event_sim_focus, 094732_event_sim_min, 095840_hole_probe |
+| 시험 결과 11-05 밤 (드라이브에 있음, 강의실 PC에도 받음) | 집, 강의실, 드라이브 | `results/20261105/` | 기록에 숫자로 쓴 것: 191121_crash_walk2, 191735_crash_walk_window, 193217_crash_walk_wide, 193426_crash_walk_wide_line, 193446_crash_walk_wide_bg, 194118_crash_walk_reopen_bg, 194616_crash_walk_reopen_window, 200541_reach_table, 212340_op_walk3_bg, 215835_op_walk3_window, 225533_flow_walk, 225752_flow_walk. 비교용 앞 판: 201233_op_walk, 205827_op_walk2, 214347_op_walk3_window_try, 225247_flow_walk. 안 옮겨도 됨: 190443, 190510, 191518, 200732, 205253, 211823, 214219 |
+| 프로토타입 개발셋 | 강의실 | `data/eval/dev30/` | 기록은 `archive/experiment_prototype.md` |
+| API 키·벡터·모델 | PC마다 따로 | `data/.env`, `data/vectors/`, `data/models/` | 앞과 같음 |
+| 사람 조작 기록 `streams` | **강의실만**(집 PC에 없음) | `%APPDATA%\blender_tutor\streams\` | 183파일 2.8MB, Git·드라이브 밖 |
 
 ## 참고
 
-- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[191]](HISTORY.md), [구조](STRUCTURE.md).
+- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[193]](HISTORY.md), [구조](STRUCTURE.md).
 - 검색 흐름 코드: `blender_tutor/answer_engine.py`(`REWRITE_PROMPT`, `answer`, `_rewritten`, `search`, `_widened`), `engine_setup.py`. 공식 API 문서: `https://docs.blender.org/api/5.2/`.
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`

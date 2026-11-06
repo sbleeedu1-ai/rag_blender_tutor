@@ -18,6 +18,18 @@
           }
         ]
       }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.venv/Scripts/python.exe\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/check_records_before_compact.py\"",
+            "timeout": 30
+          }
+        ]
+      }
     ]
   }
 }
