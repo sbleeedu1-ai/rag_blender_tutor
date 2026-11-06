@@ -6,6 +6,7 @@
 """
 
 import json
+import secrets
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -60,7 +61,11 @@ def start_notice(cwd: Path, now: datetime) -> str:
     text = "\n\n".join(part for part in (take_note(cwd), unsaved_now(cwd, now)) if part)
     if not text:
         return ""
-    return json.dumps({"systemMessage": text, "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": text}}, ensure_ascii=False)
+    # 훅만 아는 번호. Claude가 인용하면 파일을 스스로 찾은 것이 아니라 이 알림을 받았다는 증명이 된다
+    number = f"알림 번호 {secrets.token_hex(3)}"
+    order = (f"사용자의 첫 메시지가 무엇이든, 어떤 도구를 쓰기 전에 첫 답 맨 앞에 \"{number}\"와 아래 글을 그대로 인용한다. "
+             "받지 못한 것처럼 넘어가지 않는다. 그다음 빠진 기록을 사용자와 함께 채운다.")
+    return json.dumps({"systemMessage": f"{number}\n{text}", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": f"{order}\n\n{text}"}}, ensure_ascii=False)
 
 
 def main() -> None:

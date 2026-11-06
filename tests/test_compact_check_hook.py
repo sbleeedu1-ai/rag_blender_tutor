@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timedelta
@@ -176,6 +177,23 @@ def test_시작_알림은_Claude와_사용자_화면_양쪽에_보낸다(repo):
     assert "새파일.md" in data["hookSpecificOutput"]["additionalContext"]
     assert data["hookSpecificOutput"]["hookEventName"] == "SessionStart"
     assert "새파일.md" in data["systemMessage"]
+
+
+def test_시작_알림에_첫_답_지시와_알림_번호가_있다(repo):
+    (repo / "새파일.md").write_text("x", encoding="utf-8")
+    end(repo)
+    data = json.loads(start(repo).stdout)
+    context, screen = data["hookSpecificOutput"]["additionalContext"], data["systemMessage"]
+    number = re.search(r"알림 번호 ([0-9a-f]{6})", screen).group(1)
+    assert f"알림 번호 {number}" in context  # 화면과 Claude가 받은 번호가 같아야 훅에서 받았음을 증명한다
+    assert "도구를 쓰기 전에" in context and "첫 답" in context and "인용" in context
+
+
+def test_알림_번호는_알릴_때마다_다르다(repo):
+    (repo / "새파일.md").write_text("x", encoding="utf-8")
+    first = json.loads(start(repo).stdout)["systemMessage"]
+    second = json.loads(start(repo).stdout)["systemMessage"]
+    assert re.search(r"알림 번호 (\w+)", first).group(1) != re.search(r"알림 번호 (\w+)", second).group(1)
 
 
 def test_시작할_때는_HANDOFF_날짜만으로_알리지_않는다(repo):
