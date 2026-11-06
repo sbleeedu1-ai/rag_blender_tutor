@@ -12,7 +12,7 @@
 
 ## 다음 할 일
 
-1. **가설 8을 마친다**(`docs/experiment.md` 가설 8, HISTORY [197]). 순서: ① 공식 문서 대조 결과(스크래치패드의 `대조_값읽기.md`, `대조_조작.md`, `대조_애드온.md`, 세션이 바뀌면 다시 돌려야 할 수 있음)를 받아 `다름`을 원문으로 다시 확인하고 `.scratch/mvp-roundtrip/research/`에 남긴다 ② 움직임 경로 인자 고치기 ③ 스컬프트 `stroke`, 네모 선택 등을 호출과 `agent-desktop drag`로 대조, 끌기 도중 값 ④ 넘어간 것 표, 실행 뒤 독립 검토(스킬 지시문 그대로), 판정. 비용과 묻힘 측정, 줄 수 한도는 아직 안 정했다.
+1. **가설 8을 마친다**(`docs/experiment.md` 가설 8, HISTORY [197]·[198]). 순서: ① 공식 문서 대조 결과(`.scratch/mvp-roundtrip/research/2026-11-06-공식문서-대조-*.md`, 받은 그대로)를 사용자와 함께 다시 본다. 새 구멍 후보는 커스텀 속성(`obj["x"]`), `local_view_get` 등 상태 함수, 쿼드 뷰와 카메라 시점 값, `ViewLayer.update`. 애드온의 스레드·쿼드 뷰·`None` 항목은 사용자 판단 ② 움직임 경로 인자 고치기 ③ 스컬프트 `stroke`, 네모 선택 등을 호출과 `agent-desktop drag`로 대조, 끌기 도중 값 ④ 넘어간 것 표, 실행 뒤 독립 검토(스킬 지시문 그대로), 판정. 비용과 묻힘 측정, 줄 수 한도는 아직 안 정했다.
 2. **있는 조작을 다 써 보는 시험을 만든다**(사용자 "있는건 다 써보는 테스트 만들어야 하지 않을까?"). 11-05 시험 2는 옛 도구·기본 입력이고 2,605개 중 1,552개만 실행됐다. 고친 도구와 `undo=True`로 다시 돌리고, 못 돈 조작은 조작마다 까닭을 적고, 입력 칸(`ops.json`, 공식 문서)으로 끌기 조작도 채운다. 그 뒤 '늘 바뀌는 값' 시험(아래 3-2)을 체크리스트대로 다시 잰다.
 3. **범용 시험을 이어 간다.** [계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md)(0절이 진행 상황). 사용자 "진행해 ㄱㄱ"(전수 실행, 기준 숫자 제안값, 설정 복사본 승인).
    1. **진행 순서(사용자가 정함)**: 가설 → 결과 보기 전에 기준 적기 → 실험 → 결과 → 이 시험의 목적 다시 보기 → 통과하면 실험 자체 점검 → 다음. `experiment-checklist` 스킬의 체크리스트를 채운다. 실패했다고 원인을 안 재고 방법만 바꿔 고르게 하지 않는다(HISTORY [185]). 있는지 확인하지 않은 자료에 기대지 않는다.
@@ -77,6 +77,6 @@
 
 ## 참고
 
-- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[197]](HISTORY.md), [구조](STRUCTURE.md).
+- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[198]](HISTORY.md), [구조](STRUCTURE.md).
 - 검색 흐름 코드: `blender_tutor/answer_engine.py`(`REWRITE_PROMPT`, `answer`, `_rewritten`, `search`, `_widened`), `engine_setup.py`. 공식 API 문서: `https://docs.blender.org/api/5.2/`.
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`

@@ -108,9 +108,97 @@ def test_자동_압축은_막지_않는다(repo):
     assert run_hook(repo, "auto").returncode == 0
 
 
-def test_설정이_직접_입력한_컴팩트에만_훅을_건다():
+def test_설정이_직접_입력과_자동_압축_모두에_훅을_건다():
     settings = json.loads((HOOKS.parent / "settings.json").read_text(encoding="utf-8"))
     entries = settings["hooks"]["PreCompact"]
-    assert [entry["matcher"] for entry in entries] == ["manual"]
+    assert [entry["matcher"] for entry in entries] == ["manual|auto"]
     assert "check_records_before_compact.py" in entries[0]["hooks"][0]["command"]
-    assert "Stop" not in settings["hooks"] and "SessionEnd" not in settings["hooks"]
+    assert "Stop" not in settings["hooks"]
+
+
+def test_자동_압축은_빠진_기록을_요약_지시문으로_넘긴다(repo):
+    (repo / "새파일.md").write_text("x", encoding="utf-8")
+    done = run_hook(repo, "auto")
+    assert done.returncode == 0
+    assert "새파일.md" in done.stdout
+    assert "요약" in done.stdout
+
+
+def test_자동_압축은_기록이_다_있으면_아무것도_안_넘긴다(repo):
+    (repo / "HANDOFF.md").write_text(f"마지막 갱신: {datetime.now():%Y-%m-%d}\n", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "오늘 날짜")
+    (repo / "docs" / "experiment.md").write_text(f"results/{datetime.now():%Y%m%d}/\n", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "기록")
+    done = run_hook(repo, "auto")
+    assert done.returncode == 0
+    assert done.stdout.strip() == ""
+
+
+def run_notice(repo, **payload):
+    return subprocess.run([sys.executable, str(HOOKS / "notice_after_clear.py")], input=json.dumps({"cwd": str(repo), **payload}),
+                          capture_output=True, text=True, encoding="utf-8")
+
+
+def end(repo, reason="clear"):
+    return run_notice(repo, hook_event_name="SessionEnd", reason=reason, transcript_path="C:/기록/세션.jsonl")
+
+
+def start(repo, source="clear"):
+    return run_notice(repo, hook_event_name="SessionStart", source=source)
+
+
+def test_기록이_빠진_채_클리어하면_새_세션에_알린다(repo):
+    (repo / "새파일.md").write_text("x", encoding="utf-8")
+    assert end(repo).returncode == 0
+    done = start(repo)
+    assert done.returncode == 0
+    assert "새파일.md" in done.stdout
+    assert "C:/기록/세션.jsonl" in done.stdout
+
+
+def test_알림은_한_번만_한다(repo):
+    (repo / "새파일.md").write_text("x", encoding="utf-8")
+    end(repo)
+    assert "새파일.md" in start(repo).stdout
+    assert start(repo).stdout.strip() == ""
+
+
+def test_세션을_끝낸_뒤_새로_열어도_알린다(repo):
+    (repo / "새파일.md").write_text("x", encoding="utf-8")
+    end(repo, "prompt_input_exit")
+    assert "새파일.md" in start(repo, "startup").stdout
+
+
+def test_빠진_기록이_없으면_알리지_않는다(repo):
+    (repo / "HANDOFF.md").write_text(f"마지막 갱신: {datetime.now():%Y-%m-%d}\n", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "오늘 날짜")
+    end(repo)
+    assert start(repo).stdout.strip() == ""
+
+
+def test_다음_종료에_기록이_채워졌으면_옛_알림을_지운다(repo):
+    (repo / "새파일.md").write_text("x", encoding="utf-8")
+    end(repo)
+    (repo / "HANDOFF.md").write_text(f"마지막 갱신: {datetime.now():%Y-%m-%d}\n", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "채움")
+    end(repo)
+    assert start(repo).stdout.strip() == ""
+
+
+def test_종료_알림은_git_상태에_안_나타난다(repo):
+    (repo / "새파일.md").write_text("x", encoding="utf-8")
+    end(repo)
+    status = subprocess.run(["git", "-C", str(repo), "status", "--porcelain"], capture_output=True, text=True, encoding="utf-8").stdout
+    assert status.strip() == "?? 새파일.md"
+
+
+def test_설정이_세션_끝과_시작에_알림_훅을_건다():
+    settings = json.loads((HOOKS.parent / "settings.json").read_text(encoding="utf-8"))
+    assert "notice_after_clear.py" in settings["hooks"]["SessionEnd"][0]["hooks"][0]["command"]
+    begin = settings["hooks"]["SessionStart"][0]
+    assert begin["matcher"] == "startup|clear"
+    assert "notice_after_clear.py" in begin["hooks"][0]["command"]

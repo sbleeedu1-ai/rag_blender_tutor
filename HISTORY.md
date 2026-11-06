@@ -1890,3 +1890,11 @@
 - 조작 쪽 결론(사용자 "그럼 조작쪽 결론은 난거임?"): 시험은 `undo=True`, `agent-desktop`은 대조용, UI Automation은 Blender 안을 못 읽어 도우미 창에만, `event_simulate`는 이 PC에서 안 됨.
 - 규칙: `AGENTS.md`에 Blender 동작의 전제는 공식 문서로 확인, `experiment-checklist`에 도구의 동작 칸과 검토 8번, 못 만듦은 HISTORY와 공식 문서까지(new-setup HISTORY [30]).
 - 사고: Claude가 임시 스크립트 지우기를 명령에 넣어 삭제 훅이 떴고 사용자가 거절. 임시 파일은 지우지 않기로 함.
+
+### [198] 2026-11-06 · 기록이 빠진 채 대화가 줄거나 끝나도 잃지 않게 하기 위해, 자동 압축과 클리어·세션 종료에 기록 확인 훅을 더하고 공식 문서 대조 결과를 문서로 남긴다
+
+- 사용자: "아 ㅇㅋ 근데 이거 클리어 전에 빼자고 했잖아? 넣는게 좋겠다. 또 오토 컴팩트는 훅으로 못 막나?" → Claude가 공식 문서(`code.claude.com/docs/en/hooks`)를 읽고 답하고 3가지를 제안, 사용자 "ㅇㅋ", 이어서 "지금 컴팩트 말고 하던 훅만들기나 하라고 하위 에이전트 결과는 받은 그대로 따로 문서만들어두고 다시보면되고". [193]의 "클리어 세션 종료는 하지말자"를 바꾼 결정이다.
+- 문서로 확인한 것: `/clear`를 미리 막는 훅은 없고 `SessionEnd`는 막지 못한다. 자동 압축은 막을 수 있으나 한도 오류 복구 중이면 그 요청이 실패한다. PreCompact가 막지 않고 끝날 때 일반 출력은 압축 요약의 지시문이 된다. [193]과 훅 주석의 "일반 출력은 디버그 로그로 간다"는 이 내용이 빠져 있었다.
+- 만든 것: 자동 압축은 막지 않고 빠진 기록을 요약 지시문으로 넘김(`check_records_before_compact.py`). 세션이 끝날 때 빠진 기록과 대화 기록 위치를 `.git`에 적어 두고 `/clear` 직후나 다음 새 세션에 Claude에게 넘김(`notice_after_clear.py`, `SessionEnd`, `SessionStart`의 `startup|clear`). 직접 입력한 `/compact`는 전처럼 한 번 막음. 실제 `/compact`에서 막는 모습을 이날 처음 봤고(폴더 8개가 기록에 없어 막음), 줄여 적은 폴더를 기록에 채웠다(`6b29455`).
+- 시험: `tests/test_compact_check_hook.py`에 더함, 먼저 실패를 봄. 실제 `/clear`, 세션 종료, 자동 압축에서는 아직 안 눌러 봄. `SessionStart`는 `resume`에는 걸지 않았다.
+- 공식 문서 대조(Sonnet 3개): 결과를 받은 그대로 `.scratch/mvp-roundtrip/research/2026-11-06-공식문서-대조-값읽기.md`, `-조작.md`, `-애드온.md`에 둠. 판정: 값 읽기 52행(다름 2), 조작 38행(다름 1), 애드온 73행(다름 7). 사용자가 "다시보면되고"라 해서 **전체 검토는 아직 안 함.** Claude가 원문으로 본 것: 스레드("Python threads cause Blender to crash", 애드온 Sender는 도는 내내 살아 있음), 쿼드 뷰의 `region_3d`("the camera region"), 키맵("create a new one if it does not exist yet"), UI 변경 지연(`Area.ui_type`), `load_post`(시작 파일은 빈 글자), `session_uid`, `Object.local_view_get` 등. 애드온 코드는 안 고침.
