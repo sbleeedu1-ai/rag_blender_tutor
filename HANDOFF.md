@@ -12,8 +12,8 @@
 
 ## 다음 할 일
 
-1. **회고 정리는 끝났다(HISTORY [193]).** 다음은 2번 측정 구멍 고치기이고, 사용자 "3단계는 기다려봐"에 따라 **사용자가 말하면 시작한다.** 줄 수 한도를 어떻게 정할지, 비용과 묻힘을 소액으로 먼저 잴지도 아직 안 정했다.
-2. **측정 구멍 고치기 3단계**(대기): 91칸을 시험 7의 상태들에서 읽어 안 죽는지 확인 → 시험 도구(`data/`, 애드온 아님)가 모음 칸을 읽고 긴 모음은 전체로 비교, 새 물체 값은 따로 셈 → 정답을 아는 변화(활성 물체, 활성 수정자, 51번째 뒤 점, 작업 상태 14칸)가 전부 잡히는지 점검. 기준은 전부 잡힘.
+1. **회고 정리와 코드 검토는 끝났다(HISTORY [193]·[194]).** 다음은 2번 측정 구멍 고치기다(사용자 압축 지시 "다음은 측정 구멍 고치기다"). `experiment-checklist` 체크리스트를 채워 결과를 보기 전에 가설과 기준을 사용자에게 보인다. 줄 수 한도를 어떻게 정할지, 비용과 묻힘을 소액으로 먼저 잴지도 아직 안 정했다.
+2. **측정 구멍 고치기 3단계**: 91칸을 시험 7의 상태들에서 읽어 안 죽는지 확인 → 시험 도구(`data/`, 애드온 아님)가 모음 칸을 읽고 긴 모음은 전체로 비교, 새 물체 값은 따로 셈 → 정답을 아는 변화(활성 물체, 활성 수정자, 51번째 뒤 점, 작업 상태 14칸)가 전부 잡히는지 점검. 기준은 전부 잡힘.
 3. **범용 시험을 이어 간다.** [계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md)(0절이 진행 상황). 사용자 "진행해 ㄱㄱ"(전수 실행, 기준 숫자 제안값, 설정 복사본 승인).
    1. **진행 순서(사용자가 정함)**: 가설 → 결과 보기 전에 기준 적기 → 실험 → 결과 → 이 시험의 목적 다시 보기 → 통과하면 실험 자체 점검 → 다음. `experiment-checklist` 스킬의 체크리스트를 채운다. 실패했다고 원인을 안 재고 방법만 바꿔 고르게 하지 않는다(HISTORY [185]). 있는지 확인하지 않은 자료에 기대지 않는다.
    2. **늘 바뀌는 값 다음 시험(안)**: 가설은 "몇 가지 작업에서 모은 작은 목록이 목록을 만들 때 쓰지 않은 작업에서 자주 바뀌는 값도 대부분 잡는다". 성격이 다른 작업 6개, 지표는 덮는 비율과 크기. 사람 기록을 참고해 선택(좌표 지정)과 시점 돌리기를 넣고, 흐름은 목록을 모르는 Sonnet 하위 에이전트가 쓴다. 숫자 기준은 사용자와 정한다.
@@ -77,6 +77,6 @@
 
 ## 참고
 
-- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[193]](HISTORY.md), [구조](STRUCTURE.md).
+- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[194]](HISTORY.md), [구조](STRUCTURE.md).
 - 검색 흐름 코드: `blender_tutor/answer_engine.py`(`REWRITE_PROMPT`, `answer`, `_rewritten`, `search`, `_widened`), `engine_setup.py`. 공식 API 문서: `https://docs.blender.org/api/5.2/`.
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`

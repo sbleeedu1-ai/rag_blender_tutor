@@ -83,6 +83,13 @@ def test_10분이_지나면_다시_막는다(repo):
     assert hook.decide(repo, NOW + timedelta(minutes=11)) is not None
 
 
+def test_하위_폴더에서_불러도_저장소_맨_위를_본다(repo):
+    below = repo / "docs"
+    assert hook.decide(below, NOW) is None  # HANDOFF가 있는데 없다고 막으면 안 된다
+    (repo / "results" / "20261106" / "101010_new_run").mkdir()
+    assert "101010_new_run" in hook.decide(below, NOW)  # 오늘 결과 점검도 빠지면 안 된다
+
+
 def run_hook(repo, trigger):
     payload = json.dumps({"hook_event_name": "PreCompact", "trigger": trigger, "cwd": str(repo)})
     return subprocess.run([sys.executable, str(HOOKS / "check_records_before_compact.py")], input=payload,

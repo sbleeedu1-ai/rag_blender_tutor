@@ -43,8 +43,9 @@ def missing_records(repo: Path, now: datetime) -> list[str]:
     return _unwritten_results(repo, now) + unsaved + _stale_handoff(repo, now)
 
 
-def decide(repo: Path, now: datetime) -> str | None:
-    """막을 까닭 글, 통과면 None."""
+def decide(cwd: Path, now: datetime) -> str | None:
+    """막을 까닭 글, 통과면 None. Claude가 하위 폴더에 있어도 저장소 맨 위를 본다."""
+    repo = Path(_git(cwd, "rev-parse", "--show-toplevel").strip())
     missing = missing_records(repo, now)
     # 저장소 밖으로 나가지 않고 커밋되지도 않는 자리에 "한 번 막았다"를 적는다
     marker = repo / _git(repo, "rev-parse", "--git-dir").strip() / "compact_check_asked"
