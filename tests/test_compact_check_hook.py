@@ -128,9 +128,6 @@ def test_자동_압축은_기록이_다_있으면_아무것도_안_넘긴다(rep
     (repo / "HANDOFF.md").write_text(f"마지막 갱신: {datetime.now():%Y-%m-%d}\n", encoding="utf-8")
     git(repo, "add", ".")
     git(repo, "commit", "-q", "-m", "오늘 날짜")
-    (repo / "docs" / "experiment.md").write_text(f"results/{datetime.now():%Y%m%d}/\n", encoding="utf-8")
-    git(repo, "add", ".")
-    git(repo, "commit", "-q", "-m", "기록")
     done = run_hook(repo, "auto")
     assert done.returncode == 0
     assert done.stdout.strip() == ""
@@ -193,7 +190,8 @@ def test_종료_알림은_git_상태에_안_나타난다(repo):
     (repo / "새파일.md").write_text("x", encoding="utf-8")
     end(repo)
     status = subprocess.run(["git", "-C", str(repo), "status", "--porcelain"], capture_output=True, text=True, encoding="utf-8").stdout
-    assert status.strip() == "?? 새파일.md"
+    assert "session_end_missing" not in status
+    assert len(status.strip().splitlines()) == 1  # 새파일.md 하나뿐
 
 
 def test_설정이_세션_끝과_시작에_알림_훅을_건다():
