@@ -2111,5 +2111,5 @@
 
 - 계기: 사용자가 GPT 대화(`chatgpt.com/c/6aeb3a6e-…`)를 받아 오게 함(집 PC `Downloads\딥시크_하네스_설명_전문.md`, 메시지 65개, 1,965줄, 저장소에 안 넣음). 사용자 "어쨌든 추가해두긴 해야하는데".
 - 이미 기록에 있던 것: agent-desktop·security-audit·pstack 계획([156]), agent-desktop 시험([157]), 세션 전체 `/retro`([192]), 용어집 이름 `GLOSSARY.md` 대 `CONTEXT.md`(`docs/agents/domain.md`가 이미 처리).
-- 새로 남길 것(모두 GPT의 설명, Claude가 원문을 확인하지 않음): Matt `chief-of-staff`(총괄은 방향만 잡고 일은 하위 에이전트에 나누며 결정을 위키로 쌓음, 아직 `in-progress`) · pstack `/automate-me`(지난 대화에서 작업 습관을 뽑아 개인 스킬로, 원래 Cursor 기록을 읽음)·`/reflect`(교훈을 스킬 수정으로)·`/correct`(되풀이 실수의 구조적 예방)·`hillclimb`(지표 하나를 재고 고치기 반복) · 사용자가 찾은 지난 버그마다 고치기 전엔 실패하고 뒤엔 통과하는 회귀 테스트 만들기(엉클 밥 글과 연결, [192]는 훅·점검표였고 이건 안 함) · claude-mem(HANDOFF와 함께 쓰며 비교) · Impeccable(도우미 창 UI 손볼 때).
+- 새로 남길 것(모두 GPT의 설명, Claude가 원문을 확인하지 않음): Matt `chief-of-staff`(총괄은 방향만 잡고 일은 하위 에이전트에 나누며 결정을 위키로 쌓음, 아직 `in-progress`) · pstack `/automate-me`(지난 대화에서 작업 습관을 뽑아 개인 스킬로, 원래 Cursor 기록을 읽음)·`/reflect`(교훈을 스킬 수정으로)·`/correct`(되풀이 실수의 구조적 예방)·`hillclimb`(지표 하나를 재고 고치기 반복) · 사용자가 찾은 지난 버그마다 고치기 전엔 실패하고 뒤엔 통과하는 회귀 테스트 만들기(GPT 자신의 제안. GPT가 정리한 엉클 밥 글의 검증 표는 단위·인수·QA·변이 테스트와 정적 검사이고 회귀 테스트는 없음, 원문은 안 봄. [192]는 훅·점검표였고 이건 안 함) · claude-mem(HANDOFF와 함께 쓰며 비교) · Impeccable(도우미 창 UI 손볼 때).
 - 언제: pstack 시험(티켓을 다 끝낸 뒤, [156])에 함께 본다. 지금 9단계 작업에는 넣지 않는다.
