@@ -27,6 +27,7 @@ _DOC_CELL = "도구의 동작"
 _DOC_TOOL = "api_doc.py"
 _DOC_NAME = re.compile(r"bpy(?:\.\w+)+", re.ASCII)  # 이름 바로 뒤에 붙은 조사를 이름에 넣지 않는다
 _RECENT_SESSIONS = 10  # 세션 기록 하나가 10MB가 넘을 수 있어 훅 제한 시간 안에 읽을 만큼만 본다
+_RECENT_SUBAGENTS = 30  # 하위 에이전트 기록은 작아서 더 많이 본다. 동시에 도는 작업이 여럿이라 최근 것만으로는 모자란다
 _HOW_TO_GOAL = (
     "experiment-checklist 스킬대로 기대 결과를 모르는 하위 에이전트에게 최종 목표 원문을 주고 "
     "\"이 시험이 통과할 때와 실패할 때 최종 답이 각각 어떻게 달라지나\"를 물어 답을 그 칸에 적은 뒤 다시 실행하세요. "
@@ -112,7 +113,9 @@ def missing_step(record: str, prompts: list[str], doc_commands: list[str]) -> st
 def session_calls(transcript_path: str) -> tuple[list[str], list[str]]:
     """이 프로젝트의 최근 세션 기록에서 하위 에이전트 프롬프트와 문서 도구 명령을 모은다."""
     folder = Path(transcript_path).parent
-    logs = sorted(folder.glob("*.jsonl"), key=lambda log: log.stat().st_mtime, reverse=True)[:_RECENT_SESSIONS]
+    newest = lambda found: sorted(found, key=lambda log: log.stat().st_mtime, reverse=True)
+    # 하위 에이전트의 호출은 `<세션>/subagents/` 아래 따로 남아, 그쪽도 최근 것을 본다(HISTORY [236])
+    logs = newest(folder.glob("*.jsonl"))[:_RECENT_SESSIONS] + newest(folder.glob("*/subagents/*.jsonl"))[:_RECENT_SUBAGENTS]
     prompts, doc_commands = [], []
     for log in logs:
         # 지금 쓰이는 세션은 마지막 줄이 덜 적혀 있을 수 있어 완성된 줄만 읽는다

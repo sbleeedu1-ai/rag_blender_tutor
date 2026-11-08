@@ -126,6 +126,13 @@ def test_세션_기록에서_하위_에이전트_프롬프트만_모은다(tmp_p
     assert sorted(hook.session_calls(str(tmp_path / "이번.jsonl"))[0]) == ["이번 세션 호출", "지난 세션 호출"]
 
 
+def test_하위_에이전트_기록의_호출도_모은다(tmp_path):
+    _log(tmp_path / "세션.jsonl", _call("Agent", "부모 호출"))
+    (tmp_path / "세션" / "subagents").mkdir(parents=True)
+    _log(tmp_path / "세션" / "subagents" / "agent-a1.jsonl", _call("Agent", "하위 호출"))
+    assert sorted(hook.session_calls(str(tmp_path / "세션.jsonl"))[0]) == ["부모 호출", "하위 호출"]
+
+
 def _command(name, command):
     return {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": name, "input": {"command": command}}]}}
 
