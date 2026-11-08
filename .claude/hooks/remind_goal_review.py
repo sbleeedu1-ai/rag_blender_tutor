@@ -2,10 +2,12 @@
 (PreToolUse, Bash·PowerShell). HISTORY [212]·[213].
 
 - 시험을 띄우는 명령만 본다: `state_generic`의 `*_run.py`를 파이썬으로 실행하거나, `state_generic`의 스크립트를 Blender `--python`으로 넘기는 명령.
-- `docs/experiment.md` 마지막 절: `- [x] 목표 검토:`가 있고 `- [x] 결과:`가 아직 없어야 한다. 결과가 적힌 절은 끝난 실험이라 새 절을 요구한다.
-- `목표 검토` 칸이 있는 앞 절: 실행 뒤 칸을 모두 채웠어야 한다. 이 칸이 없는 옛 절은 보지 않는다.
+- `docs/experiment.md`에서 `- [x] 목표 검토:`가 있고 `- [x] 결과:`가 아직 없는 절은 모두 진행 중인 시험이다. 여러 시험을 동시에 돌릴 수 있게, 마지막 절 하나만 진행 중으로 보지 않는다(HISTORY [235]).
+- 진행 중인 절이 하나도 없으면 막는다. 결과가 적힌 절은 끝난 실험이라 새 절을 요구한다. 마지막 절에 결과도 목표 검토도 없으면 새 시험의 칸이 빠진 것으로 본다.
+- 결과가 적힌 절 가운데 `목표 검토` 칸이 있는 절: 실행 뒤 칸을 모두 채웠어야 한다. 이 칸이 없는 옛 절은 보지 않는다.
 - 세션 기록: 두 검토마다 프롬프트에 절 제목과 칸 이름이 든 하위 에이전트 호출이 있어야 한다. 이 PC의 최근 세션만 찾는다.
-- 공식 문서: 마지막 절에 `도구의 동작` 칸이 있어야 하고, 그 칸의 `bpy.` 이름마다 `.claude/tools/api_doc.py`를 돌린 명령이 세션 기록에 있어야 한다(HISTORY [214]).
+- 공식 문서: 진행 중인 절마다 `도구의 동작` 칸이 있어야 하고, 그 칸의 `bpy.` 이름마다 `.claude/tools/api_doc.py`를 돌린 명령이 세션 기록에 있어야 한다(HISTORY [214]).
+- 명령이 어느 절의 시험인지는 모른다. 진행 중인 절을 모두 검사하고, 버려져 결과를 끝내 안 적은 절은 진행 중으로 남는다.
 - `목표 검토` 칸에 "판정에 안 씀"이라고 적은 절은 칸만 보고 세션 기록과 실행 뒤 칸은 보지 않는다.
 - 호출이 있었는지만 본다. 답의 내용이나 칸에 그대로 옮겼는지, 문서를 제대로 읽었는지, 칸에 적지 않은 이름은 보지 못한다.
 """
@@ -78,7 +80,7 @@ def _unread_docs(section: list[str], doc_commands: list[str]) -> str | None:
     """`도구의 동작` 칸이 없거나, 칸에 적은 이름을 문서 도구로 보지 않았을 때의 설명."""
     cell = _cell(section, _DOC_CELL)
     if cell is None:
-        return f"마지막 실험 절에 `- [x] {_DOC_CELL}:` 칸이 없습니다. 시험이 기대는 동작의 근거를 적으세요."
+        return f"실험 절 `{_title(section)}`에 `- [x] {_DOC_CELL}:` 칸이 없습니다. 시험이 기대는 동작의 근거를 적으세요."
     unread = [name for name in dict.fromkeys(_DOC_NAME.findall(cell)) if not any(name in command for command in doc_commands)]
     if unread:
         return f"`{_DOC_CELL}` 칸의 {', '.join(unread)}를 문서 도구로 본 기록이 없습니다. 이 세션에서 `.venv\\Scripts\\python .claude\\tools\\api_doc.py <이름>`으로 항목 전체를 읽으세요."
@@ -90,18 +92,20 @@ def missing_step(record: str, prompts: list[str], doc_commands: list[str]) -> st
     sections = _sections(record)
     if not sections:
         return "docs/experiment.md에 실험 절이 없습니다."
-    last = sections[-1]
-    for section in sections[:-1]:
-        if problem := _unfinished(section, prompts):
+    for section in sections:
+        if _cell(section, "결과") and (problem := _unfinished(section, prompts)):
             return problem
-    if _cell(last, "결과"):
-        return _unfinished(last, prompts) or "마지막 실험 절은 결과까지 적혀 끝났습니다. 새 시험이면 새 절을 쓰고 체크리스트부터 채우세요."
-    if _cell(last, _GOAL) is None:
+    last = sections[-1]
+    if not _cell(last, "결과") and _cell(last, _GOAL) is None:
         return f"마지막 실험 절에 `- [x] {_GOAL}:` 칸이 없습니다. {_HOW_TO_GOAL}"
-    if _needs_after_cells(last):
-        if problem := _unasked(last, _GOAL, prompts):
+    running = [section for section in sections if not _cell(section, "결과") and _cell(section, _GOAL)]
+    if not running:
+        return "결과가 아직 없는 실험 절이 없습니다. 새 시험이면 새 절을 쓰고 체크리스트부터 채우세요."
+    for section in filter(_needs_after_cells, running):
+        if problem := _unasked(section, _GOAL, prompts):
             return f"{problem} {_HOW_TO_GOAL}"
-        return _unread_docs(last, doc_commands)
+        if problem := _unread_docs(section, doc_commands):
+            return problem
     return None
 
 

@@ -77,6 +77,23 @@ def test_빠진_절차를_알려_준다(record, prompts, word):
     assert word in hook.missing_step(record, prompts, [])
 
 
+FRONT = "[E2] 먼저 시작한 시험"
+FRONT_OPEN = f"### {FRONT}\n- [x] 목표 검토: 답\n- [x] 도구의 동작: 실행으로 확인\n\n"
+
+
+def test_결과가_없는_절은_모두_진행_중으로_본다():
+    # 동시에 도는 시험: 앞 절이 마지막이 아니어도 실행 뒤 칸을 요구하지 않는다(HISTORY [235])
+    assert hook.missing_step(FRONT_OPEN + OPEN, ASKED + [f"{FRONT} 목표 검토"], []) is None
+    finished_last = FRONT_OPEN + f"### [E2] 끝난 시험\n- [x] 목표 검토: 답\n{AFTER}"
+    assert hook.missing_step(finished_last, [f"{FRONT} 목표 검토", "[E2] 끝난 시험 실행 뒤 독립 검토"], []) is None
+
+
+def test_진행_중인_앞_절도_검토와_문서를_본다():
+    assert "호출이 없" in hook.missing_step(FRONT_OPEN + OPEN, ASKED, [])
+    no_doc = f"### {FRONT}\n- [x] 목표 검토: 답\n\n"
+    assert "도구의 동작" in hook.missing_step(no_doc + OPEN, ASKED + [f"{FRONT} 목표 검토"], [])
+
+
 def test_문서_칸이_없으면_막는다():
     assert "도구의 동작" in hook.missing_step(GOAL_ONLY, ASKED, [])
 
