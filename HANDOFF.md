@@ -1,6 +1,6 @@
 # 인수인계
 
-마지막 갱신: 2026-11-08 03:40 사용량 한도 직전(HISTORY [229]까지 기록, 안 닿은 칸 작업만 보고 못 받음: 그 결과 폴더를 직접 보고 이어 감) · Claude Code(Opus 5.5) · 집 PC(B783D5080) · 브랜치 `feat/35-dev-eval` · PR #39 병합 전에 씀. PR #40(`chore/tidy-menu-json`)도 병합 전. 이어받을 때 두 PR이 병합됐는지 git으로 먼저 본다.
+마지막 갱신: 2026-11-08 11:20 재부팅 뒤 ·Claude Code(Opus 5.5) · 집 PC(B783D5080) · 브랜치 `feat/35-dev-eval` · PR #39 병합 전에 씀. PR #40(`chore/tidy-menu-json`)도 병합 전. 이어받을 때 두 PR이 병합됐는지 git으로 먼저 본다.
 
 ## 지금 상태 한눈에
 
