@@ -1690,3 +1690,397 @@ Sonnet(노력치 기본), 첫 설계의 절, 두 파일 전체(7판·`op_run.py`
 | (고치며 찾음) 영역 문맥 + `undo=True`가 화면 없는 Blender에서 죽음 | 본 실행을 `undo=False`로, `undo` 영향은 따로 잼(측정 점검 4) |
 
 첫 목표 검토(첫 설계): Sonnet(노력치 기본). 답: 이 시험은 보낼 값 목록을 바로 바꾸지 않고, 그 재료인 칸 전수표의 근거를 바꾼다. 확정 못 하는 것: 어떤 값을 보낼지와 줄 한도 안에서 놓치지 않는지, 실제 작업 파일에서도 같은지(9단계 3·7번), 상태 범위.
+
+### [E2] 함수 전수 · 9판이 안 부른 읽기 함수 1,854개를 불러 값의 모양·크기·시간 또는 까닭을 함수마다 남기는가 · 2026-11-08
+
+티켓 46 9단계의 5번 중 함수 몫이다. 1,854개는 `results/20261107/031654_값_전수표/함수_전수표.csv`(1,862줄)에서 "9판 닿은 상태 수(창)"가 0인 함수다(`h9_cover.py:133`과 같은 정의, 9판이 부른 8개는 `Object.select_get` 등 선택·숨김 함수). 이름별로 `is_registered_node_type` 561 · `input_template` 560 · `output_template` 560(노드 클래스 함수 1,681)과 나머지 173개다. 11-05 앞 조사(`results/20261105/135703_bpy_dump2/func_call_rows.jsonl`)는 이 중 1,764개를 한 장면에서 불러 돌려준 타입만 적었고(값의 모양·크기·시간 없음), 34개는 값을 바꿀까 봐 안 불렀고, 43개는 실물이 없었고, 2개(`DynamicPaintSurface.output_exists`, `XrSessionState.action_state_get`)는 부르면 죽었다.
+
+**이 절을 늦게 넣은 까닭:** 시험 전 훅(`.claude/hooks/remind_goal_review.py`)이 하위 에이전트의 호출 기록을 못 읽어, 이 절을 넣으면 다른 시험까지 막혔다. 그래서 1·2차는 스크래치패드에 절을 두고 돌렸고, 훅을 고친 뒤(HISTORY [235]·[236]) 3차 전에 넣었다. 1·2차의 결과는 아래 "중간 결과"이고, 결과 칸은 3차 뒤에 쓴다.
+
+도구(`data/`는 git 밖이라 결과 폴더 `코드/`에 사본): 실행기 `data/eval/state_generic/func_run.py`, Blender 안쪽 `func_walk.py`. 상태는 안 닿은 칸 채우기와 같은 `crash_walk.STATES` + `fill_states.STATES` 255개를 그대로 만든다(2개 제외, 아래).
+- 상태마다 포인터·모음 칸만 따라가(값은 안 읽음) 타입마다 실물을 6개까지 모은다. 같은 타입 모음은 앞 8개, 여러 타입이 섞이는 모음은 실제 타입마다 4개, 자료(ID) 모음은 200개까지. 모음 묶음 타입(`KeyMaps`·`AttributeGroupMesh` 등)은 모음 자체를 실물로 둔다. 평가본은 원본을 다 모은 뒤 따라간다. 함수가 돌려줘야만 생기는 타입(`OperatorProperties`·`GizmoGroupProperties`·`IDPropertyWrapPtr`)은 그것을 돌려주는 함수(`WindowManager.operator_properties_last`, `WorkSpaceTool.operator_properties`·`gizmo_group_properties`, `MovieStrip`·`MovieClip.metadata`)를 불러 실물로 더한 뒤 한 번 더 돈다.
+- 클래스 함수(`use_self` 거짓)는 클래스에, 나머지는 실물에 부른다. 입력은 필수 입력만(`Property.is_required`) 칸 정의의 기본값(범위로 자름)으로 만들고, 행렬 칸은 단위 행렬, 파일 경로는 상자 TEMP, 포인터는 그 타입 실물(실패하면 다른 실물로 세 번까지), 실물도 6개까지 바꿔 본다. 41개 함수는 공식 문서의 입력 설명대로 뜻 있는 값을 준다(`func_walk.SPECIAL`: 모음의 첫 항목 이름·`data_path`, 같은 나무의 짝 출력 노드, 다른 키 설정의 같은 이름 키맵 등). `KeyMap.restore_*`는 사용자 키 설정의 키맵에 부른다(까닭 글 "must be a user keymap"). `Pose`의 클래스 함수 2개는 문맥의 활성 물체에 포즈가 있을 때만 부른다(문서가 "this pose"를 바꾼다고 적고 self가 없음, 공장 상태에서 `backup_restore`가 Blender를 죽임).
+- `input_template`·`output_template`은 공식 문서 "index (in [0, inf])"대로 0부터 없음(None)이나 예외가 날 때까지(64개까지) 부르고, 틀(이름·타입·identifier) 수와 끝난 자리를 남긴다. index 0부터 예외면 "오류".
+- 값이 나오면 모양(종류·길이·행렬 크기)·JSON 글자 수·40자 예·부른 시간(ms)을 남긴다. 장면이 안 바뀌고 50ms 안이면 4번 더 불러 시간을 잰다. 값을 바꿀까 봐 11-05가 안 부른 34개는 상태마다 뒤에 한 번만, 부르면 죽는다고 기록된 2개는 상태마다 맨 뒤에 부른다. 부르기 앞뒤로 장면 요약(자료 수·물체 이름·위치·모드·메시 점·면 수·시퀀서 조각 수·키 설정별 키맵 항목 수·프레임·조작 기록 수)을 견줘 "장면 바뀜"을 적는다.
+- 오류의 까닭 글이 조건을 알려 주면 한 번 만들고 다시 부른다(줄에 "준비"): `PoseBone` "not a B-Bone" → `bbone_segments=4`, `ParticleSystem` "no VCol data" → 메시에 `BYTE_COLOR`·`CORNER` 색 속성, "need to step the sim" → 프레임 한 칸.
+- 노드 클래스 함수 1,681개는 상태와 상관없는 클래스 값이라 3개 상태에서 값을 받으면 그 조각에서는 그만 부른다. 나머지 173개는 실물이 있는 상태마다 부른다(크기·시간이 상태마다 다른지 보려고).
+- 상태는 세 조각으로 나눠 Blender 3개로 돌리고 조각마다 결과 파일이 따로다(`조각N_결과.jsonl`). 부르기·입력 만들기 직전에 자리(`CALL`·`ARGS 타입.함수 상태`)를 공유 메모리에 적는다. 죽거나 멈추면(진행 없음 300초) 실행기가 그 함수에 "죽음"·"멈춤" 줄을 쓰고 같은 상태를 다시 만들어 남은 함수만 부른다(함수마다 조각당 3번 죽으면 더 안 부름). 실물을 모으다 죽으면 그 자리를 건너뛸 목록에 넣고 다시(상태당 5자리까지). 상태 만들기에서 죽으면 그 상태를 적고 다음으로.
+- `Event` 입력(`KeyMapItems.match_event`): 화면 없는 Blender에서 `Window.event_simulate`가 Blender를 죽이고, 파이썬 조작을 `INVOKE_DEFAULT`로 불러도 `invoke`가 아니라 `execute`로 넘어가 `Event`가 없다(실행으로 확인, 스크래치패드 `probe_event.py`). 그래서 끝에 창 있는 Blender 1개(옆 화면 x=-1920, 포커스 안 가져감, `--enable-event-simulate`)로 공장 상태에서 이 함수만 부른다.
+- 결과 종류(함수마다 하나): 값 나옴(한 상태 이상에서 예외 없이 돌아옴. 없음(None)만 돌려준 것은 따로 셈) · 오류(불렀으나 모든 상태에서 예외·죽음·멈춤·스크립트 오류) · 못 만듦(실물이나 입력이 어느 상태에도 없어 못 부름) · 사용자 PC라 안 돌림(실물이 VR 세션 안에만 있음) · 누락(결과 줄 없음). 값 나옴 줄에도 다른 상태의 죽음·멈춤·오류 수를 남긴다.
+- 격리: 조작 전수와 같은 상자(`BLENDER_USER_CONFIG`·`SCRIPTS`·`DATAFILES`·`EXTENSIONS`·`SYSTEM_EXTENSIONS`·`TEMP`·`TMP`·`HOME`·`USERPROFILE`·`APPDATA`·`LOCALAPPDATA`), `--offline-mode`, `--disable-autoexec`, 설정 자동 저장 끔. 상태를 만들기 전후로 원격 확장 저장소를 끄고 에셋 라이브러리·번역 폴더·임시 폴더를 상자로 돌린다(`op_walk_v10_조작전수.isolate_prefs`와 같음). 진짜 설정 파일 4개·`quit.blend`·문서/Blender·`C:\tmp`·`APPDATA\Blender Foundation`·설치 폴더·바탕화면·다운로드·`data/` 첫 단계·dev50 장면·클립보드 횟수(`opall_run.real_files`)와 `data/blend_sources` 전체의 크기·시각을 전후로 견주고, 상자마다 확장 목록 `index.json`이 생겼는지 본다(`네트워크_흔적.json`). Blender 수는 띄우기 전마다 세고(18:00 전 PC 전체 8개 미만, 뒤 2개 미만), 남은 메모리 4GB 넘게, CPU 80% 아래일 때만 띄운다(coordinator 지시).
+- 안 돌리는 상태 2개: `채우기:VR 세션 3차`(VR 런타임을 띄우는 `wm.xr_session_toggle`, 조작 전수가 정한 "막을 수 없는 조작" 39개 중 하나), `채우기:정의 칸 is_overridable`(일부러 죽는 칸을 읽어 함수를 부를 실물이 안 생김).
+
+- [x] 목적: 최종 목표 사용자 "API 에서 찾아낸 값중 어떤것을 효율적으로 보내면 좋을까?". 그 전 단계로 사용자 "모르는거부터 파악하는게 정상 아니니? 왜 자꾸 범위를 줄이지", "또 범위 줄이네? 왜 조작 다써보기만해?"(HISTORY [221]). 티켓 46 완료 조건 "함수 1,854개: 함수마다 '불러 봄' 또는 까닭". 보낼 값 규칙(9번)이 함수로만 읽히는 값을 고를 수 있게, 함수마다 무엇을 얼마나 빨리 돌려주는지 남긴다.
+- [x] 가설(실행 전에 정함): 상태 253개를 화면 없는 Blender로 돌리면 1,854개 함수 모두가 결과 종류 하나를 갖고(누락 0), 11-05에 값을 받은 1,764개는 모두 이번에도 값이 나온다(아니면 그 함수마다 다른 까닭을 밝힌다).
+- [x] 자료: 함수 목록 `함수_전수표.csv`(Claude가 11-07에 만든 전수표, 공식 문서와 1,862개 모두 맞춤, 종합 문서 1절). 실행 전 세기(`실행전_개수.json`, Blender 없이): 1,862 중 9판이 부른 8, 목표 1,854, 겹친 이름 0. 이 판 Blender에서 클래스·함수가 모두 있고 클래스 함수 1,696·실물 함수 158(`목록.json`, Blender 한 번). 상태 255개는 Claude가 스크립트로 만든 것이라 실제 작업 파일의 다양함은 없다(공개 .blend는 이번에 안 연다: 함수는 실물이 필요한데 파일 실물은 9단계 3번 칸 읽기가 이미 다 봤고, 상태 스크립트가 타입을 더 고르게 만든다고 Claude가 판단. 못 만든 타입이 남으면 다음 할 일로).
+- [x] 도구의 동작: 공식 문서는 `.claude/tools/api_doc.py`로 항목을 끝까지 읽었다(이름 뒤 괄호는 `data/blender_api_5.2/txt/`의 파일·줄). 입력 칸 `bpy.types.Property.is_required`(Property.txt:97-100)·`bpy.types.Property.is_output`(Property.txt:65-68). 클래스 함수 여부는 `bpy.types.Function.use_self`(Function.txt:25-28, "Function does not pass itself as an argument (becomes a static method in Python)")와 `bpy.types.Function.use_self_type`(Function.txt:29-32, use_self가 거짓이면 이것이 참일 때 class method)로 가른다. 설명이 이름과 반대로 읽혀 **실행으로 확인**했다(`use_self` 거짓 1,696개 = 노드 1,681 + 15, 실물 함수 `Mesh.count_selected_items`가 실물에서 정답으로 불림). 소켓 틀 함수는 클래스 함수이고 index는 0부터, 돌려주는 것은 `NodeInternalSocketTemplate`(CompositorNodeAlphaOver.txt:5-25). 끝을 알리는 방식은 문서에 없어 실행으로 봤다(없음(None)을 돌려줌). `.claude/tools/api_doc.py`는 `classmethod`로 시작하는 항목 줄을 못 찾아(예 `ShaderNodeMath.input_template`, `AssetLibrary.online_assets_url`, `XrSessionState.action_state_get`, `WindowManager.operator_properties_last`, `XrActionMaps.find`, `Pose`의 다섯 함수) 그 문서는 파일을 직접 끝까지 읽었다(Pose.txt:37-59, XrSessionState.txt:107-117, XrActionMaps.txt:29-35). VR: `bpy.types.WindowManager.xr_session_state`(WindowManager.txt:106-109, "Runtime state information about the VR session", `XrSessionState | None`). `Event`: `bpy.types.Window.event_simulate`가 돌려줌(Window.txt:68-84). `bpy.types.KeyMapItems.find_match`는 인자로 준 키맵 항목과 맞는 항목을 이 키맵에서 찾음(KeyMapItems.txt:74-82). `bpy.types.Mesh.count_selected_items`(Mesh.txt:313-318)는 조건을 안 적음. 실행으로 확인: 편집 모드의 `total_*_sel`과 같고 물체 모드에서는 (0,0,0)(`results/20261108/170633_선택수_확인/출력.txt`). `bpy.types.Gizmo.properties`(Gizmo.txt:69-72), `bpy.types.NodesModifier.properties`(NodesModifier.txt:56-59, `NodesModifierProperties | None`), `bpy.types.Node.debug_zone_lazy_function_graph`(Node.txt:254-259, "this zone"). 죽음 원인을 볼 함수: `bpy.types.Object.ray_cast`(Object.txt:763-776, "evaluated geometry")·`bpy.types.Object.closest_point_on_mesh`(Object.txt:777-789)·`bpy.types.Object.crazyspace_eval`(Object.txt:689-693)·`bpy.types.Strip.split`(Strip.txt:186-195)·`bpy.types.SequenceEditor.display_stack`(SequenceEditor.txt:77-80, 입력 Meta Strip)·`bpy.types.DynamicPaintSurface.output_exists`(DynamicPaintSurface.txt:216-222). 그 밖에 실행으로 확인: 화면 없는 Blender에서 `Window.event_simulate`는 Blender를 죽이고(`results/20261108/153412_함수_시험/조각1.log`), `INVOKE_DEFAULT`는 execute로 넘어감. `Pose`의 use_self 거짓 함수는 클래스에서 부르면 죽고 실물 `obj.pose`에서 부르면 값이 나옴(`161559_포즈_함수_확인/출력.txt`). 공개 .blend 여는 방식은 `bpy.ops.wm.open_mainfile`의 `load_ui=False, use_scripts=False`(앞 실행 `fill_walk`와 같음).
+- [x] 지표: (1) 누락 수. (2) 결과 종류별 함수 수와 까닭별 수. (3) 11-05에 값을 받은 1,764개 중 이번 결과 종류별 수(다시 나왔나). (4) 값 나옴 함수마다 모양·글자 수(최소·최대)·시간(중앙·최대)·값 받은 상태 수·다른 상태의 죽음·오류 수. (1)-(3)이 완료 조건 "함수마다 불러 봄 또는 까닭"의 근거이고, (4)가 9번(보낼 값 규칙)에서 함수 값을 넣고 뺄 재료(크기와 시간)다. 소켓 틀 1,120개와 노드 등록 확인 561개는 따로 센다(대부분 없음·참이라 합치면 분포가 그쪽으로 쏠림).
+- [x] 기준 숫자의 출처: 누락 0은 원리상 필요한 값. 1,764개 재현은 11-05 결과에서 온 집합 비교(숫자를 빌리지 않음). 노드 클래스 함수 3개 상태(`need_ok`)·실물 6개·모음 8개·멈춤 300초·틀 64개는 Claude 제안값(시간 줄이기용이며 판정 기준이 아님. 300초는 `fill_run.py` UNMOVED와 같음). Blender 수·메모리·CPU 한도는 coordinator 지시.
+- [x] 닿을 수 있는 기준: 누락 0은 실행기가 어느 단계에서 끝나도 줄을 써 주므로 거의 늘 통과한다(조작 전수 2차 지적 5와 같은 성질). 그래서 정보는 결과 종류·까닭 분포와 1,764개 재현에 있다. 사용자 PC 종류는 VR 세션 타입의 함수 7개(`XrActionMaps.find`, `XrViewfinderState` 2개, `XrActionMapBindings`·`XrActionMapItems`·`XrComponentPaths`·`XrUserPaths`의 `find`)로 예상한다(5개 상태 시험에서 7). `XrSessionState.action_state_get`은 클래스 함수라 세션 없이도 불리고 죽으므로 "오류(죽음)"로 예상한다. 1,764개 재현은 원리상 닿는다(같은 판, 상태가 더 많음). 다만 11-05는 다른 상태(한 장면에 여러 자료를 넣은 장면)이고 입력 방식도 조금 다르다(11-05: 글자 `p.default or "location"`, 정수 `max(0, hard_min)`, 실물 2개. 이번: 기본값을 범위로 자름, 단위 행렬, 실물 6개 × 3, SPECIAL). 그래서 재현이 안 되면 상태와 입력 중 어느 탓인지 함수마다 밝혀야 한다.
+- [x] 판정(실행 전에 정함): 누락 0이고 1,764개가 모두 값 나옴(또는 함수마다 까닭을 밝힘)이면 함수 전수표에 "불러 봄" 열(결과 종류·까닭·모양·크기·시간)을 채우는 재료로 쓰고 티켓 46의 함수 완료 조건을 닫을 수 있다고 본다. 못 만듦·오류가 남은 함수는 까닭별로 "다른 길이 있는가"를 실행 뒤 독립 검토에 맡겨, 써 보지 않은 길이 있으면 그 길로 다시 돈다(안 닿은 칸 2차와 같은 처리). 누락이 있거나 1,764개 중 까닭 없이 값이 안 나온 것이 있으면 그 함수만 다시 돌리고, 남으면 도구 원인을 찾기 전에는 전수표를 안 바꾼다.
+- [x] 측정 점검(최종 코드로 돌림): (1) 정답을 아는 장면 `--check`(`results/20261108/155802_함수_점검/`): `Mesh.count_selected_items` 편집 모드 점 2개 → (2, 1, 0) = `total_vert_sel`·`total_edge_sel`·`total_face_sel`, `Spline.calc_length` (0,0,0)-(3,4,0) 선 → 5.0, `Text.as_string` "abc⏎def" → 같은 글, `VertexGroup.weight(0)` 0.25 → 0.25, 양성 대조 `Mesh.split_faces`(평평한 큐브) → "장면 바뀜" 참·점 8 → 24, 소켓 틀 대조(틀이 나온 노드마다 실제 노드를 만들어 입력·출력 소켓 identifier와 견줌, 다른 길로 잰 대조) 33개 노드 모두 같음·다름 0·틀 없음 527. 모두 맞음. **첫 점검(`153300_함수_점검`)은 물체 모드에서 선택 칸 합(3, 2, 0)을 정답으로 두어 `count_selected_items`가 (0, 0, 0)으로 달랐다.** 따로 Blender로 재 보니 함수가 편집 모드에서만 세는 것이라, 정답을 편집 모드의 `total_*_sel`로 바꿨다(결과를 본 뒤 점검을 바꿈, **낙관적**). (2) 일부러 고장(`FUNC_FAULT`, 공장 상태, 실행기 고장 처리 부분은 그 뒤 혼자 부르기 줄만 뺌): `Scene.statistics` 죽음(`153949_함수_고장_죽음`) → "오류(죽음)", 나머지 이어짐. `Light.area` 멈춤(진행 없음 20초로 줄여 잼, `154009_함수_고장_멈춤`) → "오류(멈춤)", 이어짐. (3) 최종 코드 5개 상태 × 조각 3 + 창(`155830_함수_시험`, 공장·`메시 모드:EDIT`·`파티클·물리`·`뼈대:POSE`·`화면:로컬 뷰`): 누락 0, 값 나옴 1,776·못 만듦 66·사용자 PC 7·오류 5, 조각 셋이 각자 파일에 씀, 죽은 뒤 같은 상태를 다시 만들어 남은 함수만 부름(`action_state_get`·`Pose.backup_restore` 죽음 6번), 창 Blender에서 `event_simulate`로 만든 `Event`로 `KeyMapItems.match_event` 값 나옴(없음), 진짜 파일·클립보드·`blend_sources` 같음, `index.json` 흔적 0. 이 시험에서 나온 도구 탓 오류 2개(`KeyMap.restore_*`의 "must be a user keymap", `ParticleSystem.mcol_on_emitter`의 "no VCol data", `RigidBodyWorld.convex_sweep_test`의 "need to step the sim")는 위 "준비"·사용자 키맵으로 고쳤다(본 실행에서 확인). 앞의 `153412`·`153805_함수_시험`은 도구 오류(입력을 만들다 죽은 것을 실물 모으기 자리로 짚음, 혼자 부르기 되풀이)라 숫자로 안 쓴다.
+- [x] 독립 검토: (실행 전 설계) Sonnet(노력치 기본), 이 절·두 도구 전체·`crash_walk.py`와 `fill_states.py` 일부·함수 전수표·11-05 `phase_func_call`·조작 전수 절·점검 폴더 4개·공식 문서를 읽음(보고 첫 줄에 범위). 결론: "지금 상태로는 본 실행을 돌리지 않는 게 좋다". 지적 10개와 처리는 아래 "실행 전 독립 검토 지적" 표. 처리 뒤의 최종 코드는 다시 검토받지 않았고 측정 점검 (1)·(3)을 최종 코드로 다시 돌렸다.
+- [x] 목표 검토: Sonnet(노력치 기본), 이 절·티켓 46·HISTORY [221]-[232]. 답: 통과해도 실패해도 "어떤 값을 효율적으로 보낼지"는 직접 바뀌지 않고, 9번(가설 11)의 재료를 만든다. 통과하면 함수 전수표의 "불러 봄" 열이 채워져 함수 값을 크기·시간으로 넣고 뺄 수 있고, 실패하면 그 함수들을 "모름"으로 둔 채 9번이 간다. 확정 못 하는 것: 값의 쓸모·변화 빈도(조작 전수·강좌 따라 하기 몫), 실제 사용자 파일에서의 모양, 몇 상태의 크기·시간이 모든 장면의 대표라는 것, 측정 점검이 적고 하나는 결과를 본 뒤 바꿈.
+- [x] 비용과 시간: 돈 들지 않음. 5개 상태 시험이 46초(목록·창 포함, Blender 3개). 253개 상태 × 상태당 몇 초 + 죽음마다 다시 띄우기(`action_state_get`·`Pose.backup_restore` 조각당 3번씩) → 30-90분 어림(무거운 노드·소켓 상태는 더 걸릴 수 있음). Blender 3개(coordinator 지시 한도).
+
+실행 전 독립 검토 지적(Sonnet):
+
+| # | 지적 | 처리 |
+|---|---|---|
+| 1 | 소켓 틀 1,120개가 None 64개를 "틀 64개"로 세어 가짜 값 나옴 | 고침: 첫 None·예외에서 끊고, 틀이 없으면 모양 "없음", index 0 예외는 "오류". 소켓 틀은 따로 셈. 측정 점검 (1)에 실제 노드 소켓과의 대조를 더함(33개 같음) |
+| 2 | 혼자 부르기가 공장 상태뿐이라 `output_exists`가 "못 만듦"으로 바뀜, 고친 혼자 부르기는 안 돌았음 | 고침: 혼자 부르기를 없애고 두 함수를 상태마다 맨 뒤에 부름(죽으면 같은 상태를 다시 만들어 남은 것만). `action_state_get`은 "오류(죽음)" 예상으로 고쳐 적음 |
+| 3 | 도구 탓 오류: `KeyMapItems.find_match`에 자기 키맵을 줌, `local_view_get`은 로컬 뷰 상태가 필요, `Event` 다른 길(조작 invoke) | 고침: 다른 키 설정의 같은 이름 키맵. 로컬 뷰는 `화면:로컬 뷰` 상태가 STATES에 있음(읽다 죽는 `SpaceView3D.local_view`는 9판처럼 건너뜀). `INVOKE_DEFAULT`는 화면 없는 쪽에서 `execute`로 넘어감을 실행으로 확인 → 창 Blender로 부름 |
+| 4 | 클래스 함수를 클래스에만 부름(`Pose`), 첫 실물에서 죽으면 다른 실물을 안 봄, 하위 타입 6개만 | 고침: `Pose` 클래스 함수는 활성 물체에 포즈가 있을 때만. 죽음은 그 상태만 건너뛰고 다른 상태에서 다시 부름(조각당 3번). 하위 타입 6개는 그대로(못 본 것으로 적음) |
+| 5 | 값 나옴이 다른 상태의 죽음·오류를 가림, 앞 세 상태만 보면 크기가 하한 | 고침: 값 나옴 줄에 다른 상태의 죽음·멈춤·스크립트 오류·오류 수. 노드 클래스 함수만 3개 상태, 나머지는 실물이 있는 상태마다 |
+| 6 | 안 잡힌 예외·값 기록이 try 밖이라 값을 돌려준 함수가 "스크립트 오류"로 섞임 | 고침: 잡는 예외에 `OSError`·`ZeroDivisionError`·`NotImplementedError`·`StopIteration`을 더하고, 값 기록 실패는 모양 "기록 실패"로 남김. 까닭에는 죽음·멈춤·스크립트 오류 수를 나눠 적음 |
+| 7 | 측정 점검이 최종 코드를 못 가름, "장면 바뀜"이 메시·키맵 변경을 못 봄(양성 대조 없음), 못 만듦 원인을 가를 합계 없음 | 고침: 최종 코드로 점검·5개 상태 시험을 다시 돌림, 장면 요약에 메시 점·면·시퀀서·키맵 항목 수를 더하고 `split_faces` 양성 대조, 합계에 시간 제한에 걸린 상태·실물 타입 수 |
+| 8 | 원격 확장 저장소 끄기·번역 폴더 상자·`index.json` 흔적 검사가 없음, `채우기:애드온`의 ui_translate | 고침: `isolate_prefs`(상태 앞뒤), 흔적 검사. ui_translate 상태는 그대로 두되 번역 폴더를 상자로 돌림(조작 전수는 애드온을 안 켰음. 이번 상태는 안 닿은 칸 채우기와 같게 둠) |
+| 9 | `use_self` 문서 설명이 이름과 반대, "11-05와 같은 입력 방식"은 부정확 | 고침: 도구의 동작·닿을 수 있는 기준 칸 문장 |
+| 10 | `STATE_TEMP_ROOT` 없으면 KeyError, `FUNC_STALE` 남으면 멈춤 판정이 짧아짐, 18시 뒤 느려짐, 조각마다 건너뛸 자리가 따로, 앞 함수가 실물을 바꿈 | 고침: 앞의 둘(시작 때 검사·멈춤 초 출력). 나머지는 그대로(못 본 것으로 적음) |
+
+#### 중간 결과(1차·2차 본 실행과 보충까지, 3차 전)
+
+본 실행 두 번. 1차 `results/20261108/160213_함수_전수/`(210초) 뒤 못 만듦·오류 20개의 까닭을 보고 도구를 고쳐(아래 "결과를 본 뒤 바꾼 것", 모두 낙관적) 2차 `results/20261108/162126_함수_전수2/`(16:21-16:44, 1,409초, Blender 조각 3 + 창 1. 상태 목록 254개 중 252개를 끝까지 만듦, 사분할 2개는 만들기 중 죽음. 상태 줄 258은 창 중복 줄이 섞인 수)를 돌렸다. 판정은 2차로 한다. 2차 점검 `results/20261108/161322_함수_점검3/`(정답 4개·`split_faces` 양성 대조·소켓 틀 33개 노드 대조 모두 맞음), 시험 `161344_함수_시험3`·`161919_함수_시험4`·`162053_함수_시험5`(5개·1개 상태).
+
+| 결과 종류 | 1차 | 2차 | 2차의 함수·까닭 |
+|---|---|---|---|
+| 값 나옴 | 1,827 | 1,845 | 노드 클래스 함수 1,681 모두(등록 확인 561 중 참 555·거짓 6: `CompositorNodeGamma`·`GeometryNodeApplySimulatedData`·`TextureNodeCompose`·`TextureNodeDecompose`는 상태 만들기의 "Node type undefined"와 맞고, `Node`·`NodeGroup`은 바탕 타입. 거꾸로 `*CustomGroup` 3개는 참인데 `nodes.new`로 못 만듦. 소켓 틀 1,120 중 없음 1,059·틀 1-8개 61, 틀이 나온 것은 모두 TextureNode 쪽) + 상태에 따라 값이 다른 나머지 164 |
+| 사용자 PC라 안 돌림 | 7 | 7 | `XrActionMaps.find`, `XrActionMapBindings`·`XrActionMapItems`·`XrComponentPaths`·`XrUserPaths`의 `find`, `XrViewfinderState.trigger_flash`·`trigger_focus_indicator`: 실물이 VR 세션 상태(`WindowManager.xr_session_state`, 문서 `bpy.types.WindowManager.txt:106-109`는 "Runtime state information about the VR session"과 `XrSessionState | None`만 적음) 아래에만 있다. 이 PC에서는 세션이 안 생긴다(실행으로 확인: 안 닿은 칸 채우기 3차 `140901_안닿은칸_채우기3` 창6에서 `wm.xr_session_toggle`을 실행했고 3초 뒤에도 `xr_session_state` None, `data/eval/state_generic/fill_reasons.json:127-130`). 이번 시험에서는 세션 켜기를 다시 돌리지 않았다. 이름표 "사용자 PC라 안 돌림"은 도구가 붙인 것이고 뜻은 "이 PC에서 VR 세션이 안 생겨 실물 없음"이다 |
+| 오류 | 5 | 1 | `XrSessionState.action_state_get`: 클래스 함수라 세션 없이 부를 수 있으나 24번(조각마다 8번 한도) 모두 Blender가 죽음. 문서는 "current state of a VR action"(`bpy.types.XrSessionState.txt:107-117`)이라 VR 세션이 있어야 뜻이 있는 함수(추측: 세션이 없어 죽음) |
+| 못 만듦 | 15 | 1 | `SequencerCompositorModifierPropertiesEmpty.bl_system_properties_get`: 합성 수정자에 묶음이 없으면 `properties`가 None, 합성 묶음이면 `CompositorNodesModifierInterface`, 셰이더·지오메트리·텍스처 묶음을 달면 Blender가 죽음(`results/20261108/161846_없던_실물_확인/probe5`, `161919_함수_시험4` 사건) |
+| 누락 | 0 | 0 | |
+
+- 중간 결과: 실행 전 판정 기준 둘 다 숫자로는 충족하나, 둘 다 거의 늘 통과하는 기준이라(누락 0은 구조상, 1,764개 중 1,681개는 상태와 상관없는 클래스 값) 판정은 **"기준 충족, 닫기 보류"**로 한다(실행 뒤 독립 검토 지적 6·판정 의견을 받아들임). 닫기 전에 판단받을 것: 아래 다음 할 일 1(실물마다 부르기)과 2(실제 파일). 누락 0(목표 1,854 = 결과 줄이 있는 함수 1,854, 목표 밖 줄 0, 깨진 줄 0). 11-05에 값을 받은 1,764개는 2차에서 모두 값 나옴(1차도 같음). 1차와 2차를 함수마다 견주면 1,827은 둘 다 값 나옴, 못 만듦 14·오류 4가 값 나옴으로 바뀜, 사용자 PC 7·못 만듦 1·오류 1은 그대로. 값 나옴 1,845 중 다른 상태에서 죽음·멈춤이 있는 6개(`Object.ray_cast`·`closest_point_on_mesh` 각 24, `Strip.split` 5, `DynamicPaintSurface.output_exists` 4, `SequenceEditor.display_stack` 2, `Object.crazyspace_eval` 2), 다른 상태에서 오류가 있는 10개(예 `Object.local_view_get` 값 2·오류 247: 로컬 뷰가 아니면 "Viewport not in local view"), 스크립트 오류 2줄(`PoseBone.bbone_segment_matrix`, `뼈대:EDIT`·`다시 연:뼈대:EDIT`, 실행기 종료 코드 9). 값의 크기·시간(9번 재료): 함수마다 시간 중앙값 1,844개가 1ms 미만, 1개(`Depsgraph.debug_relations_graphviz` 1.56ms)만 1-10ms. 크기 최대 40자 이하 1,796·41-1,000자 46·1,001자 넘음 3(`NodeTree.debug_lazy_function_graph` 33만 자, `Depsgraph.debug_relations_graphviz` 28만 자, `Mesh.calc_smooth_groups` 2,779자). 없음(None)만 돌려준 함수는 합계 1,094(소켓 틀 1,059 + 35)인데, 창이 세 번 돌아 `KeyMapItems.match_event`(없음만 돌려줌)가 빠진 수라 실제로는 1,095(소켓 틀 1,059 + 36). 부르기로 장면이 바뀐 함수 3(`Mesh.split_faces`, `MetaStrip.separate`, `Strip.split`). 나머지 173개 중 값 나옴 164개의 값 받은 상태 수 중앙 177.5(최대 252에 66개가 몰림), 한 상태에서만 값을 받은 함수 10. 크기·시간 분포를 164개만 다시 세면 크기 최대 40자 이하 138·41-1,000자 23·1,001자 넘음 3이고, 시간 중앙값은 대부분 1ms 미만이나 최대 시간이 1ms를 넘는 함수가 8개(`Bone.evaluate_envelope` 42.9ms, `Node.debug_zone_lazy_function_graph` 6.1ms 등)다(독립 검토가 셈). 진짜 파일·클립보드(118→118)·`blend_sources` 모두 같음, 확장 목록 `index.json` 흔적 0.
+- 중간 목적 다시 보기: 티켓 46 완료 조건 "함수 1,854개: 함수마다 '불러 봄' 또는 까닭"에 답한다. 1,845개는 값의 모양·크기·시간이 `함수별_결과.csv`에 있고, 9개는 까닭(VR 세션 8, 그중 1은 부르면 죽음)과 1개는 만들 길 몇 가지를 써 보고 남긴 까닭이 있다(소스는 안 봄, 아래 넘어간 것). 최종 목표 "어떤것을 효율적으로 보내면 좋을까"에는 직접 답하지 않는다(목표 검토 답과 같음). 9번에 줄 재료: 함수 값은 거의 모두 1ms 미만·40자 이하라 시간·크기로는 거의 걸러지지 않고, 큰 3개(디버그 그래프 2개·매끈한 면 묶음)와 장면을 바꾸는 3개, 문맥에 따라 죽는 6개가 거를 대상이다. 값의 쓸모와 바뀌는 빈도는 이 시험이 재지 않는다.
+- 중간 실험 점검: 도구 오류: (1) 창 조각은 함수 2개를 단위 2개로 받았는데 `run_window`가 상태 줄을 i=0 하나만 써, 실행기가 단위 1을 "끝났는데 상태 줄 없음"으로 보고 창 Blender를 두 번 더 띄웠다(`window_결과.jsonl`에 같은 줄 세 벌, `GizmoProperties`의 "값 받은 상태 수" 3과 `match_event`의 부른 횟수가 세 배). 결과 종류는 안 바뀐다. 고치지 않았다(아래 넘어간 것). (2) 상태 만들기에서 죽은 상태 2개(`화면:사분할`, `다시 연:화면:사분할`, 두 번 띄워도 같은 자리 `BUILD 사분할`): 1차에서도 죽었다. `편집기:VIEW_3D`·`다시 연:넓히기:그리스펜슬`은 1차에서 죽었고 2차에서는 다시 띄우기 한 번으로 끝났다(재현이 안 되는 죽음). (3) 상태 만들기 일부 실패 26개(노드 타입 undefined, 조작 poll 실패 등, `fill_states` 쪽 까닭이며 안 닿은 칸 채우기와 같음). 표본: 상태 258개는 Claude가 스크립트로 만든 장면이라 실제 사용자 파일의 크기(예: 큰 메시에서 `calc_smooth_groups`·`ray_cast` 시간)는 재지 않았다. 함수마다 실물 6개·변형 3까지라 같은 타입의 다른 실물에서 다른 값이 날 수 있다. 재현: 1차·2차가 같은 1,827개에서 같은 결과 종류(코드가 달라 엄밀한 되풀이는 아님). 죽음은 `ray_cast`·`closest_point_on_mesh`가 1차 9번·2차 24번(조각마다 8번 한도까지 다른 상태에서 계속 죽음)으로 늘 재현된다. 되풀이 실행이 확인하는 것은 "같은 상태 스크립트에서 같은 결과 종류"이고, 다른 장면에서 같다는 것은 확인하지 못한다.
+- 중간 결과를 본 뒤 바꾼 것(1차 본 실행의 못 만듦·오류를 보고 고침, 모두 **낙관적**): ① 실물을 부모 타입으로도 찾는 `by_base` 색인(파이썬으로 등록한 하위 타입 `AddonPreferences`·`OperatorProperties` 등). ② 섞인 모음을 20,000개까지 훑음(앞 200개만 보던 것). ③ 죽은 실물만 건너뛰고 같은 상태의 다른 실물로 부름(`DEAD_SELVES`, `Strip.split`이 오류 → 값 7개 상태). ④ 상태 만들기에서 죽으면 한 번 더 띄움. ⑤ `KeyMapItems.find_match`의 self를 사용자 키 설정의 키맵으로(까닭 글 "(base) must be a user keymap"). ⑥ 입자를 가진 물체를 평가본에서도 찾음(`ParticleSystem.mcol_on_emitter`). ⑦ `fill_states.grab`이 부르는 걷기를 `GrabWalk`로 대어, 렌더 중처럼 그 순간에만 사는 구조에서 바로 함수를 부름(`RenderPasses.find_by_name`). ⑧ 새 상태 `함수:없던 실물`(점 색·UV가 있는 평면의 내보내기·머리카락 입자, 시뮬레이션 구역과 입력이 있는 지오메트리 노드 수정자, 셰이더 묶음을 단 노드 수정자로 `NodesModifierPropertiesEmpty`, 합성 노드 수정자를 단 조각, 영상 클립의 점 추적 4개로 평면 추적, 키 두 개를 넣은 뼈대로 액션, `bpy.utils.keyconfig_set`으로 키 설정 preferences). ⑨ `Pose`의 `use_self` 거짓 함수를 클래스가 아니라 실물 `obj.pose`에서 부름: 클래스에서 부르면 죽고 실물에서 부르면 값이 나옴(실행으로 확인 `results/20261108/161559_포즈_함수_확인/출력.txt`), 1차의 "죽음 8"은 부른 방법 탓. ⑩ 창 Blender에서 기즈모 묶음을 등록해 화살표 기즈모의 `properties`(`GizmoProperties`). 판정 기준(누락 0, 1,764개 재현)은 바꾸지 않았다.
+- 중간 넘어간 것: 아래 표.
+- 중간 실행 뒤 독립 검토: Sonnet(노력치 높음), 체크리스트의 지시 그대로(작성자 결론·걱정은 안 알림). 읽은 범위(보고 첫 줄): 이 절 80/80, `func_walk.py` 1,154/1,154, `func_run.py` 447/447, 티켓 46 42/42, 결과 CSV 1,854행·조각 jsonl 세 개 전부(스크립트로 셈)·사건 94/94·창 10/10, `docs/experiment.md`는 1578-1692만(앞은 grep), HISTORY는 [221]·[222]·[231]과 제목 줄, 공식 문서는 인용 줄 주변(끝까지 읽은 것 4개), 못 읽음 `crash_walk.py`·`fill_states.py`(일부 grep)·`opall_run.py`·함수 전수표 원본·`api_doc.py`. 실제 길이와 대조: 이 절 검토 때 80줄, `func_walk.py` 검토 때 1,154줄(그 뒤 보충 고침으로 늘어남), `func_run.py` 447줄, 조각 jsonl 19,724·19,540·19,371줄, 사건 94줄로 보고와 같다. 지적과 처리는 아래 "실행 뒤 독립 검토 지적" 표. 보충 실행 `results/20261108/170250_함수_전수2_보충/`(상태 5개 + 창, 고친 코드).
+
+중간 넘어간 것:
+
+| 종류 | 무엇 | 확인한 방법 | 처리 |
+|---|---|---|---|
+| 못 만듦 | `SequencerCompositorModifierPropertiesEmpty` | 묶음 없음(None)·합성 묶음(Interface)·셰이더·지오메트리·텍스처 묶음(셋 다 Blender 죽음, `161846_없던_실물_확인/probe5`)·소켓 지움·파일 다시 엶·묶음 지움·새 묶음(`171527_빈_속성_다른길`). 노드 수정자 쪽 Empty는 셰이더 묶음으로 만들어짐. 창 Blender와 Blender 소스는 안 봄 | 다음 할 일 5 |
+| 예외 | `XrSessionState.action_state_get` 24번 죽음 | 문서 `bpy.types.XrSessionState.txt:107-117`, 세션 없는 Blender에서 클래스로 부름. VR 세션을 켜서 부르는 것은 막을 수 없는 조작이라 안 함 | 지금 함: 결과 종류는 "오류(죽음)"로 두고 까닭에 VR 세션 필요를 적음 |
+| 예상 밖 | 창 조각이 세 번 돌고 같은 줄 세 벌 | `window_결과.jsonl`, `run_window`가 상태 줄 하나만 씀 | 지금 함: 고쳐 보충 실행에서 창 한 번. 2차 결과 종류는 안 바뀜(횟수·상태 수만 세 배) |
+| 예상 밖 | 상태 2개(`화면:사분할`·`다시 연:화면:사분할`)가 만들기 중 늘 죽음 | 1차·2차 모두 같은 자리 `BUILD 사분할`, 다시 띄워도 같음. 앞 기록(검토 지적 3e)에 화면 없으면 죽는다고 있음 | 다음 할 일 4 |
+| 예상 밖 | 스크립트 오류 2줄 `PoseBone.bbone_segment_matrix`(뼈대 EDIT 상태, 실물 1) | 조각2.log Traceback: 도구의 `prepare`가 None인 `bone`에 씀 | 지금 함: 가드, 보충 실행에서 함수의 까닭 글로 바뀜(검토 지적 3c) |
+| 예상 밖 | 다른 상태에서 죽는 값 나옴 함수 6개 | `ray_cast`·`closest_point_on_mesh`는 메시가 아닌 물체(실물 1번)에서만 죽음(조각 jsonl), `Strip.split`은 값을 평가본 사본에서만 받음 | 지금 함(앞 둘). 나머지 원인은 다음 할 일 3 |
+| 못 본 것 | 낙관적 변경으로 값이 나온 18개 중 7개(`GizmoProperties`·`KeyConfigPreferences`·`MovieTrackingPlaneMarkers.find_frame`·`NodesModifierPropertiesEmpty`·`ParticleSystem.mcol_on_emitter`·`RenderPasses.find_by_name`·`SequencerCompositorModifierProperties`)는 한 상태에서 한 번 | CSV 값 받은 상태 수 1 | 그대로(재현이라고 쓰지 않음) |
+| 못 본 것 | 실물을 바꿔 부르기는 실패할 때만, 장면 바뀜은 하한 | `call_one`, `scene_digest` | 다음 할 일 1 |
+| 못 본 것 | 실제 사용자 파일·큰 장면에서의 값 크기·시간 | 상태는 스크립트 장면뿐. 실행 전에 Claude가 공개 .blend를 안 열기로 정함(범위를 줄인 판단) | 다음 할 일 2(판단받음) |
+| 못 본 것 | 실물 6개·변형 3 밖의 실물 | 한도는 제안값 | 다음 할 일 1 |
+| 추측 | `use_self` 거짓 함수 중 `Pose` 말고도 실물에서 불러야 하는 것이 있는지 | 나머지 13개(노드 `poll`, `Bone` 행렬 정적 함수, `AssetLibrary` 2, `WindowManager.operator_properties_last`, XR 7)는 클래스에서 값이 나오거나(XR 1 제외) 실물이 VR 세션뿐. 실물로 불러 대조하지 않음 | 다음 할 일 1 |
+| 제외 | 안 돌린 상태 2개(`채우기:VR 세션 3차`, `채우기:정의 칸 is_overridable`) | 실행 전 정함 | 그대로 |
+
+2차 실행 뒤 독립 검토 지적(Sonnet):
+
+| # | 지적 | 확인 | 처리 |
+|---|---|---|---|
+| 1 | "등록 확인 561 모두 참"이 틀림(거짓 6). VR 7개는 "안 돌림"이 아니라 세션 켜기를 앞서 실제로 돌렸는데 안 생김. 인용 문서는 "세션 안에서만"을 증명하지 않음 | CSV에서 거짓 6개(각 9개 상태) 확인, `data/eval/state_generic/fill_reasons.json:127-130` 확인 | 지금 함: 결과 표 문장을 고침. 결과 파일의 이름표는 덮어쓰지 않으려고 그대로 두고 뜻을 표에 적음 |
+| 2 | 확인 범위를 넘는 표현: 실물 6개는 실패할 때만 바꿔 봄(값 나옴 줄 97.5%가 첫 실물·첫 변형), 164개 중 87개는 성공한 실물 경로가 하나, 없음만은 1,095(1,094 아님), `Node.debug_zone_*`는 구역 노드가 아닌 `nodes[0]`에 불림, 구조를 돌려준 함수의 "크기"는 이름표 길이 | `call_one`이 성공하면 바로 돌려줌을 확인. `Mesh.count_selected_items`도 같은 탓: `메시 모드:EDIT`의 `meshes[0]`은 편집 중이 아닌 기본 큐브라 (0,0,0)(`crash_walk.object_state`가 큐브를 하나 더 만듦). 함수 값은 `total_*_sel`과 같고 물체 모드에서는 0(`results/20261108/170633_선택수_확인/출력.txt`) | 지금 함: 1,095와 164개 분포로 문장 고침. `debug_zone_*`는 구역 노드를 고르게 고쳐 보충 실행: 구역 노드(`노드:지오메트리`·`채우기:노드 전부`의 `nodes[280]`, `함수:없던 실물`의 시뮬레이션 입력)에서도 3개 상태 모두 없음(None), 시간 1.4-4.8ms. 까닭은 안 잼(추측: 수정자에서 평가된 구역이어야 그래프가 남음). 실물마다 부르기는 다음 할 일 1 |
+| 3a | `ray_cast`·`closest_point_on_mesh` 죽음 24번은 모두 실물 1번, 곡선·그리스펜슬·포인트클라우드·헤어·볼륨 물체 상태뿐. 죽음 8번 한도로 167/252 상태만 불림 | 조각 jsonl에서 두 함수의 같은 24개 상태 확인 | 지금 함: 까닭으로 적음(메시가 아닌 물체에 부르면 죽음, 실행 기록). 한도 뒤 상태는 못 본 것 |
+| 3b | `Strip.split` 값은 평가본 사본에서만 받음(원본 `strips[0]`은 5개 상태에서 죽음). `display_stack`·`output_exists`·`crazyspace_eval` 죽음 원인 안 잼 | 기록 줄로 확인 | 지금 함: 넘어간 것에 적음. 원인은 다음 할 일 3 |
+| 3c | 스크립트 오류 2줄은 도구 탓(편집 모드 포즈 뼈의 `bone`이 None인데 `prepare`가 씀) | 조각2.log Traceback | 지금 함: 가드를 넣고 보충 실행에서 스크립트 오류 0, 두 상태 모두 함수 자신의 까닭 글 "out of date B-Bone segment data - depsgraph update required" |
+| 3d | `count_selected_items`가 `메시 모드:EDIT`에서 (0,0,0), `다시 연:` 쪽만 값 | 위 2 | 지금 함(위 2) |
+| 3e | 사분할 2개는 앞 기록(`docs/experiment.md:650,993`)에 "화면 없으면 죽고 창에서는 읽힘"이 있음 | 그 줄은 내가 읽지 않음(검토 보고) | 다음 할 일 4 |
+| 3f | 상태 수 253·254·252·258이 섞임 | `상태목록.json` 254 | 지금 함: 2차 줄을 고침. 실행 전 칸의 "253"은 실행 전에 쓴 글이라 그대로 |
+| 4a | 창 세 번 중복은 지금 고칠 수 있음 | | 지금 함: `run_window`가 단위마다 상태 줄을 씀. 보충 실행에서 창 한 번·상태 줄 2개, `GizmoProperties` 값 1·`match_event` 없음 1 |
+| 4b | 실제 사용자 파일·큰 장면을 지금 잴 수 있음(`data/blend_sources` .blend 2,373개). 실행 전 "공개 .blend는 안 연다"는 Claude 판단이며 [221] "범위 줄이지 말라"와 부딪힘 | 실행 전 자료 칸이 Claude 판단임을 확인 | 다음 할 일 2(부모 세션 판단): 범위를 줄인 결정이라 보고에 올림 |
+| 4c | `use_self` 거짓 13개를 실물로도 불러 대조 안 함, `Function.txt:31-33`의 `use_self_type`을 안 적음 | | 다음 할 일 1에 넣음 |
+| 4d | 낙관적 변경으로 값이 나온 18개 중 7개는 한 상태 한 번뿐 | CSV | 지금 함: 넘어간 것에 적음(재현이라고 쓰지 않음) |
+| 5 | `SequencerCompositorModifierPropertiesEmpty`: probe4의 다시 열기는 도구 실수로 안 돌았음, 창 Blender·소스는 안 써 봄, "다 써 봄"은 과장 | probe4 Traceback 확인 | 지금 함: 다른 길을 더 써 봄(`results/20261108/171527_빈_속성_다른길/`: 소켓 지움·파일 다시 엶·묶음 지움·새 묶음, 모두 Interface 또는 None). 창 Blender·소스는 안 함(다음 할 일 5). 문장을 "몇 가지를 써 봄"으로 고침. 문서 설명이 "DEBUG ONLY"이고 같은 꼴 함수 23개가 모두 16자라 9번 재료에 더할 것은 적음 |
+| 6 | 누락 0·1,764개 재현은 거의 늘 통과, 분포가 노드 클래스 값에 묻힘 | | 지금 함: 판정을 "기준 충족, 닫기 보류"로, 164개 분포를 따로 적음 |
+| 7 | "장면 바뀜 3"은 하한(`scene_digest`가 포즈·노드·수정자·곡선 점을 안 봄), 양성 대조는 `split_faces` 하나 | `func_walk.scene_digest` | 못 본 것으로 적고 다음 할 일 1에 넣음 |
+| 8 | 인용 줄은 맞고 문서에 없는 것은 실행으로 확인함. `WindowManager.txt:106-109` 근거가 약함 | | 지금 함: 지적 1과 같이 고침 |
+
+2차 뒤 다음 할 일(부모 세션이 1-5 모두 하기로 정함, 아래 3차):
+
+1. 실물마다 부르기: 성공해도 실물 6개 전부(`use_self` 거짓 13개는 클래스·실물 둘 다)로 불러 모양·크기 차이를 대조하고, 장면 요약에 포즈·노드·수정자·곡선 점을 더한다. 성공 줄을 먼저 쓰고 추가 실물 줄을 따로 써야 추가 실물에서 죽어도 값이 남는다. 본 실행 한 번(약 25분, Blender 3개).
+2. 실제 파일: `data/blend_sources`의 .blend에서 상태에 따라 값이 다른 164개를 부른다(큰 메시의 `calc_smooth_groups`·`ShapeKey.normals_*`·`ray_cast` 크기·시간). 실행 전에 Claude가 "안 연다"고 정한 범위라 판단받는다.
+3. 죽음 원인: `Strip.split` 원본, `SequenceEditor.display_stack`, `DynamicPaintSurface.output_exists`, `Object.crazyspace_eval`.
+4. 창 Blender로 `화면:사분할`·`다시 연:화면:사분할`.
+5. `SequencerCompositorModifierPropertiesEmpty`가 생기는 조건을 Blender 소스에서 찾는다(또는 못 만듦으로 둠).
+
+#### 3차 실행 전(부모 세션 결정: 실물 전부, 공개 .blend, 남은 다음 할 일)
+
+부모 세션(coordinator) 지시 원문: "판단받을 것 세 가지를 모두 하는 것으로 정했습니다(범위를 줄이지 않습니다). 1. 성공해도 실물 6개 전부로 부르고, 장면 요약을 넓힙니다. 2. `data/blend_sources`의 공개 .blend로 상태에 따라 값이 다른 함수 164개를 부릅니다(원본은 복사본으로 열고 전후 해시로 지킵니다). 3. 실험 절 끝의 다음 할 일(죽음 원인 4개, 창 Blender로 사분할 상태 2개, Empty 소스 보기)도 합니다." 기록 HISTORY [236]. Blender 한도는 coordinator가 17:5x에 "18:00 기준을 19:00으로" 미뤘다(19시 전 PC 전체 8개 미만·남은 메모리 4GB 넘음, 뒤 2개 미만).
+
+도구 변경(`func_walk.py`·`func_run.py`, 결과 폴더 `코드/`에 사본):
+- 추가 실물: 첫 실물에서 값이 나오면 그 상태의 나머지 실물(6개까지)에 한 번씩 더 부르고 `kind: extra` 줄로 따로 쓴다(`call_extras`). 첫 줄을 먼저 쓰므로 추가 실물에서 죽어도 값은 남는다. 추가 실물 죽음은 함수 죽음 수에 안 넣고 조각마다 8번이면 그 함수의 추가 실물을 그만 부른다. `use_self` 거짓 함수(노드 클래스 함수 빼고)는 클래스에 부른 뒤 실물에도 부른다. 합계에 추가 실물 부름·값·오류·죽음·안 부름·평가본 수·첫 실물과 모양 종류(숫자를 지운 모양)가 다른 줄 수.
+- 큰 실물 고르기(`size_pick`): 크기에 따라 값이 달라지는 타입은 가장 큰 실물 4개 + 모은 실물 앞 2개(`Mesh` 면 수, `ShapeKey` 점 수, `NodeTree` 노드 수, `Text` 줄 수, `Spline` 점 수, `Curves`·`GreasePencil`). `Object.ray_cast`·`closest_point_on_mesh`·`crazyspace_eval`은 메시 물체 중 면이 많은 것부터(곡선 등 메시 아닌 물체에서 죽는 것은 2차에서 24번 잼).
+- 죽음 한도: 함수마다 상태(파일)당 3번, 조각 전체는 상태 모드 8번·파일 모드 40번. 파일 모드에서 클래스로 늘 죽는 `XrSessionState.action_state_get`은 안 부른다.
+- 장면 요약: 수정자 종류·제약 수, 포즈 뼈 위치·회전·크기, 노드 나무(묶음·재질)의 노드·연결 수, 곡선 점 수, 그리스펜슬 층 수, 액션 층 수를 더함.
+- 공개 .blend(`--files`): `data/blend_sources` 다섯 곳 .blend 2,373개(`fill_run.blend_files`와 같은 목록·순서)를 상자 TEMP에 복사해 그 사본을 `open_mainfile(load_ui=False, use_scripts=False)`로 연다. 사본 이름 둘을 번갈아 덮어쓴다(쌓이지 않게, 지우지 않음). 노드 클래스 함수는 안 부른다. 연 뒤 유체 캐시·임시 경로를 상자로 돌린다. 파일마다 라이브러리 수·못 찾은 라이브러리(`ID.is_missing`)·못 찾은 그림 수를 적는다(사본이라 상대 경로가 끊길 수 있음, 값이 작게 나오는 쪽). 원본 다섯 곳 모든 파일의 크기·sha256을 전후로 견준다. 200MB 넘는 21개는 마지막 조각 하나에서 차례로 연다. 열기 멈춤 900초. 세기는 노드 클래스 함수 1,681개를 목표에서 빼고, 함수마다 파일별 크기 최대·부르기 시간 중앙값의 파일 사이 중앙·95번째·최대와 값 받은 파일 수를 낸다.
+- 정답 파일(`--extra-file`): `results/20261108/174918_정답_파일/정답.blend`(앞 물체 곡선 `A_곡선`, 뒤 물체 면 90,601개 격자 `B_메시`, 모양 키 2개, 500줄 글).
+- 창 상태(`--winstates`): `화면:사분할`·`다시 연:화면:사분할`을 창 있는 Blender 하나로.
+- 진짜 파일이 달라지면 어느 파일인지(`진짜파일_차이.json`, 전후 목록 차이). 파일 시험 `172731_함수_파일_시험`에서 trees(문서/Blender·C:/tmp·APPDATA/Blender Foundation·설치 폴더 중 하나)가 달랐는데 어느 것인지 못 봤기 때문(그 뒤 17:27 이후 수정 시각을 가진 파일은 네 곳 모두 0개였다. 생긴 파일이 아니라 없어진 파일이거나 시각을 보존한 복사로 보이나 추측).
+- 죽음 원인 4개(`Strip.split` 원본, `SequenceEditor.display_stack`, `DynamicPaintSurface.output_exists`, `Object.crazyspace_eval`)는 2차·3차 결과 줄과 조각 log의 죽은 자리, 작은 탐색 실행으로 본다. `SequencerCompositorModifierPropertiesEmpty`는 Blender 5.2 소스(projects.blender.org의 공개 저장소)에서 이 타입으로 갈리는 조건을 찾는다.
+
+- [x] 가설(3차, 실행 전에 정함, 설계 검토 지적 3·목표 검토 보완으로 고침): 공개 .blend에서 부른 함수 중, 2차에서 "작다"(크기 최대 1,000자 이하이고 시간 최대 1ms 미만)던 함수 가운데 파일에서 단위별 크기 최대의 95번째 값이 5,000자 이상이거나 단위별 부르기 중앙값의 95번째 값이 10ms 이상인 함수가 1개 이상 있다.
+- [x] 지표(3차): (1) 가설의 함수 수와 이름(2차에서 이미 큰 3개·느린 8개는 따로 셈), (2) 함수마다 파일·상태의 크기·시간 중앙·95%·최대와 값 받은 단위 수, (3) 추가 실물 값의 모양 종류가 첫 실물과 다른 줄 수, (4) 파일 수 결과별(열림·열기 오류·죽음·멈춤)을 앞 실행 `020217`(열림 2,303·열기 오류 70)과 대조, 원본 전후 해시. (1)은 9번(보낼 값 규칙)에서 "스크립트 장면 숫자로 함수 값을 넣고 빼도 되는가"의 답이고, (3)은 "실물 하나로 잰 모양이 대표인가"의 답이다.
+- [x] 기준 숫자의 출처(3차): 5,000자(값 하나가 대략 천 토큰을 넘는 선)·10ms(걸음마다 부르면 느껴지는 선)·95번째 값은 Claude 제안값이고 9번이 정할 실제 한도는 아니다. 2차 "작다"의 1,000자·1ms는 2차 분포(164개 중 41-1,000자 23·1ms 넘는 8)에서 Claude가 고른 선. 실물 6개·추가 실물 죽음 8번·파일 죽음 40번·상태당 3번도 제안값. 파일 목록·900초는 `fill_run`과 같음.
+- [x] 닿을 수 있는 기준(3차): 크기가 자료 수에 비례하는 함수(`Mesh.calc_smooth_groups`·`ShapeKey.normals_*`·`Text.as_string`·`Scene.statistics` 등)는 파일 중 큰 것(면 수십만-수백만)에서 원리상 닿는다. 2차에서 이미 1,000자 넘는 함수(`calc_smooth_groups` 2,779자 등)는 가설 집합 밖이라, 가설이 맞으려면 2차에서 작던 함수가 커져야 한다. 반대로 구조·참거짓·None을 돌려주는 함수는 원리상 안 닿는다. 시간 10ms는 BVH를 만드는 `ray_cast`·`closest_point_on_mesh`(2차에서 이미 0.0x ms)가 큰 메시에서 닿을 수 있다.
+- [x] 판정(3차, 실행 전에 정함): 가설이 맞으면 9번은 그 함수들의 크기·시간을 파일 기준(95번째 값)으로 쓰고 "스크립트 장면 숫자로 충분하다"고 쓰지 않는다. 틀리면 2차·3차 상태 숫자를 9번 재료로 쓰되 "이 파일 모음 안에서"라고 적는다. 모양 종류가 실물마다 다른 함수는 함수별 표에 적는다. 원본 해시가 하나라도 다르면 결과를 쓰기 전에 원인(수정 시각·폴더)을 찾는다. 파일에서 값을 받은 단위 수가 0인 함수는 "파일에서 못 봄"으로 따로 센다(호출이 줄어 틀림으로 보이지 않게).
+- [x] 측정 점검(3차): (1) 추가 실물 `results/20261108/172207_함수_시험6/`(상태 5개): 추가 실물 줄 1,089(값 1,032·오류 27·입력 못 만듦 30), 부른 함수 112, 첫 실물과 모양이 다른 함수 10, 추가 실물에서 죽은 함수 2(`ViewLayer.bl_system_properties_get` 실물 1번, `SequenceEditor.display_stack`)로 잡힘. (2) 창 상태 `172529_함수_창상태_시험`: 사분할 두 상태가 끝까지 만들어지고 값 3,532줄. (3) 파일 `172731_함수_파일_시험`(작은 13개, 고치기 전 코드): 원본 달라진 파일 0, 끝까지 돎. (4) 고친 코드로 표본 파일 시험(큰 것 3개·`flat-archiviz`·곡선 하나뿐인 `single-curve`·읽다 죽었던 `jacaranda_tree_1k`·라이브러리를 쓰는 `library_test_scene`·열기 오류 `room.blend`·정답 파일)을 본 실행 전에 돌려 정답 파일의 `calc_smooth_groups` 길이 90,601·`Text.as_string` 2,889자·모양 키 점 91,204와 맞는지, `ray_cast`가 메시 물체에 불리는지 본다(결과는 아래 3차 결과에 적음).
+- [x] 독립 검토(3차 설계): Sonnet(노력치 높음), 계획·이 절·고친 도구 전체와 2차 판 diff·시험 결과·앞 파일 실행(020217)을 읽음. 결론 "상태·창 상태 3차는 지금 돌려도 됨, 파일 3차는 고친 뒤". 지적 13개와 처리는 아래 "3차 설계 검토 지적" 표.
+- [x] 목표 검토(3차): Sonnet(노력치 기본), 계획·이 절·티켓 46·HISTORY [221]·[222]·[236]. 답: 통과하든 실패하든 보낼 값을 정하는 규칙의 큰 틀은 안 바뀌고, 함수 값 164개 중 일부의 크기·시간 숫자를 무엇으로 쓰느냐만 바뀐다. 통과하면 넘은 함수만 파일 기준 숫자로, 실패하면 2차 숫자를 "이 파일 안에서"라는 조건으로. 첫 가설(10배)은 이미 큰 3개로도 채워져 정보가 적고, 상대 배수는 보낼지 말지와 무관하며, 최대값은 큰 파일 한두 개가 정하고, 공개 파일은 초보자 작업 파일을 대표하지 않는다. 확정 못 하는 것: 값의 쓸모·바뀌는 빈도, 파일 쪽 정답 대조, 모양이 다를 때 규칙을 어떻게 바꿀지. 보완 권고(2차에서 큰 함수 빼고 세기, 중앙값·분위수, 값 받은 파일 수)는 가설·지표에 넣음.
+- [x] 비용과 시간(3차): 돈 들지 않음. 상태 3차 60-90분 어림(설계 검토: 시험6의 다시 띄우기가 상태당 약 2번). 파일은 표본 시험으로 어림을 고친다(작은 파일 몇 초, 큰 파일은 분 단위, 전체 수 시간 이상으로 추측). 19:00 뒤 PC 전체 2개 미만일 때만 띄우므로 더 길어질 수 있다.
+
+3차 설계 검토 지적(Sonnet):
+
+| # | 지적 | 처리 |
+|---|---|---|
+| 1 | 죽음 한도 8번이 조각 전체에 누적되어 파일에서 `ray_cast`·`closest_point_on_mesh`가 앞 몇 파일만 불림 | 고침: 그 셋은 메시 물체만, 한도는 상태당 3번·파일 모드 조각 전체 40번 |
+| 2 | 실물이 데이터 순서 앞 6개라 큰 것을 못 잡음 | 고침: `size_pick`(가장 큰 4개 + 앞 2개) |
+| 3 | 가설(10배)이 거의 늘 참이거나 잡음에 좌우됨, 경로 값은 상자 경로 길이 | 고침: 2차에서 작던 함수만, 절대 기준(95번째 값 5,000자·10ms), 시간은 단위별 부르기 중앙값. 경로 값 함수(`online_assets_cache_path`·`filepath_from_user`·`frame_path`)는 결과를 볼 때 따로 표시 |
+| 4 | 모양 비교가 길이 차이를 모양 차이로 셈 | 고침: 숫자를 지운 모양 종류로 견줌 |
+| 5 | 파일 경로 코드가 안 돌았고 표본이 작고 정답 점검 없음, 020217과 대조 안 함 | 고침: 정답 파일과 층을 나눈 표본으로 본 실행 전 시험, 파일 수 결과를 020217과 대조(지표 4) |
+| 6 | 큰 파일 3개가 동시에 열림, 평가 그래프 시간·메모리 안 잼 | 고침: 200MB 넘는 21개는 마지막 조각 하나에서 차례로. 표본에 큰 3개 |
+| 7 | 다른 일의 `fill_run --job files --hash`가 같은 원본을 직접 열어 해시 대조가 섞임 | 처음에는 그 작업이 끝난 뒤 띄우기로 했으나, 18:02에 그 작업이 2,373개 중 2,324개에서 큰 파일을 25분에 2개씩 열고 있어 몇 시간 걸릴 것으로 보여 바꿈(결과를 보기 전): 같이 돌리고, 원본 해시가 다르면 달라진 파일 이름·수정 시각을 그 작업의 파일별 결과 줄(`173731_큰파일_제한없이2/파일1_결과.jsonl`)과 견줘 누가 썼는지 가른다. 이 실행은 원본을 열지 않고 사본만 연다 |
+| 8 | 사본은 상대 경로가 끊겨 값이 작게 나옴, `lib.library`는 늘 None, 복사가 try 밖 | 고침: `ID.is_missing`으로 셈, 복사 실패를 줄로. 작게 나오는 쪽은 못 본 것으로 적음 |
+| 9 | 판정에 호출 범위 조건 없음, 숫자(164·173·2,373·2,303) 맞추기, 파일 모드 누락 1,681, 견줄 기준 판 미정 | 고침: 판정에 "파일에서 못 봄" 따로, 파일 모드 세기에서 노드 클래스 함수 뺌. 견줄 기준은 같은 코드의 3차 상태 실행(가설의 "2차에서 작다"는 2차 숫자로 실행 전에 고정) |
+| 10 | 추가 실물에 평가본 복제가 섞임 | 고침: "추가 실물 중 평가본" 열로 따로 셈 |
+| 11 | 첫 부름 ARGS 표시에 실물 번호 없음, "안 부름"을 부름에 셈, 파일 모드에서 `action_state_get` | 고침: 셋 다 |
+| 12 | 시간 어림이 낙관적 | 고침: 비용과 시간 칸 |
+| 13 | 죽음 원인·Empty 소스의 방법이 계획에 없음 | 고침: 도구 변경 끝 줄 |
+
+#### 3차 진행 기록(결과 칸 전)
+
+- 상태 3차 `results/20261108/175136_함수_전수3/`(17:51-17:58, 410초, Blender 조각 3 + 창 1, 고친 코드): 결과 종류 값 나옴 1,845·사용자 PC 7·오류 1·못 만듦 1·누락 0(2차와 같음). 상태 254개 중 252개 끝, 사분할 2개는 화면 없는 쪽에서 또 만들기 중 죽음. 추가 실물 줄 48,982(값 47,373·오류 304·입력 못 만듦 1,305), 추가 실물을 부른 함수 144, 숫자를 지운 모양 종류가 첫 실물과 다른 함수 16(예 `ShaderNodeTree.get_output_node` 없음 ↔ 출력 노드 구조, `KeyMapItems.from_id` 없음 ↔ 항목, `NodeTree.debug_lazy_function_graph` 없음 ↔ 최대 28만 자), 추가 실물에서 죽은 함수 4(`ViewLayer.bl_system_properties_get` 13번: 추가 실물 238개가 모두 평가본 뷰 레이어라 평가본에서 부르면 죽는 것으로 보임(추측), `GeometryNodeForeachGeometryElementInput.pair_with_output` 3, `PoseBone.compute_bbone_handles` 1, `SequenceEditor.display_stack` 1). 첫 부름 죽음은 53줄로 2차 85줄보다 적다(`ray_cast`·`closest_point_on_mesh`·`crazyspace_eval`을 메시 물체만 고른 뒤 이 셋은 죽음 0). 진짜 파일·클립보드 같음, `index.json` 흔적 0.
+- 창 상태 `175928_함수_전수3_창상태`: 사분할 두 상태를 창 있는 Blender로 끝까지 만듦(값 3,532줄·추가 실물 값 454줄), 진짜 파일 같음. 이 두 상태에서만 값이 나온 함수는 없다(두 상태의 값 나옴 함수는 모두 3차 상태에서도 값 나옴).
+- 파일 표본 `175213_함수_파일_표본`(9개, 610초): 원본 달라진 파일 0, 진짜 파일 같음. 열기 오류 1(`1.62/room.blend`, 앞 실행 020217과 같음). 정답 파일 대조(측정 점검 (4)): `Mesh.calc_smooth_groups`가 가장 큰 메시(`meshes[0](크기 90601)`)에 불려 `tuple 90601개` = 면 90,601 ✓, `ShapeKey.normals_vertex_get` `tuple 273612개` = 점 91,204 × 3 ✓, `Text.as_string` `글자 2889자` ✓, `Object.ray_cast`·`closest_point_on_mesh`는 곡선 `A_곡선`이 아니라 메시 물체에 불림 ✓(`ray_cast` 첫 부름 29.8ms, 다시 부르면 0.004ms: 처음에 BVH를 만드는 시간. 실행 전에 정한 시간 지표는 부르기 중앙값이라 이 첫 부름 시간은 가설 판정에 안 들어감, 따로 적음). 사본이라 라이브러리를 못 찾은 파일 `library_test_scene`(3개 모두), 그림을 못 찾은 파일 `jacaranda`(10)·`pine_tree_01`(18). 스플래시 파일에서 `ViewLayer.bl_system_properties_get` 추가 실물(평가본)이 죽어 파일을 다시 여는 데 175초 → 파일 모드는 추가 실물 죽음 한도를 2번으로 줄임(본 실행 전, 결과를 보기 전).
+- 파일 본 실행 `함수_파일_전수`: 18:03 시작, 2,373개 + 정답 파일 + 라이브러리가 끊긴 파일(아래 Empty). 같은 원본을 직접 여는 다른 일(`173731_큰파일_제한없이2`)이 도는 중이라 설계 검토 지적 7의 처리를 바꿔 같이 돌림(지적 표 7).
+- 죽음 원인 4개(`results/20261108/175336_죽음_원인/`, 출력 `출력.txt`·`출력2.txt`): `DynamicPaintSurface.output_exists`는 입력 `object`에 메시가 아닌 물체(카메라)를 주면 Blender가 죽음(실행으로 확인, 같은 표면에 평면·큐브를 주면 False). 2차에서 죽은 `넓히기:물리`는 입력 물체를 첫 실물로 골라 메시 아닌 물체가 들어간 것으로 보임(추측, 입력 줄은 죽으면 안 남음). `Strip.split`(원본 색 조각, 범위 안·밖 프레임, 합성 수정자·색 균형 수정자, 평가본), `SequenceEditor.display_stack`(색 조각 → "Strip type must be 'META'", 메타 → None, 평가본 편집기, 다른 장면 편집기, 지운 메타 참조), `Object.crazyspace_eval`(섭디비전·뼈대+섭디비전, split_faces 뒤)는 따로 불러서는 죽지 않았다. 상태 안에서 죽은 자리는 모두 같은 상태에서 값을 바꾸는 함수(`display_stack`·`invalidate_cache`·`MetaStrip.separate`·`Mesh.split_faces`) 뒤였다(2차 결과 줄의 순서). 원인은 못 잼(추측: 앞 함수가 바꾼 자료를 가리키는 낡은 참조).
+- `SequencerCompositorModifierPropertiesEmpty`: Blender 5.2 소스(`source/blender/makesrna/intern/rna_sequencer.cc`, `blender-v5.2-release` 가지, projects.blender.org)의 `rna_SequencerCompositorModifierProperties_refine`은 수정자의 노드 묶음이 없거나 `ID_MISSING`이면 이 타입을 돌려주고, 속성 포인터 getter는 묶음이 없으면 NULL을 돌려준다(소스 코드). 그래서 "링크한 묶음의 라이브러리 파일이 없는" 경우에만 생긴다. 실행으로 확인(`175259_빈_속성_소스_조건/출력.txt`): 라이브러리 `A/lib.blend`의 합성·지오메트리 묶음을 링크한 `main.blend`를 다른 폴더 `B`에 복사해 열면 묶음 `is_missing` 참, 합성 수정자 `properties`가 `SequencerCompositorModifierPropertiesEmpty`, 노드 수정자 `properties`가 `NodesModifierPropertiesEmpty`이고 `bl_system_properties_get()`이 `PropertyGroup`을 돌려줌. 이 파일(`B/main.blend`)을 파일 본 실행에 더함.
+
+### [E2] 강좌 따라 하기 2차 · 뺀 도넛 수업과 안 써 본 자료를 더해도 걸음 기록이 완성 파일의 값 바뀜을 덮는가, 실제 조작으로 바꾸면 무엇이 더 세어지나 · 2026-11-08
+
+티켓 46 9단계의 7번 2차다. 1차는 결과 폴더 `results/20261108/153221_강좌_따라하기/README.md`(가설 미달, 도넛 8수업 중 충족 0, HISTORY [237])에 체크리스트까지 남겼다. 2차는 HISTORY [237]의 "범위를 줄이지 않고 이어 한다"에 따라 뺀 수업, 안 써 본 자료, 시점 돌리기 취소 원인, 파이썬으로 값을 넣은 걸음의 영향을 더한다. 결과는 `results/20261108/175018_강좌_따라하기2/`에 새로 남긴다(1차 폴더는 읽기만).
+
+도구: 흐름 `data/eval/state_generic/flows_tut2.py`(1차 흐름 + 새 흐름 9개), 실행기 `tut_run2.py`(흐름마다 시작 파일·light 읽기·Blender 하나 6GB 넘으면 멈춤), 지문 `tut_compare.py`·`tut_compare_inside.py`, 집계 `tut_tally2.py`(2차 쌍을 더한 판, 처음에 `tut_tally.py`로 적었던 것을 실행 뒤 검토 7번으로 고침), 기대 상태 `tut_expect_inside.py`. 걷는 도구와 값 읽기는 1차와 같다(`flow_walk.py`, 7판 `op_walk_v7_주소만.py`).
+
+새 흐름:
+- 도넛 수업 9(도넛 여럿·접시·조리대), 10(바깥 자료 배치·방·하늘), 13(조명 애니메이션), 14(영상 편집): 그 수업의 앞 단계 파일 사본(Donut_8·9·12)을 열고 시작한다(1차는 우리 흐름 사슬에서 시작). 14는 도넛과 상관없는 영상 편집 장면이라 공장 상태에서 시작하고, 완성 파일 쪽은 지시대로 13→14 쌍과 함께 공장→14 쌍도 낸다. 10의 바깥 자료(Poliigon 유리병·용설란·화분)는 Donut_10 사본 안에 메시와 재질로 들어 있어 `wm.append`로 가져온다. 텍스처 그림 파일은 사본 폴더에 없다(이미지 칸은 비어 있음). 이 네 흐름은 점 수만 개라 메시 요소 칸을 안 읽는 light로 읽는다(지문 쪽도 light).
+- 수업 5: 단계 파일 4와 5의 지문 차이가 `BlendData.filepath` 1칸뿐이라(1차 지문으로 확인) 따라 할 걸음이 없다. 판정에서는 "판정 불가"로 센다.
+- 초콜릿 도넛·컵케이크: 1차에서 받아 두고 안 쓴 공식 데모(지오메트리 노드). 사람이 만드는 순서로 Claude가 옮겼다(강좌 아님, 판정 밖, 1차 데모 3개와 같은 취급).
+- 조작판: 1차 L2와 L12에서 파이썬으로 값을 넣은 걸음을 실제 조작으로 바꾼 판(`view3d.select`, `wm.context_toggle`, `object.select_pattern`, `screen.frame_jump`·`frame_offset`, `wm.context_set_int`·`context_set_float`). L12 조작판은 1차 L11 끝 사본에서 시작한다. 활성 물체 바꾸기와 키 보간은 3D 화면 안의 조작으로 바꿀 길이 없어 그대로 둔다.
+- 시점 돌리기 점검: 공장 상태에서 돌리기 → 카메라 시점 → 돌리기 → 원근으로 되돌림 → 돌리기 → `camera_to_view` → 돌리기.
+- 다른 따라 하기 저장소: GitHub에서 로그인 없이 받을 수 있는 단계 파일을 찾되, 파일을 받는 것은 프로젝트 규칙(티켓 46 2단계 "파일 이름·출처·크기를 보이고 허락받은 뒤")대로 목록만 만들고 허락을 기다린다.
+- 강의실 PC의 사람 기록 `streams`: 이 PC의 `%APPDATA%\blender_tutor\streams`가 없음(ls로 확인) → "이 PC에 없음"으로 넘어간다.
+
+- [x] 목적: 최종 목표 사용자 "API 에서 찾아낸 값중 어떤것을 효율적으로 보내면 좋을까?". 7단계 티켓 원문 "강좌 따라 하기: 몇 개를 조작 순서로 옮겨 조작마다 바뀐 값을 보고 완성 파일과 견준다." 사용자 "이런게 한 두개가 아니라 좀 여러개 있어야 윤곽이 보이지 않을까?"(HISTORY [222]). 2차의 몫은 HISTORY [237] Claude 결정 "범위를 줄이지 않고 이어 한다". 결과는 8단계 "칸마다 자주 바뀜, 일부러 바꿀 때만, 안 쓰임"에 쓴다.
+- [x] 가설(실행 전에 정함, 설계 검토 뒤 고침): 1차에서 더한 도넛 수업 4개(9·10·13·14)에서도 1차 8개와 같이 걸음 기록이 완성 파일 쌍의 값 바뀜 칸을 80% 넘게 잡지 못한다(1차 결론 "걸음 기록만으로는 부족"이 새 수업에서도 성립한다). 덧붙인 가설 둘(판정에 안 씀, 재는 것): (ㄱ) 파이썬으로 값을 넣은 걸음을 실제 조작으로 바꿔도 그 걸음의 작업 상태 칸은 달라지지 않고(바뀐 걸음 0개), 더 세어지는 것은 조작 기록·화면 칸뿐이다. (ㄴ) 이 흐름에서 시점 돌리기는 카메라 시점(`view_perspective` = CAMERA)에서만 취소되고 그 밖에서는 안 취소된다.
+- [x] 자료: 도넛 단계 파일 사본 14개(1차와 같음, `<스크래치패드>/tut/copy/donut/`, 원본 해시 1차 실행 전 값과 대조), 1차 지문 37개·흐름 jsonl 4개·저장 사본(1차 폴더, 읽기만), 데모 사본 chocolate_donut·cupcakes(1차에 해시까지 뜸). Claude가 Donut_9·10·13·14를 화면 없는 Blender로 열어 확인한 것: 9는 도넛 복제 7개·아이싱 재질 7색·접시(원 3,802점)·조리대·뒷벽(평면), 10은 유리병(17,324면)·용설란(171,620면)·화분·빈 물체·방 상자·하늘 텍스처·Cycles, 13은 면 조명 하나 더·조명 회전 키·Icing.007에 스프링클·샘플 1000, 14는 카메라만 있는 장면에 영상 편집 띠 2개(이미지 160장, 색 띠 225-250프레임의 투명도 키)·초당 30장·Standard. 대표성의 한계는 1차와 같다(한 강좌·한 사람, 순서는 Claude가 고름, 원본보다 적은 복제 수 3개·작은 접시). 9-13은 그 사람의 앞 단계 파일에서 시작하므로 1차보다 출발 상태가 완성 파일과 가깝다.
+- [x] 도구의 동작: 1차 체크리스트의 항목(조작 호출 `bpy.ops` 1-168줄, `bpy.ops.wm.save_as_mainfile` copy, `bpy.ops.wm.open_mainfile` load_ui, `bpy.ops.object.subdivision_set`, `bpy.ops.object.modifier_apply`, `bpy.ops.object.modifier_add`, `bpy.ops.object.parent_set`, `bpy.ops.node.new_geometry_node_group_assign`, `bpy.ops.object.move_to_collection`, `bpy.types.ID.session_uid`)에 더해 이 세션에서 끝까지 읽은 것: `bpy.ops.wm.append`(wm.txt 118-165줄, filepath·directory·filename), `bpy.ops.view3d.select`(view3d.txt 279-294줄, location·extend·deselect_all), `bpy.ops.wm.context_toggle`(417-427줄), `bpy.ops.wm.context_set_enum`(349-359줄), `bpy.ops.wm.context_set_int`(383-394줄), `bpy.ops.wm.context_set_float`(360-371줄), `bpy.ops.screen.frame_jump`(screen.txt 121-128줄), `bpy.ops.screen.frame_offset`(129-136줄), `bpy.ops.object.select_pattern`(object.txt 1946-1957줄, 활성은 안 바꿈), `bpy.ops.object.constraint_add`(243-250줄), `bpy.ops.mesh.primitive_circle_add`(mesh.txt 1014-1041줄), `bpy.ops.mesh.inset`(635-652줄), `bpy.ops.view3d.view_orbit`(view3d.txt 532-548줄: 취소되는 조건은 문서에 없음 → 실행으로 확인), `bpy.ops.view3d.view_camera`(490-495줄, 카메라 시점 켜고 끄기), `bpy.ops.view3d.camera_to_view`(32-37줄), `bpy.types.RegionView3D.view_perspective`(57-60줄, PERSP·ORTHO·CAMERA), `bpy.types.RegionView3D.lock_rotation`(17-20줄), `bpy.types.Scene.sequence_editor_create`(Scene 328-333줄), `bpy.types.StripsTopLevel.new_image`(38-49줄), `bpy.types.StripsTopLevel.new_effect`(85-132줄, COLOR·length). `wm.context_set_float`에 `active_object.rotation_euler[2]`처럼 번호 붙은 경로가 되는지는 문서에 없어 실행으로 확인한다.
+- [x] 지표(설계 검토 뒤 고침): 주 지표 (가′) = 1차 (가)에서 공통 7칸(`Collection.all_objects`·`objects`·`collection_objects`, `Scene.objects`, `ViewLayer.objects`, `LayerObjects.active`·`selected`)과 열기 흔적 칸(`SpaceNodeEditor.*`, `SpaceImageEditor.*`, `NodeTreePath.node_tree`)을 분모·분자에서 뺀 값. 부 지표: 1차 그대로의 (가)·(나), 기준선, 대조군(같은 읽기 방식 수업끼리만, 표에 full/light 열). 1차 8수업도 같은 규칙으로 다시 세어 두 판을 함께 낸다. (ㄱ): 바꾼 걸음마다 (조작판 − 1차 판) 작업 상태 칸 차집합. 조작 기록(`WindowManager.operators`·`reports`, `*_OT_*` 자리), 화면 갈래, `Object.tag`는 미리 빼고 따로 센다. 조작판을 두 번 돌려 두 번 모두 나온 차이만 센다. 바꾸지 않은 걸음의 두 판 차이도 함께 내(잡음 기준선). 걸음은 이름·순서로 짝짓는다. (ㄴ): 시점 돌리기마다 결과와 그 앞 `view_perspective`·`lock_camera`(흐름이 `시점기록.jsonl`에 씀).
+- [x] 기준 숫자의 출처: 80%·대조군 +0.1·분모 10 미만 판정 불가는 1차 제안값 그대로. "새 4수업 중 3개 이상 충족이면 1차 결론을 뒤집을 근거"의 3은 Claude 제안값. (ㄱ)의 "바뀐 걸음 0개"는 원리상 기준(차이가 없음). 13수업 전체의 75%(10개)는 1차 8개가 충족 0이라 닿을 수 없어 쓰지 않는다(설계 검토 1).
+- [x] 닿을 수 있는 기준: 최댓값 1.0. 1차에서 놓친 칸 대부분이 우리가 안 한 조정이었으므로(1차 결과 칸, 추측) 수업 9-13도 1.0에는 못 닿는다. 수업 5는 분모 0이라 판정 불가가 확실하다(판정할 수 있는 수업은 많아야 12). 1차의 편집기 10칸은 파일 열기 흔적이었으므로(1차 실행 뒤 검토) 2차에서도 같은 칸이 분모에 들어간다. 이번에는 결과를 보기 전에 정한다: `SpaceNodeEditor.*`, `SpaceImageEditor.*`, `NodeTreePath.node_tree`는 열기 흔적이라 (가) 분모에서 빼고, 뺀 수와 뺀 판도 함께 낸다.
+- [x] 판정(실행 전에 정함, 설계 검토 뒤 고침): 새 4수업(9·10·13·14) 중 (가′) 기준 충족(안 된 걸음 0, 분모 10 이상, (가′)·(나) 0.8 이상, 대조군보다 0.1 이상)이 2개 이하이면 가설 성립: 1차 결론대로 8단계에서 완성 파일 차이에서만 바뀐 칸을 따로 표시한다. 3개 이상이면 1차 결론을 뒤집을 근거로 보고, 수업별로 어떤 차이가 있는지(시작 파일이 완성 파일인지 등)를 따져 8단계 근거 방식을 다시 정한다. 수업 5는 분모 0이라 판정 불가로 표에 고정 줄을 둔다. 14는 공장에서 시작하므로 판정 쌍은 공장(저장)→Donut_14 하나이고, 13→14는 참고(판정 밖)다. 14 쌍에는 4.0 파일을 5.2로 열 때의 기본값 차이가 섞일 수 있어 (가′) 분모의 한계로 적는다. (ㄱ): 작업 상태 차이가 난 바꾼 걸음이 0개면 "파이썬 값 넣기는 작업 상태를 덜 세지 않는다", 1개 이상이면 그 칸을 8단계 근거에 더하고 해당 걸음 종류를 적는다. 조작 기록·화면 칸이 더 세어진 수는 8단계에서 그 갈래 빈도를 "아래로 치우친 값"으로 표시하는 근거로 쓴다. (ㄴ): 이 흐름에서 카메라 시점일 때만 취소되면 그렇게 적고, 사람 조작에서 시점이 풀리는지는 소스를 읽기 전에는 단정하지 않는다. 흐름 고치기는 오류·CANCELLED 걸음만, 고친 판은 새 폴더.
+- [x] 측정 점검: 1차의 점검(같은 파일 두 번, 정답을 아는 값·구조 변화, 열기 흔적)은 같은 도구라 다시 하지 않고 1차 결과를 쓴다. 새로 하는 것: (a) light 지문 두 번(Donut_13_light) 차이 0. (b) 수업 끝 기대 상태(`tut_expect_inside.py`에 2차 수업을 더함: L9 도넛 복제 3·아이싱 새 재질 3·접시·조리대·뒷벽, L10 덧붙인 물체 4·방·하늘 노드·Light 없음·Cycles, L13 면 조명 2·Area 액션·Icing.007 노드 수정자·샘플 1000, L14 띠 2·색 띠 투명도 키·초당 30·Standard, 초콜릿·컵케이크 노드 수정자·재질, 조작판 L2·L12는 1차 판과 같은 기대). (c) 조작판에서 바꾼 걸음이 1차 판과 같은 작업 값을 바꾸는지(예: `view3d.select`로 점 고르기 뒤 `MeshVertex.select`·`Mesh.total_vert_sel`, `wm.context_toggle` 뒤 `ToolSettings.use_proportional_edit`) — 같지 않으면 그 걸음은 비교에서 빼고 까닭을 적는다.
+- [x] 독립 검토: Sonnet(노력치 기본), 이 절·1차 기록·새 흐름·실행기·걷는 도구·집계를 읽음(못 읽은 곳: tut_compare 둘, tut_expect, HISTORY, 1차 결과 파일). 지적 16개, 처리는 아래 "2차 설계 검토 지적".
+- [x] 목표 검토: Sonnet(노력치 기본), 이 절의 목적·가설·지표·판정만 읽음(고치기 전 판). 답: 통과하면 걸음 기록을 칸 빈도 근거로 쓰고, 실패해도 보낼 값 목록의 뼈대는 같고 "걸음으로는 안 잡히는 칸" 꼬리표와 별도 근거가 붙는다. 분모를 13으로 두면 통과가 어렵다(1차 0/8). (ㄱ)은 결과에 따라 칸별 표시(조작 기록·화면 갈래 "아래로 치우침" 또는 작업 상태 칸 추가)가 달라진다. (ㄴ)은 맞으면 최종 답이 사실상 안 바뀐다.
+- [x] 비용과 시간: 돈 들지 않음. 창 있는 Blender 1개로 흐름 9개(걸음 약 250개, light 흐름은 걸음마다 약 2-5초로 어림, 안 재 봄), 지문은 화면 없는 Blender 2개씩 약 15개. 이 작업 동시 2개, 19시 전에는 PC 전체 8개 미만·남은 메모리 4GB 초과, 19시부터 2개 미만. Blender 하나가 6GB를 넘으면 그 실행을 멈추고 기록(`tut_run2.py`가 10초마다 잼). GitHub 목록 요청은 30초 넘게 띄워 천천히. 파일을 받는 것은 허락 뒤.
+
+### 2차 설계 검토 지적
+
+| 번호 | 지적 | 처리 |
+|---|---|---|
+| 1 | 분모 13이면 판정이 실행 전에 미달로 정해짐 | 고침: 판정을 "새 4수업이 1차와 같은 방향인가"로, 13수업 75%는 안 씀 |
+| 2 | 수업 5가 집계에서 빠짐 | 고침: 판정 불가 고정 줄 |
+| 3 | 14의 쌍이 둘, 4.0→5.2 기본값 차이 | 고침: 판정 쌍은 공장(저장)→14, 13→14는 참고 키, 한계를 판정 칸에 적음 |
+| 4 | 조작판 키가 "L"로 시작해 판정에 섞임 | 고침: 키를 `조작판_L2`·`조작판_L12`로, 도넛 수업은 명시 목록 |
+| 5 | 1차와 2차를 합칠 방법 없음 | 고침: 집계가 1차 폴더를 읽기 전용 입력으로 받음, 1차 8수업도 2차 규칙으로 다시 세어 두 판을 냄 |
+| 6 | 열기 흔적만 빼고 공통 7칸은 둠(비대칭) | 고침: 두 가지 모두 뺀 (가′)를 주 지표로 |
+| 7 | full·light 섞인 대조군 | 고침: 표에 읽기 방식 열, 대조군은 같은 방식끼리 |
+| 8 | `--disable-autoexec` 없음(남의 파일을 명령줄로 엶) | 고침: 실행기 인자에 더함 |
+| 9 | 시작 파일 화면이 렌더 보기·카메라 시점일 수 있음 | 고침: 시작 점검 앞에 솔리드·원근 맞추기 걸음(판정 밖), 맞추기 전 상태를 `시점기록.jsonl`에 |
+| 10 | 이름 가정(Icing.004, Area), 파일 없는 이미지 띠, Standard, 번호 붙은 경로 | 확인: Donut_8에 Donut·Donut.001·Icing·Icing.001이 있어 복제 3번은 .002-.004(단계 파일 대강으로 확인). L13의 `pick("Area")`는 옛 조명에 키를 넣는 것이 맞음(Donut_13에서 옛 Area에 AreaAction). 나머지는 점검 실행으로 확인 |
+| 11 | (ㄱ)이 늘 참, 기준 숫자 없음, 잡음 | 고침: 지표·판정을 작업 상태 차집합과 "바뀐 걸음 0개"로, 조작판 두 번, 짝은 이름·순서 |
+| 12 | 조작판 L12는 새 세션이라 세션 자료가 다름 | 고침: 바꾸지 않은 걸음의 두 판 차이를 잡음 기준선으로 |
+| 13 | (ㄴ)이 시점 값을 안 남김, 자동 돌리기, 잠금 True 시험 없음, 사람 조작 단정 | 고침: 시점 기록 걸음, 잠금 켜고 돌리기, 판정 문장 줄임. 소스는 공개 저장소를 읽어 봄(웹, 받지 않음) |
+| 14 | 진짜 설정 실행 전 해시, 시작 파일 존재 | 고침: 실행 전 해시(결과 폴더 `진짜설정_해시_실행전.txt`), 실행기가 시작 파일 없으면 멈춤 |
+| 15 | 집계에 2차 쌍이 없음 | 고침: 쌍과 light 지문(Donut_9·12·13·14, 공장 저장, 두 번 읽기)을 더함 |
+| 16 | 기대 상태 2차 항목 없음 | 고침: `tut_expect_inside.py`에 더함 |
+
+### 2차 실행 기록
+
+- 점검 실행(`results/20261108/175818_강좌_따라하기2_점검/`, 17:58-18:10, 판정 밖): 흐름 9개 모두 끝까지 감, 오류 0. 안 된 걸음은 시점 돌리기 CANCELLED 7번뿐(시점 돌리기 점검 흐름, 아래 (ㄴ)). 점검 실행에서 본 것과 고친 것: (1) `tut_run2.py`의 메모리 재기가 `tasklist` CSV의 "1,234,567 K"를 쉼표로 잘못 나눠 늘 0을 냈다(최대 메모리 0.0GB). `csv` 모듈로 고쳐 본 실행은 0.8-1.4GB로 잼. (2) 조작판 L12에 1차 L12의 "키 보간을 직선으로" 걸음이 빠져 있었다. 절이 정한 "1차 L12와 같은 순서, 키 보간은 그대로"에 맞게 18:06에 더했다(점검 실행의 조작판 L12는 고치기 전 판으로 이미 돌고 있었고, 본 실행 조작판 L12는 고친 판). 순서: 점검 흐름 L14·초콜릿·컵케이크·조작판 L2를 본 뒤 18:07에 그 흐름들의 본 실행을 시작했고, L9·L10·L13 본 실행은 점검 실행이 18:10에 다 끝나고 걸음을 본 뒤 18:10에 시작했다. 점검 실행과 본 실행의 흐름 기록은 L9·L13·L14·초콜릿·컵케이크·시점 점검이 바이트까지 같고 L10은 `wm.append` 걸음의 자리 이동 진단 값만 다르다(실행 뒤 검토 10번이 견줌, 재현 근거). (3) 조작판 L12의 "빈 물체를 활성으로"는 선택 패턴이 활성을 안 바꿔서 더한 걸음이라, 집계에서 바로 앞 걸음과 합쳐 1차 판 "Empty 고르기" 하나와 짝짓는다(본 실행 집계를 보기 전에 정함). 이름 가정(Icing.002-.004, Area, Icing.007)은 모두 맞았고, 파일 없는 이미지 띠·Standard·번호 붙은 경로(`active_object.rotation_euler[2]`)도 FINISHED 또는 "됨"이고 값이 바뀜.
+- 본 실행(`results/20261108/175018_강좌_따라하기2/`): `실행출력_1.log`(조작판 2개·L14·초콜릿·컵케이크·시점 점검), `실행출력_2.log`(L9·L10·L13), `실행출력_3_조작판_두번째.log`(조작판 두 번째, 하위 폴더 `조작판_두번째/`). 흐름 11번 모두 종료 코드 0, 끝까지 감, 안 된 걸음은 시점 돌리기 CANCELLED 7번(점검 흐름)뿐. Blender 하나 최대 1.4GB(6GB 넘은 것 없음). 18:07-18:21에 이 작업 Blender는 동시에 2개까지, PC 전체는 띄울 때 7개(19시 전 한도 8개 미만·남은 메모리 4GB 초과 안).
+- 지문: 완성 파일 2차 8개(`지문_완성파일_출력.log`), 사본 8개(`지문_사본1_출력.log`, `지문_사본2_출력.log`), 조작판 두 번째 사본 2개(`조작판_두번째/지문/`). 1차 지문(Donut_1-8·10·11·12, 공장, 공장 저장, 데모 3, 1차 사본)은 1차 폴더에서 읽기만.
+- 기대 상태(`기대상태_확인.json`, `기대상태_확인_조작판_두번째.json`): 8수업 32항목 중 31개 참, 조작판 두 번째 8항목 모두 참. 거짓 1개는 초콜릿 도넛 "재질 2": 사본을 열어 보니 재질 칸이 `Material`·`Icing`·`Bread` 3개다. 공장 Cube에 원래 재질 칸 하나가 있는 것을 기대에 안 넣은 기대 쪽 잘못이고 흐름은 계획대로 됐다(`코드/chk_choco.py`로 확인).
+- 원본 해시(`원본_해시_대조.txt`): 도넛 14개·데모 5개·진짜 설정 4개 모두 OK(진짜 설정은 이번에 실행 전 해시를 떠서 대조).
+- 집계: `.venv\Scripts\python data\eval\state_generic\tut_tally2.py results\20261108\175018_강좌_따라하기2 results\20261108\153221_강좌_따라하기` → `집계/`(걸음별, 수업별, 완성파일_대조, 완성파일_대조_칸, 조작판_대조, 조작판_걸음, 시점_돌리기, 측정_점검, 칸별_집계, 합계). 1차 8수업과 데모 3개의 (가)·(나)는 1차 집계와 같다(다시 세기 확인). 코드 사본은 `코드/`.
+
+수업별(걸음은 점검·시점 돌리기·시작 앞 걸음 뺌. (가′)는 분모/잡음/비율. 대조군은 같은 읽기 방식의 다른 도넛 수업 평균):
+
+| 수업 | 읽기 | 걸음 | 시점 돌리기 | (가′) | (가′) 대조군 | (가′) 기준선(흐름 3개) | (가) | (나) | 점검 c 자카드 | 판정((가′)) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| L2 | full | 1차 |  | 3/0/0.0 | 0.333 | 1.0 | 0.667 | 0.596 | 1.0 | 판정 불가(분모 3) |
+| L3 | full | 1차 |  | 4/3/0.75 | 0.4 | 1.0 | 0.643 | 0.6 | 0.93 | 판정 불가(분모 4) |
+| L4 | full | 1차 |  | 5/5/1.0 | 0.16 | 0.8 | 0.733 | 1.0 | 1.0 | 판정 불가(분모 5) |
+| L5 | full | 0 | | 0 | | | | | | 판정 불가(걸음 없음, 고정 줄) |
+| L6 | full | 1차 |  | 11/5/0.455 | 0.236 | 0.727 | 0.625 | 0.841 | 1.0 | 미달 |
+| L7 | full | 1차 |  | 8/4/0.5 | 0.025 | 0.0 | 0.692 | 0.809 | 1.0 | 판정 불가(분모 8) |
+| L8 | full | 1차 |  | 10/6/0.6 | 0.12 | 0.5 | 0.667 | 1.0 | 1.0 | 미달 |
+| L9 | light | 29 | 8 | 15/4/0.267 | 0.067 | 0.4 | 0.476 | 1.0 | 1.0 | 미달 |
+| L10 | light | 17 | 5 | 17/5/0.294 | 0.082 | 0.353 | 0.409 | 0.91 | 0.931 | 미달 |
+| L11 | light | 1차 |  | 13/3/0.231 | 0.123 | 0.308 | 0.429 | 0.792 | 1.0 | 미달 |
+| L12 | light | 1차 |  | 20/6/0.3 | 0.1 | 0.45 | 0.462 | 1.0 | 0.956 | 미달 |
+| L13 | light | 9 | 3 | 47/5/0.106 | 0.081 | 0.298 | 0.222 | 1.0 | 0.877 | 미달 |
+| L14 | light | 13 | 3 | 35/7/0.2 | 0.011 | 0.086 | 0.283 | 0.514 | 0.814 | 미달 |
+| 참고 13→14 | light | L14 |  | 53/6/0.113 |  | 0.132 | 0.188 | 0.294 | 0.814 | 판정 밖 |
+| 초콜릿 도넛(데모) | full | 39 | 10 | 53/8/0.151 |  | 0.132 | 0.143 | 0.4 | 1.0 | 판정 밖 |
+| 컵케이크(데모) | full | 34 | 9 | 56/6/0.107 |  | 0.089 | 0.141 | 0.459 | 1.0 | 판정 밖 |
+
+- 조작판 L2·L12: 흐름 걸음 15·15(L12는 활성 걸음을 합쳐 짝 14). 짝 15·14개 중 바꾼 걸음 5·8개.
+- 걸음마다 바뀐 칸 수(중앙값, 그중 작업 상태 중앙값): L9 4·2, L10 6·2, L13 4·2, L14 2·2, 초콜릿 2·2, 컵케이크 3·2. 수업 동안 한 번이라도 바뀐 칸(그중 작업 상태): L9 43(16), L10 47(16), L13 33(16), L14 37(21), 초콜릿 52(29), 컵케이크 60(31).
+- 2차 걸음 141개 중 파이썬 값 넣기(`data`) 95개(67%), 1차·2차 합 377개 중 233개(62%).
+- 놓친 칸(`완성파일_대조_칸.json` "(가′) 완성 파일에만"): L9 11칸(카메라 렌즈, 노드 소켓 값, 물체 위치, 3D 커서), L10 12칸(모음 자식, 노출, 위치·회전, 3D 커서), L13 42칸(카메라 피사계 심도, 움직임 흐림, Cycles 설정, 키 점, 하늘 노드 값, 프레임 속도), L14 28칸(FFmpeg·EEVEE·그리스 펜 렌더 설정, 활성 띠). 놓친 93칸 중 29칸은 다른 강좌 걸음에서 바뀐 적이 있는 칸이다(L9 8, L10 5, L13 15, L14 1, `칸별_집계.csv`로 셈, 실행 뒤 검토 5번을 다시 셈). 곧 걸음 방식은 볼 수 있는데 Claude가 짠 흐름이 그 조작을 안 한 칸이다. 잡은 칸에 이 칸을 더한 대략의 상한은 L9 0.80, L10 0.59, L13 0.43, L14 0.23이라, 흐름을 그 사람 조작에 더 가깝게 짰어도 L10·L13·L14는 0.8에 못 닿는다. L14 놓친 28칸 중 12칸(EEVEE·그리스 펜·Cycles 샘플 방식 등)은 Donut_1(그 사람의 4.0 시작 파일)과 값이 같아 판이나 시작 설정의 차이로 보이고, 16칸(FFmpeg 10칸 등)은 Donut_1과도 달라 수업 14에서 바꾼 것으로 보인다(실행 뒤 검토 6번이 잼, 12칸을 빼도 7/23 = 0.30 미달). L13은 쌍 양쪽이 같은 4.0 파일이라 판 차이로 설명되지 않고, 그 사람이 한 다른 조정으로 본다(추측).
+- 칸별 집계(`집계/칸별_집계.csv`, 1차·2차 강좌 걸음 377개, 조작판·시점 점검 흐름 뺌): 전수표 11,449칸 중 강좌 걸음에서 값이 바뀐 칸 236(걸음 10% 이상 15), 생김·없어짐만 1,718, 완성 파일 차이에만 있는 칸 643(전수표 밖 포함 898), 이번 근거에서 안 바뀜 8,848. 조작판에서만 더 바뀐 칸 55(열 `조작판에서만 더 바뀜`, 다른 점을 고른 3걸음을 뺀 뒤). 1차는 220(10% 이상 8), 1,548, 606, 9,071이었다. 후보 표시 규칙은 1차 제안값 그대로이고 판정에 안 쓴다.
+
+(ㄱ) 조작판(`집계/조작판_대조.json`, `조작판_걸음.csv`). 두 번 모두 나온 차이만 셈. 두 번의 바뀐·생긴·없어진 칸은 서로 똑같아서 이 거르기는 실제로 거른 것이 없다(실행 뒤 검토 10번):
+- 비교에서 뺀 걸음: L2 점 누르기 3걸음(`view3d.select`). 걸음 기록의 직접 값(첫 이동 뒤 좌표 합)이 1차 0.0763, 조작판 0.0399로 다른 점을 골랐다(두 번 모두 같음). 측정 점검 (c) 규칙 "같지 않으면 그 걸음은 비교에서 빼고 까닭을 적는다"대로 뺐다(실행 뒤 검토 2번이 찾음, 처음 판은 칸 이름만 견줘 "빼야 할 걸음 없음"으로 잘못 닫았다). 누른 화면 자리가 다른 점에 더 가까웠던 것으로 본다(추측).
+- **(ㄱ) 판정: 가설 불성립.** 비교한 바꾼 걸음 10개(L2 2개, L12 8개) 중 작업 상태 칸 차이가 난 걸음 2개. 둘 다 L12 "Camera 고르기 → `object.select_pattern`", "Empty 고르기 → `object.select_pattern` + 활성"이고 1차 판에만 `LayerObjects.active`가 있다. 선택 패턴은 활성을 안 바꾼다(소스 코드: 설치된 `5.2/scripts/startup/bl_operators/object.py` 45-92줄의 execute가 `select_set(True)`만 함. 공식 문서 object.txt 1946-1957줄에는 활성 언급 없음). 사람이 화면에서 누르면 활성도 바뀌므로(`view3d.select` "Select and activate item(s)", view3d.txt 280줄) 이 차이는 Claude가 고른 바꿀 조작 탓이다. 미리 정한 규칙대로 `LayerObjects.active`를 8단계 근거에 더하고 걸음 종류(물체 고르기)를 적는다. 바꾸지 않은 걸음 16개의 작업 상태 차이는 0.
+- 바꿔 본 범위: 강좌 파이썬 값 넣기 233걸음 중 바꿔 본 것은 고르기·토글·프레임·값 하나 넣기 종류뿐이다. 노드 더하기·잇기·소켓 값(약 69걸음), 재질(17), 이름(12), 그 밖의 값(55)은 바꿔 보지 않았다(실행 뒤 검토 1번이 `걸음별.csv`로 셈). 그래서 "파이썬 값 넣기 전체가 작업 상태를 덜 세지 않는다"고는 말할 수 없다.
+- 참고(결과를 본 뒤 고른 보기, 판정에 안 씀): 수업 단위로 모은 작업 상태 칸은 1차 판·조작판 두 번 모두 L2 269·269·269, L12 205·205·205로 같다(차집합 0).
+- 조작 기록: 비교한 바꾼 걸음 10개 중 조작판에만 `Operator.*` 13칸이 더 잡힌 걸음이 7개(조작 기록 전체로는 걸음마다 22-31칸), `select_pattern`은 `OBJECT_OT_select_pattern.*` 5칸과 `Report.message`·`type`도. 그러나 바꾸지 않은 걸음에서도 조작 기록 차이가 0이 아니다: L12의 바꾸지 않은 4걸음에서 1차 판에만 69-73칸(`Macro.*` 등). 화면 칸 `Region.x`·`y`는 바꾼 걸음 1개(L12 1프레임으로)와 바꾸지 않은 걸음 3개에서 조작판에만, 1개에서 1차 판에만 나와 잡음과 가를 수 없다. 1차 L12는 카메라 시점에서 돌았고 조작판 L12는 시작 앞 걸음이 원근으로 맞춰 돌아 `RegionView3D.*`가 1차 판에만 나온다(조건 차이, 실행 뒤 검토 3번).
+
+(ㄴ) 시점 돌리기(`집계/시점_돌리기.csv`, `저장/시점기록.jsonl`, 1차·2차 흐름과 조작판 두 번째 모두): 돌리기 128번 중 CANCELLED 15번. 15번 모두 그 앞에서 시점을 마지막으로 바꾼 걸음이 `view3d.view_camera`(3) 또는 `view3d.camera_to_view`(12)이고 카메라 잠금이 꺼진 상태다. 1차 도넛 흐름의 8번은 걸음 161 `camera_to_view` 뒤 164-199의 돌리기 8번 모두다(그 사이 시점을 바꾼 걸음 없음). 카메라 시점에서 잠금(`SpaceView3D.lock_camera`)을 켜고 돌린 1번은 FINISHED이고 `view_location`·`view_distance`와 카메라 물체의 `Object.location`·`rotation_euler`·`matrix_*`가 바뀜. 원근으로 되돌린 뒤의 돌리기는 모두 FINISHED. 소스 코드(Blender 저장소 `blender-v5.2-release` 가지 `source/blender/editors/space_view3d/view3d_navigate_view_orbit.cc`, 웹으로 읽음, 받지 않음): `vieworbit_exec`가 취소를 돌려주는 곳은 두 군데, (1) 회전 잠금(`RV3D_LOCK_ROTATION`)이 켜져 있고 반대쪽 보기가 아닐 때, (2) `rv3d->persp == RV3D_CAMOB`(카메라 시점)이고 `ED_view3d_camera_lock_check`가 거짓일 때. 공식 문서 `bpy.ops.view3d.view_orbit`(view3d.txt 532-548줄)에는 취소 조건이 없고, `bpy.types.SpaceView3D.lock_camera`(SpaceView3D 33-36줄) "카메라 시점 안에서 화면 이동 허용"과 맞는다. `camera_to_view`가 카메라 시점으로 바꾸는 것은 공식 문서(view3d.txt 32-37줄 "Set camera view to active view")에 없고 실행으로 확인했다. 시작 파일 4개 중 2개(Donut_12와 1차 L11 사본)가 카메라 시점·재질 보기로, 1개가 `lock_camera` 켜짐으로 저장돼 있었다(`시점기록.jsonl` "맞추기 전", 이 기록에는 흐름 이름이 없어 어느 파일인지는 실행 순서로만 미룸). 소스의 다른 조건(회전 잠금 `lock_rotation` 켜짐)은 시험하지 않았다. 시점 값은 점검 흐름의 기록 걸음에서만 직접 읽었고, 나머지는 "앞에서 마지막으로 시점을 바꾼 걸음"으로 미루어 본 것이다. 흐름이 쓴 것은 `view3d.view_orbit`(숫자판 돌리기)뿐이다. 사람이 마우스로 돌리는 `view3d.rotate`는 소스 `view3d_navigate_view_rotate.cc`에 `VIEWOPS_FLAG_PERSP_ENSURE`가 있어 카메라 시점을 벗어나는 쪽으로 보인다(실행 뒤 검토 4번이 웹으로 읽음, `ED_view3d_persp_ensure` 본문은 못 봄, 추측). 그러면 사람은 1차 L11·L12에서 카메라 시점을 벗어났을 수 있고, 흐름은 카메라 시점에 남아 걸음 기록의 화면 칸이 달라졌다.
+
+측정 점검:
+- (a) light 두 번: Donut_13·Donut_9 모두 바뀜·생김·없어짐 0.
+- (b) 기대 상태: 위 31/32(+조작판 두 번째 8/8). L13은 시작 파일 Donut_12에 Area 애니메이션도 Icing.007 수정자도 없어 실패할 수 있던 검사다.
+- (c) 조작판의 바꾼 걸음이 같은 작업 값을 바꾸는지: `wm.context_toggle`은 `ToolSettings.use_proportional_edit`를 같이 잡음. `view3d.select` 점 고르기 3번은 바뀐 칸 이름은 같지만(`MeshVertex.select`·`Mesh.total_vert_sel`) 고른 점이 1차 판과 달라 비교에서 뺐다(위 (ㄱ)). 선택 패턴 두 걸음은 활성이 다른 조작이라는 차이로 남김.
+- 점검 c(세션 순변화와 파일 대조): 자카드는 L10 0.931, L13 0.877, L14 0.814로 1차 기준 0.95보다 낮다. 파일 대조에만 있는 칸은 L10·L14에서 지운 물체의 `Light`·`Mesh`·노드 트리 칸이다. 쓰는 이가 없는 자료는 저장 때 빠진다는 것은 공식 문서 `ID.use_fake_user` "Save this data-block even if it has no users"(ID.txt 121-124줄)와 맞고, 걸음 기록의 `Mesh.users`·`PointLight.users` 바뀜(L14 걸음 2·5)도 같은 쪽이다(실행으로는 확인 안 함). L13은 `Image`·`Stereo3dFormat`·`UDIMTile`(렌더 결과 그림으로 봄, 추측). 세션에만 있는 것은 L13의 `KeyingSet*` 9칸. "세션 순변화 중 걸음 기록에 없는 칸"은 17수업 모두 0인데, 1차 실행 뒤 검토 6-가에서 구조상 늘 0이라 근거에서 거둔 검사라 여기서도 근거로 쓰지 않는다.
+- 효과 없는 걸음(바뀐 칸 0이거나 값이 이미 같음, 실행 뒤 검토 9번): L13 "160프레임으로"(Donut_12가 이미 160), L14 "영상 편집 자료 만들기"(공장 지문에 이미 `SequenceEditor` 17칸, 공식 문서 `Scene.sequence_editor_create` "Ensure ... valid"), L14 "색 띠 섞기 방식"(넣은 값이 기본값과 같음), 컵케이크 "이름을 Plane로", 이미 골라진 Cube 고르기 3개, 조작판 "빈 물체를 활성으로" 2번, 1프레임으로 가는 `screen.frame_jump`.
+- 측정 구멍: light 읽기는 메시 요소 칸을 안 읽으므로(설계대로) L9 `mesh.inset`(직접 값은 점 32→64, 면 1→33)과 `shade_smooth`에서 메시 칸이 0이다. light 수업(L9-L14)의 걸음마다 바뀐 칸 수는 full 수업보다 적게 나온다. L9 시점 돌리기 걸음 24에서 `Mesh.texspace_*`가 바뀐 것은 텍스처 공간이 늦게 계산된다는 추측과 같은 쪽이다.
+- 결과 분류: 2차 11번 실행 걸음 311개 = 됨 140, FINISHED 156, FINISHED/PASS_THROUGH 8, CANCELLED 7, 오류 0(실행 뒤 검토 8번이 셈). `view3d.select`의 FINISHED/PASS_THROUGH는 문자열이 FINISHED로 시작해 성공으로 셌고, 고른 점이 1개로 실제로 골라졌다. 판정 줄 13개 = 충족 0, 미달 8, 판정 불가 5(분모 3·4·5·8인 L2·L3·L4·L7과 L5).
+- 대조 경로: 실행 뒤 검토가 `tut_tally2.py`를 안 쓴 별도 코드로 새 4수업의 (가′)·(나)를 다시 세어 같았다(같은 지문을 썼으므로 독립인 것은 계산뿐). 메모리 고침은 고친 실행기의 출력으로만 확인했다. 지문 쪽 `tut_compare.py`에는 `--disable-autoexec`가 없다(공장 설정의 스크립트 자동 실행 꺼짐에 기댐, `wm.open_mainfile` `use_scripts` wm.txt 1160줄).
+
+### 2차 넘어간 것
+
+| 종류 | 무엇 | 확인한 방법 | 처리 |
+|---|---|---|---|
+| 못 만듦 | 수업 5 | 단계 파일 4→5 지문 차이가 `BlendData.filepath` 1칸. 써 보지 않은 대안: adcimon 단계 파일(허락 뒤), 공개 강좌 차례와 순서 대조 | 지금 함: 판정 불가 고정 줄 |
+| 제외 | (가′)가 1차 L2·L3·L4·L7을 분모 10 미만으로 판정 불가로 만듦 | 뺀 칸 목록(`완성파일_대조.csv` "(가′)에서 뺀 칸")을 직접 읽음: 공통 7칸 | 지금 함: 두 판((가′), (가) 1차 규칙)을 모두 냄. (가)로도 12수업 충족 0 |
+| 예상 밖 | 초콜릿 도넛 기대 상태 "재질 2" 거짓 | 사본을 열어 재질 칸 3개 확인 | 지금 함: 기대 쪽 잘못으로 적음, 흐름은 그대로 |
+| 예상 밖 | 메모리 재기가 0을 냄 | `tasklist` CSV 직접 읽음 | 지금 함: 고쳐 본 실행에서 잼(점검 실행 값은 못 씀) |
+| 예상 밖 | 조작판 L12에 키 보간 걸음이 빠짐, 활성 걸음이 더 있음 | 1차 L12 걸음 이름과 나란히 봄 | 지금 함: 본 실행 전에 더함, 활성 걸음은 앞 걸음과 합쳐 짝지음 |
+| 예상 밖 | 점검 c 자카드가 L10·L13·L14에서 0.95 아래 | 파일에만·세션에만 칸을 직접 읽음 | 다음 할 일: 저장 때 쓰는 이 없는 자료가 빠지는지 실행으로 확인(지금은 추측) |
+| 예상 밖 | 조작판 L2 점 누르기가 1차와 다른 점을 고름 | 걸음 기록 직접 값(좌표 합) 대조 | 지금 함: 비교에서 뺌. 다음 할 일: 다시 하면 누른 점 번호를 걸음 기록에 남김 |
+| 추측 | L13 놓친 칸은 그 사람이 한 다른 조정, L14 놓친 칸 12개는 판·시작 설정 차이 | L14는 Donut_1과 값 대조(실행 뒤 검토 6번), L13은 쌍 양쪽이 같은 판 | 다음 할 일: 8단계에서 "완성 파일 차이에만" 칸으로 따로 표시 |
+| 못 만듦 | GitHub 다른 따라 하기 저장소 | GitHub 검색(낱말 `blender donut tutorial`, 주제 `blender-tutorial`)과 저장소 API 목록만 읽음(받지 않음): adcimon/blender-donut(MIT, 단계 파일 21개 약 0.8-16.2MB, 합계 약 300MB), zigaowang/donut-blender(완성본 1개 5.5MB), lbluethner/blender-donut-tutorial(완성본 1개 2.9MB) | 다음 할 일: 받는 것은 사용자 허락 뒤(티켓 46 2단계). 단계 파일이 있는 것은 adcimon 하나 |
+| 못 만듦 | 강의실 PC 사람 기록 `streams` | 이 PC `%APPDATA%\blender_tutor\streams` 없음 | 다음 할 일: 강의실 PC에서 |
+| 못 본 것 | 사람 조작(`view3d.rotate`)으로 카메라 시점이 풀리는지, 회전 잠금 조건 | 소스로 `view_orbit` 취소 조건만 확인 | 다음 할 일: 입력 흉내(`Window.event_simulate`, Window.txt 68-84줄, HISTORY [209])로 카메라 시점에서 `view3d.rotate`를 잼, `log_view`에 흐름 이름을 남김 |
+| 못 본 것 | 바깥 자료 텍스처 그림 | Donut_10 사본 폴더에 그림 파일 없음 | 다음 할 일: 없음(이미지 칸은 비어 있는 채로 셈) |
+| 추측 | 한 강좌·한 사람·Claude가 고른 순서 | 1차와 같음 | 다음 할 일: adcimon 단계 파일(허락 뒤) |
+| 못 만듦 | 조작판의 활성 바꾸기·키 보간 | 써 보지 않은 대안: `view3d.select`(활성도 바꿈), `outliner.item_activate`(outliner.txt 314-324줄), `graph.interpolation_type`(graph.txt 306-313줄, 걷는 도구가 영역을 3D 화면으로 덮어써 그래프 편집기 영역이 필요) | 다음 할 일: 조작판 다음 판 |
+| 못 본 것 | 노드·재질·이름 등 파이썬 값 넣기 약 150걸음 | 바꿔 보지 않음 | 다음 할 일: 조작판을 노드 편집기 조작으로 넓힘 |
+| 못 본 것 | 1차에서 남긴 다음 할 일(0.8 상한을 먼저 셈, 다른 갈래 덮는 비율, `bpy` 직접 대조, 순서 원문 대조) | 2차에서 처리 안 함(상한은 실행 뒤에 셈) | 다음 할 일: 8단계 전에 |
+
+- [x] 결과: **가설 성립(주 판정).** 새 4수업(9·10·13·14) 중 (가′) 기준 충족 0(판정 기준은 2개 이하면 성립). (가′)는 L9 0.267, L10 0.294, L13 0.106, L14 0.200이고 같은 방식 대조군보다 L9·L10·L14는 0.19-0.21, L13은 0.03 높을 뿐 0.8에 크게 못 미친다. (나)는 L9·L13 1.0, L10 0.91, L14 0.514. 1차 8수업을 같은 규칙으로 다시 세면 판정 불가 4(분모 3·4·5·8), 미달 4이고, 1차 규칙 (가)로 세어도 12수업 충족 0. 수업 5는 판정 불가 고정 줄. 덧붙인 가설 (ㄱ) **불성립**: 비교한 바꾼 걸음 10개 중 2개에서 작업 상태 칸(`LayerObjects.active`)이 달랐다(선택 패턴의 뜻 차이, 점 누르기 3걸음은 다른 점을 골라 뺌). 덧붙인 가설 (ㄴ) **성립**: `view_orbit` 취소 15/128번이 모두 카메라 시점·잠금 꺼짐이고, 잠금을 켜면 1/1 FINISHED, 원근에서는 모두 FINISHED, 소스의 취소 조건과 맞음(회전 잠금 조건은 미시험). 안 된 걸음은 시점 돌리기 CANCELLED 7번(점검 흐름)뿐, 오류 0. 결론대로 8단계에서는 완성 파일 차이에서만 바뀐 칸(전수표 643칸)을 따로 표시하고, `LayerObjects.active`를 근거에 더하며, 조작 기록 갈래는 걸음 방식에 따라 흔들리는 값으로 표시한다.
+- [x] 목적 다시 보기: 목적 "API 에서 찾아낸 값중 어떤것을 효율적으로 보내면 좋을까?"에는 직접 답하지 않고, 8단계 칸 표시의 근거를 정한다. 2차로 정해진 것: (1) Claude가 짠 흐름의 걸음 기록만으로 "자주 바뀜, 일부러 바꿀 때만, 안 쓰임"을 정하면 새 수업에서도 완성 파일 차이를 못 덮는다(새 4수업 충족 0). 놓친 칸의 약 3분의 1은 걸음 방식이 볼 수 있는데 흐름이 안 한 조작이라, "걸음 방식이 못 본다"와 "흐름이 안 했다"를 가려 8단계에 표시한다. (2) 파이썬 값 넣기를 실제 조작으로 바꾼 10걸음 중 2걸음에서 작업 상태 칸(`LayerObjects.active`)이 달랐고 이는 고른 조작(선택 패턴)의 뜻 차이다. 조작 기록 갈래는 조작판에서 더 잡히지만 바꾸지 않은 걸음에도 차이가 있어, 칸별 빈도에서 조작 기록 갈래는 "걸음 방식에 따라 흔들리는 값"으로 표시한다. 화면 칸은 잡음과 가를 수 없다. 노드·재질 같은 나머지 값 넣기는 재지 않았다. (3) `view3d.view_orbit` 취소는 카메라 시점이고 잠금이 꺼졌을 때뿐이다(실행과 소스). 사람의 마우스 돌리기가 카메라 시점을 벗어나는지는 모른다.
+- [x] 실험 점검: 도구 오류는 메모리 재기 1개(고침, 판정과 무관)와 조작판 L12 걸음 빠짐 1개(본 실행 전에 고침). 표본: 새 도넛 수업 4개, 데모 2개, 조작판 2개(두 번씩), 시점 점검 1개. 재현: 조작판 두 번의 걸음 기록 바뀐 칸이 서로 같고, 점검 실행과 본 실행의 흐름 기록이 L10의 진단 값 말고 바이트까지 같고, light 지문 두 번 차이 0, 1차 8수업 (가)·(나)가 1차 집계와 같다. 되풀이 실행이 확인하는 것은 같은 흐름의 작업 상태 잡음이 0이라는 것이고, 다른 순서나 다른 사람으로 해도 같은지는 확인하지 못한다. 치우침: L10 (나) 0.91은 물체를 완성 파일 Donut_10에서 `wm.append`로 가져와 높게 나올 수밖에 없다. 새 4수업은 모두 light 읽기이고 앞 단계 파일에서 시작한다(1차보다 출발이 완성 파일과 가까움). 대조군은 같은 방식끼리라 light 6수업, full 6수업(L5 빼면 5수업).
+- [x] 결과를 본 뒤 바꾼 것: (1) 집계에 수업 단위 작업 상태 합집합 대조를 더했다(조작판 걸음 대조를 본 뒤). 처음 판은 이것으로 (ㄱ)을 "덜 세지 않는다"고 썼다가, 실행 뒤 검토 1번대로 정한 규칙(바꾼 걸음 단위)으로 "불성립"으로 고쳤고 수업 단위는 참고로 내렸다(**낙관적, 판정에 안 씀**). (2) 실행 뒤 검토 2번으로 조작판 L2 점 누르기 3걸음을 비교에서 뺐다(`tut_tally2.py` `CONTROL_EXCLUDE`). 미리 정한 측정 점검 (c) 규칙을 적용한 것이고 기준은 안 바꿨다. 결과: 바꾼 걸음 13→10, 차이 난 걸음 3→2. (3) 점검 c 자카드 0.95는 1차 기준이고 2차 절에는 기준으로 안 적었다. 새 기준을 만들지 않고 숫자만 적는다. (4) 놓친 칸의 상한(L9 0.80 등)은 결과를 본 뒤 셌다. 판정 기준과 쌍은 바꾸지 않았다.
+- [x] 넘어간 것: 위 "2차 넘어간 것" 표 16줄, 칸이 빈 줄 없음. 처리는 지금 함 6줄, 나머지는 다음 할 일(GitHub 단계 파일은 사용자 허락이 필요).
+- [x] 실행 뒤 독립 검토: Opus(노력치 기본), 스킬 지시문 그대로, 기대 결과와 작성자의 걱정은 안 알림, 읽기만·Blender 안 띄움. 첫 줄 보고: 이 절 1858-1977줄 끝까지(마지막 항목 "결과를 본 뒤 바꾼 것", 그때 파일 줄 수와 맞음), 1차 README 전부, 도구 코드 8개 끝까지, 티켓 46 전부, HISTORY [237]·[209]. 못 읽은 곳: 점검 폴더 집계·지문 로그, 1차 도넛.jsonl은 앞 30걸음과 시점 열만. 더 나눠 띄운 것 없음. 지적 16개, 처리는 아래 "2차 실행 뒤 검토 지적". 결론: 주 판정은 다시 세어도 그대로, (ㄱ)과 결론 (2)·(3)은 바꿔야 함.
+
+### 2차 실행 뒤 검토 지적
+
+| 번호 | 지적 | 처리 |
+|---|---|---|
+| 1 | (ㄱ)을 미리 정한 규칙(바꾼 걸음 1개 이상이면 그 칸을 근거에 더함)과 달리 수업 단위로 "덜 세지 않는다"고 결론, 바꿔 본 범위(13걸음)를 넘는 일반화 | 고침: (ㄱ) "불성립", 수업 단위는 참고로 내림, 바꿔 보지 않은 약 150걸음을 못 본 것에 |
+| 2 | 조작판 L2 점 누르기가 1차와 다른 점을 고름, (c) 규칙대로 빼야 함 | 고침: 직접 값으로 확인(1차 0.0763, 조작판 0.0399) 뒤 3걸음을 뺌(`CONTROL_EXCLUDE`), 집계 다시 돌림 |
+| 3 | 화면 칸 `Region.x`·`y`는 잡음과 구분 안 됨, 조작 기록도 바꾸지 않은 걸음에서 차이, 시점 조건 차이 | 고침: 결론 (2)에서 화면 칸을 거두고 조작 기록은 "흔들리는 값"으로, 조건 차이를 적음 |
+| 4 | (3) "걸음 기록의 빈 곳이 아니다"는 확인 안 됨(`view3d.rotate`는 카메라 시점을 벗어날 수 있음), `lock_camera` 켜진 시작 파일, 잠금 켜고 돌린 걸음의 카메라 물체 이동, 회전 잠금 미시험, 시점기록에 흐름 이름 없음 | 고침: 뒷문장 거둠, 사실 줄을 더함. 다음 할 일: 입력 흉내로 `view3d.rotate` 잼(19시 뒤 Blender 한도로 이번에는 안 함) |
+| 5 | 주 가설 성립이 흐름 설계로 거의 정해짐(놓친 93칸 중 29칸은 걸음 방식이 볼 수 있음), 0.8 상한을 먼저 안 셈 | 고침: 다시 세어 같음(29/93), 상한을 적고 결론 (1)을 "Claude가 짠 흐름의 걸음 기록"으로 좁힘. 상한은 결과 뒤에 셌다고 밝힘 |
+| 6 | L13·L14 "4.0→5.2 기본값" 추측은 지금 잴 수 있었음 | 고침: 검토가 잰 값(L14 12칸 Donut_1과 같음, 12칸 빼도 0.30)을 적고 L13 추측은 바꿈. 검토 스크립트 `scratchpad/review2/l14.py`는 다시 돌리지 않음 |
+| 7 | 숫자 틀림(기대 상태 34→32항목, 완성 파일 지문 9→8, `tut_tally.py`→`tut_tally2.py`, `Operator.*` 13칸) | 고침 |
+| 8 | 결과 종류별 전체 수, PASS_THROUGH 분류 | 고침: 측정 점검에 분류 줄 |
+| 9 | 효과 없는 걸음과 측정 구멍(light의 메시 칸 0)을 안 적음 | 고침: 측정 점검에 두 줄 |
+| 10 | 늘 통과하는 검사(점검 c 빠짐 0, 두 번 거르기), 재현 근거 안 씀, L10 (나)는 append 탓 | 고침: 근거에서 거두고 재현 근거와 치우침을 적음 |
+| 11 | 도구를 자기 출력으로만 판정(메모리, 시점 표) | 고침: 측정 점검 "대조 경로" 줄에 밝힘 |
+| 12 | 근거 종류(선택 패턴은 소스 코드, 활성 바꾸는 화면 조작 있음, `camera_to_view`는 실행으로 확인, 저장 때 빠짐은 `use_fake_user` 문서와 맞음, 지문 쪽 `--disable-autoexec` 없음) | 고침: 선택 패턴 근거를 소스로(설치된 object.py 45-92줄을 직접 읽음), 나머지를 그 줄에 적음. 활성·키 보간 대안은 넘어간 것 표에 |
+| 13 | 못 만듦의 써 보지 않은 대안(수업 5, GitHub 찾은 낱말, 입력 흉내, 활성·보간 조작) | 고침: 넘어간 것 표에 대안과 다음 할 일 |
+| 14 | 밝힌 못 본 것의 다음 행동, 1차에서 남은 다음 할 일, HANDOFF에 줄 없음 | 고침: 넘어간 것 표에 줄. HANDOFF는 이 작업이 쓰지 않고 부모에게 알림 |
+| 15 | 점검 실행과 본 실행의 순서 표현 | 고침: 실행 기록에 시각 순서를 적음(L9·L10·L13 본 실행은 점검 실행이 끝난 뒤 시작한 것을 실행출력 시각으로 확인, 검토의 "보기 전에 들어감"은 맞지 않음) |
+| 16 | 부 지표 기준선 열이 표에서 빠짐(흐름 3개가 걸음 기록보다 높은 수업이 판정 가능한 8개 중 6개) | 고침: 수업별 표에 열을 더함 |
+
+### 11-08 저녁 결과 폴더 보충(18:10 기준, 빠졌던 폴더를 나중에 채움)
+
+모두 `results/20261108/` 아래. 문맥 값 폴더는 이 작업(티켓 46의 6단계)이 직접 돌린 것이라 요약 숫자를 옮겼다. 다른 작업 폴더는 폴더 안 파일과 `요약.json`·`대조_합계.json` 첫 줄만 보고 적었고, 결과 판단은 그 작업의 절이 채운다. `002437`·`002542`·`013413`·`013434`·`020003`·`020025_opall_check_*`와 `012919`·`012937_calc_window`는 위 표에 "·"로 묶어 이미 적혀 있다.
+
+#### 문맥 값 시험 6 (`data/eval/context_values/`, 142개 값)
+
+| 폴더 | 무엇 | 결과(창 정답 / 화면 없는 정답) |
+|---|---|---|
+| `142253_context_dev`, `143109_context_dev` | 시간만(`일: timing`) | 정답을 안 돌려 표는 "못 만듦 138, 확인 안 됨 4"로 보임 |
+| `145044_context_dev` | 정답만(`일: truth`) | 창: 맞음 119, 틀림 5, 못 만듦 14, 확인 안 됨 4 |
+| `150649_context_dev` | 전체 첫 판(앞 판) | 창: 맞음 125, 틀림 9, 못 만듦 4, 확인 안 됨 4 / 화면 없음: 맞음 92, 틀림 35 |
+| `164410_context_dev` | 틀림 9개 원인·못 만듦 대안을 넣은 판 | 창: 맞음 141, 못 만듦 1(gpencil) / 화면 없음: 맞음 93, 틀림 36, 못 만듦 13 |
+| `171900_context_dev` | 키맵 해시 부분 점검을 더한 판 | 같은 수. 화면 없는 점검이 `keymaps[0].keymap_items[0]` IndexError로 0줄 |
+| `173642_context_dev` | 점검을 고친 기준 판 | 창: 맞음 141, 못 만듦 1 / 화면 없음: 맞음 93, 틀림 36, 못 만듦 13. 점검 14/14 |
+
+화면 없는 정답의 틀림은 창이 있어야 정해지는 값(구역·팝업 등)이라 기준으로 쓰지 않는다(README 결론).
+
+#### 다른 작업 폴더(파일만 보고 적음)
+
+| 폴더 | 보이는 것 |
+|---|---|
+| `143651_calc_r4check` | 계산 값 검토 지적 측정(`검토지적_측정.json`, 원숭이 500면 분류)과 소스판 대조 |
+| `143827_calc_dev`, `145605_calc_dev` | 계산 값 정답만: 96개 중 맞음 91, 확인 안 됨 2, 못 만듦 3, 거짓 경보 0(요약에 "낙관적" 표시) |
+| `145333_calc_hidden` | 숨긴 면 확인(`숨긴면_확인.json`) |
+| `145635_calc_blends`, `150958_calc_blends` | 공개 .blend 거짓 경보 재확인(`00-`번 jsonl·log) |
+| `152559_calc_dev` | 계산 값 시간만. 10만 면 UV 구 물체·편집 모드 모두 H6 "미달" |
+| `152141_따로읽기_대조`, `152316_따로읽기_대조2` | 따로 읽기 대조. 첫 판은 무작위 29개 중 1개만 찾음, 둘째 판은 29/29, 늘 빈 값 10/10 |
+| `152433_큰파일_제한없이` | 큰 파일 제한 없이 실행(`파일1_결과.jsonl`) |
+| `153346_함수_점검`, `180313_함수_파일_전수` | 함수 전수 점검과 파일 전수(180313은 18:10에 `할일.json`만 있음, 진행 중으로 보임) |
+| `154801_강좌_따라하기_점검`, `175818_강좌_따라하기2_점검` | 강좌 따라 하기 점검 실행(154801 메모: 도넛 흐름 110줄에서 멈춤, 표면 나누기 단계 2라 걸음마다 약 40초) |
+| `160308_opall_main30_resume2`, `173548_opall_main30_resume3` | 조작 전수 대표 30개 이어 돌리기(상태별 jsonl·log) |
+
+### [E2] 문맥 값 시험 6 셋째 판 · 이름이 다른 둘째 사례·다른 경로 대조·큰 장면을 더해도 142개 값의 정답이 맞고, 값이 찬 시간이 늘어나는가 · 2026-11-08
+
+`data/eval/context_values/`, 기준 앞 판 `results/20261108/173642_context_dev`(창 정답 맞음 141, 못 만듦 1). 이번 판은 조정자 3차 지시 1-6을 넣은 것이다.
+
+#### 실행 전
+
+- [x] 목적: 사용자 최종 목표 "API 에서 찾아낸 값중 어떤것을 효율적으로 보내면 좋을까?". 조정자 3차 지시 원문 "두 상태에서 읽은 값의 설명이 같은 33개 가운데, 원래 하나뿐인 값이 아닌 것에 이름이 다른 둘째 사례를 둡니다. 늘 같은 값을 돌려주는 읽기로는 통과하지 못하게 하려는 것입니다."
+- [x] 가설: 문맥 값 읽기(`ctx.read`)는 이름이 다른 둘째 상태, RNA 경로로 따로 꺼낸 같은 값, 실제 속성 편집기 패널에서도 정답과 맞고, 자료를 모두 붙인 10만 면 장면에서 값이 찬 채로 잰 값이 앞 판(장면별 최대 43개)보다 늘어난다.
+- [x] 자료: 정답 상태는 `truth.py`가 빈 공장 장면에서 만든다(13절 이름이 다른 둘째 사례 25줄 안팎, 14절 다른 경로 대조 11줄·실제 패널 2줄). 시간 장면은 `run_inside.py timing_scenes()`에 "UV 구 10만 면에 자료를 모두 붙임, 물체 모드"를 더함. 옛 그리스 펜슬 모드는 `data/blend_sources`의 공개 .blend 10개를 스크래치패드에 복사해 화면 없이 열었다(모두 OBJECT, 저장 판 2.82-4.5). 한계: 상태는 우리가 만든 것이라 실제 사용 상태를 대표하지 않는다.
+- [x] 도구의 동작: `api_doc.py`로 읽음: `bpy.types.FieldSettings.txt` 135-138줄(texture), `bpy.ops.object.txt` 540-559줄(effector_add type TEXTURE), `bpy.types.RegionView3D.txt` 57-60줄(view_perspective), `bpy.types.Property.txt` 33-36줄(identifier). 소스 코드 v5.2.2 `buttons_texture.cc` 338-347줄(텍스처 힘 마당 사용자). 칸 정의(PropertyRNA)가 구조체마다 따로라는 것과, 편집기 칸의 ui_type을 바꿔도 앞 공간 내용이 남는다는 것, 실제 패널 위 F9가 버튼 문맥을 준다는 것은 문서에 없어 실행으로 확인한다(추측으로 시작).
+- [x] 지표: 창 정답의 결과 종류별 수(맞음·틀림·못 만듦·확인 안 됨), "읽은 값 설명이 모두 같은 값" 수, 장면별 값 찬 채로 잰 값 수. 늘 같은 값을 주는 읽기와 빈 값 위주의 시간을 가려내는 숫자라 목적(무엇을 싸게 보낼지)의 근거가 된다.
+- [x] 기준 숫자의 출처: 앞 판 숫자(141/0/1/0, 같은 값 33, 장면별 33-43)는 173642에서 잰 값. 원래 하나뿐인 값 8개는 조정자 지시와 작성자 판단.
+- [x] 닿을 수 있는 기준: 같은 값 33개 중 원래 하나뿐인 8개와 설명이 구조상 늘 같은 것(region_popup "Region:TEMPORARY", freestyle_module·point_cache·tool·tool_settings·asset_library_reference는 포인터·주인 자료로 판정)을 빼면 최소 약 20개가 남는다. 이번에 둘째 이름을 준 값은 19개.
+- [x] 판정: 새 줄이 모두 맞으면 문맥 값 표를 "이름이 바뀌어도 맞음"으로 쓰고 시간 표를 큰 장면 기준으로 갱신한다. 틀리면 그 값의 읽는 곳이나 정답을 원인부터 잰다.
+- [x] 측정 점검: 앞 판의 점검 14개(정답을 아는 변화를 넣어 해시·부수 상태가 잡히는지)를 그대로 돌린다.
+- [x] 독립 검토: 설계 검토는 첫 판·둘째 판에서 받았다(README 독립 검토 처리표). 이번 판은 같은 설계에 사례를 더한 것이라 설계 검토를 건너뛰고 실행 뒤 독립 검토를 맡긴다.
+- [x] 목표 검토: 판정에 안 씀(앞 판 정답의 범위를 넓히는 점검. 값 목록을 고르는 판정은 이 절에서 하지 않는다).
+- [x] 비용과 시간: 돈 드는 호출 없음. 약 20-25분(앞 판 18분 + 큰 장면). Blender 한도: 19시 전 PC 전체 8개 미만·남은 메모리 4GB 초과, 19시 뒤 2개 미만, 하나가 6GB를 넘으면 멈춤, `--console-crash-handler`.
+
+#### 실행 뒤
+
+결과 폴더(모두 `results/20261108/`): `182236_context_dev`(기준, 전부), `181416_context_dev`(첫 실행, 둘째 이름 조작을 상속으로 만든 결함으로 버튼·기즈모 27줄 못 만듦, 정답 일 뒤 멈춤), `182034_context_dev`·`182204_context_dev`(고친 뒤 `CTX_ONLY`로 그 값만 다시 본 확인), `175904_옛GP_파일열기`(옛 .blend 10개).
+
+- [x] 결과: 창 정답 750줄 = 판정 740줄 모두 맞음 + 관찰 5 + 못 만듦 5(옛 그리스 펜슬 모드). 142개 값 종류: 정답 일치 141, 못 만듦 1(gpencil), 틀림 0, 확인 안 됨 0(앞 판과 같음). 새 40줄(13절 27, 14절 대조 11·실제 패널 2) 모두 맞음. 읽은 값 설명이 모든 상태에서 같은 값 33 → 16(남은 것 중 늘 같은 값으로 통과할 수 있는 것은 region_popup 1개, 나머지는 하나뿐인 값 8개와 포인터·주인 자료로 판정하는 7개). 있어야 할 때 분포 2개 82, 3개 35, 4개 13, 5개 이상 8, 0개 4. 시간 1,420번 원본·부수·파생 같음. H6 통과(10개 장면 모두). 자료를 모두 붙인 10만 면 장면에서 값 찬 채로 잰 값 79개(앞 장면 29-43개), 합 0.55ms. 어디서도 안 찬 값 79 → 53. 점검 창·화면 없음 14/14. 진짜 설정·quit.blend 해시 같음, 최대 메모리 1.24GB(6GB 한도 안).
+- [x] 목적 다시 보기: "늘 같은 값을 돌려주는 읽기로는 통과하지 못하게"는 region_popup 하나를 빼고 이뤘다. 목표("어떤 값을 효율적으로 보낼까")에는 시간 근거가 넓어졌다: 값이 찬 10만 면 장면에서도 79개 합 0.55ms라 문맥 값의 시간은 고르는 기준이 되지 못한다(다른 기준, 예: 자주 바뀜·쓸모로 골라야 함).
+- [x] 실험 점검: 첫 실행(181416)에서 도구 오류 27줄을 보고 원인(조작 클래스 상속)을 `CTX_ONLY` 실행(182034)으로 확인하고 고쳤다. 실제 패널 F9 판은 12자리 모두 빈 값이라 오른쪽 클릭 메뉴로 바꿨다(182204에서 2/2). 표본은 우리가 만든 상태라 실제 사용 상태를 대표하지 않는다. 되풀이 실행은 결정성(같은 상태에서 같은 값)만 확인하고, 다른 상태에서도 맞는지는 확인하지 못한다.
+- [x] 결과를 본 뒤 바꾼 것: 정답은 바꾸지 않았다. 도구 2개(상속 제거, F9 → 오른쪽 클릭 메뉴)를 결과를 보고 바꿨다(낙관적: 고친 도구는 그 결과를 본 실행에서만 확인됨).
+- [x] 넘어간 것: 아래 표.
+- [x] 실행 뒤 독립 검토: 아래 "셋째 판 독립 검토 지적"(검토 뒤 채움).
+
+#### 넘어간 것
+
+| 종류 | 무엇 | 확인한 방법 | 처리 |
+|---|---|---|---|
+| 예상 밖 | 둘째 이름 조작을 상속으로 만들자 부모 ctx.probe의 버튼·키맵 호출이 안 먹음 | 상속을 뺀 `CTX_ONLY` 실행에서 돌아옴(182034) | 지금 함: 상속 제거. 왜 그런지(bpy 등록 동작)는 소스를 안 봄 |
+| 예상 밖 | 실제 속성 편집기 패널 위 F9가 ctx.probe를 안 부름(12자리) | 오른쪽 클릭 메뉴로 바꾸니 다섯째 자리에서 읽힘 | 지금 함: 오른쪽 클릭 메뉴. F9가 안 먹는 까닭은 안 잼(앞 판 팝업 위 F9도 안 먹음) |
+| 못 만듦 | 옛 그리스 펜슬 모드 5개 | `mode_set` 값, 공개 옛 .blend 10개(모두 OBJECT), 소스 `context.cc` 1405-1480줄·`ed_util.cc` 137·199줄·`wm_files.cc` 800줄 | 지금 함: 못 만듦 확정(README) |
+| 못 만듦 | gpencil 있어야 할 때 | 앞 판과 같음 | 그대로 |
+| 못 본 것 | region_popup 둘째 모양 | 없음 | 다음 할 일: 폭이 다른 둘째 팝업 패널 |
+| 못 본 것 | 버튼 전용 10개의 실제 패널 확인 | modifier·constraint만 | 다음 할 일 |
+| 못 본 것 | 원본 보호의 다른 도구 대조(`op_walk.py` snapshot) | 값 대조는 RNA 경로로 11줄 | 다음 할 일 |
+| 못 본 것 | 어디서도 값이 안 찬 53개 | 셈 | 다음 할 일: 활성 물체 종류별 큰 장면 |
+| 추측 | 같은 칸 ui_type을 바꿔도 앞 편집기 내용이 남는다 | 큰 장면에서 edit_image·edit_text·edit_movieclip·edit_mask가 값이 찬 채로 재짐 | 실행으로 확인됨 |
+| 추측 | 칸 정의(PropertyRNA)가 구조체마다 따로다 | FieldSettings·DisplaceModifier 두 줄이 각자 포인터와 같음 | 실행으로 확인됨(두 구조체만) |
