@@ -71,13 +71,13 @@ def test_절차를_밟았으면_통과한다(record, prompts):
     (OPEN, ["[E2] 다른 시험 목표 검토"], "호출이 없"),  # 절 제목이 다름
     (f"### [E2] 끝난 시험\n- [x] 목표 검토: 답\n{AFTER}", ["[E2] 끝난 시험 실행 뒤 독립 검토"], "새 절"),
     ("### [E2] 앞 시험\n- [x] 목표 검토: 답\n- [x] 결과: 끝\n\n" + OPEN, ASKED, "목적 다시 보기"),
-    (f"### [E2] 앞 시험\n- [x] 목표 검토: 답\n{AFTER}\n" + OPEN, ASKED, "실행 뒤 독립 검토"),
 ])
 def test_빠진_절차를_알려_준다(record, prompts, word):
     assert word in hook.missing_step(record, prompts, [])
 
 
-FRONT = "[E2] 먼저 시작한 시험"
+TODAY = "2026-11-09"
+FRONT = f"[E2] 먼저 시작한 시험 · {TODAY}"
 FRONT_OPEN = f"### {FRONT}\n- [x] 목표 검토: 답\n- [x] 도구의 동작: 실행으로 확인\n\n"
 
 
@@ -88,10 +88,29 @@ def test_결과가_없는_절은_모두_진행_중으로_본다():
     assert hook.missing_step(finished_last, [f"{FRONT} 목표 검토", "[E2] 끝난 시험 실행 뒤 독립 검토"], []) is None
 
 
-def test_진행_중인_앞_절도_검토와_문서를_본다():
-    assert "호출이 없" in hook.missing_step(FRONT_OPEN + OPEN, ASKED, [])
+def test_진행_중인_앞_절도_오늘_시작했으면_검토와_문서를_본다():
+    assert "호출이 없" in hook.missing_step(FRONT_OPEN + OPEN, ASKED, [], TODAY)
     no_doc = f"### {FRONT}\n- [x] 목표 검토: 답\n\n"
-    assert "도구의 동작" in hook.missing_step(no_doc + OPEN, ASKED + [f"{FRONT} 목표 검토"], [])
+    assert "도구의 동작" in hook.missing_step(no_doc + OPEN, ASKED + [f"{FRONT} 목표 검토"], [], TODAY)
+
+
+def test_다른_날_시작한_앞_절은_문서_칸만_본다():
+    # PC를 오가면 앞 절의 하위 에이전트 호출은 다른 PC 세션 기록에만 있다(2026-11-09 강의실 PC에서 가설 9 절 때문에 막힘)
+    old_open = "### [E2] 다른 날 시험 · 2026-11-07\n- [x] 목표 검토: 답\n- [x] 도구의 동작: `bpy.types.Window`\n\n"
+    assert hook.missing_step(old_open + OPEN, ASKED, [], TODAY) is None
+    no_doc = "### [E2] 다른 날 시험 · 2026-11-07\n- [x] 목표 검토: 답\n\n"
+    assert "도구의 동작" in hook.missing_step(no_doc + OPEN, ASKED, [], TODAY)
+
+
+def test_끝난_절은_실행_뒤_칸만_보고_세션_기록은_보지_않는다():
+    finished = f"### [E2] 앞 시험\n- [x] 목표 검토: 답\n{AFTER}\n"
+    assert hook.missing_step(finished + OPEN, ASKED, [], TODAY) is None
+    assert "목적 다시 보기" in hook.missing_step("### [E2] 앞 시험\n- [x] 목표 검토: 답\n- [x] 결과: 끝\n\n" + OPEN, ASKED, [], TODAY)
+
+
+def test_마지막_절은_날짜와_상관없이_세션_기록을_본다():
+    last = "### [E2] 지난 날 마지막 시험 · 2026-11-07\n- [x] 목표 검토: 답\n- [x] 도구의 동작: 실행으로 확인\n"
+    assert "호출이 없" in hook.missing_step(last, [], [], TODAY)
 
 
 def test_문서_칸이_없으면_막는다():

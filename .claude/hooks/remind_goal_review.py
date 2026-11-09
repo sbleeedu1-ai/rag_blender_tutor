@@ -4,9 +4,10 @@
 - 시험을 띄우는 명령만 본다: `state_generic`의 `*_run.py`를 파이썬으로 실행하거나, `state_generic`의 스크립트를 Blender `--python`으로 넘기는 명령.
 - `docs/experiment.md`에서 `- [x] 목표 검토:`가 있고 `- [x] 결과:`가 아직 없는 절은 모두 진행 중인 시험이다. 여러 시험을 동시에 돌릴 수 있게, 마지막 절 하나만 진행 중으로 보지 않는다(HISTORY [235]).
 - 진행 중인 절이 하나도 없으면 막는다. 결과가 적힌 절은 끝난 실험이라 새 절을 요구한다. 마지막 절에 결과도 목표 검토도 없으면 새 시험의 칸이 빠진 것으로 본다.
-- 결과가 적힌 절 가운데 `목표 검토` 칸이 있는 절: 실행 뒤 칸을 모두 채웠어야 한다. 이 칸이 없는 옛 절은 보지 않는다.
-- 세션 기록: 두 검토마다 프롬프트에 절 제목과 칸 이름이 든 하위 에이전트 호출이 있어야 한다. 이 PC의 최근 세션만 찾는다.
-- 공식 문서: 진행 중인 절마다 `도구의 동작` 칸이 있어야 하고, 그 칸의 `bpy.` 이름마다 `.claude/tools/api_doc.py`를 돌린 명령이 세션 기록에 있어야 한다(HISTORY [214]).
+- 결과가 적힌 절 가운데 `목표 검토` 칸이 있는 절: 실행 뒤 칸을 모두 채웠어야 한다. 이 칸이 없는 옛 절은 보지 않는다. 끝난 절은 문서 칸만 보고 세션 기록은 보지 않는다.
+- 세션 기록: 진행 중인 절 가운데 맨 끝 절과 제목 날짜가 오늘인 절만, 목표 검토마다 프롬프트에 절 제목과 칸 이름이 든 하위 에이전트 호출이 있어야 한다. 이 PC의 최근 세션만 찾는다.
+  다른 날 시작한 앞 절은 문서 칸만 본다. PC를 오가면 그 호출은 다른 PC 세션 기록에만 있어, 끝난 절 때문에 이 PC의 새 시험이 막혔다(2026-11-09, 사용자 "지금 훅만 고치자 이게 PC를 오가며 하니 어쩔수 없네").
+- 공식 문서: 진행 중인 절마다 `도구의 동작` 칸이 있어야 하고, 세션 기록을 보는 절(위와 같음)은 그 칸의 `bpy.` 이름마다 `.claude/tools/api_doc.py`를 돌린 명령이 세션 기록에 있어야 한다(HISTORY [214]).
 - 명령이 어느 절의 시험인지는 모른다. 진행 중인 절을 모두 검사하고, 버려져 결과를 끝내 안 적은 절은 진행 중으로 남는다.
 - `목표 검토` 칸에 "판정에 안 씀"이라고 적은 절은 칸만 보고 세션 기록과 실행 뒤 칸은 보지 않는다.
 - 호출이 있었는지만 본다. 답의 내용이나 칸에 그대로 옮겼는지, 문서를 제대로 읽었는지, 칸에 적지 않은 이름은 보지 못한다.
@@ -15,6 +16,7 @@
 import json
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 _PYTHON_RUN = re.compile(r"""python(?:\.exe)?["']?\s+(?:-\S+\s+)*["']?([^\s"';&|]+_run\.py)""", re.IGNORECASE)
@@ -26,6 +28,7 @@ _NOT_FOR_VERDICT = "판정에 안 씀"
 _DOC_CELL = "도구의 동작"
 _DOC_TOOL = "api_doc.py"
 _DOC_NAME = re.compile(r"bpy(?:\.\w+)+", re.ASCII)  # 이름 바로 뒤에 붙은 조사를 이름에 넣지 않는다
+_DATE = re.compile(r"(\d{4}-\d{2}-\d{2})\s*$")  # 절 제목 끝의 날짜(`### [E2] … · 2026-11-09`)
 _RECENT_SESSIONS = 10  # 세션 기록 하나가 10MB가 넘을 수 있어 훅 제한 시간 안에 읽을 만큼만 본다
 _RECENT_SUBAGENTS = 30  # 하위 에이전트 기록은 작아서 더 많이 본다. 동시에 도는 작업이 여럿이라 최근 것만으로는 모자란다
 _HOW_TO_GOAL = (
@@ -67,6 +70,12 @@ def _unasked(section: list[str], cell: str, prompts: list[str]) -> str | None:
     return f"세션 기록에 `{_title(section)}`의 `{cell}` 하위 에이전트 호출이 없습니다. 프롬프트에 절 제목과 칸 이름을 넣어 불러 주세요(이 PC의 최근 {_RECENT_SESSIONS}개 세션만 찾습니다)."
 
 
+def _checks_log(section: list[str], last: list[str], today: str) -> bool:
+    """세션 기록까지 볼 절: 맨 끝 절이거나 제목 끝 날짜가 오늘인 절."""
+    found = _DATE.search(section[0])
+    return section is last or (found is not None and found.group(1) == today)
+
+
 def _unfinished(section: list[str], prompts: list[str]) -> str | None:
     """실행이 끝난 절에서 빠진 것."""
     if not _needs_after_cells(section):
@@ -74,7 +83,7 @@ def _unfinished(section: list[str], prompts: list[str]) -> str | None:
     missing = [name for name in _AFTER_CELLS if _cell(section, name) is None]
     if missing:
         return f"앞 시험 `{_title(section)}`의 실행 뒤 칸이 비었습니다: {', '.join(missing)}. 그것부터 채우세요."
-    return _unasked(section, _AFTER_REVIEW, prompts)
+    return None
 
 
 def _unread_docs(section: list[str], doc_commands: list[str]) -> str | None:
@@ -88,8 +97,9 @@ def _unread_docs(section: list[str], doc_commands: list[str]) -> str | None:
     return None
 
 
-def missing_step(record: str, prompts: list[str], doc_commands: list[str]) -> str | None:
-    """시험 전에 빠진 절차를 설명하는 글. 시험을 돌려도 되면 None."""
+def missing_step(record: str, prompts: list[str], doc_commands: list[str], today: str | None = None) -> str | None:
+    """시험 전에 빠진 절차를 설명하는 글. 시험을 돌려도 되면 None. today는 'YYYY-MM-DD'(없으면 오늘)."""
+    today = today or date.today().isoformat()
     sections = _sections(record)
     if not sections:
         return "docs/experiment.md에 실험 절이 없습니다."
@@ -103,6 +113,10 @@ def missing_step(record: str, prompts: list[str], doc_commands: list[str]) -> st
     if not running:
         return "결과가 아직 없는 실험 절이 없습니다. 새 시험이면 새 절을 쓰고 체크리스트부터 채우세요."
     for section in filter(_needs_after_cells, running):
+        if not _checks_log(section, last, today):
+            if _cell(section, _DOC_CELL) is None:
+                return _unread_docs(section, doc_commands)
+            continue
         if problem := _unasked(section, _GOAL, prompts):
             return f"{problem} {_HOW_TO_GOAL}"
         if problem := _unread_docs(section, doc_commands):
