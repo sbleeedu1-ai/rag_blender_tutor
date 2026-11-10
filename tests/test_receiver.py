@@ -150,7 +150,7 @@ def test_애드온이_이미_켜진_도우미인지_물어볼_수_있다(receive
 
 # 설정 값(HISTORY [270]): 도우미가 청하면 애드온은 다음 답장을 보고 작업 상태와 한 봉투로 보낸다
 
-SETTINGS = {"always": ["bpy.context.object.location = (0, 0, 0)"], "fields": {"MO": ["bpy.context.object.modifiers['Bevel'].segments = 1"]}}
+SETTINGS = {"always": ["bpy.context.object.location = (0, 0, 0)"], "situation": [], "computed": [], "fields": {"MO": ["bpy.context.object.modifiers['Bevel'].segments = 1"]}}
 
 
 def wants(receiver, window):

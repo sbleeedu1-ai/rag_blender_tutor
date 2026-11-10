@@ -73,15 +73,17 @@ def test_분야_고르기_답이_모양에_안_맞으면_ValueError(answer):
 
 def test_설정_값은_들어오는_곳에서_모양을_검사한다():
     assert SettingLines.from_json(SETTINGS.to_json()) == SETTINGS
-    for bad in ({"always": []}, {"always": "x", "fields": {}}, {"always": [], "fields": {"MO": [1]}}, [], {"always": [], "fields": [], "x": 1}):
+    empty = {"always": [], "situation": [], "computed": [], "fields": {}}
+    for bad in ({"always": []}, {**empty, "always": "x"}, {**empty, "fields": {"MO": [1]}}, [], {**empty, "x": 1}, {**empty, "situation": [2]}):
         with pytest.raises(ValueError):
             SettingLines.from_json(bad)
 
 
 def test_넘길_줄은_늘_보내는_줄_다음에_고른_분야_차례로_겹침_없이_한도까지():
-    settings = SettingLines(("a",), {"MO": ("b", "a"), "RD": ("c",)})
-    assert lines_for(settings, ("RD", "MO")) == ["a", "c", "b"]
-    assert lines_for(settings, ()) == ["a"]
+    settings = SettingLines(("a",), {"MO": ("b", "a"), "RD": ("c",)}, situation=("상황",), computed=("계산",))
+    assert lines_for(settings, ("RD", "MO")) == ["a", "상황", "계산", "c", "b"]
+    assert lines_for(settings, ("RD",), situation=False, computed=False) == ["a", "c"]  # 1-a·2 초안을 끈 판
+    assert lines_for(settings, ()) == ["a", "상황", "계산"]
     many = SettingLines(tuple(f"줄{i}" for i in range(MAX_LINES + 5)), {})
     assert len(lines_for(many, ())) == MAX_LINES
 

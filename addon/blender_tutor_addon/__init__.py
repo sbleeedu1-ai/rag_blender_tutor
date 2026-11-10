@@ -388,6 +388,7 @@ def save_snapshot(context, folder: Path) -> tuple[Path, Path | None]:
 
     JSON은 도우미에 보내는 14칸 그대로라 평가 프로그램이 WorkState로 바로 읽는다. 창이 없어(화면 없이 띄운 Blender)
     PNG를 못 찍으면 PNG 자리는 None이다. 같은 초에 또 누르면 이름 뒤에 -2, -3을 붙여 앞 것을 덮지 않는다.
+    설정 값도 같은 이름의 .settings.json으로 남긴다(평가 문항의 "설정 값" 칸이 가리킨다).
     """
     folder.mkdir(parents=True, exist_ok=True)
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -398,6 +399,9 @@ def save_snapshot(context, folder: Path) -> tuple[Path, Path | None]:
     _recent.update(context.window_manager.operators)
     state = stem.with_suffix(".json")
     state.write_text(json.dumps(read_state(context, _recent.names), ensure_ascii=False, indent=2), encoding="utf-8")
+    # 평가에서 같은 설정 값으로 묻게 같은 이름의 .settings.json도 남긴다(HISTORY [270]). 표가 없으면 남기지 않는다
+    if _sender is not None and (settings := _read_settings(context)) is not None:
+        stem.with_suffix(".settings.json").write_text(json.dumps(settings, ensure_ascii=False, indent=1), encoding="utf-8")
     picture = stem.with_suffix(".png")
     try:
         bpy.ops.screen.screenshot(filepath=str(picture), check_existing=False)

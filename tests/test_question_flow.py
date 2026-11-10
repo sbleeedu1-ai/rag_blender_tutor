@@ -130,7 +130,7 @@ def test_중간에_실패한_답은_다음_질문의_최근_대화에_들어가�
 def test_그_Blender가_지금_상태에서_읽은_설정_값을_엔진에_넘긴다(make, receiver):
     from blender_tutor.setting_fields import SettingLines
 
-    lines = {"always": ["bpy.context.object.location = (0, 0, 0)"], "fields": {}}
+    lines = {"always": ["bpy.context.object.location = (0, 0, 0)"], "situation": [], "computed": [], "fields": {}}
     send(receiver, 1, 100, EDITING, settings=lines)
     make(engine := FakeEngine()).ask("베벨은?")
     assert engine.settings_got == SettingLines.from_json(lines)

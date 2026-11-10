@@ -64,28 +64,39 @@ class SettingLines:
 
     always: 분야와 상관없이 보내는 줄(늘 보내는 갈래, 공장값과 다른 설정, 그 물체의 모디파이어·제약).
     fields: 분야 코드 → 그 분야 묶음 칸의 줄(공장값이어도 지금 값).
+    situation·computed: 갈래 1-a(그 상황일 때 늘)·2(계산) 초안 줄. 설정으로 넣고 빼며 효과를 가른다(사용자 검토 전 초안).
     """
 
     always: tuple[str, ...] = ()
     fields: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    situation: tuple[str, ...] = ()
+    computed: tuple[str, ...] = ()
 
     @classmethod
     def from_json(cls, data: object) -> "SettingLines":
-        """애드온이 보낸 JSON({"always": [...], "fields": {"MO": [...], ...}})을 들어오는 곳에서 검사해 만든다. 모양이 틀리면 ValueError."""
-        if not isinstance(data, dict) or set(data) != {"always", "fields"}:
+        """애드온이 보낸 JSON({"always": [...], "situation": [...], "computed": [...], "fields": {"MO": [...], ...}})을
+        들어오는 곳에서 검사해 만든다. 모양이 틀리면 ValueError."""
+        if not isinstance(data, dict) or set(data) != {"always", "situation", "computed", "fields"}:
             raise ValueError(f"설정 값 모양이 다름: {type(data).__name__} {sorted(data) if isinstance(data, dict) else ''}")
-        always, fields = data["always"], data["fields"]
-        if not _texts(always) or not isinstance(fields, dict) or not all(isinstance(k, str) and _texts(v) for k, v in fields.items()):
-            raise ValueError("설정 값의 always·fields가 글 줄 목록이 아님")
-        return cls(tuple(always), {code: tuple(lines) for code, lines in fields.items()})
+        fields = data["fields"]
+        if not all(_texts(data[name]) for name in ("always", "situation", "computed")) or not isinstance(fields, dict)                 or not all(isinstance(k, str) and _texts(v) for k, v in fields.items()):
+            raise ValueError("설정 값의 always·situation·computed·fields가 글 줄 목록이 아님")
+        return cls(tuple(data["always"]), {code: tuple(lines) for code, lines in fields.items()},
+                   tuple(data["situation"]), tuple(data["computed"]))
 
     def to_json(self) -> dict:
-        return {"always": list(self.always), "fields": {code: list(lines) for code, lines in self.fields.items()}}
+        return {"always": list(self.always), "situation": list(self.situation), "computed": list(self.computed),
+                "fields": {code: list(lines) for code, lines in self.fields.items()}}
 
 
-def lines_for(settings: SettingLines, codes: Sequence[str], limit: int = MAX_LINES) -> list[str]:
-    """답변 모델에 넘길 설정 줄: 늘 보내는 줄, 그다음 고른 분야 차례로 그 분야 줄(겹치는 줄은 한 번). limit줄에서 자른다(뒤쪽 분야부터 잘림)."""
+def lines_for(settings: SettingLines, codes: Sequence[str], limit: int = MAX_LINES, situation: bool = True, computed: bool = True) -> list[str]:
+    """답변 모델에 넘길 설정 줄: 늘 보내는 줄(+ 켜 두면 1-a·2 초안 줄), 그다음 고른 분야 차례로 그 분야 줄(겹치는 줄은 한 번).
+    limit줄에서 자른다(뒤쪽 분야부터 잘림)."""
     lines = dict.fromkeys(settings.always)
+    if situation:
+        lines.update(dict.fromkeys(settings.situation))
+    if computed:
+        lines.update(dict.fromkeys(settings.computed))
     for code in codes:
         lines.update(dict.fromkeys(settings.fields.get(code, ())))
     return list(lines)[:limit]

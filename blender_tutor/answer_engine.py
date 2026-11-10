@@ -177,6 +177,9 @@ class Settings:
     reasoning: Reasoning = Reasoning.NONE
     # 분야 고르기가 실패해 묶음 없이 답할 때의 생각 수준(명세 처음 low, 사용자 "묶음이 실패해서 빠질 경우엔 생각을 키도록", [270])
     fallback_reasoning: Reasoning = Reasoning.LOW
+    # 설정 값의 1-a(그 상황일 때 늘)·2(계산) 초안 줄을 넘길지. 개발셋에서 끈 판과 견준다(사용자 "어차피 할거면 … 지금 하는게", [270])
+    situation_lines: bool = True
+    computed_lines: bool = True
 
     def __post_init__(self):
         object.__setattr__(self, "reasoning", Reasoning(self.reasoning))  # "low"처럼 글자로 줘도 받고, 모르는 이름이면 ValueError
@@ -316,7 +319,7 @@ class AnswerEngine:
             yield _failure(error, [])
             return
         codes, field_failed = self._fields_from(chosen)
-        lines = lines_for(settings, codes) if settings is not None else []
+        lines = lines_for(settings, codes, situation=self._settings.situation_lines, computed=self._settings.computed_lines) if settings is not None else []
         model = self._fallback_model if field_failed and self._fallback_model else self._model
         results = self.search(query, vectors[0])
         # 먼저 볼 소제목은 검색 상위를 대신하지 않고 그 위에 덧붙인다. 검색에도 걸렸으면 한 번만

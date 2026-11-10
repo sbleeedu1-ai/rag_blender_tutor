@@ -3,18 +3,19 @@
 이 프로그램이 어떤 조각으로 되어 있고, 무엇이 어디로 흘러가는지 정리한다. 결정의 이유는 짧게만 쓰고 `HISTORY.md`·`docs/adr/` 번호로 잇는다.
 프로그램·파일·주고받는 모양이 바뀌는 티켓은 같은 PR에서 이 문서도 고친다(`AGENTS.md`).
 
-마지막 갱신: 2026-11-03, 티켓 36(방패 연습 과정, 고른 면 수 감지, 공통 준비에서 화면 언어 확인 뺌) 뒤
+마지막 갱신: 2026-11-10, 티켓 35(답 모델에 설정 값 묶음을 넘김, 모델을 Claude Haiku 5.5로, HISTORY [270]) 뒤
 
 ## 1. 한눈에
 
 ```
 [1] Blender 5.2 ── 애드온
       · 0.5초마다 작업 상태를 읽어, 바뀌었으면 보낸다
+      · 0.5초마다 도우미에 "설정 값을 청했나" 묻고, 청했으면 설정 값을 읽어 작업 상태와 함께 보낸다
       · F10: 바로 보내고 도우미 창을 부른다
       · Blender를 켤 때 도우미 프로그램이 없으면 켠다
       │
       │  내 PC 안 HTTP (127.0.0.1, 비밀 글자가 없으면 버림)
-      │  보내는 것: 작업 상태 14칸 + 창 번호 + 파일 열기·저장 사건
+      │  보내는 것: 작업 상태 14칸 + 창 번호 + 파일 열기·저장 사건 (+ 청했을 때만 설정 값 줄)
       ▼
 [2] 도우미 프로그램 (파이썬, Blender 밖에서 따로 켜짐)
       │
@@ -27,16 +28,18 @@
       └─▶ 도우미 창
             ├─ 위: 연습 과정 카드 (고르기 / 연습 과정 · n단계, 단계 이름, 뒤로 · 다음(다 끝내면 다음 단계) ··· 단계 ▼)
             ├─ 가운데: 대화 (안내 말·알림·질문·답)
-            └─ 아래: 질문 쓰기(F10으로 부름, Esc로 Blender에 돌아감)
+            └─ 아래: 질문 쓰기(F10으로 부름, Esc로 Blender에 돌아감. 쓰기 시작하면 설정 값을 청함)
                   └─▶ 답 엔진
                         └─▶ 답 글(흘러나오듯) + 근거 목록
 
           답 엔진이 쓰는 것
             · 설명서 청크 (data/, 미리 만듦)
             · 메뉴 이름 사전 (data/, 미리 만듦)
-            · 질문 바꾸기: gpt-6-luna 3번 동시 흘려 받기, 검색어 칸이 먼저 닫힌 1개의 영어 검색어(질문마다 약 $0.00025)
+            · 질문 바꾸기: Claude Haiku 5.5 3번 동시 흘려 받기, 검색어 칸이 먼저 닫힌 1개의 영어 검색어
+            · 분야 고르기: Haiku 1번(바꾼 검색어 + 작업 상태 → 32분야 중 1-3개), 임베딩과 동시에
             · 임베딩: 진짜(text-embedding-3-large, 질문마다 아주 적은 돈)
-            · 답변 모델: gpt-6-luna, 생각 수준 none(질문마다 약 $0.0003, 티켓 33)
+            · 답변 모델: Haiku, 생각 끔(분야 고르기가 실패하면 생각 low로). 늘 보내는 설정 줄 + 고른 분야의 묶음 줄을 함께 넘김
+            · gpt-6-luna는 선택지(provider="openai", 분야 고르기 없음)
 ```
 
 - **프로그램은 둘**이다. Blender 안의 **애드온**과, Blender 밖에 따로 도는 **도우미 프로그램**.
@@ -69,9 +72,9 @@
   │     질문과 함께 답 엔진에 넘긴다
   │
   └─▶ 답 엔진 (answer_engine)
-        질문 바꾸기(영어 검색어) → 뜻 검색 → 모델에 넘길 글 → 메뉴 이름 한국어로 → 근거 목록
+        질문 바꾸기(영어 검색어) → 분야 고르기(설정 값이 있으면, 임베딩과 동시에) → 뜻 검색 → 모델에 넘길 글(설정 줄 포함) → 메뉴 이름 한국어로 → 근거 목록
         읽는 것: 청크 서식(manual_chunks의 Chunk) · 메뉴 이름 사전(menu_names의 MenuNames)
-        만드는 곳: engine_setup.build_engine — 도우미 창·평가 프로그램 모두 진짜 임베딩(미리 만든 설명서 벡터 + 질문마다 OpenAI) + luna 질문 바꾸기 3개(beginner_scope.OpenAIModel, 흘려 받기) + 진짜 답변 모델(answer_model.OpenAIAnswerModel)
+        만드는 곳: engine_setup.build_engine — 도우미 창·평가 프로그램 모두 진짜 임베딩(미리 만든 설명서 벡터 + 질문마다 OpenAI) + Haiku 질문 바꾸기 3개·분야 고르기·답변 모델과 예비 답변 모델(claude_model.ClaudeModel). provider="openai"면 luna(beginner_scope.OpenAIModel, answer_model.OpenAIAnswerModel)
 ```
 
 - **서식**(`work_state`의 `WorkState`, `manual_chunks`의 `Chunk`)은 처리하는 단계가 아니라 여러 곳이 함께 쓰는 양식이다. 서식이 한 파일 안에 있으면 다른 곳이 그 파일 전체에 기대게 되어 따로 둔다.
@@ -89,10 +92,11 @@
 
 | 자리 | 파일 | 하는 일 | 만든 티켓 |
 |---|---|---|---|
-| Blender 안 | `addon/blender_tutor_addon/__init__.py` | 작업 상태 14칸 읽기, 바뀐 때만 보내기, F10(누른 시각을 함께 보냄), 파일 열기·저장 알림, glTF 내보내기 잡기, 도우미 프로그램 켜기, Ctrl+F10 지금 상태 저장(JSON + PNG → `data/snapshots/`) | 25, 28 |
+| Blender 안 | `addon/blender_tutor_addon/__init__.py` | 작업 상태 14칸 읽기, 바뀐 때만 보내기, F10(누른 시각을 함께 보냄), 파일 열기·저장 알림, glTF 내보내기 잡기, 도우미 프로그램 켜기, Ctrl+F10 지금 상태 저장(JSON + PNG → `data/snapshots/`). 0.5초마다 `GET /wants`로 설정 값을 청했는지 묻고, 청했으면 `settings_reader`로 읽어 봉투의 `settings`에 실음 | 25, 28, 35 |
+| Blender 안 | `addon/blender_tutor_addon/settings_reader.py` | 설정 값 읽기: 프로젝트 `state_tables/`(칸의 갈래·공장값·분야 묶음)를 읽고, 열린 장면의 값을 규칙 13(갈래 1·4는 늘, 3·5·6은 공장값과 다를 때, 그 물체의 모디파이어·제약은 늘)과 분야 묶음(공장값이어도 지금 값)으로 줄을 만든다(`read_settings`). 한 줄 = `주인.칸 = 값` | 35 |
 | 도우미 | `blender_tutor/helper.py` | 도우미 프로그램 입구(애드온이 켬). 받는 쪽·창·답 엔진·창마다 진행을 띄우고 잇는다. Blender 따라가기(0.1초), F10·Esc·트레이, 질문을 질문 한 번(question_flow)으로(창 쪽 연결 `_QtWindowSide`: Qt 신호 + 답 스레드), 카드 단추를 창마다 진행으로. 시간 기록·흐름 기록을 붙임. 엔진 준비 뒤 예열(옵션, `BLENDER_TUTOR_WARM_UP=1`). 답변 모델 생각 수준 `BLENDER_TUTOR_REASONING`(none·low·medium, 없으면 none) | 26, 27, 28, 39, 43, 33 |
 | 도우미 | `blender_tutor/question_flow.py` | 질문 한 번: 마지막 앞 Blender 고르기 → 작업 상태 확인(없으면 "F10을 눌러 주세요", 옛 애드온이면 "다시 설치") → 지금 단계 → 대화 → 시간 기록 → 창에 보이기. 창 쪽 연결(`WindowSide`: `show`·`start`)만 바꿔 끼운다 | 26, 28, 39 |
-| 도우미 | `blender_tutor/receiver.py` | 받는 쪽. Blender 창 번호마다 최신 작업 상태 하나, 켜진 Blender 목록, 닫힌 Blender 버림, 마지막 Blender가 닫히면 끝남, 모양이 틀린 봉투(옛 애드온)를 받은 적 있음(도우미 창이 '다시 설치' 안내에 씀) | 25, 26, 28 |
+| 도우미 | `blender_tutor/receiver.py` | 받는 쪽. Blender 창 번호마다 최신 작업 상태 하나, 켜진 Blender 목록, 닫힌 Blender 버림, 마지막 Blender가 닫히면 끝남, 모양이 틀린 봉투(옛 애드온)를 받은 적 있음(도우미 창이 '다시 설치' 안내에 씀). 설정 값: 청하기(`want_settings`, 애드온이 `GET /wants`로 받아 감), 지금 상태에서 읽은 것만 내기(`settings_for`, 오는 중이면 기다림, 시점만 다르면 같은 상태로 봄) | 25, 26, 28, 35 |
 | 도우미(서식) | `blender_tutor/work_state.py` | 작업 상태 14칸의 서식(애드온 JSON ↔ `WorkState`). 받는 쪽·진행 관리·답 엔진이 함께 씀. `korean_screen`(한국어 화면에 번역 켜짐)은 답 엔진과 창마다 진행이 메뉴 이름을 어느 말로 보일지 정할 때 씀 | 25, 27, 32 |
 | 도우미 | `blender_tutor/helper_window.py` | 창 그리기(PySide6 위젯): 어두운 반투명 판, 연습 과정 카드(단계 ▼: 다섯 줄 단계 목록 + 연습 과정 바꾸기), 물음 줄 [네]/[아니요], 안내 말(답처럼 문장마다 줄바꿈, 연습 과정 파일의 빈 줄은 문단)·단계 시작 줄(위에 구분선)·알림, 회색 질문·굵은 흰 답·근거 카드(처음엔 "▸ 근거 n개" 한 줄로 접힘, 누르면 링크 목록)·알약 입력칸, X, 가장자리 크기 조절, 트레이 아이콘 | 26, 27, 33, 36 |
 | 도우미 | `blender_tutor/window_rules.py` | 창 규칙: 화면 모습 → 맨 위/뒤로/숨김/그대로, 마지막 앞 Blender, 문장마다 줄바꿈 | 26 |
@@ -106,7 +110,9 @@
 | 도우미 | `blender_tutor/korean_particles.py` | 한국어 조사 고르기: 이름 끝 받침에 따라 "이에요/예요", "으로/로" | 27 |
 | 도우미 | `blender_tutor/timing.py` | 시간 기록: 질문마다 F10 누름·받음·입력 가능·보냄·첫 글자·답 끝 시각, PC 이름, 그때의 엔진 이름·설정(생각 수준 등), 창에 보인 답 글·근거·실패 문구를 한 줄로 | 28, 32 |
 | 도우미 | `blender_tutor/answer_engine.py` | 답 엔진: 질문 + 작업 상태 + 지금 단계 → 질문 바꾸기(`Rewriter.stream` 여럿을 동시에 흘려 받아 `"query"` 칸이 먼저 닫힌 1개(`closed_query`, 칸 순서는 따지지 않음), 호출은 뒤에서 끝까지 읽어 요금을 셈, 긴 지시 `REWRITE_PROMPT`) → 설명서 검색(상위 8개) → 답 글 흐름 + 근거 목록(+ 평가용 검색 결과·붙인 연습 과정). 답변 모델에는 청크 영어 원문과, 지시 끝에 넘기는 청크에 나온 낱말의 용어표 줄(`TERMS`, 예: vertex → 버텍스)만 붙인다 검색 `search(검색어, 벡터)`는 실측 프로그램도 불러 쓰지 않은 검색어를 채점한다 | 21-23, 29, 31, 43, 44 |
-| 도우미 | `blender_tutor/engine_setup.py` | 엔진 만들기 `build_engine(data/, model=None, …, settings=, embedding=)`: `data/vectors/` 설명서 벡터를 읽고 질문·연습 과정만 OpenAI로 임베딩, 질문 바꾸기 luna 3개(`REWRITE_MODEL`·`REWRITE_COUNT`, `rewriters_for`, `rewriters=`로 바꿔 끼울 수 있음), 답변 모델(주지 않으면 진짜, 생각 수준은 `settings.reasoning`). 답변 모델 만들기는 `answer_model_for(settings)` 한 곳(평가 프로그램도 이것으로 만들어 요금을 셈). 엔진 이름(`engine.name`, `text-embedding-3-large+gpt-6-luna×3+gpt-6-luna`, 답변 칸은 끼운 모델 이름)도 여기서 정해 시간 기록·평가가 그대로 남김. 키가 없으면 SystemExit, 벡터 파일이 없으면 FileNotFoundError. 이전의 무료 임시 엔진(`stand_in.py`)은 `archive/`로 옮김 | 26, 29, 31, 33, 44 |
+| 도우미 | `blender_tutor/engine_setup.py` | 엔진 만들기 `build_engine(data/, model=None, …, settings=, embedding=, provider="claude")`: `data/vectors/` 설명서 벡터를 읽고 질문·연습 과정만 OpenAI로 임베딩, 질문 바꾸기 3개(`REWRITE_COUNT`, `rewriters_for(settings, provider)`, Claude면 JSON 스키마로 답하게 함, `rewriters=`로 바꿔 끼울 수 있음), 답변 모델(주지 않으면 진짜, 생각 수준은 `settings.reasoning`), Claude면 분야 고르기 모델과 예비 답변 모델(생각 수준 `settings.fallback_reasoning`)도. 답변 모델 만들기는 `answer_model_for(settings, provider)` 한 곳(평가 프로그램도 이것으로 만들어 요금을 셈). 엔진 이름(`engine.name`, `text-embedding-3-large+claude-haiku-5-5×3+claude-haiku-5-5`, 답변 칸은 끼운 모델 이름)도 여기서 정해 시간 기록·평가가 그대로 남김. 키가 없으면 SystemExit, 벡터 파일이 없으면 FileNotFoundError. 이전의 무료 임시 엔진(`stand_in.py`)은 `archive/`로 옮김 | 26, 29, 31, 33, 44 |
+| 도우미 | `blender_tutor/claude_model.py` | Claude(Haiku 5.5) 연결 `ClaudeModel(model, key, reasoning, max_tokens, timeout, schema)`: 공식 `anthropic` 라이브러리로 `stream`(질문 바꾸기·답변, 조각 사이 한도를 넘으면 TimeoutError)과 `ask_json`(구조화된 출력, 분야 고르기). 생각 수준 none은 생각 끔, low·medium은 adaptive + effort. 자동 재시도 끔. 받은 토큰을 세고 `dollars()`. 키는 `ANTHROPIC_API_KEY`(환경 변수 또는 `data/.env`) | 35 |
+| 도우미 | `blender_tutor/setting_fields.py` | 분야와 설정 값: 분야 목록·묶음 읽기(`state_tables/fields.json`·`bundles.json`), 분야 고르기 `choose_fields`(질문 + 검색어 + 작업 상태 → 1-3개, 모양이 틀리면 ValueError), 설정 값 서식 `SettingLines`(늘 보내는 줄 + 분야마다 줄, 들어오는 곳에서 검사), 넘길 줄 `lines_for`(늘 보내는 줄 → 고른 분야 차례, 1,450줄 한도) | 35 |
 | 도우미 | `blender_tutor/answer_model.py` | 진짜 답변 모델 `OpenAIAnswerModel(model, key, effort)`: Chat Completions에 `stream`으로 묻고 답 조각을 오는 대로 낸다. 생각 수준을 `reasoning_effort`로 넘김. 조각 사이가 `timeout`초(기본 10초)를 넘으면 TimeoutError, 끝 표시 없이 끊기면 ValueError, 도중 오류 조각이면 RuntimeError(공식 라이브러리와 같은 규칙). 받은 토큰을 세고 `dollars()`로 요금. 흐름 읽기 `events(response, 이름)`는 질문 바꾸기 흘려 받기도 함께 씀 | 33, 44 |
 | 자료 만들기 + 읽기 | `blender_tutor/manual_chunks.py` | 만들기: 설명서 HTML → 소제목 단위 청크(`data/chunks/`, 한 번 돌림, `save_chunks`). 읽기: 청크 파일(`load_chunks`)과 청크 서식 `Chunk`(답 엔진이 씀) | 19 |
 | 자료 만들기 + 읽기 | `blender_tutor/menu_names.py` | 만들기: 설명서의 블렌더 표기 ↔ 화면 한국어 번역 사전(`data/menu_names/`, 한 번 돌림). 읽기: 사전 `MenuNames(이름들, 고정 짝, 통과 제목)`과 `[[메뉴 이름]]` 표시를 화면 글로 바꾸기(`screen_path`·`screen_marks`, 답 엔진·창마다 진행이 씀), 사전 읽기 `load_menu_names(data/)`(없으면 None, 엔진 만들기와 도우미 입구가 창마다 진행에 넣을 때 씀). 고정 짝·통과 제목이 사전과 어긋나면 바로 멈춤 | 20, 31, 32 |
@@ -123,11 +129,14 @@
 | 만드는 사람 | `blender_tutor/course_check.py` | 연습 과정 파일 검사. 설명서 자료와 맞댈 때 청크 파일은 답 엔진과 같은 `manual_chunks.load_chunks`로 읽는다 | 15, 24, 31 |
 | 만드는 사람 | `courses/*.yaml` | 연습 과정(검 `sword.yaml`, 방패 `shield.yaml`, 공통 준비 `_common.yaml`). 파일 하나를 더하면 코드를 고치지 않고 연습 과정이 늘어난다(티켓 36에서 확인). 화면에 보이는 메뉴·버튼 이름은 `[[Edit > Preferences]]`처럼 감싸 쓴다(바뀐 글은 늘 영어 이름으로 끝나 조사는 영어 이름에 맞춘다. 한국어 이름에 "를"이 든 것(모디파이어를 추가)은 뒤에 "~ 칸을"·"~ 순서로"처럼 이름씨를 넣어 조사가 겹치지 않게). 검은 티켓 32에서 사용자가 따라 하며 고침. 방패도 티켓 36에서 사용자가 두 번 따라 하며 고침. 안내의 숫자는 참고값이고, 창은 안내 말을 문장마다 줄을 바꿔 보이며 파일의 빈 줄(큰따옴표 글 속 `\n\n`)은 문단으로 남김 | 16, 32, 36 |
 | 설치 | `blender_tutor/install_addon.py` | 애드온을 Blender 애드온 폴더에 복사하고 `config.json`(도우미 켜는 법·비밀 글자)을 적음 | 25 |
-| 공통 | `blender_tutor/paths.py` | 프로젝트 폴더 위치(`PROJECT`), 연습 과정 폴더, 메뉴 이름 표 3개(`MENU_ALIASES`·`MENU_CHOICES`·`MENU_TITLES`, `menu_tables/`), 진행 기록 폴더 고르기(설정 폴더에 쓸 수 없으면 사용자 폴더). 함께 쓰는 경로가 늘면 여기에 | 26 뒤, 27 |
+| 공통 | `blender_tutor/paths.py` | 프로젝트 폴더 위치(`PROJECT`), 연습 과정 폴더, 메뉴 이름 표 3개(`MENU_ALIASES`·`MENU_CHOICES`·`MENU_TITLES`, `menu_tables/`), 분야 표 2개(`FIELDS`·`BUNDLES`, `state_tables/`), 진행 기록 폴더 고르기(설정 폴더에 쓸 수 없으면 사용자 폴더). 함께 쓰는 경로가 늘면 여기에 | 26 뒤, 27 |
 | 시험 | `tests/` | 기본 테스트(API 키·Blender 없이) | 각 티켓 |
 | 시험 | `addon/selftest.py` | Blender를 화면 없이 띄워 애드온을 확인(기본 테스트 밖) | 25 |
 | 저장소 | `menu_tables/menu_choices.json` | 번역이 여러 개인 메뉴 이름의 고정 짝: `"영어 이름": "문맥"`, 메뉴마다 다르면 `"앞 단 > 이름": "문맥"`(예: `"Add > Empty": "Operator"` → 추가 메뉴에서만 "비어 있음"). 초보자 범위 113개 중 112개 + 경로 열쇠 6개(티켓 31 화면 검수). 화면이 영어인데 후보에 영어가 없는 이름(Smart UV Project)은 적지 않음 → 영어 그대로 | 23, 31 |
 | 저장소 | `menu_tables/menu_titles.json` | 제목에서만 뽑은 이름 가운데 검수를 통과한 영어 이름 목록(`["Solidify", …]`, 80개). 질문 속 메뉴 이름 찾기(`english_in`)는 이것만 씀. 탈락·미검수 제목은 뺌 | 31 |
+| 저장소 | `state_tables/fields.json` | 분야 고르기의 32분야: `"코드": "쉬운 설명"`(예: `"MO": "모디파이어 …"`). 가설 15·16과 같은 목록 | 35 |
+| 저장소 | `state_tables/bundles.json` | 분야 코드 → 묶음 칸(`타입.칸`). 지금은 가설 16의 묶음16(쓸모 상·중 칸). 11-13 뒤 쓸모 등급 없이 다시 만들어 이 파일만 갈아 끼운다 | 35 |
+| 저장소 | `state_tables/rules.json`·`factory.json` | 애드온이 읽는 칸의 갈래(1·1-a·2·3·4·5·6)와 갈래 3·5·6 칸의 공장값(공장 장면을 Blender로 읽은 값). `blender_tutor/state_tables.py`가 연구 결과 파일에서 만든다 | 35 |
 | 저장소 | `menu_tables/menu_aliases.json` | 설명서 철자 → 화면 철자 표(예: `"Icosphere": "Ico Sphere"`). 사전을 만들 때 번역을 화면 철자로 찾음 | 31 |
 | 프로젝트 설정 | `pyproject.toml` | 프로젝트 신분증 겸 설정(TOML 형식): 필요한 파이썬(3.12 이상), 부품 목록(PyYAML·beautifulsoup4·numpy·rank-bm25·PySide6-Essentials, 개발용 pytest, 검색 비교용 `compare`: sentence-transformers. 무거워서 `pip install -e ".[dev,compare]"`로 따로 설치), 설치할 폴더(`blender_tutor`), 테스트 설정. `pip install -e ".[dev]"`·pytest·GitHub 자동 테스트가 읽는다. 부품을 더하면 다른 PC에서 설치 명령을 다시 돌린다. `addon/`은 여기 없다(설치 명령이 Blender 폴더에 복사) | 15 |
 
@@ -144,7 +153,8 @@
   "state": { "작업 상태 14칸": "아래 표" },
   "summon": false,
   "event": null,
-  "pressed": null
+  "pressed": null,
+  "settings": null
 }
 ```
 
@@ -155,6 +165,7 @@
 | `summon` | F10을 눌렀으면 참. 도우미 창을 앞으로 부름 |
 | `event` | 파일을 열었거나(`opened`) 저장했으면(`saved`) 그 경로. 경로 변화만으로는 "열기"와 "다른 이름으로 저장"을 가를 수 없어 사건으로 보냄(티켓 18) |
 | `pressed` | F10이면 애드온이 F10을 받은 시각(`time.time()` 초, 같은 PC 시계), 아니면 `null`. 시간 기록이 여기서부터 잼(티켓 28). 이 칸이 없는 옛 애드온의 봉투는 받는 쪽이 거절하므로 설치 명령을 다시 돌린다 |
+| `settings` | 도우미가 청했을 때만 `{"always": ["주인.칸 = 값", …], "fields": {"MO": [...], …}}`, 아니면 `null`. 같은 봉투의 작업 상태에서 읽은 값이다. 이 칸이 없는 옛 애드온의 봉투도 거절한다 |
 
 - 봉투 겉면(HTTP 머리)에 비밀 글자(`X-Tutor-Token`)를 싣는다. 없거나 틀리면 버린다. 브라우저의 웹페이지가 `127.0.0.1`로 보내는 요청을 막으려는 것이다(HISTORY [44]).
 - 봉투는 **바뀌었을 때만**(0.5초마다 확인), F10 때, 파일 사건 때 보낸다.
@@ -193,7 +204,8 @@
 - 창이 Enter로 질문을 보내면(`HelperWindow.asked`), 질문 한 번(`QuestionFlow.ask`)이 **마지막으로 앞에 있던 Blender**의 작업 상태를 골라 답 스레드에서 `Conversation.ask`를 부른다. 작업 상태가 없으면 엔진을 부르지 않고 안내(`Failure`)를 보인다. 어느 쪽이든 시간 기록에 한 줄을 남기고, 나온 사건은 하나씩 화면 스레드로 넘겨 `HelperWindow.show_answer_event`가 그린다
 - 넣는 것: 질문, 작업 상태, 최근 대화(최대 3쌍, `Conversation`이 듦, 끝까지 나온 답만), 지금 단계(연습 중이면, 티켓 27)
 - 나오는 것(흘러나오는 차례): 답 글 조각(`Piece`) 여러 개 → 끝(`Done`: 근거 목록 + 검색 결과 + 모델에 붙인 비슷한 연습 과정. 뒤의 둘은 평가 프로그램이 쓰고 창은 근거만 그림) 또는 오류(`Failure`: 짧은 문구)
-- 바깥 서비스 호출은 질문마다 5번: 질문 바꾸기 3번(동시에 흘려 받아 검색어 칸이 먼저 닫힌 1개만 쓰고, 나머지와 그 답의 뒤쪽 칸은 기다리지 않음) + 임베딩 1번 + 답변 모델 1번(질문당 합계 약 $0.0005). 돈이 들지 않는 실행 방법은 없다(시험은 가짜 부품을 끼운다)
+- 바깥 서비스 호출은 질문마다 6번: 질문 바꾸기 3번(동시에 흘려 받아 검색어 칸이 먼저 닫힌 1개만 쓰고, 나머지와 그 답의 뒤쪽 칸은 기다리지 않음) + 분야 고르기 1번(설정 값이 있을 때, 임베딩과 동시에) + 임베딩 1번 + 답변 모델 1번. 돈이 들지 않는 실행 방법은 없다(시험은 가짜 부품을 끼운다)
+- 설정 값: 입력칸에 쓰기 시작하면(`HelperWindow.started_typing`) 입구가 받는 쪽에 청하고, 애드온이 0.5초 안에 읽어 보낸다. 질문 한 번은 지금 상태에서 읽은 설정 값을 받는 쪽에서 꺼내 넘긴다(오는 중이면 2초까지 기다림, 없으면 설정 값 없이). 분야 고르기가 실패하거나 5초(`field_timeout`)를 넘기면 묶음 없이(늘 보내는 줄만) 생각 수준을 올린 예비 답변 모델로 답하고, `Done.field_failed`에 남긴다
 - 질문 바꾸기가 `rewrite_timeout`(5초) 안에 하나도 오지 않으면 시간 초과, 모두 실패하면 오류 표시(`Failure`)로 멈춘다. 한국어 질문 그대로 찾지 않는다(HISTORY [127])
 - 예열(옵션): 환경 변수 `BLENDER_TUTOR_WARM_UP=1`이면 도우미가 엔진을 만든 뒤 `AnswerEngine.warm_up`(질문 바꾸기 1번 + 임베딩 1번)을 부른다. 기본은 끔
 
