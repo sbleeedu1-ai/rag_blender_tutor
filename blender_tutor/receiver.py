@@ -4,7 +4,8 @@
 설치 때 만든 비밀 글자(X-Tutor-Token)가 없는 요청은 버린다. 브라우저의 웹페이지가 127.0.0.1로 보내는 요청을 막으려는 것이다.
 창 번호마다 최신 작업 상태 하나를 들고, 닫힌 Blender의 상태는 버리고, 마지막 Blender가 닫히면 끝난다.
 설정 값(답 모델에 넘길 설정 줄, HISTORY [270])은 늘 보내지 않는다. 도우미 창이 입력을 시작하면 want_settings로 청하고,
-애드온은 다음 작업 상태 답장에서 그것을 보고 설정 값을 읽어 작업 상태와 한 봉투로 보낸다(그 상태에서 읽은 값이라는 것이 함께 남는다).
+애드온은 0.5초마다 GET /wants?window=<창 번호>로 물어 청했으면 설정 값을 읽어 작업 상태와 한 봉투로 보낸다
+(작업 상태는 바뀔 때만 보내므로 그 답장으로는 청을 전할 수 없다. 한 봉투라 그 상태에서 읽은 값이라는 것이 함께 남는다).
 도우미 프로그램 입구(blender_tutor.helper)가 이것을 띄운다.
 """
 
@@ -216,8 +217,17 @@ class Receiver:
             if empty and (heard or time.monotonic() - started >= grace):
                 return
 
-    def _receive(self, message: Message) -> bool:
-        """받은 봉투를 든다. 돌려주는 값은 그 Blender에 설정 값을 읽어 달라고 답장에 실을지."""
+    def _take_wanted(self, window: int) -> bool:
+        """애드온이 물었을 때: 그 창에 설정 값을 청했으면 참(한 번만 알리고, 오는 중으로 둔다)."""
+        with self._lock:
+            ask = window in self._wanted
+            if ask:
+                self._wanted.discard(window)
+                self._pending.add(window)
+        return ask
+
+    def _receive(self, message: Message) -> None:
+        """받은 봉투를 든다. 설정 값이 실려 있으면 그 상태와 함께 두고 기다리는 질문을 깨운다."""
         started = None if message.pid in self._started else self._process_started(message.pid)
         with self._lock:
             if started is not None:
@@ -228,12 +238,7 @@ class Receiver:
                 self._settings[message.window] = (message.state, message.settings)
                 self._pending.discard(message.window)
                 self._arrived.notify_all()
-            ask = message.window in self._wanted
-            if ask:
-                self._wanted.discard(message.window)
-                self._pending.add(message.window)
         self._listener(message)
-        return ask
 
     def _handler(self) -> type[BaseHTTPRequestHandler]:
         receiver = self
@@ -242,9 +247,17 @@ class Receiver:
             timeout = 5  # 보내다 멈춘 요청이 받는 쪽을 붙잡지 않게
 
             def do_GET(self):
-                if self._allowed() and self.path == "/ping":  # 애드온이 '이미 켜진 도우미'인지 물을 때
+                if not self._allowed():
+                    return
+                path, _, query = self.path.partition("?")
+                if path == "/ping":  # 애드온이 '이미 켜진 도우미'인지 물을 때
                     self._reply(200, {"app": "blender_tutor"})
-                elif self._allowed():
+                elif path == "/wants":  # 애드온이 0.5초마다: 설정 값을 읽어 보낼까
+                    window = query.removeprefix("window=")
+                    if not window.isdigit():
+                        return self._reply(400, {"error": "window=<창 번호>가 필요함"})
+                    self._reply(200, {"read_settings": receiver._take_wanted(int(window))})
+                else:
                     self._reply(404, {"error": "없는 주소"})
 
             def do_POST(self):
@@ -262,7 +275,8 @@ class Receiver:
                     log.warning("모양이 틀린 작업 상태: %s", error)
                     receiver._rejected = True
                     return self._reply(400, {"error": str(error)})
-                self._reply(200, {"read_settings": receiver._receive(message)})
+                receiver._receive(message)
+                self._reply(200, {})
 
             def _allowed(self) -> bool:
                 # 맞든 틀리든 같은 시간이 걸리게 비교한다(앞 글자부터 맞혀 가는 시간 재기 공격 막기)

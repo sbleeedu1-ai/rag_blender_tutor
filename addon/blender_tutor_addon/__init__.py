@@ -5,6 +5,8 @@
 - 파일 열기·저장은 사건(opened·saved)으로 함께 보낸다(티켓 18).
 - Blender를 켤 때와 F10 때 도우미 프로그램이 없으면 켠다. 끄는 일은 도우미 프로그램이 한다(켜진 Blender가 없으면 끝남).
 - Ctrl+F10: 평가 문항을 만들려고 그 순간의 작업 상태 JSON과 화면 PNG를 프로젝트 data/snapshots/에 함께 저장한다(티켓 28).
+- 설정 값(답 모델에 넘길 설정 줄, HISTORY [270]): 0.5초마다 도우미에 GET /wants로 묻고, 청했으면 settings_reader로 읽어
+  그 작업 상태와 한 봉투로 보낸다(도우미 창에 질문을 쓰기 시작할 때 청한다). 읽을 표는 프로젝트 state_tables/에 있다.
 
 이 애드온은 Blender 안 파이썬에서 돌아 blender_tutor 패키지를 가져다 쓰지 못한다. 작업 상태 칸은
 blender_tutor/work_state.py와 같게 맞추고, 바꾸면 둘 다 고친다(addon/selftest.py가 맞는지 본다).
@@ -205,6 +207,10 @@ class Sender:
     def stop(self) -> None:
         self._queue.put(None)
 
+    def ask_wants(self, window: int) -> None:
+        """도우미가 그 창의 설정 값을 청했는지 묻는다(보내는 줄에 세움. 답은 _want_settings에 적고 다음 tick이 읽어 보낸다)."""
+        self._queue.put((("wants", window), False))
+
     def answer(self) -> str:
         """자리 번호에 누가 있나: 'ours'(이 비밀 글자로 대답하는 도우미), 'other'(비밀 글자가 다른 도우미 등), 'none'."""
         try:
@@ -258,10 +264,21 @@ class Sender:
         except OSError:  # 도우미 프로그램이 꺼져 있음
             return False
 
+    def _wants(self, window: int) -> None:
+        global _want_settings
+        try:
+            with urllib.request.urlopen(self._request(f"/wants?window={window}"), timeout=1) as response:
+                if json.loads(response.read()).get("read_settings"):
+                    _want_settings = True
+        except (OSError, ValueError):  # 도우미가 꺼져 있거나 옛 도우미(이 주소 없음): 청한 것이 없다고 본다
+            pass
+
     def _run(self) -> None:
         while (item := self._queue.get()) is not None:
             payload, launch = item
-            if payload is None:
+            if isinstance(payload, tuple):  # ("wants", 창 번호)
+                self._wants(payload[1])
+            elif payload is None:
                 self.launch()
             elif not self._post(payload) and launch and self.launch():
                 self._post(payload)
@@ -277,19 +294,36 @@ def _warn(text: str) -> None:
 # 애드온이 켜져 있는 동안의 상태
 _recent = RecentOperators()
 _events: list[dict] = []  # 다음 읽기 때 보낼 파일 사건
+_want_settings = False  # 도우미가 설정 값을 청했나(보내는 스레드가 적고 tick이 읽어 보냄)
+_tables: dict | None = None  # 설정 값을 읽을 표(state_tables/, 처음 청할 때 한 번 읽음)
 _last: dict | None = None  # 마지막으로 보낸 작업 상태
 _sender: Sender | None = None
 _notice = ""  # 상태 줄에 띄울 알림(보내는 스레드가 적고 tick이 띄움)
 _keymaps = []
 
 
-def _payload(state: dict, summon: bool = False, event: dict | None = None, pressed: float | None = None) -> dict:
-    return {"window": _own_window(), "pid": os.getpid(), "state": state, "summon": summon, "event": event, "pressed": pressed}
+def _payload(state: dict, summon: bool = False, event: dict | None = None, pressed: float | None = None, settings: dict | None = None) -> dict:
+    return {"window": _own_window(), "pid": os.getpid(), "state": state, "summon": summon, "event": event, "pressed": pressed, "settings": settings}
+
+
+def _read_settings(context) -> dict | None:
+    """설정 값을 읽는다(blender_tutor/setting_fields.py의 SettingLines 모양). 표가 없거나 읽다 실패하면 콘솔에 남기고 None
+    (도우미는 잠시 기다렸다가 설정 값 없이 답한다)."""
+    global _tables
+    from . import settings_reader  # 설정 값을 청할 때만 쓰므로 그때 가져온다
+
+    try:
+        if _tables is None:
+            _tables = settings_reader.load_tables(Path(_sender.project) / "state_tables")
+        return settings_reader.read_settings(context, _tables)
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
 def tick() -> float:
-    """0.5초마다: 작업 상태를 읽어 바뀌었거나 파일 사건이 있으면 보낸다."""
-    global _last, _notice
+    """0.5초마다: 작업 상태를 읽어 바뀌었거나 파일 사건이 있으면 보낸다. 도우미가 청했으면 설정 값도 읽어 보낸다."""
+    global _last, _notice, _want_settings
     try:
         context = bpy.context
         if _notice and context.workspace is not None:
@@ -300,8 +334,12 @@ def tick() -> float:
         if _sender is not None:
             for event in _events:
                 _sender.send(_payload(state, event=event))
-            if state != _last and not _events:
+            if _want_settings:  # 청한 설정 값은 상태가 그대로여도 보낸다
+                _want_settings = False
+                _sender.send(_payload(state, settings=_read_settings(context)))
+            elif state != _last and not _events:
                 _sender.send(_payload(state))
+            _sender.ask_wants(_own_window())
         _events.clear()
         _last = state
     except Exception:  # 한 번 실패해도 다음 읽기는 계속한다
@@ -413,7 +451,7 @@ def register():
 
 
 def unregister():
-    global _sender, _last
+    global _sender, _last, _want_settings, _tables
     if bpy.app.timers.is_registered(tick):
         bpy.app.timers.unregister(tick)
     for handlers, handler in ((bpy.app.handlers.load_post, _on_load), (bpy.app.handlers.save_post, _on_save)):
@@ -426,6 +464,6 @@ def unregister():
     bpy.utils.unregister_class(TUTOR_OT_summon)
     if _sender is not None:
         _sender.stop()
-    _sender, _last = None, None
+    _sender, _last, _want_settings, _tables = None, None, False, None
     _events.clear()  # 껐다 켤 때 지난 파일 사건·조작이 다시 나가지 않게
     _recent.names.clear()

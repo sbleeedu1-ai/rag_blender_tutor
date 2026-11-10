@@ -35,9 +35,9 @@ TOKEN = "test-token"  # 받는 쪽 시험의 비밀 글자
 
 def send(
     receiver, window, pid, state=EDITING, *, summon=False, event=None, pressed=None, token=TOKEN, path="/state", body=None,
-    settings=None, reply=None,
+    settings=None,
 ) -> int:
-    """애드온처럼 보내고 응답 번호를 돌려준다. reply(목록)를 주면 받은 답장 JSON을 붙인다."""
+    """애드온처럼 보내고 응답 번호를 돌려준다."""
     if body is None:
         body = {"window": window, "pid": pid, "state": state, "summon": summon, "event": event, "pressed": pressed, "settings": settings}
     request = urllib.request.Request(
@@ -47,8 +47,6 @@ def send(
     )
     try:
         with urllib.request.urlopen(request, timeout=5) as response:
-            if reply is not None:
-                reply.append(json.loads(response.read()))
             return response.status
     except urllib.error.HTTPError as error:
         return error.code

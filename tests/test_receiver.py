@@ -153,13 +153,18 @@ def test_애드온이_이미_켜진_도우미인지_물어볼_수_있다(receive
 SETTINGS = {"always": ["bpy.context.object.location = (0, 0, 0)"], "fields": {"MO": ["bpy.context.object.modifiers['Bevel'].segments = 1"]}}
 
 
-def test_청한_뒤의_답장에만_설정_값을_읽어_달라고_싣는다(receiver):
-    replies = []
-    send(receiver, 1, 100, reply=replies)
+def wants(receiver, window):
+    """애드온처럼 0.5초마다 묻는 것: 설정 값을 읽어 보낼까."""
+    request = urllib.request.Request(f"http://127.0.0.1:{receiver.port}/wants?window={window}", headers={TOKEN_HEADER: TOKEN})
+    with urllib.request.urlopen(request, timeout=5) as response:
+        return json.loads(response.read())["read_settings"]
+
+
+def test_청한_뒤_애드온이_물으면_한_번만_읽어_달라고_답한다(receiver):
+    send(receiver, 1, 100)
+    assert wants(receiver, 1) is False
     receiver.want_settings()
-    send(receiver, 1, 100, reply=replies)
-    send(receiver, 1, 100, reply=replies)  # 한 번 알렸으면 다시 싣지 않는다(읽어 오는 중)
-    assert [r["read_settings"] for r in replies] == [False, True, False]
+    assert [wants(receiver, 1), wants(receiver, 1)] == [True, False]  # 한 번 알렸으면 다시 싣지 않는다(읽어 오는 중)
 
 
 def test_지금_작업_상태에서_읽은_설정_값만_낸다(receiver):
@@ -171,15 +176,13 @@ def test_지금_작업_상태에서_읽은_설정_값만_낸다(receiver):
     assert receiver.settings_for(1) is not None
     send(receiver, 1, 100, OBJECT_MODE)  # 상태가 바뀌면 오래된 값이라 내지 않고 새로 청한다
     assert receiver.settings_for(1) is None
-    replies = []
-    send(receiver, 1, 100, OBJECT_MODE, reply=replies)
-    assert replies == [{"read_settings": True}]
+    assert wants(receiver, 1) is True
 
 
 def test_오는_중인_설정_값은_한도까지_기다린다(receiver):
     send(receiver, 1, 100)
     receiver.want_settings(1)
-    send(receiver, 1, 100)  # 답장으로 알렸다
+    assert wants(receiver, 1)  # 애드온에 알렸다(오는 중)
     later = threading.Timer(0.1, lambda: send(receiver, 1, 100, settings=SETTINGS))
     later.start()
     assert receiver.settings_for(1, wait=3.0) is not None

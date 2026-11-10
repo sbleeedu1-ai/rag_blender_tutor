@@ -140,6 +140,9 @@ class FakeSender:
     def send(self, payload, launch=False):
         self.sent.append(payload)
 
+    def ask_wants(self, window):  # 설정 값을 청했는지 묻기(HISTORY [270]). 여기서는 묻기만 센다
+        self.asked = getattr(self, "asked", 0) + 1
+
 
 real_sender, addon._sender = addon._sender, FakeSender()
 addon.tick()
