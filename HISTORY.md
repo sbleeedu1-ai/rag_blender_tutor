@@ -1606,6 +1606,14 @@
 - 기록 정리: 사용자 "experiment.md 도 … _prototype 붙여서 아카이브 폴더 … 새롭게 experiment.md 에 … 체크리스트만 쭉 맨위에" → `docs/experiment.md`를 `archive/experiment_prototype.md`로 옮기고(git mv), 새 `docs/experiment.md`에는 문항 번호를 뺀 체크리스트만. HISTORY [158]·[159]의 `docs/experiment.md` [E1]·[E1b] 링크는 이제 보관본을 가리킨다.
 - 고치기 후보로 더함: 사족(틀린 "없어요"·근거 없는 권유), 작업 상태에 셰이딩·X-Ray·빈 재질 칸·시점(말로), 메뉴 이름 사전이 옵션 아래 값(Set Origin의 Origin to Geometry 등)을 뽑지 않음(ko.po에는 "오리진을 지오메트리로 이동", 사용자가 화면에서 확인), 참고 치수를 답이 딱 잘라 말함.
 
+### [161] 2026-11-04 · 루트를 깔끔하게 하기 위해, 메뉴 이름 표 3개를 `menu_tables/`로 모으고 경로를 `paths.py` 한 곳에 둔다
+
+- 계기: 사용자 "뭔가 지저분해진거같아" → Claude가 폴더를 훑어 정리 후보 7개를 보이고, 루트의 `menu_aliases.json`·`menu_choices.json`·`menu_titles.json`은 코드 경로를 고쳐야 해서 기록 PR과 섞지 않고 따로 하자고 권함. 사용자 "ㅇㅋ 일단 그럼 새 브랜치파서 할까?"
+- 바꾼 것: 세 파일을 `menu_tables/`로 옮기고(git mv), 6개 모듈이 따로 만들던 경로를 `paths.py`의 `MENU_ALIASES`·`MENU_CHOICES`·`MENU_TITLES`로 모음. `STRUCTURE.md` 경로 고침. 이 PR은 [160](PR #39, 아직 병합 전) 뒤 번호.
+- 확인: pytest 596 passed(옮기기 전과 같은 수), course_check 문제 0개, 실제 사전(`data/menu_names`)을 새 경로의 표로 읽음.
+- 함께 옮긴 것(사용자 "ㅇㅇ"): 번역을 도우미에 쓰지 않기로 한 뒤([104]) 가리키는 곳이 없는 조사 문서 2개(`2026-10-28-다국어-RAG와-선번역-근거.md`·`2026-10-28-한국어-번역-도입-경위.md`)를 `.scratch/mvp-roundtrip/research/`에서 `archive/research/`로. 같은 번역 조사라도 `31-번역-모델-조사.md`는 코드가 가격 근거로 가리켜 둠.
+- 함께 한 것: Git 밖의 빈 폴더 `prototype/helper_window_ui/`(옛 캐시 파일 하나뿐)를 지움. `data/` 루트의 낱개 기록 6개는 HISTORY·티켓이 경로를 가리켜 그대로 둠. `data/models/`(약 6.9GB)는 티켓 42에서 쓸 수 있어 둠. 홀드아웃 폴더는 새 홀드아웃을 만들 때 `archive/`로.
+
 ### [162] 2026-11-04 · 나중 확장 계획을 잃지 않기 위해, 강사님이 준 "실무 기능 커리큘럼" 아이디어를 명세 범위 밖 목록에 적는다
 
 - 사용자가 강사님 아이디어를 정리해 보임: "커리큘럼을 만들자 / 지금 만든 검/방패 같은 스타일로 / 실무에서 자주 사용되는 기능들을 토대로 그걸 익힐 커리큘럼을 만들고 그걸 확장시켜서 뻗어나갈 과정들을 만들자 / 유튜브에 수많은 튜토리얼과 심화과정을 내가 체크해봐야한다."
