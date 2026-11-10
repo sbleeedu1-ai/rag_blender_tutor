@@ -356,6 +356,9 @@ def main(
     run_command.add_argument("--bm25", action="store_true", help="낱말 검색(BM25)을 섞는다(기본은 끄고 뜻 검색만)")
     run_command.add_argument("--embedding", choices=EMBEDDINGS, default=EMBEDDINGS[0], help="임베딩 종류")
     run_command.add_argument("--reranker", choices=RERANKERS, default=RERANKERS[0], help="리랭커")
+    run_command.add_argument("--no-situation", action="store_true", help="설정 값의 1-a(그 상황일 때 늘) 줄을 넘기지 않는다(켠 판과 견주려고)")
+    run_command.add_argument("--no-computed", action="store_true", help="설정 값의 2(계산 값) 줄을 넘기지 않는다(켠 판과 견주려고)")
+    run_command.add_argument("--no-fields", action="store_true", help="분야를 고르지 않고 분야 묶음 줄을 넘기지 않는다(늘 보내는 줄만, 묶음 몫을 가르려고)")
     run_command.add_argument("--yes", action="store_true", help="어림 비용을 보고 확인받았다(돈이 든다)")
     times_command.add_argument("--timings", type=Path, help="도우미 창의 시간 기록 파일(기본: 설정 폴더의 timings.jsonl)")
     args = parser.parse_args(argv)
@@ -367,7 +370,9 @@ def main(
     # 실패할 수 있는 읽기(엔진 만들기·시간 기록)는 폴더를 만들기 전에 한다. 빈 폴더가 남으면 같은 이름으로 다시 돌릴 수 없어서
     if args.command == "run":
         turns = sum(len(dialogue.turns) for dialogue in dialogues)
-        settings = Settings(top_k=args.top_k, use_bm25=args.bm25, reasoning=args.reasoning)
+        settings = Settings(top_k=args.top_k, use_bm25=args.bm25, reasoning=args.reasoning,
+                            situation_lines=not args.no_situation, computed_lines=not args.no_computed,
+                            field_lines=not args.no_fields)
         if not args.yes:
             per_turn = DOLLARS_PER_TURN.get(settings.reasoning)
             estimate = (

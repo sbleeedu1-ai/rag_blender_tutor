@@ -126,6 +126,14 @@ def test_분야_고르기가_한도를_넘기면_기다리지_않고_실패로_�
     assert events[-1].field_failed and fallback.calls
 
 
+def test_분야_묶음을_끄면_분야를_고르지_않고_늘_보내는_줄만_넘긴다():
+    model, field_model = FakeModel(), FakeFieldModel()
+    events = list(engine(field_model, model, settings=Settings(field_lines=False)).answer("베벨", STATE, [], settings=SETTINGS))
+    content = model.calls[0][-1]["content"]
+    assert not field_model.calls and "location = (0, 0, 0)" in content and "segments = 1" not in content
+    assert events[-1].fields == () and not events[-1].field_failed
+
+
 def test_설정_값이_없으면_분야를_고르지_않고_설정_칸도_넣지_않는다():
     model, field_model = FakeModel(), FakeFieldModel()
     events = list(engine(field_model, model).answer("베벨", STATE, []))

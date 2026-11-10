@@ -181,6 +181,8 @@ class Settings:
     # 설정 값의 1-a(그 상황일 때 늘)·2(계산) 초안 줄을 넘길지. 개발셋에서 끈 판과 견준다(사용자 "어차피 할거면 … 지금 하는게", [270])
     situation_lines: bool = True
     computed_lines: bool = True
+    # 분야 묶음을 넘길지. 끄면 분야를 고르지 않고 늘 보내는 줄만 넘긴다(개발셋에서 묶음 몫을 가르려고, 검토 A5)
+    field_lines: bool = True
 
     def __post_init__(self):
         object.__setattr__(self, "reasoning", Reasoning(self.reasoning))  # "low"처럼 글자로 줘도 받고, 모르는 이름이면 ValueError
@@ -307,7 +309,7 @@ class AnswerEngine:
         try:
             query = self._rewritten(rewrite) if rewrite else "\n".join([question, *context.values()])
             # 분야 고르기는 바꾼 검색어가 나온 뒤 임베딩과 동시에 부른다(명세). 실패해도 답은 멈추지 않는다(묶음 없이 답함)
-            chosen = self._start_fields(question, query, state) if settings is not None and self._field_model else None
+            chosen = self._start_fields(question, query, state) if settings is not None and self._field_model and self._settings.field_lines else None
             # 비슷한 연습 과정은 검색어(직전 질문·조작에 끌림)가 아니라 질문만으로 고른다.
             # 질문만의 벡터는 따로 부르지 않고 같은 호출에 글을 하나 더 실어 받는다(비용은 질문 길이만큼 늚)
             texts = [query, question] if recommend and question != query else [query]
