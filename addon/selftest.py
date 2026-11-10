@@ -134,11 +134,16 @@ context.view_layer.objects.active = cube
 
 # 바뀐 때만 보내기: 보내는 쪽을 가짜로 바꿔 끼운다
 class FakeSender:
+    project = os.environ["TUTOR_PROJECT"]  # 설정 값 표(state_tables/)를 읽는 자리
+
     def __init__(self):
         self.sent = []
 
     def send(self, payload, launch=False):
         self.sent.append(payload)
+
+    def ask_wants(self, window):  # 설정 값을 청했는지 묻기(HISTORY [270]). 여기서는 묻기만 센다
+        self.asked = getattr(self, "asked", 0) + 1
 
 
 real_sender, addon._sender = addon._sender, FakeSender()
@@ -153,6 +158,22 @@ addon.tick()
 sent = addon._sender.sent[-1]
 check("창 번호·프로세스 번호를 함께 보냄", sent["pid"] == os.getpid() and isinstance(sent["window"], int), (sent["window"], sent["pid"]))
 check("부르기가 아니면 누른 시각 없음", sent["pressed"] is None)
+check("청하지 않으면 설정 값 없음", sent["settings"] is None and addon._sender.asked >= 1, addon._sender.asked)
+# 설정 값(HISTORY [270]): 도우미가 청하면 상태가 그대로여도 설정 값을 읽어 실어 보낸다
+count = len(addon._sender.sent)
+addon._want_settings = True
+started = time.perf_counter()
+addon.tick()
+read_ms = (time.perf_counter() - started) * 1000
+sent = addon._sender.sent[-1]
+lines = sent["settings"]
+check("청하면 상태가 그대로여도 설정 값을 실어 보냄", len(addon._sender.sent) == count + 1 and lines is not None and not addon._want_settings)
+sys.path.insert(0, os.environ["TUTOR_PROJECT"])
+from blender_tutor.setting_fields import SettingLines  # noqa: E402  도우미가 받는 모양과 맞는지
+
+check("설정 값이 도우미의 SettingLines 모양과 맞음", len(SettingLines.from_json(lines).fields) == 32,
+      {"늘": len(lines["always"]), "1-a": len(lines["situation"]), "2": len(lines["computed"])})
+check("설정 값 읽기 시간(공장 장면, ms)", read_ms < 3000, round(read_ms))
 before = time.time()
 bpy.ops.tutor.summon()
 message = Message.from_json(addon._sender.sent[-1])  # 받는 쪽이 읽는 모양과 맞나

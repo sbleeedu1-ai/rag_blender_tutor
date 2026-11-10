@@ -110,11 +110,13 @@ def test_비밀_글자가_틀리면_받지_않는다(receiver, received):
 @pytest.mark.parametrize(
     "body",
     [
-        {"window": 1, "pid": 100, "state": {"mode": "OBJECT"}, "summon": False, "event": None, "pressed": None},  # 칸이 빠진 작업 상태
-        {"window": "1", "pid": 100, "state": EDITING, "summon": False, "event": None, "pressed": None},  # 창 번호가 글자
-        {"window": 1, "pid": 100, "state": EDITING, "summon": False, "event": {"kind": "deleted", "path": ""}, "pressed": None},  # 모르는 사건
-        {"window": 1, "pid": 100, "state": EDITING, "summon": True, "event": None, "pressed": "방금"},  # 누른 시각이 글자
+        {"window": 1, "pid": 100, "state": {"mode": "OBJECT"}, "summon": False, "event": None, "pressed": None, "settings": None},  # 칸이 빠진 작업 상태
+        {"window": "1", "pid": 100, "state": EDITING, "summon": False, "event": None, "pressed": None, "settings": None},  # 창 번호가 글자
+        {"window": 1, "pid": 100, "state": EDITING, "summon": False, "event": {"kind": "deleted", "path": ""}, "pressed": None, "settings": None},  # 모르는 사건
+        {"window": 1, "pid": 100, "state": EDITING, "summon": True, "event": None, "pressed": "방금", "settings": None},  # 누른 시각이 글자
         {"window": 1, "pid": 100, "state": EDITING, "summon": True, "event": None},  # 누른 시각 칸이 없는 옛 애드온
+        {"window": 1, "pid": 100, "state": EDITING, "summon": True, "event": None, "pressed": None},  # 설정 값 칸이 없는 옛 애드온
+        {"window": 1, "pid": 100, "state": EDITING, "summon": False, "event": None, "pressed": None, "settings": {"always": "x", "fields": {}}},  # 설정 값 모양이 틀림
     ],
 )
 def test_모양이_틀린_것은_받지_않는다(receiver, received, body):
@@ -144,3 +146,62 @@ def test_애드온이_이미_켜진_도우미인지_물어볼_수_있다(receive
     request = urllib.request.Request(f"http://127.0.0.1:{receiver.port}/ping", headers={TOKEN_HEADER: TOKEN})
     with urllib.request.urlopen(request, timeout=5) as response:
         assert json.loads(response.read()) == {"app": "blender_tutor"}
+
+
+# 설정 값(HISTORY [270]): 도우미가 청하면 애드온은 다음 답장을 보고 작업 상태와 한 봉투로 보낸다
+
+SETTINGS = {"always": ["bpy.context.object.location = (0, 0, 0)"], "situation": [], "computed": [], "fields": {"MO": ["bpy.context.object.modifiers['Bevel'].segments = 1"]}}
+
+
+def wants(receiver, window):
+    """애드온처럼 0.5초마다 묻는 것: 설정 값을 읽어 보낼까."""
+    request = urllib.request.Request(f"http://127.0.0.1:{receiver.port}/wants?window={window}", headers={TOKEN_HEADER: TOKEN})
+    with urllib.request.urlopen(request, timeout=5) as response:
+        return json.loads(response.read())["read_settings"]
+
+
+def test_청한_뒤_애드온이_물으면_한_번만_읽어_달라고_답한다(receiver):
+    send(receiver, 1, 100)
+    assert wants(receiver, 1) is False
+    receiver.want_settings()
+    assert [wants(receiver, 1), wants(receiver, 1)] == [True, False]  # 한 번 알렸으면 다시 싣지 않는다(읽어 오는 중)
+
+
+def test_지금_작업_상태에서_읽은_설정_값만_낸다(receiver):
+    from blender_tutor.setting_fields import SettingLines
+
+    send(receiver, 1, 100, EDITING, settings=SETTINGS)
+    assert receiver.settings_for(1) == (WorkState.from_json(EDITING), SettingLines.from_json(SETTINGS))
+    send(receiver, 1, 100, {**EDITING, "view": {**EDITING["view"], "distance": 3.0}})  # 화면만 돌렸으면 그대로 쓴다
+    assert receiver.settings_for(1) is not None
+    send(receiver, 1, 100, OBJECT_MODE)  # 상태가 바뀌면 오래된 값이라 내지 않고 새로 청한다
+    assert receiver.settings_for(1) is None
+    assert wants(receiver, 1) is True
+
+
+def test_오는_중인_설정_값은_한도까지_기다린다(receiver):
+    send(receiver, 1, 100)
+    receiver.want_settings(1)
+    assert wants(receiver, 1)  # 애드온에 알렸다(오는 중)
+    later = threading.Timer(0.1, lambda: send(receiver, 1, 100, settings=SETTINGS))
+    later.start()
+    assert receiver.settings_for(1, wait=3.0) is not None
+    later.join()
+
+
+def test_안_오는_설정_값은_한도만큼만_기다리고_없이_간다(receiver):
+    send(receiver, 1, 100)
+    assert receiver.settings_for(1, wait=0.05) is None
+
+
+def test_알린_설정_값이_한도_안에_안_오면_다시_청한다(receiver, monkeypatch):
+    # 애드온이 읽다 실패해 설정 값 없이 보내도 그 창이 영영 못 청하는 일이 없게(PR #42 검토 K1)
+    import blender_tutor.receiver as module
+
+    send(receiver, 1, 100)
+    receiver.want_settings(1)
+    assert wants(receiver, 1)  # 알림(오는 중)
+    send(receiver, 1, 100)  # 설정 값 없는 봉투만 옴
+    assert receiver.settings_for(1) is None and wants(receiver, 1) is False  # 한도 안: 다시 청하지 않음
+    monkeypatch.setattr(module, "PENDING_LIMIT", 0.0)
+    assert receiver.settings_for(1) is None and wants(receiver, 1) is True  # 한도 지남: 다시 청함

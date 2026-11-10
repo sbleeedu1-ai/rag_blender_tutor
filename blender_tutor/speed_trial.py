@@ -272,11 +272,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if folder.exists():
         raise SystemExit(f"{folder}가 이미 있습니다(덮어쓰지 않음).")
     settings, key, calls = Settings(), openai_key(), Calls()
-    inner_rewriters = engine_setup.rewriters_for(settings, key)
+    inner_rewriters = engine_setup.rewriters_for(settings, "openai")  # 이 실측은 luna 판이다(HISTORY [127]-[135])
     inner_answer = OpenAIAnswerModel(MODEL, key, settings.reasoning.value)
     engine = engine_setup.build_engine(
         args.data, model=TimedAnswer(inner_answer, calls, 0),
-        settings=settings, rewriters=[TimedRewriter(model, calls, slot) for slot, model in enumerate(inner_rewriters)],
+        settings=settings, rewriters=[TimedRewriter(model, calls, slot) for slot, model in enumerate(inner_rewriters)], provider="openai",
     )
     keys = {piece.chunk: piece.key for piece in pieces(load_chunks(args.data / "chunks" / "manual_chunks.jsonl"))}
     state = WorkState.from_json(json.loads(STATE.read_text(encoding="utf-8")))

@@ -35,6 +35,7 @@ from blender_tutor.conversation import RECENT_PAIRS, Conversation, settings_reco
 from blender_tutor.manual_chunks import BASE_URL, Chunk
 from blender_tutor.paths import COURSES, PROJECT, default_progress_records
 from blender_tutor.progress import Course, Step, load_courses
+from blender_tutor.setting_fields import SettingLines
 from blender_tutor.work_state import WorkState
 
 # 지금 고를 수 있는 임베딩 종류·리랭커. 리랭커와 bge-m3 같은 다른 임베딩은 아직 없어서, 켠 척하지 않게 고를 수 없게 막는다.
@@ -47,7 +48,8 @@ DOLLARS_PER_TURN = {Reasoning.NONE: 0.00064, Reasoning.LOW: 0.00065}
 RERANKERS = ("끔",)
 
 # 칸 이름 → 꼭 있어야 하나. 연습 과정 밖 질문이면 연습 과정·단계를 빼거나 null로 둔다
-_TURN = {"번호": True, "질문": True, "작업 상태": True, "스크린샷": False, "단계": False, "핵심": True, "정답 위치": True}
+# 설정 값: Ctrl+F10이 작업 상태 옆에 남긴 <같은 이름>.settings.json(HISTORY [270]). 없으면 설정 값 없이 묻는다
+_TURN = {"번호": True, "질문": True, "작업 상태": True, "설정 값": False, "스크린샷": False, "단계": False, "핵심": True, "정답 위치": True}
 _SINGLE = {**_TURN, "분류": True, "연습 과정": False}
 _SCENARIO = {"번호": True, "분류": True, "연습 과정": False, "차례": True}
 
@@ -62,6 +64,7 @@ class Turn:
     step: Step | None  # 연습 과정 밖이면 None
     keys: tuple[str, ...]  # 맞는 답의 핵심(1개 이상, 채점 기준)
     locations: tuple[str, ...]  # 정답 위치(경로.html#앵커 또는 쪽 전체 경로.html). 문서에 없는 질문이면 빈 묶음
+    settings: SettingLines | None = None  # 그때 읽은 설정 값(문항에 적었을 때만)
 
 
 @dataclass(frozen=True)
@@ -90,6 +93,8 @@ class TurnResult:
     # F10·창이 드는 시간은 도우미 창의 시간 기록(times)으로 잰다
     first_piece: float | None = None
     done: float = 0.0
+    fields: tuple[str, ...] = ()  # 분야 고르기가 고른 분야(설정 값이 없거나 실패하면 빈 묶음)
+    field_failed: bool = False  # 분야 고르기가 실패해 묶음 없이 답했나
 
 
 def run(
@@ -106,22 +111,24 @@ def run(
         conversation = Conversation(keep=recent_pairs)
         conversation.engine = engine
         for turn in dialogue.turns:
-            pieces, failure, sources, results, similar, first_piece = [], None, (), (), (), None
+            pieces, failure, sources, results, similar, first_piece, fields, field_failed = [], None, (), (), (), None, (), False
             start = clock()
-            for event in conversation.ask(turn.question, turn.state, turn.step):
+            for event in conversation.ask(turn.question, turn.state, turn.step, turn.settings):
                 if isinstance(event, Piece):
                     if first_piece is None:
                         first_piece = clock() - start
                     pieces.append(event.text)
                 elif isinstance(event, Done):
                     sources, results, similar = event.sources, event.results, event.similar
+                    fields, field_failed = event.fields, event.field_failed
                 elif isinstance(event, Failure):
                     failure, results = event.message, event.results
             done = clock() - start
             answer = "".join(pieces)
             mentioned = tuple(course for course in similar if course.name in answer)
             found.append(TurnResult(
-                dialogue, turn, answer, failure, sources, results, hit(turn.locations, results), similar, mentioned, first_piece, done
+                dialogue, turn, answer, failure, sources, results, hit(turn.locations, results), similar, mentioned, first_piece, done,
+                fields, field_failed,
             ))
     return found
 
@@ -300,11 +307,17 @@ def _turn(data: dict, course: str | None, steps: dict[tuple[str, str], Step], fo
         state = WorkState.from_json(json.loads(state_path.read_text(encoding="utf-8")))
     except (OSError, ValueError) as error:
         raise ValueError(f"{number}: 작업 상태 {data['작업 상태']}를 읽지 못함({error})") from error
+    settings = None
+    if data.get("설정 값") is not None:
+        try:
+            settings = SettingLines.from_json(json.loads((folder / data["설정 값"]).read_text(encoding="utf-8")))
+        except (OSError, ValueError) as error:
+            raise ValueError(f"{number}: 설정 값 {data['설정 값']}를 읽지 못함({error})") from error
     # 스크린샷은 평가 프로그램이 쓰지 않지만 GPT 측정·채점(작업 상태와 대조)에 쓰므로, 적었는데 없으면 문항을 만들다 빠진 것이다
     if data.get("스크린샷") is not None and not (folder / data["스크린샷"]).is_file():
         raise ValueError(f"{number}: 스크린샷 {data['스크린샷']}가 없음")
     step = steps[(course, label)] if course is not None else None
-    return Turn(number, data["질문"], state, step, tuple(data["핵심"]), locations)
+    return Turn(number, data["질문"], state, step, tuple(data["핵심"]), locations, settings)
 
 
 def _check_fields(data: object, fields: dict[str, bool]) -> None:
@@ -432,6 +445,7 @@ def _write_run(folder: Path, name: str, about: dict, found: list[TurnResult]) ->
                 "붙인 연습 과정": [course.name for course in result.similar],
                 "답에 나온 연습 과정": [course.name for course in result.mentioned],
                 "첫 글자(초)": result.first_piece, "답 끝(초)": result.done,
+                "설정 값 있음": result.turn.settings is not None, "고른 분야": list(result.fields), "분야 고르기 실패": result.field_failed,
             }
             file.write(json.dumps(row, ensure_ascii=False) + "\n")
     counted = [result for result in found if result.turn.locations]

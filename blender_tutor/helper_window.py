@@ -85,6 +85,7 @@ class HelperWindow(QWidget):
     """
 
     asked = Signal(str)  # Enter로 보낸 질문
+    started_typing = Signal()  # 빈 입력칸에 글을 쓰기 시작함(설정 값을 미리 청하는 때, HISTORY [270])
     escape = Signal()  # Esc: Blender로 돌아가기
     chose_course = Signal(str)  # 고른 연습 과정 이름표(처음 고르기·바꾸기)
     went_next = Signal()  # '다음' 버튼(조작을 다 끝냈으면 '다음 단계')
@@ -102,6 +103,7 @@ class HelperWindow(QWidget):
         self.setStyleSheet(STYLE)
         self.put_away = False  # 사용자가 X로 직접 내렸나(F10·트레이로 부를 때까지 내린 채)
         self._busy = False  # 답을 기다리는 중
+        self._typing = False  # 입력칸에 쓰던 글이 있나(started_typing을 질문마다 한 번만 알리려고)
         self._answer: QLabel | None = None
         self._answer_text = ""
         self._course_labels: tuple[str, ...] = ()  # 고르기 버튼·바꾸기 메뉴를 만든 연습 과정 목록
@@ -148,6 +150,7 @@ class HelperWindow(QWidget):
         self.input.setPlaceholderText("질문을 쓰고 Enter")
         self.input.setFixedHeight(42)
         self.input.returnPressed.connect(self._send)
+        self.input.textEdited.connect(self._typed)
         root.addWidget(self.input)
 
     # ---- 보이기
@@ -325,11 +328,18 @@ class HelperWindow(QWidget):
         self.step_list.setFixedHeight(self.step_list.sizeHintForRow(0) * rows + 2 * self.step_list.frameWidth())
 
     # ---- 대화
+    def _typed(self, text: str) -> None:
+        """빈 칸에 첫 글자를 쓰면 알린다(같은 질문을 쓰는 동안 한 번). 질문을 보내면 칸이 비어 다음 질문에 다시 알린다."""
+        if text and not self._typing:
+            self.started_typing.emit()
+        self._typing = bool(text)
+
     def _send(self) -> None:
         question = self.input.text().strip()
         if not question or self._busy:
             return
-        self.input.clear()
+        self.input.clear()  # 프로그램이 비운 것은 textEdited로 오지 않아 직접 되돌린다
+        self._typing = False
         self._busy = True
         self._label(question, "question")
         self._answer = self._label(THINKING, "thinking")

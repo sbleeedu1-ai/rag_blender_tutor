@@ -9,6 +9,9 @@ COURSES = PROJECT / "courses"
 MENU_ALIASES = PROJECT / "menu_tables" / "menu_aliases.json"  # 설명서 철자 → 화면 철자
 MENU_CHOICES = PROJECT / "menu_tables" / "menu_choices.json"  # 번역이 여러 개인 이름의 고정 짝(영어 이름 → 문맥)
 MENU_TITLES = PROJECT / "menu_tables" / "menu_titles.json"  # 제목에서만 뽑은 이름 중 검수를 통과한 것
+# 답 모델에 보낼 설정 값의 표(Blender에서 읽은 칸 이름·공장값이라 저장소에 커밋한다, HISTORY [270])
+FIELDS = PROJECT / "state_tables" / "fields.json"  # 분야 코드 → 쉬운 설명(32종)
+BUNDLES = PROJECT / "state_tables" / "bundles.json"  # 분야 코드 → 묶음 칸(갈아 끼우는 파일)
 
 
 def progress_records(app_data: Path | None, home: Path) -> Path:

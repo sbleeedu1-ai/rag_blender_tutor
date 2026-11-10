@@ -3,10 +3,14 @@
 애드온 → 도우미 프로그램은 내 PC 안 HTTP(127.0.0.1)다. 두 프로그램이 따로 돌아 함수를 바로 부를 수 없어서다.
 설치 때 만든 비밀 글자(X-Tutor-Token)가 없는 요청은 버린다. 브라우저의 웹페이지가 127.0.0.1로 보내는 요청을 막으려는 것이다.
 창 번호마다 최신 작업 상태 하나를 들고, 닫힌 Blender의 상태는 버리고, 마지막 Blender가 닫히면 끝난다.
+설정 값(답 모델에 넘길 설정 줄, HISTORY [270])은 늘 보내지 않는다. 도우미 창이 입력을 시작하면 want_settings로 청하고,
+애드온은 0.5초마다 GET /wants?window=<창 번호>로 물어 청했으면 설정 값을 읽어 작업 상태와 한 봉투로 보낸다
+(작업 상태는 바뀔 때만 보내므로 그 답장으로는 청을 전할 수 없다. 한 봉투라 그 상태에서 읽은 값이라는 것이 함께 남는다).
 도우미 프로그램 입구(blender_tutor.helper)가 이것을 띄운다.
 """
 
 import ctypes
+import dataclasses
 import json
 import logging
 import secrets
@@ -16,12 +20,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+from blender_tutor.setting_fields import SettingLines
 from blender_tutor.work_state import WorkState
 
 PORT = 8766  # 시제품(티켓 01)과 같은 번호. 설치 명령이 애드온 설정 파일에 함께 적는다
 TOKEN_ENV = "BLENDER_TUTOR_TOKEN"  # 애드온이 받는 쪽을 켤 때 비밀 글자를 넘기는 환경 변수
 TOKEN_HEADER = "X-Tutor-Token"
-FILE_EVENTS = ("opened", "saved")  # Blender load_post·save_post 알림(다른 이름으로 저장도 saved, 티켓 18)
+FILE_EVENTS = ("opened", "saved")
+# 애드온에 알린 뒤 설정 값이 이만큼(초) 오지 않으면 다시 청한다. 읽다 실패했거나 봉투가 거절돼도 영영 못 청하는 일이 없게
+# (PR #42 검토 K1). 읽기는 0.4-0.8초 걸린다(실행으로 확인)
+PENDING_LIMIT = 3.0  # Blender load_post·save_post 알림(다른 이름으로 저장도 saved, 티켓 18)
 
 log = logging.getLogger(__name__)
 
@@ -55,12 +63,13 @@ class Message:
     summon: bool = False  # F10: 도우미 창을 앞으로 부른다
     event: FileEvent | None = None
     pressed: float | None = None  # F10을 누른 시각(애드온의 time.time(), 같은 PC 시계). 시간 기록이 여기서부터 잰다(티켓 28)
+    settings: SettingLines | None = None  # 청했을 때만 실어 오는 설정 값(이 작업 상태에서 읽은 것)
 
     @classmethod
     def from_json(cls, data: object) -> "Message":
-        """애드온이 보낸 JSON을 읽는다. 모양이 틀리면 ValueError."""
-        if not isinstance(data, dict) or set(data) != {"window", "pid", "state", "summon", "event", "pressed"}:
-            raise ValueError("칸이 window·pid·state·summon·event·pressed가 아님")
+        """애드온이 보낸 JSON을 읽는다. 모양이 틀리면 ValueError(settings 칸이 없는 옛 애드온의 봉투도)."""
+        if not isinstance(data, dict) or set(data) != {"window", "pid", "state", "summon", "event", "pressed", "settings"}:
+            raise ValueError("칸이 window·pid·state·summon·event·pressed·settings가 아님")
         window, pid, summon, event, pressed = data["window"], data["pid"], data["summon"], data["event"], data["pressed"]
         if not all(isinstance(n, int) and not isinstance(n, bool) for n in (window, pid)) or not isinstance(summon, bool):
             raise ValueError("창 번호·프로세스 번호는 정수, summon은 참/거짓")
@@ -68,7 +77,8 @@ class Message:
             raise ValueError("누른 시각은 숫자")
         if event is not None:
             event = FileEvent.from_json(event)
-        return cls(window, pid, WorkState.from_json(data["state"]), summon, event, None if pressed is None else float(pressed))
+        settings = None if data["settings"] is None else SettingLines.from_json(data["settings"])
+        return cls(window, pid, WorkState.from_json(data["state"]), summon, event, None if pressed is None else float(pressed), settings)
 
 
 def process_started(pid: int) -> int | None:
@@ -114,6 +124,10 @@ class Receiver:
         self._process_started = process_started
         self._lock = threading.Lock()
         self._latest: dict[int, tuple[int, WorkState]] = {}  # 창 번호 → (프로세스 번호, 최신 작업 상태)
+        self._settings: dict[int, tuple[WorkState, SettingLines]] = {}  # 창 번호 → (읽을 때의 작업 상태, 설정 값)
+        self._wanted: set[int] = set()  # 설정 값을 청했지만 아직 애드온에 알리지 않은 창 번호
+        self._pending: dict[int, float] = {}  # 애드온에 알렸지만 설정 값이 아직 오지 않은 창 번호 → 알린 시각
+        self._arrived = threading.Condition(self._lock)  # 설정 값이 오면 기다리는 질문을 깨운다
         self._started: dict[int, object] = {}  # 프로세스 번호 → 처음 받았을 때 그 프로세스가 켜진 시각
         self._heard = False  # Blender가 한 번이라도 보냈나
         self._rejected = False  # 비밀 글자는 맞는데 모양이 틀린 봉투를 받은 적이 있나(설치 명령을 다시 돌리지 않은 옛 애드온)
@@ -144,6 +158,36 @@ class Receiver:
             entry = self._latest.get(window)
         return entry[1] if entry else None
 
+    def want_settings(self, window: int | None = None) -> None:
+        """설정 값을 청한다(window가 없으면 켜진 Blender 모두). 애드온은 다음 답장을 보고 읽어 보낸다(0.5초 안팎)."""
+        with self._lock:
+            self._wanted.update(self._latest if window is None else [window])
+
+    def settings_for(self, window: int, wait: float = 0.0) -> tuple[WorkState, SettingLines] | None:
+        """그 창의 (설정 값을 읽은 작업 상태, 설정 값). 지금 작업 상태에서 읽은 것만 낸다(시점은 따지지 않음).
+        오래됐거나 없으면 새로 청하고, 청한 것이 오는 중이면 wait초까지 기다린다. 끝내 없으면 None(설정 값 없이 답한다).
+        작업 상태를 함께 돌려주는 것은 모델에 넘길 상태와 설정 값을 같은 순간의 것으로 맞추려는 것이다(PR #42 검토 K3)."""
+        deadline = time.monotonic() + wait
+        with self._arrived:
+            while True:
+                fresh = self._fresh(window)
+                if fresh is not None:
+                    return fresh
+                sent = self._pending.get(window)
+                if window in self._latest and (sent is None or time.monotonic() - sent >= PENDING_LIMIT):
+                    self._pending.pop(window, None)
+                    self._wanted.add(window)
+                left = deadline - time.monotonic()
+                if left <= 0 or not self._arrived.wait(left):
+                    return self._fresh(window)
+
+    def _fresh(self, window: int) -> tuple[WorkState, SettingLines] | None:
+        """(잠금 안에서) 지금 작업 상태와 같은 상태에서 읽은 설정 값. 시점(view)만 다르면 같은 상태로 본다(화면 돌리기마다 새로 읽지 않게)."""
+        entry, kept = self._latest.get(window), self._settings.get(window)
+        if entry is None or kept is None or _without_view(kept[0]) != _without_view(entry[1]):
+            return None
+        return kept
+
     def blenders(self) -> dict[int, int]:
         """켜진 Blender들의 창 번호 → 프로세스 번호(처음 받은 차례)."""
         with self._lock:
@@ -159,6 +203,9 @@ class Receiver:
             for window, (pid, _) in entries:
                 if pid in closed_pids:
                     self._latest.pop(window, None)
+                    self._settings.pop(window, None)
+                    self._wanted.discard(window)
+                    self._pending.pop(window, None)
             for pid in closed_pids:
                 self._started.pop(pid, None)
 
@@ -176,13 +223,27 @@ class Receiver:
             if empty and (heard or time.monotonic() - started >= grace):
                 return
 
+    def _take_wanted(self, window: int) -> bool:
+        """애드온이 물었을 때: 그 창에 설정 값을 청했으면 참(한 번만 알리고, 오는 중으로 둔다)."""
+        with self._lock:
+            ask = window in self._wanted
+            if ask:
+                self._wanted.discard(window)
+                self._pending[window] = time.monotonic()
+        return ask
+
     def _receive(self, message: Message) -> None:
+        """받은 봉투를 든다. 설정 값이 실려 있으면 그 상태와 함께 두고 기다리는 질문을 깨운다."""
         started = None if message.pid in self._started else self._process_started(message.pid)
         with self._lock:
             if started is not None:
                 self._started.setdefault(message.pid, started)
             self._latest[message.window] = (message.pid, message.state)
             self._heard = True
+            if message.settings is not None:
+                self._settings[message.window] = (message.state, message.settings)
+                self._pending.pop(message.window, None)
+                self._arrived.notify_all()
         self._listener(message)
 
     def _handler(self) -> type[BaseHTTPRequestHandler]:
@@ -192,9 +253,17 @@ class Receiver:
             timeout = 5  # 보내다 멈춘 요청이 받는 쪽을 붙잡지 않게
 
             def do_GET(self):
-                if self._allowed() and self.path == "/ping":  # 애드온이 '이미 켜진 도우미'인지 물을 때
+                if not self._allowed():
+                    return
+                path, _, query = self.path.partition("?")
+                if path == "/ping":  # 애드온이 '이미 켜진 도우미'인지 물을 때
                     self._reply(200, {"app": "blender_tutor"})
-                elif self._allowed():
+                elif path == "/wants":  # 애드온이 0.5초마다: 설정 값을 읽어 보낼까
+                    window = query.removeprefix("window=")
+                    if not (window.isascii() and window.isdecimal()):  # '²' 같은 글자는 int()가 못 읽는다(검토 K6)
+                        return self._reply(400, {"error": "window=<창 번호>가 필요함"})
+                    self._reply(200, {"read_settings": receiver._take_wanted(int(window))})
+                else:
                     self._reply(404, {"error": "없는 주소"})
 
             def do_POST(self):
@@ -234,3 +303,8 @@ class Receiver:
                 pass
 
         return Handler
+
+
+def _without_view(state: WorkState) -> WorkState:
+    """시점(거리·각도·중심)을 뺀 작업 상태. 설정 값이 지금 상태에서 읽은 것인지 볼 때 쓴다."""
+    return dataclasses.replace(state, view=None)

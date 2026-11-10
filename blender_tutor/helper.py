@@ -79,6 +79,7 @@ class Helper:
         # 붙잡아 둔다: Qt는 메서드에 이은 연결을 그 객체가 살아 있을 때만 지켜, 지역 변수면 Enter가 아무것도 부르지 않는다
         self._flow = QuestionFlow(receiver, self._front, self._desk, self._conversation, self._stopwatch, _QtWindowSide(bridge))
         self.window.asked.connect(self._flow.ask)
+        self.window.started_typing.connect(lambda: self._receiver.want_settings())  # 설정 값을 미리 읽어 두게(HISTORY [270])
         self.window.escape.connect(self._back_to_blender)
         self.window.chose_course.connect(lambda label: self._on_card(lambda window: self._desk.choose(window, label)))
         self.window.went_next.connect(lambda: self._on_card(self._desk.forward, to_blender=True))
