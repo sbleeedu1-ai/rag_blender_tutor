@@ -10,6 +10,7 @@ import logging
 import re
 from collections.abc import Iterable, Iterator, Sequence
 import threading
+import time
 from concurrent.futures import Future, as_completed
 from dataclasses import dataclass
 from enum import StrEnum
@@ -344,6 +345,7 @@ class AnswerEngine:
     def _start_fields(self, question: str, query: str, state: WorkState) -> Future:
         """분야 고르기를 뒤에서 부른다. 결과(분야 코드 묶음)나 오류는 돌려준 Future에 담긴다."""
         found = Future()
+        found.deadline = time.monotonic() + self._settings.field_timeout  # 한도는 부른 때부터 잰다(임베딩 뒤부터가 아님, 검토 K2)
 
         def run():
             try:
@@ -359,7 +361,7 @@ class AnswerEngine:
         if chosen is None:
             return (), False
         try:
-            return chosen.result(timeout=self._settings.field_timeout), False
+            return chosen.result(timeout=max(0.0, chosen.deadline - time.monotonic())), False
         except Exception as error:
             log.warning("분야 고르기 실패, 묶음 없이 답함: %r", error)
             return (), True

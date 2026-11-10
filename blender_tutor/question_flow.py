@@ -65,8 +65,10 @@ class QuestionFlow:
 
         def work() -> None:
             # 설정 값은 입력을 시작할 때 미리 청해 둔다(helper). 지금 상태에서 읽은 것이 없으면 여기서 기다린다(답 스레드라 창은 안 멈춤)
-            settings = self._receiver.settings_for(window, self._settings_wait)
-            for event in self._conversation.ask(question, state, step, settings):
+            found = self._receiver.settings_for(window, self._settings_wait)
+            # 설정 값이 있으면 그것을 읽은 순간의 작업 상태로 묻는다(기다리는 사이 Blender가 바뀌어도 둘이 어긋나지 않게)
+            asked_state, settings = found if found else (state, None)
+            for event in self._conversation.ask(question, asked_state, step, settings):
                 lap.saw(event)
                 self._window_side.show(event)
 

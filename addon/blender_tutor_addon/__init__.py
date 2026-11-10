@@ -188,6 +188,7 @@ class Sender:
         self._config = config
         self._base = f"http://127.0.0.1:{config['port']}"
         self._queue: queue.Queue = queue.Queue()
+        self._asking = False  # 묻기가 줄에 서 있나(도우미가 느리면 0.5초마다 쌓여 상태 보내기를 밀지 않게, 검토 K5)
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
@@ -208,8 +209,11 @@ class Sender:
         self._queue.put(None)
 
     def ask_wants(self, window: int) -> None:
-        """도우미가 그 창의 설정 값을 청했는지 묻는다(보내는 줄에 세움. 답은 _want_settings에 적고 다음 tick이 읽어 보낸다)."""
-        self._queue.put((("wants", window), False))
+        """도우미가 그 창의 설정 값을 청했는지 묻는다(보내는 줄에 세움. 답은 _want_settings에 적고 다음 tick이 읽어 보낸다).
+        앞 묻기가 아직 줄에 있으면 새로 세우지 않는다."""
+        if not self._asking:
+            self._asking = True
+            self._queue.put((("wants", window), False))
 
     def answer(self) -> str:
         """자리 번호에 누가 있나: 'ours'(이 비밀 글자로 대답하는 도우미), 'other'(비밀 글자가 다른 도우미 등), 'none'."""
@@ -277,6 +281,7 @@ class Sender:
         while (item := self._queue.get()) is not None:
             payload, launch = item
             if isinstance(payload, tuple):  # ("wants", 창 번호)
+                self._asking = False
                 self._wants(payload[1])
             elif payload is None:
                 self.launch()

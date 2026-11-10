@@ -171,7 +171,7 @@ def test_지금_작업_상태에서_읽은_설정_값만_낸다(receiver):
     from blender_tutor.setting_fields import SettingLines
 
     send(receiver, 1, 100, EDITING, settings=SETTINGS)
-    assert receiver.settings_for(1) == SettingLines.from_json(SETTINGS)
+    assert receiver.settings_for(1) == (WorkState.from_json(EDITING), SettingLines.from_json(SETTINGS))
     send(receiver, 1, 100, {**EDITING, "view": {**EDITING["view"], "distance": 3.0}})  # 화면만 돌렸으면 그대로 쓴다
     assert receiver.settings_for(1) is not None
     send(receiver, 1, 100, OBJECT_MODE)  # 상태가 바뀌면 오래된 값이라 내지 않고 새로 청한다
@@ -192,3 +192,16 @@ def test_오는_중인_설정_값은_한도까지_기다린다(receiver):
 def test_안_오는_설정_값은_한도만큼만_기다리고_없이_간다(receiver):
     send(receiver, 1, 100)
     assert receiver.settings_for(1, wait=0.05) is None
+
+
+def test_알린_설정_값이_한도_안에_안_오면_다시_청한다(receiver, monkeypatch):
+    # 애드온이 읽다 실패해 설정 값 없이 보내도 그 창이 영영 못 청하는 일이 없게(PR #42 검토 K1)
+    import blender_tutor.receiver as module
+
+    send(receiver, 1, 100)
+    receiver.want_settings(1)
+    assert wants(receiver, 1)  # 알림(오는 중)
+    send(receiver, 1, 100)  # 설정 값 없는 봉투만 옴
+    assert receiver.settings_for(1) is None and wants(receiver, 1) is False  # 한도 안: 다시 청하지 않음
+    monkeypatch.setattr(module, "PENDING_LIMIT", 0.0)
+    assert receiver.settings_for(1) is None and wants(receiver, 1) is True  # 한도 지남: 다시 청함
