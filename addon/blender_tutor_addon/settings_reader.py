@@ -11,6 +11,7 @@ Blender 안 파이썬에서 돈다(bpy와 표준 라이브러리만, blender_tut
 한 줄 = "자리.칸 = 값"(예: Object[Cube].modifiers[Bevel].segments = 3). 값 글이 길면 잘라 총 글자 수를 붙인다.
 """
 
+import bmesh
 import heapq
 import itertools
 import json
@@ -24,6 +25,9 @@ import bpy
 NEVER = {"rna_type", "bl_rna", "access_token", "session_uid", "original", "id_data", "depsgraph", "view_layer_eval"}
 # 읽으면 Blender가 죽는 자리(op_walk SKIP_SITES 시험 7, h11_patch 뼈대일 때의 조작 기록 속성)
 SKIP_SITES = {"SpaceView3D.local_view", "OBJECT_OT_vertex_group_set_active.group"}
+# 값이 틀리게 나오는 자리: 격자 편집 모드에서 LatticePoint.co의 z가 3억대 쓰레기 값으로 나오고 읽을 때마다 바뀐다
+# (2026-11-10 실행으로 확인, 우리 코드를 거치지 않고 p.co를 읽어도 같음). 사용자가 옮기는 위치는 co_deform이다(공식 문서 LatticePoint)
+WRONG_SITES = {"LatticePoint.co"}
 VALUE_CHARS = 160  # 한 줄 값 글의 위 끝(넘으면 자르고 총 글자 수를 붙임)
 
 # ---- 범위·고르기(h11_rule, h13_patch) ----
@@ -41,7 +45,8 @@ OBJECT_ROOTS = re.compile(r"^(Object|Mesh|Curve|TextCurve|SurfaceCurve|Armature|
 ITEM_SEGMENT = re.compile(r"\.(bones|edit_bones|layers|vertex_groups|particle_systems|material_slots)\[([^\]]*)\]")
 MODE_PAINT = {"SCULPT": "sculpt", "VERTEX_PAINT": "vertex_paint", "WEIGHT_PAINT": "weight_paint", "TEXTURE_PAINT": "image_paint", "PARTICLE_EDIT": "particle_edit",
               "PAINT_GREASE_PENCIL": "gpencil_paint", "SCULPT_GREASE_PENCIL": "gpencil_sculpt_paint", "WEIGHT_GREASE_PENCIL": "gpencil_weight_paint", "VERTEX_GREASE_PENCIL": "gpencil_vertex_paint"}
-ELEMENT_KINDS = {"ReadOnlyInteger", "VertexGroupElement", "Particle", "ChildParticle", "ParticleHairKey", "ParticleKey"}
+# 털 곡선(Curves)의 점·곡선, 점 구름의 점도 메시 점처럼 수십만 개가 될 수 있어 요소로 본다(공식 문서 Curves.points·curves, PointCloud.points)
+ELEMENT_KINDS = {"ReadOnlyInteger", "VertexGroupElement", "Particle", "ChildParticle", "ParticleHairKey", "ParticleKey", "CurvePoint", "CurveSlice", "Point"}
 ELEMENT_MESH = re.compile(r"^Mesh(Vertex|Edge|Polygon|Loop|UVLoop|NormalValue|Skin|PaintMask|VertColor|FaceMap|Select)\w*$")
 NODE_PROPS = {"default_value", "is_linked", "mute", "nodes", "links", "image"}
 ID_LABEL = re.compile(r"^(\w+)\[[^\]]*\]")
@@ -56,13 +61,21 @@ COMPARED = ("1", "3", "5", "6", "표에 없음")  # rule13: 4·뺌·2·1-a·문�
 
 # ---- 초안(사용자 검토 전, 2026-11-10 Claude가 정함) ----
 # 1-a 갈래(그 상황일 때 늘): h13은 상황별 요약 줄 수(SUMMARY)만 셌다. 여기서는 그 상황의 1-a 칸을 활성 물체·그 데이터에서
-#   점·면 같은 요소 칸을 빼고 지금 값 그대로 보내고, 상황마다 SITUATION_CAP줄에서 자른다.
+#   점·면 같은 요소 칸을 빼고 지금 값 그대로 보내고, 모두 합쳐 SITUATION_CAP줄에서 자른다(뼈·곡선 점·격자 점은 활성·고른 것만).
 # 2 갈래(계산 값): h13은 상수 109줄로만 셌다. 여기서는 Blender가 계산해 둔 칸(갈래 2)을 활성 물체·그 데이터·장면에서만,
 #   요소 칸을 빼고 지금 값 그대로 보내고, 모두 합쳐 COMPUTED_CAP줄에서 자른다.
 # 분야 묶음·2 초안에서 뺀다: 동영상 편집기의 채널은 장면마다 128개가 늘 있어(공장 장면 읽기에서 Channel 1-128, 실행으로 확인)
 # 묶음 OT 줄의 절반 이상을 채웠다. 이 도우미는 동영상 편집을 다루지 않는다
 FIXED_LISTS = (".sequence_editor.channels[",)
-SITUATION_CAP = 30
+SITUATION_CAP = 60  # 1-a 초안 전체의 위 끝(상황 14가지에서 상한 없이 41줄까지 나옴, HISTORY [271])
+# 뼈·곡선 점·격자 점은 활성 항목(뼈)을 자세히, 같이 고른 것은 PICKED_LIMIT개까지만 보낸다. 고르지 않은 것은 보내지 않는다.
+# 뼈 300개·곡선 점 100개에서 고르지 않은 항목까지 따라가 곡선은 1-a가 600줄이 됐다(2026-11-10 실행으로 확인)
+PICKED_LIMIT = 10
+POINT_FLAGS = {"BezierSplinePoint.select_control_point", "BezierSplinePoint.select_left_handle", "BezierSplinePoint.select_right_handle", "SplinePoint.select"}
+# 같이 고른 뼈(활성 아님)는 위치만(편집: head·tail, 물체 모드 자료: head_local·tail_local, 포즈: head·tail)
+BRIEF_SITES = {"EditBone.head", "EditBone.tail", "Bone.head_local", "Bone.tail_local", "PoseBone.head", "PoseBone.tail"}
+# 활성 물체 데이터의 곡선 점·격자 점 항목(자리 이름: Curve[이름].splines[0].bezier_points[3], Lattice[이름].points[5])
+POINT_ITEM = re.compile(r"^((?:Curve|SurfaceCurve)\[[^\]]*\]\.splines\[[^\]]*\]\.(?:bezier_points|points)\[[^\]]*\]|Lattice\[[^\]]*\]\.points\[[^\]]*\])")
 COMPUTED_CAP = 120
 SITUATION_GROUPS = {"메시 편집": ("1-a 메시 편집",), "뼈": ("1-a 뼈",), "곡선 편집": ("1-a 곡선",), "격자·메타볼": ("1-a 격자", "1-a 메타볼"),
                     "그리스 펜슬": ("1-a 그리스 펜슬",), "애니메이션": ("1-a 애니메이션",), "캐시": ("1-a 캐시",), "조각·칠하기": ("1-a 조각·칠하기",),
@@ -108,6 +121,9 @@ def read_settings(context, tables: dict, *, situations: bool = True, computed: b
     for key, text in values.items():
         path, site = key.rsplit("|", 1)
         if _is_element(site) or (_not_sent(site) and site not in ALWAYS):
+            continue
+        if not scope.point_ok(path):
+            count("고르지 않은 점")
             continue
         group = rules.get(site, "표에 없음")
         if site in G1 or site in NEW1:
@@ -188,6 +204,9 @@ class _Scope:
                 self.actives["edit_bones"] = edit.name if edit else None
             if target.type == "GREASEPENCIL" and target.data.layers.active:
                 self.actives["layers"] = target.data.layers.active.name
+        self.picked, self.picked_points, self.notes = {}, set(), []
+        if target:
+            self._pick(target)
         self.paint_roots = set()
         if target and target.mode in MODE_PAINT:
             attr = MODE_PAINT[target.mode]
@@ -204,6 +223,53 @@ class _Scope:
         self.area_prefix = _view_area(windows)
         self.modifier_roots = tuple(f"{_id_label(target)}.{name}[" for name in ("modifiers", "constraints")) if target else ()
 
+    def _pick(self, target):
+        """같이 고른 뼈(활성 빼고)와 고른 곡선·격자 점(편집 모드일 때만): 앞 PICKED_LIMIT개, 넘친 수는 notes 줄로."""
+        data, label = target.data, _id_label(target.data) if target.data else ""
+        if target.type == "ARMATURE" and target.mode == "EDIT":
+            names = [b.name for b in data.edit_bones if (b.select or b.select_head or b.select_tail) and b.name != self.actives.get("edit_bones")]
+            self._keep_bones("edit_bones", names, label)
+        elif target.type == "ARMATURE" and target.mode == "POSE":
+            names = [b.name for b in target.pose.bones if b.select and b.name != self.actives.get("bones")]
+            self._keep_bones("bones", names, f"{_id_label(target)}.pose")
+        elif target.type in ("CURVE", "SURFACE") and target.mode == "EDIT":
+            found = []
+            for s_index, spline in enumerate(data.splines):
+                for p_index, point in enumerate(spline.bezier_points):
+                    if point.select_control_point or point.select_left_handle or point.select_right_handle:
+                        found.append(f"{label}.splines[{s_index}].bezier_points[{p_index}]")
+                for p_index, point in enumerate(spline.points):
+                    if point.select:
+                        found.append(f"{label}.splines[{s_index}].points[{p_index}]")
+            self._keep_points(found, label)
+        elif target.type == "LATTICE" and target.mode == "EDIT":
+            self._keep_points([f"{label}.points[{i}]" for i, point in enumerate(data.points) if point.select], label)
+
+    def _keep_bones(self, segment, names, label):
+        self.picked[segment] = set(names[:PICKED_LIMIT])
+        if len(names) > PICKED_LIMIT:
+            self.notes.append(f"{label}.{segment} 같이 고른 뼈 = {len(names)}개(앞 {PICKED_LIMIT}개만 위치를 적음)")
+
+    def _keep_points(self, found, label):
+        self.picked_points = set(found[:PICKED_LIMIT])
+        if len(found) > PICKED_LIMIT:
+            self.notes.append(f"{label} 고른 점 = {len(found)}개(앞 {PICKED_LIMIT}개만 적음)")
+
+    def point_ok(self, path):
+        """곡선 점·격자 점 항목 안의 칸이면 고른 점일 때만 참. 점 항목이 아니면 참."""
+        found = POINT_ITEM.match(path)
+        return not found or found.group(1) in self.picked_points
+
+    def item_ok(self, path, site):
+        """뼈·층·꼭짓점 그룹 같은 모음 항목 안의 칸: 활성 항목이면 참, 같이 고른 뼈면 위치 칸(BRIEF_SITES)만 참."""
+        for segment, name in ITEM_SEGMENT.findall(path):
+            if self.actives.get(segment) == name:
+                continue
+            if name in self.picked.get(segment, ()) and site in BRIEF_SITES:
+                continue
+            return False
+        return True
+
     def owned11(self, path, site):
         """rule11이 보내는 범위인가(요소·화면 칸은 부르는 쪽에서 이미 뺐다)."""
         kind = site.split(".")[0]
@@ -217,7 +283,7 @@ class _Scope:
             return True
         if path == self.tool_root and kind == "ToolSettings":
             return True
-        if _under(path, self.owners) and _items_active(path, self.actives):
+        if _under(path, self.owners) and self.item_ok(path, site):
             return True
         return bool(self.paint_roots) and _under(path, self.paint_roots)
 
@@ -232,10 +298,10 @@ class _Scope:
             return True
         return bool(self.world_root) and (path == self.world_root or path.startswith(self.world_root + "."))
 
-    def field_scope(self, path):
-        """분야 묶음 칸을 읽는 주인: 활성 물체·그 데이터·주인 자료(활성 항목만), 장면·월드, 활성 3D 화면, 환경 설정."""
+    def field_scope(self, path, site):
+        """분야 묶음 칸을 읽는 주인: 활성 물체·그 데이터·주인 자료(활성·고른 항목만), 장면·월드, 활성 3D 화면, 환경 설정."""
         if _under(path, self.owners):
-            return _items_active(path, self.actives)
+            return self.item_ok(path, site)
         if path == self.scene_root or path.startswith(self.scene_root + "."):
             return True
         if self.world_root and (path == self.world_root or path.startswith(self.world_root + ".")):
@@ -303,10 +369,6 @@ def _under(path, roots):
     return any(path == root or path.startswith(root + ".") for root in roots)
 
 
-def _items_active(path, actives):
-    return all(actives.get(segment) == name for segment, name in ITEM_SEGMENT.findall(path))
-
-
 def _object_owned(path):
     return bool(OBJECT_ROOTS.match(path))
 
@@ -358,14 +420,39 @@ def _situations(context, target):
 
 
 def _situation_lines(values, extra, scope, target, taken):
-    """초안: 지금 상황의 1-a 칸(활성 물체·데이터·도구 설정·주인 자료에서), 상황마다 SITUATION_CAP줄까지."""
-    lines = []
-    for name in _situations(bpy.context, target):
+    """초안: 지금 상황의 1-a 칸(활성 물체·데이터·도구 설정·주인 자료에서). 앞에 고른 것의 요약 줄(넘친 수, 메시 활성 요소)을 두고
+    모두 합쳐 SITUATION_CAP줄까지."""
+    found = _situations(bpy.context, target)
+    lines = list(scope.notes)
+    if "메시 편집" in found:
+        lines += _mesh_active(target)
+    for name in found:
         groups = SITUATION_GROUPS[name]
         keys = [k for k, g in extra.items() if g in groups and k not in taken
                 and (_under(k.rsplit("|", 1)[0], scope.owners | scope.paint_roots) or k.startswith(scope.tool_root) or k.startswith("BlendData|"))]
-        lines += [_line(k, values[k]) for k in sorted(keys)[:SITUATION_CAP]]
-    return lines
+        lines += [_line(k, values[k]) for k in sorted(keys) if not _unpicked_flag(k, values[k])]
+    return lines[:SITUATION_CAP]
+
+
+def _unpicked_flag(key, text):
+    """고른 점의 꺼진 선택 표시(예: 손잡이는 안 고름). 고른 점만 보내니 켜진 표시만 남겨도 같은 뜻이고, 점 10개가 40줄 안에 든다."""
+    path, site = key.rsplit("|", 1)
+    return text == "False" and site in POINT_FLAGS and bool(POINT_ITEM.match(path))
+
+
+def _mesh_active(target):
+    """메시 편집에서 마지막에 클릭한 점·선·면(활성 요소) 한 줄. 상자·전체 선택은 Blender도 활성 요소를 두지 않아 없다
+    (공식 문서 bmesh BMEditSelSeq.active, 2026-11-10 점 100만 개 메시에서 30-40ms로 실행으로 확인). 선택 개수는 1-a 칸 Mesh.total_*_sel이 보낸다."""
+    active = bmesh.from_edit_mesh(target.data).select_history.active
+    if active is None:
+        return []
+    if isinstance(active, bmesh.types.BMVert):
+        where = f"점 #{active.index}, co = {_plain(active.co)}"
+    elif isinstance(active, bmesh.types.BMEdge):
+        where = f"선 #{active.index}, 점 {[v.index for v in active.verts]}"
+    else:
+        where = f"면 #{active.index}, 가운데 = {_plain(active.calc_center_median())}, 점 {len(active.verts)}개"
+    return [f"{_id_label(target.data)}.select_history.active = {where}"]
 
 
 def _computed_lines(values, extra, scope, taken):
@@ -385,7 +472,7 @@ def _field_lines(values, tables, scope):
     by_site = {}
     for key in values:
         path, site = key.rsplit("|", 1)
-        if _is_element(site) or not scope.field_scope(path) or any(part in path for part in FIXED_LISTS):
+        if _is_element(site) or not scope.point_ok(path) or not scope.field_scope(path, site) or any(part in path for part in FIXED_LISTS):
             continue
         by_site.setdefault(site, []).append(key)
     for code, sites in tables["bundles"].items():
@@ -472,7 +559,7 @@ def snapshot():
     def read(owner, prop, owner_type, path, follow, hops):
         name = prop.identifier
         site = f"{owner_type}.{name}"
-        if name in NEVER or site in SKIP_SITES or site == "WindowManager.keyconfigs":
+        if name in NEVER or site in SKIP_SITES or site in WRONG_SITES or site == "WindowManager.keyconfigs":
             return
         try:
             value = getattr(owner, name)

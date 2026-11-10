@@ -59,7 +59,8 @@ def reader(monkeypatch):
     fake = types.ModuleType("bpy")
     fake.types = types.SimpleNamespace(ID=type("ID", (), {}), bpy_struct=type("bpy_struct", (), {}), Object=type("Object", (), {}), LayerCollection=type("LC", (), {}))
     monkeypatch.setitem(sys.modules, "bpy", fake)
-    spec = importlib.util.spec_from_file_location("settings_reader_test", PROJECT / "addon" / "blender_tutor_addon" / "settings_reader.py")
+    monkeypatch.setitem(sys.modules, "bmesh", types.ModuleType("bmesh"))
+    spec =importlib.util.spec_from_file_location("settings_reader_test", PROJECT / "addon" / "blender_tutor_addon" / "settings_reader.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -86,6 +87,20 @@ def test_한_줄은_자리_칸_값이고_긴_값은_잘라_총_글자_수를_붙
 def test_점_면처럼_크기만큼_느는_칸과_화면_기록_칸은_가린다(reader):
     assert reader._is_element("MeshVertex.co") and reader._is_element("FloatAttribute.data") and not reader._is_element("Attribute.name")
     assert reader._not_sent("SpaceView3D.lens") and reader._not_sent("OBJECT_OT_join.x") and not reader._not_sent("BevelModifier.width")
+
+
+def test_뼈와_곡선_점은_활성_고른_것만_같이_고른_뼈는_위치만(reader):
+    scope = reader._Scope.__new__(reader._Scope)  # 범위 계산(Blender 필요)을 건너뛰고 고른 결과만 지어 넣는다
+    scope.actives, scope.picked = {"edit_bones": "B050"}, {"edit_bones": {"B051"}}
+    scope.picked_points = {"Curve[C].splines[0].bezier_points[40]", "Lattice[L].points[7]"}
+    assert scope.item_ok("Armature[R].edit_bones[B050]", "EditBone.roll")  # 활성 뼈는 다
+    assert scope.item_ok("Armature[R].edit_bones[B051]", "EditBone.head") and not scope.item_ok("Armature[R].edit_bones[B051]", "EditBone.roll")
+    assert not scope.item_ok("Armature[R].edit_bones[B099]", "EditBone.head")  # 안 고른 뼈
+    assert scope.point_ok("Curve[C].splines[0].bezier_points[40]") and not scope.point_ok("Curve[C].splines[0].bezier_points[41]")
+    assert scope.point_ok("Lattice[L].points[7]") and not scope.point_ok("Lattice[L].points[0]")
+    assert scope.point_ok("Brush[Draw].curve.curves[0].points[3]")  # 붓 감쇠 곡선 같은 설정의 점은 점 항목이 아니다
+    assert reader._unpicked_flag("Curve[C].splines[0].bezier_points[40]|BezierSplinePoint.select_left_handle", "False")
+    assert not reader._unpicked_flag("Curve[C].splines[0].bezier_points[40]|BezierSplinePoint.select_control_point", "True")
 
 
 def test_사용자_폴더가_든_공장값은_표에_넣지_않는다():
