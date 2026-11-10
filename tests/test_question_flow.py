@@ -46,8 +46,9 @@ class FakeEngine:
         self.events = events
         self.got: list[tuple] = []
 
-    def answer(self, question, state, recent, step=None):
+    def answer(self, question, state, recent, step=None, settings=None):
         self.got.append((state, list(recent), step))
+        self.settings_got = settings
         yield from self.events or [Piece(f"{question}의 "), Piece("답"), Done((), ())]
 
 
@@ -77,7 +78,7 @@ def make(tmp_path, receiver, front, desk, side):
     def make(engine=None) -> QuestionFlow:
         conversation = Conversation()
         conversation.engine = engine
-        return QuestionFlow(receiver, front, desk, conversation, Stopwatch(tmp_path / "timings.jsonl", "PC"), side)
+        return QuestionFlow(receiver, front, desk, conversation, Stopwatch(tmp_path / "timings.jsonl", "PC"), side, settings_wait=0)
 
     return make
 
@@ -124,3 +125,12 @@ def test_중간에_실패한_답은_다음_질문의_최근_대화에_들어가�
     flow.ask("다")  # 끝난 "나"는 들어가야 "가"가 빠진 이유가 실패해서임을 안다
     assert [recent for _, recent, _ in engine.got] == [[], [], [("나", "나의 답")]]
     assert [line["outcome"] for line in timings(tmp_path)] == ["failure", "done", "done"]
+
+
+def test_그_Blender가_지금_상태에서_읽은_설정_값을_엔진에_넘긴다(make, receiver):
+    from blender_tutor.setting_fields import SettingLines
+
+    lines = {"always": ["bpy.context.object.location = (0, 0, 0)"], "fields": {}}
+    send(receiver, 1, 100, EDITING, settings=lines)
+    make(engine := FakeEngine()).ask("베벨은?")
+    assert engine.settings_got == SettingLines.from_json(lines)

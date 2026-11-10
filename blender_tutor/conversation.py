@@ -12,6 +12,7 @@ from collections.abc import Iterator
 
 from blender_tutor.answer_engine import AnswerEngine, Done, Event, Failure, Piece, Settings
 from blender_tutor.progress import Step
+from blender_tutor.setting_fields import SettingLines
 from blender_tutor.work_state import WorkState
 
 RECENT_PAIRS = 3  # 명세 "최근 대화". 평가에서 바꿔 볼 수 있는 설정값(User Story 72)
@@ -40,17 +41,18 @@ class Conversation:
         """답 엔진에 넘기는 최근 대화 쌍 수(시간 기록에 설정으로 남긴다)."""
         return self._recent.maxlen
 
-    def ask(self, question: str, state: WorkState, step: Step | None = None) -> Iterator[Event]:
+    def ask(self, question: str, state: WorkState, step: Step | None = None, settings: SettingLines | None = None) -> Iterator[Event]:
         """질문을 엔진에 넘기고 나온 사건을 그대로 낸다. 끝까지 나온 답만 최근 대화에 넣는다.
 
         step은 질문한 Blender의 지금 단계(연습 과정 밖이면 None). 진행은 바꾸지 않아 답 뒤에도 같은 단계다.
+        settings는 그 Blender가 지금 상태에서 읽은 설정 값(없으면 None).
         """
         if self.engine is None:
             yield Failure(self.waiting_message)
             return
         answer = []
         try:
-            for event in self.engine.answer(question, state, list(self._recent), step):
+            for event in self.engine.answer(question, state, list(self._recent), step, settings):
                 if isinstance(event, Piece):
                     answer.append(event.text)
                 elif isinstance(event, Done):

@@ -272,14 +272,19 @@ class OpenAIModel:
 
 def openai_key(env_file: Path = DATA / ".env") -> str:
     """환경 변수 OPENAI_API_KEY, 없으면 data/.env의 같은 이름 줄에서 읽는다. 키는 화면에 내지 않는다."""
-    if os.environ.get("OPENAI_API_KEY"):
-        return os.environ["OPENAI_API_KEY"]
+    return api_key("OPENAI_API_KEY", "OpenAI", env_file)
+
+
+def api_key(variable: str, label: str, env_file: Path = DATA / ".env") -> str:
+    """환경 변수 variable, 없으면 data/.env의 같은 이름 줄에서 읽는다. 없으면 SystemExit. 키는 화면에 내지 않는다."""
+    if os.environ.get(variable):
+        return os.environ[variable]
     if env_file.is_file():
         for line in env_file.read_text(encoding="utf-8").splitlines():
             name, _, value = line.partition("=")
-            if name.strip() == "OPENAI_API_KEY" and value.strip():
+            if name.strip() == variable and value.strip():
                 return value.strip().strip("\"'")
-    raise SystemExit(f"OpenAI 키가 없습니다. 환경 변수 OPENAI_API_KEY나 {env_file}에 넣어 주세요.")
+    raise SystemExit(f"{label} 키가 없습니다. 환경 변수 {variable}나 {env_file}에 넣어 주세요.")
 
 
 def _chosen(pages: list[Page], only: Path | None) -> list[Page]:

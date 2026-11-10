@@ -345,7 +345,7 @@ def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약
     assert made_models[-1].effort == "low"  # 생각 수준을 답변 모델에 넘긴다
     # 어느 코드로 잰 결과인지(홀드아웃은 동결한 커밋 번호를 적는다). 커밋 안 한 변경이 있으면 뒤에 표시가 붙는다
     assert re.fullmatch(r"[0-9a-f]{40}( \(커밋 안 한 변경 있음\))?", settings["커밋"])
-    assert settings["settings"] == {"top_k": 8, "timeout": 10.0, "rewrite_timeout": 5.0, "use_bm25": False, "reasoning": "low", "recent_pairs": 5}
+    assert settings["settings"] == {"top_k": 8, "timeout": 10.0, "rewrite_timeout": 5.0, "field_timeout": 5.0, "use_bm25": False, "reasoning": "low", "fallback_reasoning": "low", "recent_pairs": 5}
     rows = [json.loads(text) for text in (folder / "답.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [(row["번호"], row["적중 순위"]) for row in rows] == [("D01", 1), ("D02", None)]
     assert rows[0]["검색 결과"][0]["주소"] == "files/blend/save.html#save"

@@ -14,6 +14,7 @@ from concurrent.futures import Future, as_completed
 from dataclasses import dataclass
 from enum import StrEnum
 from itertools import islice
+from collections.abc import Mapping
 from typing import Protocol
 
 import numpy as np
@@ -22,6 +23,7 @@ from rank_bm25 import BM25Okapi
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
 from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, MenuNames, screen_path
 from blender_tutor.progress import Course, Step
+from blender_tutor.setting_fields import FieldModel, SettingLines, choose_fields, lines_for
 from blender_tutor.work_state import WorkState
 
 log = logging.getLogger(__name__)
@@ -117,6 +119,12 @@ INSTRUCTIONS = """너는 Blender 5.2를 처음 쓰는 사람을 돕는 도우미
 - Blender 화면의 메뉴·버튼·옵션 이름은 설명서의 영어 그대로 [[ ]]로 감싼다. 메뉴 경로는 통째로 감싸고 단 사이를 >로 가른다(예: [[Add > Mesh]]). 한국어로 옮기지 않는다(프로그램이 사용자 화면 언어에 맞춰 바꾼다)."""
 TERMS_NOTE = "- [[ ]] 밖 문장에 나오는 Blender 낱말은 아래 표기를 쓴다(Blender 한국어 화면 글자에 맞춘 것). 괄호 속 영어는 답에서 처음 한 번만 붙인다."
 
+# 설정 값 칸의 설명(가설 16 system_for의 문구를 줄 모양에 맞춤)
+SETTINGS_NOTE = (
+    "사용자의 Blender에서 지금 읽은 설정이다(한 줄에 '경로 = 값'). 늘 보내는 설정, 공장값과 다르게 바뀐 설정, "
+    "이 질문 분야의 설정(공장값이어도 지금 값), 그 물체에 있는 모디파이어·제약의 설정이 들어 있다."
+)
+
 SIMILAR_NOTE = (
     "사용자가 연습 과정을 진행하지 않고 있다. 아래는 질문과 가까운 연습 과정이다(가까운 차례). "
     "만들고 싶은 것을 말하면 맞는 연습 과정을 권하고, 딱 맞는 게 없으면 \"가장 가까운 건 …\"이라고 말한다."
@@ -163,12 +171,16 @@ class Settings:
     top_k: int = 8  # 답변 모델에 넘길 검색 결과 수(명세 6-8개, [122]에서 8로 정함. 22번의 먼저 볼 소제목이 이 위에 더 붙는다)
     timeout: float = 10.0  # 모델이 이만큼(초) 아무것도 보내지 않으면 멈춘 것으로 본다(사용자 결정, 2026-10-21)
     rewrite_timeout: float = 5.0  # 질문 바꾸기를 동시에 부른 것 중 하나라도 올 때까지 기다리는 한도(초, [127])
+    field_timeout: float = 5.0  # 분야 고르기 한도(초). 넘기면 묶음 없이 답한다(명세 "분야 고르기", Claude가 정한 값)
     use_bm25: bool = False  # 낱말 검색(BM25)을 섞을지. 끄면 뜻 검색만(티켓 40 결과로 끔, HISTORY [102])
     # 답변 모델의 생각 수준(명세 기본 none). 엔진을 만들 때 답변 모델에 넘기고(engine_setup), 시간 기록에 남긴다
     reasoning: Reasoning = Reasoning.NONE
+    # 분야 고르기가 실패해 묶음 없이 답할 때의 생각 수준(명세 처음 low, 사용자 "묶음이 실패해서 빠질 경우엔 생각을 키도록", [270])
+    fallback_reasoning: Reasoning = Reasoning.LOW
 
     def __post_init__(self):
         object.__setattr__(self, "reasoning", Reasoning(self.reasoning))  # "low"처럼 글자로 줘도 받고, 모르는 이름이면 ValueError
+        object.__setattr__(self, "fallback_reasoning", Reasoning(self.fallback_reasoning))
 
 
 @dataclass(frozen=True)
@@ -198,6 +210,9 @@ class Done:
     # 모델에 붙인 비슷한 연습 과정(가까운 차례, 연습 과정을 진행 중이면 빈 묶음). 평가에서 단순한 질문에
     # 엉뚱하게 권했는지 보려고 알린다(티켓 29). 창은 쓰지 않는다
     similar: tuple[Course, ...] = ()
+    # 고른 분야(설정 값을 받지 않았거나 분야 고르기가 실패했으면 빈 묶음)와 실패 여부. 평가와 시간 기록용
+    fields: tuple[str, ...] = ()
+    field_failed: bool = False
 
 
 @dataclass(frozen=True)
@@ -215,7 +230,7 @@ Event = Piece | Done | Failure
 
 
 class AnswerEngine:
-    """청크와 그 벡터(미리 만들어 둔 것)를 들고, 질문마다 임베딩 1번 + 답변 1번을 부른다."""
+    """청크와 그 벡터(미리 만들어 둔 것)를 들고, 질문마다 질문 바꾸기 + 분야 고르기 + 임베딩 + 답변을 부른다(명세 "호출 6번")."""
 
     def __init__(
         self,
@@ -229,12 +244,17 @@ class AnswerEngine:
         course_vectors: Sequence[Sequence[float]] = (),
         name: str = "",
         rewriters: Sequence[Rewriter] = (),
+        field_model: FieldModel | None = None,
+        fields: Mapping[str, str] | None = None,
+        fallback_model: AnswerModel | None = None,
     ):
         """name은 시간 기록·평가 결과에 남길 엔진 이름(어떤 임베딩·답변 모델인지, 엔진을 만드는 곳이 정한다).
         menu_names는 답 글의 [[메뉴 이름]] 표시를 한국어 화면 이름으로 바꿀 사전(없으면 바꾸지 않음).
         courses·course_vectors는 비슷한 연습 과정을 권할 연습 과정과 그 벡터(이름 + 한 줄 설명 + 비슷한 말, 티켓 31).
         rewriters는 질문 바꾸기 모델들(동시에 부를 수만큼, 하나씩 따로). 있으면 모두 동시에 불러 먼저 온 답의 영어 검색어로
-        찾는다(늦는 답을 기다리지 않으려고, [127]). 없으면 질문과 맥락 줄을 그대로 검색어로 쓴다."""
+        찾는다(늦는 답을 기다리지 않으려고, [127]). 없으면 질문과 맥락 줄을 그대로 검색어로 쓴다.
+        field_model·fields는 분야 고르기 모델과 분야 목록(코드 → 쉬운 설명). 둘 다 있고 설정 값을 받은 질문이면 분야를 고른다.
+        fallback_model은 분야 고르기가 실패해 묶음 없이 답할 때 쓰는 답변 모델(생각 수준을 올린 것). 없으면 model을 쓴다."""
         self.name = name
         self._chunks = list(chunks)
         self._menu_names = menu_names
@@ -256,6 +276,10 @@ class AnswerEngine:
         self._model = model
         self._settings = settings
         self._rewriters = list(rewriters)
+        if (field_model is None) != (not fields):  # 하나만 있으면 분야를 조용히 안 고르게 되므로 설정 버그로 멈춘다
+            raise ValueError("분야 고르기 모델과 분야 목록은 함께 줘야 함")
+        self._field_model, self._fields = field_model, dict(fields or {})
+        self._fallback_model = fallback_model
         areas = sorted({area_of(chunk.page_path) for chunk in self._chunks})
         self._rewrite_prompt = REWRITE_PROMPT.format(areas="\n".join(areas))
 
@@ -264,10 +288,12 @@ class AnswerEngine:
         return self._settings
 
     def answer(
-        self, question: str, state: WorkState, recent: Sequence[tuple[str, str]], step: Step | None = None
+        self, question: str, state: WorkState, recent: Sequence[tuple[str, str]], step: Step | None = None,
+        settings: SettingLines | None = None,
     ) -> Iterator[Event]:
         """질문에 답한다. state는 애드온이 보낸 작업 상태 JSON, recent는 최근 대화 (질문, 답) 쌍 목록,
-        step은 진행 중인 연습 과정의 지금 단계(연습 과정을 진행하지 않으면 None)."""
+        step은 진행 중인 연습 과정의 지금 단계(연습 과정을 진행하지 않으면 None),
+        settings는 애드온이 미리 읽은 설정 값(없으면 설정 줄 없이 답한다: 옛 애드온, 설정 값 없는 평가 문항)."""
         context = self._context(recent, step, state)
         recommend = step is None and bool(self._courses)
         rewrite = self._rewrite_messages(question, context) if self._rewriters else None
@@ -276,6 +302,8 @@ class AnswerEngine:
         # 질문 바꾸기가 모두 실패하거나 늦으면 한국어 질문으로 찾지 않고 멈춘다(엉뚱한 근거로 답하지 않게, [127])
         try:
             query = self._rewritten(rewrite) if rewrite else "\n".join([question, *context.values()])
+            # 분야 고르기는 바꾼 검색어가 나온 뒤 임베딩과 동시에 부른다(명세). 실패해도 답은 멈추지 않는다(묶음 없이 답함)
+            chosen = self._start_fields(question, query, state) if settings is not None and self._field_model else None
             # 비슷한 연습 과정은 검색어(직전 질문·조작에 끌림)가 아니라 질문만으로 고른다.
             # 질문만의 벡터는 따로 부르지 않고 같은 호출에 글을 하나 더 실어 받는다(비용은 질문 길이만큼 늚)
             texts = [query, question] if recommend and question != query else [query]
@@ -287,15 +315,18 @@ class AnswerEngine:
         except Exception as error:
             yield _failure(error, [])
             return
+        codes, field_failed = self._fields_from(chosen)
+        lines = lines_for(settings, codes) if settings is not None else []
+        model = self._fallback_model if field_failed and self._fallback_model else self._model
         results = self.search(query, vectors[0])
         # 먼저 볼 소제목은 검색 상위를 대신하지 않고 그 위에 덧붙인다. 검색에도 걸렸으면 한 번만
         preview = self._preview(step)
         sent = list(dict.fromkeys(preview + results))
         similar = self._similar_courses(vectors[-1]) if recommend else []
-        messages = _messages(question, state, recent, self._widened(sent, preview), similar, step)
+        messages = _messages(question, state, recent, self._widened(sent, preview), similar, step, lines)
         marks = _MenuMarks(self._menu_names if state.korean_screen else None)
         try:
-            for text in self._model.stream(messages, self._settings.timeout):
+            for text in model.stream(messages, self._settings.timeout):
                 if text := marks.feed(text):
                     yield Piece(text)
         except Exception as error:
@@ -305,7 +336,30 @@ class AnswerEngine:
             return
         if text := marks.finish():
             yield Piece(text)
-        yield Done(_sources(sent), tuple(results), tuple(similar))
+        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed)
+
+    def _start_fields(self, question: str, query: str, state: WorkState) -> Future:
+        """분야 고르기를 뒤에서 부른다. 결과(분야 코드 묶음)나 오류는 돌려준 Future에 담긴다."""
+        found = Future()
+
+        def run():
+            try:
+                found.set_result(choose_fields(self._field_model, self._fields, question, query, _for_model(state), self._settings.field_timeout))
+            except Exception as error:  # 모델 오류·모양이 틀린 답 모두 묶음 없이 답하는 길로 보낸다(_fields_from이 기록)
+                found.set_exception(error)
+
+        threading.Thread(target=run, daemon=True).start()
+        return found
+
+    def _fields_from(self, chosen: Future | None) -> tuple[tuple[str, ...], bool]:
+        """(고른 분야, 실패했나). 고르지 않았으면 ((), False). 한도 안에 못 받거나 실패하면 기록을 남기고 ((), True)."""
+        if chosen is None:
+            return (), False
+        try:
+            return chosen.result(timeout=self._settings.field_timeout), False
+        except Exception as error:
+            log.warning("분야 고르기 실패, 묶음 없이 답함: %r", error)
+            return (), True
 
     def _widened(self, sent: list[Chunk], preview: list[Chunk]) -> list[list[Chunk]]:
         """넘길 청크마다 함께 읽을 묶음. 작게 찾고 크게 읽기: 찾은 청크가 SHORT_WORDS 미만이면
@@ -515,11 +569,13 @@ def _messages(
     groups: list[list[Chunk]],
     similar: list[Course],
     step: Step | None,
+    lines: Sequence[str] = (),
 ) -> list[dict[str, str]]:
     """답변 모델에 넘길 대화 글: 지시, 최근 대화, 그리고 설명서 내용·작업 상태·질문을 담은 마지막 글.
 
     groups는 넘길 청크마다 함께 읽을 묶음(찾은 청크와 그 형제 소제목). 묶음 사이를 ---로 가른다.
     similar는 연습 과정을 진행하지 않을 때만 붙이는 비슷한 연습 과정, step은 지금 단계(그 단계 내용만 넘긴다).
+    lines는 설정 값 줄(늘 보내는 줄 + 고른 분야의 줄). 없으면 그 칸을 넣지 않는다.
     """
     manual = "\n\n---\n\n".join("\n\n".join(chunk.text for chunk in group) for group in groups)
     messages = [{"role": "system", "content": INSTRUCTIONS + _terms_for(manual)}]
@@ -533,8 +589,10 @@ def _messages(
         content += f"# 지금 단계\n\n{step.guide}\n\n"
     content += (
         f"# 작업 상태\n\n{json.dumps(_for_model(state), ensure_ascii=False, indent=2)}\n\n"
-        f"# 질문\n\n{question}"
     )
+    if lines:
+        content += f"# 설정 값\n\n{SETTINGS_NOTE}\n\n" + "\n".join(lines) + "\n\n"
+    content += f"# 질문\n\n{question}"
     return messages + [{"role": "user", "content": content}]
 
 

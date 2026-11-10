@@ -13,6 +13,7 @@ dependencies = [
     "numpy>=2.0",
     "rank-bm25>=0.2.2",
     "PySide6-Essentials>=6.12",
+    "anthropic>=2.7",  # 질문 바꾸기·분야 고르기·답변(Claude Haiku 5.5, HISTORY [270])
 ]
 
 [project.optional-dependencies]
