@@ -1,22 +1,24 @@
 # 인수인계
 
-마지막 갱신: 2026-11-10 저녁 · Claude Code(Opus 5.5) · 강의실 PC · 브랜치 `exp/35-dev-bundle`(푸시함, PR 아직 안 만듦) · PR #42는 병합됨(11-10 16:46)
+마지막 갱신: 2026-11-11 낮 · Claude Code(Opus 5.5) · 강의실 PC · 브랜치 `exp/35-dev-bundle`(이 갱신과 함께 커밋·푸시, PR 아직 안 만듦) · PR #42는 병합됨(11-10 16:46)
 
-## 다음 할 일 — 개발셋 묶음 시험(티켓 35)
+## 다음 할 일 — 개발셋 묶음 시험 이어서(티켓 35)
 
-1. ~~OpenAI 키 확인~~ 끝(11-10 17:23 사용자가 `.env` 키를 바꿈, 임베딩 한 번 호출로 통함 확인: 벡터 길이 3072). 경과: 11-10 개발셋 12판이 모두 임베딩 단계에서 `HTTPError 401: Unauthorized`로 멈춤(답 0개, HISTORY [274]). `data/.env`의 `OPENAI_API_KEY`가 거부됨(환경 변수 없음, 401이라 잔액 부족이 아니라 키 문제로 봄). 사용자가 OpenAI 대시보드에서 키를 보고 `.env`를 고친 뒤, 임베딩 한 번으로 통하는지 확인(1센트 미만).
-2. **12판 다시 돌리기(승인됨)**: 사용자 "3번씩 하자 ㅇㅇ 크레딧이 모자라는건ㄱ 아니니까"(어림 약 $0.93-1.1, Anthropic 크레딧 + OpenAI 임베딩 약 $0.02). 설계·판정은 `docs/experiment.md` 끝 절 "[E2] 개발셋 묶음"(고친 설계 줄). 실패한 12폴더(`results/20261110/1703..-1716.._dev50묶음_*`)는 지우지 않고 남겼으니 **새 이름 `dev50묶음2_<판>`으로** 돌린다. 스크립트: 스크래치 `run12.sh`를 아래처럼 다시 쓰면 됨 — 판 A=`data/eval/dev50/questions.json`, D=`questions_20261110.json --no-fields --no-situation --no-computed`, B=`questions_20261110.json --no-situation --no-computed`, C=`questions_20261110.json`, A→D→B→C 3바퀴, `evaluate run … --name dev50묶음2_<판><번> --yes`. 판마다 5-10분(추측). **먼저 1판만 돌려 실패 0인지 보고** 나머지를 돌린다.
-3. **뒤처리**: `data/eval/dev50/bundle_check.py <results/날짜> <출력 폴더>`(돈 안 듦) — 판별 실패·분야 고르기 실패 수, 대상 8차례에 필요한 값이 실제로 갔는지(검토 A6), 판 이름을 가린 채점 묶음(대상 1개 + 전체 3개, 풀이.json은 채점자에게 주지 않음). 찾는 이름은 `PREFIX = "dev50묶음2"`(이름을 바꾸면 함께 고침).
-4. **채점(하위 에이전트 4명)과 판정**: 체크리스트 1-6절, 대상 차례의 "값을 맞게 씀" 기준은 실험 절에 미리 적음. 그 뒤 실행 뒤 칸·실행 뒤 독립 검토 → 사용자 보고. 결과로 분야 묶음을 보낼지(B 대 D), 1-a·2는 결정 못 함(닿는 대상 0).
-5. 금요일(11-13) 초기화 뒤: 쓸모 등급 없이 묶음 다시 만들기(Fable 5.2 high) → `state_tables/bundles.json` 갈아 끼우고 다시 잼. Codex는 설계 방향 검토 한 번.
+1. **고친 체크리스트로 648답 다시 채점(돈 안 듦, 하위 에이전트)**: 12판은 11-11에 다시 돌려 실패 0으로 끝났다(HISTORY [275], 다시 돌리지 않는다). 채점 기준은 `docs/agents/grading.md`(11-11에 `docs/experiment.md`에서 떼어 옮기고 판단 대상 결정을 더함, HISTORY [276]). 다시 채점 설계(실행 뒤 검토 R5·R7): 12판을 판 이름을 가려 차례별로 섞고, 한 차례의 12답을 한 채점자가 모두 매긴다. 일부는 두 채점자로 대조해 채점 흔들림을 잰다. "근거"는 `_widened`로 넓힌 조각까지 본다. 새 절은 `docs/experiment.md`에 `experiment-checklist` 스킬 칸으로 먼저 쓴다. 옛 채점·묶음은 `results/20261111/101200_dev50묶음2_뒤처리/`·`103722_dev50묶음2_추가채점/`(풀이.json으로 판 이름 확인), 판단 대상 결정은 `results/20261111/112346_판단대상_정리/목록.md`.
+2. **질문 바꾸기 검색어·실제 보낸 설정 줄·정지 이유를 `답.jsonl`에 남기기(코드)**: HISTORY [93]에서 "원래 질문과 실제 검색어를 모두 기록한다"고 정했는데 지금 `evaluate run`에는 없다. 다음 유료 시험 전에 고친다.
+3. 다시 채점 결과로 판정을 새로 적은 뒤: 값이 갔는데 안 쓴 답(Q28·Q04-1) 나란히 읽기 → 지시문 가설, C(1-a·2 켬)가 B보다 낮은 문항 읽기 → 제품 기본값(`Settings.situation_lines`·`computed_lines`, 지금 켬)을 사용자에게 물음. 남은 고칠 거리 표는 `docs/experiment.md` "남은 고칠 거리".
+4. 금요일(11-13) 초기화 뒤: 쓸모 등급 없이 묶음 다시 만들기(Fable 5.2 high) → `state_tables/bundles.json` 갈아 끼우고 다시 잼. Codex는 설계 방향 검토 한 번.
+5. 시험 결과 기록과 함께 이 브랜치의 PR을 만든다.
 
-**이 브랜치에서 바뀐 것**: `evaluate run`에 `--no-situation`·`--no-computed`·`--no-fields`, `answer_engine.Settings.field_lines`(끄면 분야를 고르지 않음), 시험 3개, 실험 절. pytest 722 통과(11-10 저녁). 시험이 끝나면 결과 기록과 함께 PR을 만든다.
+**11-11에 바뀐 것**: 체크리스트 → `docs/agents/grading.md`, 실험 기록 2,700여 줄 → `archive/experiment_E2.md`(통째로, 원문 그대로), 새 `docs/experiment.md`는 요약·남은 고칠 거리만. 11-11 이전 HISTORY·HANDOFF가 가리키는 `docs/experiment.md`의 [E2] 절은 보관본에 있다. `docs/agents/review.md`의 체크리스트 경로를 고침. 코드는 안 바꿈(pytest는 11-10 저녁 722 통과 그대로, 11-11에는 안 돌림).
 
-**모르면 실수할 것**: `evaluate run`의 어림 비용($0.035)은 설정 값 줄이 없던 때 숫자라 B·C판에는 맞지 않음(실험 절의 어림을 볼 것). 결과 폴더는 덮어쓰지 않으니 같은 `--name`은 날짜가 같으면 막힘. Blender 애드온은 이 PC에 이 브랜치 판으로 설치됨(`install_addon`).
+**모르면 실수할 것**: 옛 채점 숫자(54차례 맞음 A 16.0 / D 22.0 / B 24.3 / C 18.3)는 고치기 전 체크리스트 기준이라 잠정이다. 같은 판을 다시 돌린 흔들림이 판 차이보다 크다(3판으로 약 6개 차이부터 보임, 판 하나의 틀림은 A만 해도 9-20). 온도 낮추기는 Haiku 5.5에서 쓸 수 있는지 확인 전이다(실행 뒤 검토가 "400"이라 했으나 1차 자료 못 찾음). 결과 폴더는 덮어쓰지 않으니 같은 `--name`은 날짜가 같으면 막힘. Blender 애드온은 이 PC에 이 브랜치 판으로 설치됨.
 
-**Git 밖 자료(강의실 PC에만 있음, 드라이브에 안 올림)**: `data/eval/dev50/states_20261110/`(39장면 json·png·settings.json, `_*.log`), `data/eval/dev50/questions_20261110.json`, `data/eval/dev50/bundle_check.py`, 고친 `data/eval/dev50/capture.py`(`CAPTURE_OUT`·설정 값 옮기기), `results/20261110/`의 실패 12폴더. 다른 PC에서 이으려면 드라이브로 옮기고 파일 수·크기를 맞춘다. 키는 `data/.env`(출력·커밋 금지).
+**Git 밖 자료(강의실 PC에만 있음, 드라이브에 안 올림)**: `results/20261111/` 17폴더(12판·뒤처리·추가채점·원인분석·판단대상_정리), `results/20261110/`의 실패 12폴더, `data/eval/dev50/states_20261110/`, `questions_20261110.json`, `bundle_check.py`, 고친 `capture.py`. 다른 PC에서 이으려면 드라이브로 옮기고 파일 수·크기를 맞춘다. 키는 `data/.env`(출력·커밋 금지).
 
 새 AI에 붙일 첫 문장: `AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해.`
+
+## (아래는 11-10 이전 경과, 낡음 — 위가 우선)
 
 ## 가설 14 준비 경과 — 검토 전에는 재개하지 않음
 
@@ -139,6 +141,6 @@
 
 ## 참고
 
-- [실험 기록·체크리스트](docs/experiment.md)(목차), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[204]](HISTORY.md), [구조](STRUCTURE.md).
+- [실험 기록](docs/experiment.md)(요약, 지난 [E2]는 `archive/experiment_E2.md`), [채점 체크리스트](docs/agents/grading.md), [`bpy` 전체 분석](.scratch/mvp-roundtrip/research/2026-11-05-bpy-전체-분석.md), [`bpy` 작업 상태 지도](.scratch/mvp-roundtrip/research/2026-11-05-bpy-작업상태-지도.md), [범용 시험 계획](.scratch/mvp-roundtrip/research/2026-11-05-작업상태-범용-시험-계획.md), [칸 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류.md), [RNA 밖 이름·계산 값 분류](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-분류-2.md), [칸 후보 초안(낡음)](.scratch/mvp-roundtrip/research/2026-11-05-bpy-칸-후보-초안.md), [개발셋 작업표](.scratch/mvp-roundtrip/dev50-작업표.md), [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md), [질문 종류 조사](.scratch/mvp-roundtrip/research/2026-11-04-블렌더-질문-종류.md), [경과 [168]-[204]](HISTORY.md), [구조](STRUCTURE.md).
 - 검색 흐름 코드: `blender_tutor/answer_engine.py`(`REWRITE_PROMPT`, `answer`, `_rewritten`, `search`, `_widened`), `engine_setup.py`. 공식 API 문서: `https://docs.blender.org/api/5.2/`.
 - 새 세션 첫 문장: `AGENTS.md와 HANDOFF.md 맨 위를 읽고, 다음 할 일 1번에 따라 지금까지 가설 14 작업의 목적·시험 설계·구현을 검토해 줘. 실행이나 수정은 재개하지 말고 판단부터 보여 줘.`
