@@ -95,6 +95,8 @@ class TurnResult:
     done: float = 0.0
     fields: tuple[str, ...] = ()  # 분야 고르기가 고른 분야(설정 값이 없거나 실패하면 빈 묶음)
     field_failed: bool = False  # 분야 고르기가 실패해 묶음 없이 답했나
+    query: str = ""  # 검색에 쓴 글(바꾼 검색어). 답이 끝까지 안 나왔으면 빈 글
+    lines: tuple[str, ...] = ()  # 답변 모델에 실제로 넘긴 설정 줄. 답이 끝까지 안 나왔으면 빈 묶음
 
 
 def run(
@@ -111,7 +113,7 @@ def run(
         conversation = Conversation(keep=recent_pairs)
         conversation.engine = engine
         for turn in dialogue.turns:
-            pieces, failure, sources, results, similar, first_piece, fields, field_failed = [], None, (), (), (), None, (), False
+            pieces, failure, sources, results, similar, first_piece, fields, field_failed, query, lines = [], None, (), (), (), None, (), False, "", ()
             start = clock()
             for event in conversation.ask(turn.question, turn.state, turn.step, turn.settings):
                 if isinstance(event, Piece):
@@ -120,7 +122,7 @@ def run(
                     pieces.append(event.text)
                 elif isinstance(event, Done):
                     sources, results, similar = event.sources, event.results, event.similar
-                    fields, field_failed = event.fields, event.field_failed
+                    fields, field_failed, query, lines = event.fields, event.field_failed, event.query, event.lines
                 elif isinstance(event, Failure):
                     failure, results = event.message, event.results
             done = clock() - start
@@ -128,7 +130,7 @@ def run(
             mentioned = tuple(course for course in similar if course.name in answer)
             found.append(TurnResult(
                 dialogue, turn, answer, failure, sources, results, hit(turn.locations, results), similar, mentioned, first_piece, done,
-                fields, field_failed,
+                fields, field_failed, query, lines,
             ))
     return found
 
@@ -451,6 +453,7 @@ def _write_run(folder: Path, name: str, about: dict, found: list[TurnResult]) ->
                 "답에 나온 연습 과정": [course.name for course in result.mentioned],
                 "첫 글자(초)": result.first_piece, "답 끝(초)": result.done,
                 "설정 값 있음": result.turn.settings is not None, "고른 분야": list(result.fields), "분야 고르기 실패": result.field_failed,
+                "검색어": result.query, "보낸 설정 줄": list(result.lines),
             }
             file.write(json.dumps(row, ensure_ascii=False) + "\n")
     counted = [result for result in found if result.turn.locations]

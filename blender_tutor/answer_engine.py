@@ -219,6 +219,10 @@ class Done:
     # 고른 분야(설정 값을 받지 않았거나 분야 고르기가 실패했으면 빈 묶음)와 실패 여부. 평가와 시간 기록용
     fields: tuple[str, ...] = ()
     field_failed: bool = False
+    # 검색에 쓴 글(바꾼 검색어, 질문 바꾸기가 없으면 질문과 맥락을 이은 글)과 답변 모델에 실제로 넘긴 설정 줄.
+    # 평가에서 검색·답이 왜 흔들리는지 보려고 알린다(티켓 35). 창은 쓰지 않는다
+    query: str = ""
+    lines: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -342,7 +346,7 @@ class AnswerEngine:
             return
         if text := marks.finish():
             yield Piece(text)
-        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed)
+        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed, query, tuple(lines))
 
     def _start_fields(self, question: str, query: str, state: WorkState) -> Future:
         """분야 고르기를 뒤에서 부른다. 결과(분야 코드 묶음)나 오류는 돌려준 Future에 담긴다."""

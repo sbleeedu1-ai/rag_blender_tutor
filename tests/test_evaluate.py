@@ -350,6 +350,7 @@ def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약
     assert [(row["번호"], row["적중 순위"]) for row in rows] == [("D01", 1), ("D02", None)]
     assert rows[0]["검색 결과"][0]["주소"] == "files/blend/save.html#save"
     assert rows[0]["답"] == "답1"
+    assert rows[0]["검색어"].startswith("save the blend file") and rows[0]["보낸 설정 줄"] == []  # 질문 바꾸기·설정 값 없음
     assert rows[1]["붙인 연습 과정"] == [] and rows[1]["답에 나온 연습 과정"] == []  # courses/가 비어 있음
     summary = (folder / "요약.md").read_text(encoding="utf-8")
     assert "검색 적중: 1 / 1" in summary
