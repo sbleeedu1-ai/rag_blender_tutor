@@ -234,3 +234,38 @@
 (가)는 `Mirror modifier not applied to exported mesh, half model shows in chess engine, apply modifier before export, Mirror modifier`로 바뀌어 같은 위치가 4위로 들어왔다.
 이는 저장된 검색어·주소·순위의 변화이며 최종 답의 정답 여부는 확인하지 않았다.
 
+### 악화된 검색의 경로 추적 · 2026-11-11 Codex
+
+사용자: "일단 검색 청크가 들어오게 만드는게 중요한데", "나빠진건 왜 나빠진건ㄱ지 확인함?".
+앞 검토는 악화 8문항 전체의 원인을 분석한 것은 아니었음을 알리고, 이번에 12회 악화의 두 방식 검색어 72개·순위·상위 결과를 대조했다.
+자료: `results/20261111/155354_가_악화원인/`(Git 밖)의 `원인분석.md`·`대조.md`·`악화기록.json`·재현 코드·설정 복사본.
+
+**12회 중 6회는 다른 호출이 정답을 찾았는데 먼저 온 실패 검색어만 골라 놓침, 6회는 검색어 3개 모두 상위 8개에서 정답을 놓침.**
+이는 저장된 검색 결과에서 실패로 이어진 경로이며, 특정 설정 줄이 모델의 표현을 바꾼 인과관계를 검증한 것은 아니다.
+
+| 문항·뜻 | 악화 횟수 | 다른 호출은 적중 | 셋 모두 실패 | 관찰한 검색어·순위 변화 |
+|---|---:|---:|---:|---|
+| Q09 베벨 불균일 | 1 | 0 | 1 | bevel weight·limit method 등 옵션 중심, 등록 위치 8 → 11위 |
+| Q13 어두운 얼룩 | 2 | 1 | 1 | normals recalculate outside/inside → shading artifacts·inset·bevel·auto smooth 쪽, 1·2 → 23·20위 |
+| Q26 재질 색이 안 보임 | 2 | 2 | 0 | Principled BSDF가 들어간 검색어로 셰이더 설명이 앞에 옴, 정답 5·4 → 42·28위 |
+| Q29 PNG 입히기 | 1 | 1 | 0 | 기존 물체에 이미지 입히기 → 새 이미지 평면 만들기, 6 → 35위 |
+| Q36 FBX의 크기·베벨 | 3 | 1 | 2 | FBX 크기·축 변환 쪽이 앞에 옴, 2·4·2 → 11·11·11위 |
+| Q37 양면 보이기 | 1 | 0 | 1 | normals inside out → missing faces·backface culling·export 등, 5 → 16위 |
+| Q45 회색 조각 | 1 | 0 | 1 | mask clear → mask·hidden·brush·dyntopo·multires 등, 8 → 17위 |
+| Q47 불리언 단축키 | 1 | 1 | 0 | keymap 포함 검색어가 다른 단축키 쪽을 올림, 1 → 10위 |
+| 합계 | 12 | 6 | 6 | 이 8문항 안의 반대 방향 변화 2회와 합치면 순감소 10회 |
+
+실제 예 Q26: 설정 줄 `Material[Material.001].node_tree.nodes[Principled BSDF].inputs[Base Color].default_value = [0.35, 0.18, 0.07, 1.0]`가 있고,
+지금의 `material base color not showing viewport solid shading color type material settings`(정답 5위)가
+(가)의 `Principled BSDF base color not updating viewport solid shading material color display Blender`로 바뀜(정답 42위).
+1위는 Principled Hair BSDF의 Outputs, 2위는 Principled BSDF의 Inputs로 바뀌었고, 같은 (가)의 다른 호출은 정답 5위였지만 약 0.0156초 늦어 안 씀.
+설정의 항목 이름이 질문 목적보다 검색을 이끌었다는 것은 원인 **후보**이며, 해당 줄을 빼고 모델을 다시 부르지는 않았다.
+
+또 Q13의 (가) 2회차는 등록 주소를 놓쳤지만 2위의 `subdivision_surface.html#non-contiguous-normals`에
+"A quick way to fix this is to Recalculate Normals."가 있었다(현재 청크 파일에서 주소 1조각 확인).
+등록 주소 실패와 실제 근거 부재를 같다고 보지 않으며, 이 사례의 성공 판정이나 다른 11회 대체 근거의 충분성은 새로 채점하지 않았다.
+
+검증: `추적.py --악화없음`은 제품 `evaluate.hit`에 저장 주소를 넣어 "검색 적중 악화 12회 재현"으로 예상대로 종료 1;
+`확인.py`는 다른 호출의 적중 6회와 Q13 대체 주소 1조각을 확인해 종료 0.
+하위 에이전트·유료 호출·임베딩 재생성·제품 코드 수정 없이 추적했으며, 원래 질문 바꾸기부터의 독립 재실행은 아니다.
+
