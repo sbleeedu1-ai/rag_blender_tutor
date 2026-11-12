@@ -2710,3 +2710,8 @@
 
 - 사용자: "채점 10분내로 가능?" → 전체 108답은 어렵다고 답하고 13문항(26답)만 제안, 사용자 "ㅇㅇ".
 - 잠정 결과(판정에 안 씀, 채점자 1명·기준 미리 안 정함): 새 판이 나아짐 4(Q04-1·Q37·Q44·Q47)·나빠짐 2(Q43·Q45)·비슷 7 → 순 +2. 검색 적중 +7이 답에서는 약 +2. 정식 채점은 다음 세션(판정 기준 먼저).
+
+### [303] 2026-11-12 · 질문 바꾸기를 Sonnet으로 바꾸면 시간이 어떤지 대략 보기 위해, 3문항만 none·medium으로 잰다(티켓35)
+
+- 사용자: "그럼 혹시 sonnet 으로 바꾸면 딱 세문제만 대략 시간을 봐줄수 있나? none / medium ?". `data/eval/dev50/sonnet_time_probe.py`, Q01·Q09·Q44 × 호출 3개 × 1회, 2b예시없음. Sonnet 5.5는 thinking disabled가 400이라 none은 `between_tools`로 보냄(claude-api 스킬 Sonnet 5.5 절).
+- 결과(`results/20261112/172226_sonnet시간3문항/`, $0.1013): 첫 닫힘 none 1.38·1.64·1.92초, medium 1.85·1.05·1.35초(Haiku none 중앙 약 0.8, medium 약 1.8). Sonnet medium은 9호출 중 8개가 생각 토큰 0(스스로 생각을 거의 안 함). Q09는 Haiku가 모든 시험에서 못 찾았는데 Sonnet은 none 2/3·medium 2/3 찾음(검색어에 object scale 넣음). 3문항·1회라 경향만. 요금은 호출당 Haiku medium의 약 15배.
