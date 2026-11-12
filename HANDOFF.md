@@ -1,6 +1,6 @@
 # 인수인계
 
-마지막 갱신: 2026-11-12 오후(Codex 독립 재판정 반영) · Claude Code(Opus 5.5) · 강의실 PC(DESKTOP-J9LV5HK, `C:\WORKag_blender_tutor`) · PR #43 병합 전에 씀
+마지막 갱신: 2026-11-12 오후(Codex 독립 재판정 반영) · Claude Code(Opus 5.5) · 강의실 PC(DESKTOP-J9LV5HK, `C:\WORK\rag_blender_tutor`) · PR #43 병합 전에 씀
 
 ## 다음 할 일
 
