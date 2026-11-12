@@ -617,3 +617,13 @@ Q28 C1의 TR·ED는 UV 코드는 없지만 이동·편집 질문과 관련 있�
 | 제외 | 본문 충분 채점 | 설계에서 뺌 | 사용자가 뺌: "문항 수 자체를 10개로 가벼운 테스트로 가자" |
 | 추측 | 개선이 기능 이름을 넣으라는 이유·예시 때문이라는 해석 | 검색어 원문 대조는 아직 안 함 | 다음 할 일 1번: 늘어난 Q43·Q41 검색어를 기존과 대조 |
 | 못 본 것 | 제품 방식(먼저 닫힌 1개)에서의 효과, 54문항 재현, 마지막 확인용 문항과 예시 겹침 | 이번 설계 범위 밖·문항 열지 않음 | 다음 할 일 1번: 본시험 설계 때 정함 |
+
+### 결과 뒤 검색어 대조 · 늘어난 문항의 원문 읽기 · 2026-11-12
+
+사용자 "상세 분석 해야지"에 따라 Q43·Q41·Q29·Q26의 기존/none, 예시있음/none·medium, 예시없음/medium 검색어 108개를 모두 읽었다(저장 기록만, 무료).
+
+- Q43(정답: Displacement Only·Subdivide·Cycles 재질 설정): 기존 9개는 `Displacement node`·`midlevel`·`scale`처럼 노드 자체만 짚고 재질 설정의 `Displacement Method`·`Displacement Only`와 `Subdivision`은 거의 없다(최종 0/3). 예시있음은 none·medium 모두 거의 매번 `Displacement Method Displacement Only`·`Subdivision Surface modifier needed`를 넣었다(2/3·3/3). 예시없음/medium은 `Displacement modifier` 쪽으로 가서 1/3.
+- Q41(정답: glTF 내보내기 Data·Mesh의 Apply Modifiers): 기존은 9개 모두 `Mirror modifier … merge clipping bisect`로 모디파이어 옵션만 찾았다(0/3). 예시있음/none은 `export Apply Modifiers option`이 가끔 들어가 1/3, medium은 예시 유무와 관계없이 `Apply Modifiers option in FBX glTF export`를 거의 매번 넣어 3/3. 이 문항은 생각을 켠 효과로 보인다.
+- Q29·Q26: 기존도 `Image Texture node`·`Material Preview`·`Color Material`을 이미 넣었다. 차이(2/3 대 3/3)는 흔들림 안으로 본다.
+- 예상 밖: 예시가 검색어를 길게 만들었다. 낱말 수 중앙 기존 13, 예시없음 16-21, 예시있음 26-29이고, 30낱말을 넘긴 검색어가 예시있음 18-35/90(예시없음 1-5, 기존 0)이다. 예시 자체는 11-21낱말이었다. 따라서 "예시 효과"에는 후보 기능 이름을 더 많이 나열한 길이 효과가 섞여 있고, 둘을 이 시험으로 나눌 수 없다. 30낱말 규칙 위반은 지시 따르기 문제로 따로 본다.
+- 해석: 늘어난 두 문항(Q43·Q41)에서는 정답 쪽에 쓰인 기능·옵션 이름이 새로 들어간 것을 원문으로 확인했다. 원인 가설과 맞지만 2문항이며, 길이와 생각 수준이 함께 움직였다.
