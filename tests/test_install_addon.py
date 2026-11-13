@@ -15,7 +15,7 @@ def config_of(addons_dir: Path) -> dict:
 
 
 def test_애드온을_복사하고_도우미_프로그램_켜는_법을_적는다(tmp_path):
-    install(tmp_path, PYTHON)
+    install(tmp_path, PYTHON, platform="win32")
     assert (tmp_path / ADDON_NAME / "__init__.py").read_bytes() == (SOURCE / "__init__.py").read_bytes()
     config = config_of(tmp_path)
     assert config["command"] == [str(PYTHON), "-m", "blender_tutor.helper"]
@@ -49,3 +49,17 @@ def test_기본_애드온_폴더는_운영체제마다_Blender가_찾는_자리(
     assert windows == tmp_path / "AppData" / "Blender Foundation" / "Blender" / "5.2" / "scripts" / "addons"
     mac = default_addons_dir("darwin", {}, tmp_path)
     assert mac == tmp_path / "Library" / "Application Support" / "Blender" / "5.2" / "scripts" / "addons"
+
+
+def test_Mac은_도우미를_자기_이름의_앱_묶음으로_만들고_open으로_켜게_적는다(tmp_path):
+    import plistlib
+
+    target = install(tmp_path, PYTHON, platform="darwin")
+    app = target / "BlenderTutorHelper.app"
+    info = plistlib.loads((app / "Contents" / "Info.plist").read_bytes())
+    assert info["CFBundleDisplayName"] == "Blender 첫걸음 도우미" and info["LSUIElement"] is True
+    launcher = app / "Contents" / "MacOS" / info["CFBundleExecutable"]
+    assert launcher.stat().st_mode & 0o111  # 실행할 수 있음
+    assert f'"{PYTHON}" -m blender_tutor.helper' in launcher.read_text(encoding="utf-8")
+    # Mac이 직접 켜야 입력 모니터링 권한이 Blender가 아니라 이 앱에 잡힌다. open은 환경 변수를 넘기지 않아 비밀 글자는 파일로
+    assert config_of(tmp_path)["command"] == ["open", "-n", "-g", "-a", str(app), "--args", "--token-file", str(target / "config.json")]

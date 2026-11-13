@@ -319,9 +319,15 @@ class Sender:
         if found == "ours":
             return True
         env = {**os.environ, TOKEN_ENV: self._config["token"], "PYTHONUTF8": "1"}  # 기록 파일을 UTF-8로
+        command = self._config["command"]
+        if command[:1] == ["open"]:
+            # Mac: open이 켠 앱은 open의 출력·환경 변수를 받지 않아 기록 파일을 따로 알려 주고, 설정 폴더를 바꿔 켤 때(자체 시험)는
+            # 그 값을 넘긴다(넘기지 않으면 시험 기록이 실제 사용자 폴더에 쌓였다). 비밀 글자는 config.json에서 읽는다
+            extra = [part for name in ("APPDATA",) if name in os.environ for part in ("--env", f"{name}={os.environ[name]}")]
+            command = ["open", "--stdout", str(LOG), "--stderr", str(LOG), *extra, *command[1:]]
         with open(LOG, "a", encoding="utf-8") as log:
             subprocess.Popen(
-                self._config["command"], cwd=self._config["cwd"], env=env, stdout=log, stderr=log, stdin=subprocess.DEVNULL,
+                command, cwd=self._config["cwd"], env=env, stdout=log, stderr=log, stdin=subprocess.DEVNULL,
                 **_detached(),
             )
         deadline = time.monotonic() + wait

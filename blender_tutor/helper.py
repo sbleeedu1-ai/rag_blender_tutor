@@ -9,6 +9,7 @@
 """
 
 import argparse
+import json
 import logging
 import os
 import platform
@@ -304,9 +305,13 @@ def _courses() -> list[Course]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Blender 첫걸음 도우미 창을 켭니다.")
     parser.add_argument("--port", type=int, default=PORT, help=f"받을 자리 번호(기본 {PORT}, 자체 시험은 다른 번호를 씀)")
+    # Mac은 애드온이 open으로 앱 묶음을 켜서 환경 변수가 넘어오지 않는다. 그때 애드온 config.json에서 비밀 글자를 읽는다
+    parser.add_argument("--token-file", type=Path, default=None, help="비밀 글자를 읽을 애드온 config.json(환경 변수가 없을 때)")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     token = os.environ.get(TOKEN_ENV)
+    if not token and args.token_file:
+        token = json.loads(args.token_file.read_text(encoding="utf-8"))["token"]
     if not token:
         log.error("환경 변수 %s가 없습니다. 애드온이 켜 주거나, 애드온 config.json의 token을 넣고 켜세요.", TOKEN_ENV)
         return 2

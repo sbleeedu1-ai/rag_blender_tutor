@@ -10,6 +10,7 @@
 import argparse
 import json
 import os
+import plistlib
 import secrets
 import shutil
 import sys
@@ -30,23 +31,55 @@ def default_addons_dir(platform: str = sys.platform, environ: Mapping[str, str] 
     return Path(environ["APPDATA"]) / "Blender Foundation" / "Blender" / "5.2" / "scripts" / "addons"
 
 
-def install(addons_dir: Path, python: Path) -> Path:
+MAC_APP = "BlenderTutorHelper.app"  # Mac: 도우미를 감싼 앱 묶음(애드온 폴더 안)
+
+
+def install(addons_dir: Path, python: Path, platform: str = sys.platform) -> Path:
     """애드온을 addons_dir에 복사(덮어쓰기)하고 config.json을 적는다. 설치한 폴더를 돌려준다.
 
     다시 설치해도 비밀 글자는 그대로 둔다. 이미 켜진 도우미 프로그램이 지난 비밀 글자로 받고 있을 수 있어서다.
+    Mac은 도우미를 자기 이름의 앱 묶음으로 감싸 open으로 켠다(mac_app).
     """
     target = addons_dir / ADDON_NAME
     config_path = target / "config.json"
     token = json.loads(config_path.read_text(encoding="utf-8"))["token"] if config_path.exists() else secrets.token_hex(32)
     shutil.copytree(SOURCE, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", "config.json"))
+    command = [str(python), "-m", "blender_tutor.helper"]
+    if platform == "darwin":
+        app = mac_app(target / MAC_APP, python)
+        command = ["open", "-n", "-g", "-a", str(app), "--args", "--token-file", str(config_path)]
     config = {
-        "command": [str(python), "-m", "blender_tutor.helper"],
+        "command": command,
         "cwd": str(PROJECT),
         "port": PORT,
         "token": token,
     }
     config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
     return target
+
+
+def mac_app(app: Path, python: Path) -> Path:
+    """Mac: 도우미를 켜는 작은 앱 묶음을 만든다(다시 만들면 덮어씀).
+
+    Blender가 도우미를 직접 켜면 Mac은 Blender를 책임자로 보아 입력 모니터링 권한이 'Blender' 전체에 잡혔다
+    (다른 애드온도 입력을 엿들을 수 있게 됨, HISTORY [313]). 이 앱을 open으로 켜면 Mac이 켠 앱이 되어 권한이
+    'Blender 첫걸음 도우미'에만 잡힌다. LSUIElement: Dock·Cmd+Tab에 나오지 않는다(메뉴 막대 아이콘만).
+    """
+    executable = app / "Contents" / "MacOS" / "helper"
+    executable.parent.mkdir(parents=True, exist_ok=True)
+    info = {
+        "CFBundleIdentifier": "local.rag-blender-tutor.helper",
+        "CFBundleName": "Blender Tutor Helper",
+        "CFBundleDisplayName": "Blender 첫걸음 도우미",
+        "CFBundleExecutable": executable.name,
+        "CFBundlePackageType": "APPL",
+        "CFBundleVersion": "0.1.0",
+        "LSUIElement": True,
+    }
+    (app / "Contents" / "Info.plist").write_bytes(plistlib.dumps(info))
+    executable.write_text(f'#!/bin/sh\ncd "{PROJECT}"\nexec "{python}" -m blender_tutor.helper "$@"\n', encoding="utf-8")
+    executable.chmod(0o755)
+    return app
 
 
 def main() -> int:
@@ -60,8 +93,8 @@ def main() -> int:
     print("Blender 5.2를 켜고 편집 > 환경 설정 > 애드온에서 'Blender 첫걸음 도우미'를 켜 주세요(처음 한 번만).")
     if sys.platform == "darwin":
         print("도우미 아이콘(파란 동그라미)은 화면 맨 위 메뉴 막대 오른쪽에 보여요.")
-        print("처음 F10 때 '입력 모니터링' 허락을 물으면 Blender를 켜 주세요(시스템 설정 > 개인정보 보호 및 보안). 켠 뒤 Blender를")
-        print("다시 켜야 적용돼요. 켜지 않아도 쓸 수 있고, Blender를 누를 때 도우미 창이 잠깐 깜빡이는 것만 남아요.")
+        print("처음 F10 때 '입력 모니터링' 허락을 물으면 'Blender 첫걸음 도우미'를 켜 주세요(시스템 설정 > 개인정보 보호 및 보안).")
+        print("켠 뒤 Blender를 다시 켜야 적용돼요. 켜지 않아도 쓸 수 있고, Blender를 누를 때 도우미 창이 잠깐 깜빡이는 것만 남아요.")
     else:  # Windows 11은 새 트레이 아이콘을 숨김 영역(^)에 넣는다(조사 문서)
         print("도우미 아이콘(파란 동그라미)은 작업 표시줄 오른쪽 ^를 누르면 보여요.")
     return 0
