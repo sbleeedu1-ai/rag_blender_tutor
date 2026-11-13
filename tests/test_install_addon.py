@@ -41,4 +41,11 @@ def test_다시_설치하면_애드온을_덮어쓰고_비밀_글자는_그대�
 
 def test_기본_설치_위치는_Blender_5_2_사용자_애드온_폴더(monkeypatch, tmp_path):
     monkeypatch.setenv("APPDATA", str(tmp_path))
-    assert default_addons_dir() == tmp_path / "Blender Foundation" / "Blender" / "5.2" / "scripts" / "addons"
+    assert default_addons_dir("win32") == tmp_path / "Blender Foundation" / "Blender" / "5.2" / "scripts" / "addons"
+
+
+def test_기본_애드온_폴더는_운영체제마다_Blender가_찾는_자리(tmp_path):
+    windows = default_addons_dir("win32", {"APPDATA": str(tmp_path / "AppData")}, tmp_path)
+    assert windows == tmp_path / "AppData" / "Blender Foundation" / "Blender" / "5.2" / "scripts" / "addons"
+    mac = default_addons_dir("darwin", {}, tmp_path)
+    assert mac == tmp_path / "Library" / "Application Support" / "Blender" / "5.2" / "scripts" / "addons"

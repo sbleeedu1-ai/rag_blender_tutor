@@ -21,11 +21,16 @@ PROJECT = HERE.parent
 
 if "bpy" not in sys.modules:  # 1) 보통 파이썬: 빈 사용자 폴더를 만들고 장면마다 Blender를 띄운다
     sys.stdout.reconfigure(encoding="utf-8")
-    blender = os.environ.get("BLENDER", r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe")
-    template = Path(blender).parent / "5.2" / "scripts" / "startup" / "bl_app_templates_system" / "Sculpting" / "startup.blend"
+    sys.path.insert(0, str(PROJECT))
+    from blender_tutor.paths import default_blender
+
+    blender = default_blender()
+    # Blender에 딸린 파일 자리: Windows는 실행 파일 옆 5.2/, Mac은 앱 묶음의 Contents/Resources/5.2/
+    resources = Path(blender).parent.parent / "Resources" if sys.platform == "darwin" else Path(blender).parent
+    template = resources / "5.2" / "scripts" / "startup" / "bl_app_templates_system" / "Sculpting" / "startup.blend"
     box = Path(tempfile.mkdtemp(prefix="settings_selftest_"))
     env = dict(os.environ)
-    for name, folder in {"BLENDER_USER_CONFIG": "c", "BLENDER_USER_SCRIPTS": "s", "BLENDER_USER_DATAFILES": "d", "BLENDER_USER_EXTENSIONS": "e", "TEMP": "t", "TMP": "t"}.items():
+    for name, folder in {"BLENDER_USER_CONFIG": "c", "BLENDER_USER_SCRIPTS": "s", "BLENDER_USER_DATAFILES": "d", "BLENDER_USER_EXTENSIONS": "e", "TEMP": "t", "TMP": "t", "TMPDIR": "t"}.items():
         (box / folder).mkdir(exist_ok=True)
         env[name] = str(box / folder)
     subprocess.run([blender, "-b", "--factory-startup", "--python-expr", "import bpy; bpy.ops.wm.save_userpref()"], env=env, cwd=str(box), capture_output=True, timeout=120, check=True)

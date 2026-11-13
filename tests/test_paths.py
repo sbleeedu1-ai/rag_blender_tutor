@@ -21,3 +21,23 @@ def test_둘_다_쓸_수_없으면_설정_폴더_쪽을_돌려준다(tmp_path):
     blocked_app.write_text("", encoding="utf-8")
     blocked_home.write_text("", encoding="utf-8")
     assert progress_records(blocked_app, blocked_home) == blocked_app / "blender_tutor" / "progress"
+
+
+def test_설정_폴더는_Windows면_APPDATA_Mac이면_Application_Support(tmp_path):
+    from blender_tutor.paths import settings_base
+
+    assert settings_base("win32", {"APPDATA": str(tmp_path / "AppData")}, tmp_path) == tmp_path / "AppData"
+    assert settings_base("win32", {}, tmp_path) is None
+    assert settings_base("darwin", {}, tmp_path) == tmp_path / "Library" / "Application Support"
+    assert settings_base("darwin", {"APPDATA": str(tmp_path / "시험")}, tmp_path) == tmp_path / "시험"  # 자체 시험이 임시 폴더로
+
+
+def test_Blender_위치는_환경_변수가_먼저이고_Mac은_앱_묶음_안_실행_파일(tmp_path):
+    from blender_tutor.paths import blender_executable
+
+    assert blender_executable("win32", {"BLENDER": "D:/b.exe"}, []) == "D:/b.exe"
+    assert blender_executable("win32", {}, []) == r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
+    found = tmp_path / "Ext" / "Blender.app"
+    (found / "Contents" / "MacOS").mkdir(parents=True)
+    (found / "Contents" / "MacOS" / "Blender").write_text("")
+    assert blender_executable("darwin", {}, [tmp_path / "없음" / "Blender.app", found]) == str(found / "Contents" / "MacOS" / "Blender")

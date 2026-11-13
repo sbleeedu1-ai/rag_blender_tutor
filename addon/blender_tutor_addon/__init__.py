@@ -11,8 +11,9 @@
 이 애드온은 Blender 안 파이썬에서 돌아 blender_tutor 패키지를 가져다 쓰지 못한다. 작업 상태 칸은
 blender_tutor/work_state.py와 같게 맞추고, 바꾸면 둘 다 고친다(addon/selftest.py가 맞는지 본다).
 설치: 프로젝트 폴더에서 `.venv\\Scripts\\python -m blender_tutor.install_addon`(옆에 config.json을 적어 줌).
-Windows에만 있는 부분: 이 파일의 _own_window(창 번호)·TUTOR_OT_summon(창 앞으로 부르기 허락)·Sender.launch(창 없이 켜기),
-blender_tutor/receiver.py의 process_started, blender_tutor/install_addon.py의 설치 폴더·pythonw, blender_tutor/paths.py의 진행 기록 폴더. 맥을 붙일 때는 이곳들을 바꾼다.
+운영체제마다 다른 부분(Windows·Mac, HISTORY [44]·[312]): 이 파일의 _own_window(창 번호)·TUTOR_OT_summon(창 앞으로 부르기 허락,
+Windows만)·_detached(떨어진 프로그램으로 켜기), blender_tutor/receiver.py의 process_started, blender_tutor/install_addon.py의
+설치 폴더·pythonw, blender_tutor/paths.py의 설정 폴더·Blender 위치, 도우미 창은 blender_tutor/winapi.py·macapi.py.
 """
 
 import ctypes
@@ -21,6 +22,7 @@ import json
 import os
 import queue
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -149,6 +151,75 @@ _window = 0  # 처음 찾은 주 창 번호. 그 창이 살아 있는 동안 계
 
 
 def _own_window() -> int:
+    """이 Blender의 주 창 번호. Windows는 창 번호(HWND), Mac은 창 서버 번호(CGWindowID, _mac_own_window)."""
+    return _mac_own_window() if sys.platform == "darwin" else _windows_own_window()
+
+
+_CF_UTF8, _CF_SINT64 = 0x08000100, 4  # kCFStringEncodingUTF8, kCFNumberSInt64Type
+_mac = None  # Mac 창 서버를 부를 CoreGraphics·CoreFoundation(처음 쓸 때 연다)
+
+
+def _mac_libraries():
+    global _mac
+    if _mac is None:
+        cg = ctypes.CDLL("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+        cf = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+        cg.CGWindowListCopyWindowInfo.restype = ctypes.c_void_p
+        cg.CGWindowListCopyWindowInfo.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
+        cf.CFArrayGetCount.restype = ctypes.c_long
+        cf.CFArrayGetCount.argtypes = [ctypes.c_void_p]
+        cf.CFArrayGetValueAtIndex.restype = ctypes.c_void_p
+        cf.CFArrayGetValueAtIndex.argtypes = [ctypes.c_void_p, ctypes.c_long]
+        cf.CFDictionaryGetValue.restype = ctypes.c_void_p
+        cf.CFDictionaryGetValue.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        cf.CFNumberGetValue.restype = ctypes.c_bool
+        cf.CFNumberGetValue.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
+        cf.CFStringCreateWithCString.restype = ctypes.c_void_p
+        cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+        cf.CFRelease.argtypes = [ctypes.c_void_p]
+        keys = {name: cf.CFStringCreateWithCString(None, name.encode(), _CF_UTF8)
+                for name in ("kCGWindowOwnerPID", "kCGWindowNumber", "kCGWindowLayer", "kCGWindowBounds", "Width", "Height")}
+        _mac = (cg, cf, keys)
+    return _mac
+
+
+def _mac_windows(option: int, window: int = 0) -> list[dict]:
+    """창 서버의 창 목록 가운데 이 Blender의 보통 창(층 0)들: 번호와 넓이."""
+    cg, cf, keys = _mac_libraries()
+
+    def number(dictionary, key):
+        value = cf.CFDictionaryGetValue(dictionary, keys[key])
+        out = ctypes.c_int64()
+        return out.value if value and cf.CFNumberGetValue(value, _CF_SINT64, ctypes.byref(out)) else None
+
+    found = []
+    listed = cg.CGWindowListCopyWindowInfo(option, window)
+    if not listed:
+        return found
+    try:
+        for index in range(cf.CFArrayGetCount(listed)):
+            item = cf.CFArrayGetValueAtIndex(listed, index)
+            if number(item, "kCGWindowOwnerPID") == os.getpid() and number(item, "kCGWindowLayer") == 0:
+                bounds = cf.CFDictionaryGetValue(item, keys["kCGWindowBounds"])
+                area = (number(bounds, "Width") or 0) * (number(bounds, "Height") or 0) if bounds else 0
+                found.append({"number": number(item, "kCGWindowNumber"), "area": area})
+    finally:
+        cf.CFRelease(listed)
+    return found
+
+
+def _mac_own_window() -> int:
+    """이 Blender의 주 창 서버 번호(Mac). 환경 설정 창 같은 다른 창보다 넓은 창을 주 창으로 보고, 처음 찾은 번호를 기억해 둔다
+    (Windows와 같은 까닭). 그 창이 닫히면 다시 찾는다. 화면 없이 띄운 Blender(-b)에는 창이 없어 0이다."""
+    global _window
+    if _window and _mac_windows(8, _window):  # 8: kCGWindowListOptionIncludingWindow
+        return _window
+    windows = _mac_windows(0)  # 0: kCGWindowListOptionAll
+    _window = max(windows, key=lambda w: w["area"])["number"] if windows else 0
+    return _window
+
+
+def _windows_own_window() -> int:
     """이 Blender의 주 창 번호(Windows). Blender 하나에 번호 하나가 되도록, 다른 창의 주인이 아닌 Blender 창을 고른다.
 
     처음 찾은 번호를 기억해 둔다. Window > New Main Window로 주 창이 둘이 되면 Windows가 알려 주는 차례가
@@ -179,6 +250,16 @@ def _own_window() -> int:
     user32.EnumWindows(each, 0)
     _window = int(found[0] or 0) if found else 0
     return _window
+
+
+def _detached() -> dict:
+    """도우미를 Blender와 떨어진 프로그램으로 켜는 Popen 인자(Blender를 닫아도 함께 꺼지지 않게).
+
+    Windows는 새 프로세스 묶음 + 명령 창 없이, Mac은 새 세션으로(명령 창은 원래 뜨지 않음).
+    """
+    if sys.platform == "win32":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
+    return {"start_new_session": True}
 
 
 class Sender:
@@ -241,7 +322,7 @@ class Sender:
         with open(LOG, "a", encoding="utf-8") as log:
             subprocess.Popen(
                 self._config["command"], cwd=self._config["cwd"], env=env, stdout=log, stderr=log, stdin=subprocess.DEVNULL,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
+                **_detached(),
             )
         deadline = time.monotonic() + wait
         while time.monotonic() < deadline:
@@ -379,7 +460,8 @@ class TUTOR_OT_summon(bpy.types.Operator):
     def execute(self, context):
         pressed = time.time()  # 도우미의 시간 기록이 여기서부터 잰다(같은 PC 시계, 티켓 28)
         # Windows는 뒤에 있는 프로그램이 스스로 앞으로 나오는 것을 막는다. 지금 앞에 있는 Blender가 허락해 준다(ASFW_ANY = -1).
-        ctypes.windll.user32.AllowSetForegroundWindow(-1)
+        if sys.platform == "win32":
+            ctypes.windll.user32.AllowSetForegroundWindow(-1)
         if _sender is None:
             self.report({"ERROR"}, "도우미 애드온 설치가 끝나지 않았습니다(config.json 없음). 설치 명령을 실행해 주세요.")
             return {"CANCELLED"}

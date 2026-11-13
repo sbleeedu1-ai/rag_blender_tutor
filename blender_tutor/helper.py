@@ -2,9 +2,10 @@
 
 애드온이 Blender를 켤 때 켜 준다(config.json의 명령). 마지막 Blender가 닫히거나 트레이에서 끝내면 끝난다.
 손으로 켤 때: `set BLENDER_TUTOR_TOKEN=<애드온 폴더 config.json의 token>` 뒤 `.venv\\Scripts\\python -m blender_tutor.helper`
+(Mac: `BLENDER_TUTOR_TOKEN=<token> .venv/bin/python -m blender_tutor.helper`)
 
 부품끼리 잇기만 한다. 판단은 window_rules, 질문 한 번의 순서는 question_flow, 대화는 conversation, 진행은 course_desk, 그리기는 helper_window에 있고 각각 시험한다.
-이 파일과 winapi는 실제 화면·Blender가 있어야 해서 애드온 자체 시험과 눈 확인으로 본다.
+이 파일과 winapi(Mac은 macapi)는 실제 화면·Blender가 있어야 해서 애드온 자체 시험과 눈 확인으로 본다.
 """
 
 import argparse
@@ -22,7 +23,10 @@ from PySide6.QtCore import QCoreApplication, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication
 
-from blender_tutor import winapi
+if sys.platform == "win32":
+    from blender_tutor import winapi as screen_api
+else:  # Mac(HISTORY [312]): 같은 이름의 함수를 pyobjc로
+    from blender_tutor import macapi as screen_api
 from blender_tutor.answer_engine import Event, Settings
 from blender_tutor.conversation import PROGRAM_ERROR, Conversation
 from blender_tutor.course_desk import CourseDesk, Line
@@ -184,45 +188,45 @@ class Helper:
 
     def _bring_up(self) -> None:
         self.window.summon()
-        hwnd = int(self.window.winId())
-        winapi.put_on_top(hwnd)
-        if not winapi.bring_forward(hwnd):
+        hwnd = screen_api.native_window(int(self.window.winId()))
+        screen_api.put_on_top(hwnd)
+        if not screen_api.bring_forward(hwnd):
             log.info("Windows가 앞으로 가져오기를 막음(입력칸 초점 없음)")
         self._moved = (Place.TOP, hwnd)
 
     def _tray_show(self) -> None:
         """트레이 보이기: 보이는 Blender가 있으면 F10과 똑같이, 모두 최소화면 막는다(안내는 아이콘 글)."""
-        if winapi.any_shown(self._receiver.blenders()):
+        if screen_api.any_shown(self._receiver.blenders()):
             self._bring_up()
 
     def _back_to_blender(self) -> None:
         """Esc: 마지막으로 앞에 있던 Blender로 초점을 돌린다(창은 그대로, Blender가 앞이니 그 위에 남는다)."""
         window = self._front.window(self._receiver.blenders())
         if window:
-            winapi.bring_forward(window)
+            screen_api.bring_forward(window)
 
     # ---- Blender 따라가기(0.1초마다)
     def _follow(self) -> None:
         blenders = self._receiver.blenders()
-        front_hwnd, front_pid, taskbar = winapi.foreground()
+        front_hwnd, front_pid, taskbar = screen_api.foreground()
         self._front.saw_foreground(front_pid, blenders)
         if self._front.window(blenders) != self._progress_of:  # 다른 Blender로 옮겨 갔거나 닫혔다
             self._show_progress()
-        shown = winapi.any_shown(blenders)
+        shown = screen_api.any_shown(blenders)
         self._tray.blender_shown(shown)
         screen = Screen(front_pid, taskbar, frozenset(blenders.values()), shown)
         where = place(screen, self._own_pid, self.window.put_away)
         if not needs_move(where, front_hwnd, self._moved):
             return
-        hwnd = int(self.window.winId())
+        hwnd = screen_api.native_window(int(self.window.winId()))
         if where == Place.HIDDEN:
             self.window.hide()
         else:
             self.window.show()  # 초점은 빼앗지 않는다(WA_ShowWithoutActivating)
             if where == Place.TOP:
-                winapi.put_on_top(hwnd)
+                screen_api.put_on_top(hwnd)
             else:
-                winapi.put_behind(hwnd, front_hwnd)
+                screen_api.put_behind(hwnd, front_hwnd)
         self._moved = (where, front_hwnd)
 
 
@@ -276,6 +280,7 @@ def main() -> int:
     QCoreApplication.setAttribute(Qt.AA_UseSoftwareOpenGL)
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # 창을 숨겨도 트레이에 남는다
+    screen_api.hide_from_dock()  # Mac: Dock·Cmd+Tab에 나오지 않게(Windows는 Qt.Tool이 이미 뺌)
     app.setFont(QFont(FONT, 10))
     bridge = _Bridge()
     helper: Helper | None = None

@@ -11,9 +11,11 @@
 
 import ctypes
 import dataclasses
+import errno
 import json
 import logging
 import secrets
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -82,12 +84,42 @@ class Message:
 
 
 def process_started(pid: int) -> int | None:
-    """그 프로세스가 켜진 시각(Windows 시각 값). 꺼져 있으면 None(Windows 전용. 맥을 붙일 때는 이 함수만 바꾼다).
+    """그 프로세스가 켜진 시각(운영체제의 시각 값). 꺼져 있으면 None.
 
-    Windows는 꺼진 프로세스의 번호를 다른 프로그램에 다시 주므로, 번호만 보면 닫힌 Blender를 켜져 있다고 볼 수 있다.
+    운영체제는 꺼진 프로세스의 번호를 다른 프로그램에 다시 주므로, 번호만 보면 닫힌 Blender를 켜져 있다고 볼 수 있다.
     켜진 시각까지 같아야 같은 프로그램으로 본다.
     관리자로 켠 Blender처럼 열어 볼 수 없는 프로세스는 시각을 모르므로 0을 돌려준다(켜져 있다고 봄).
     """
+    return _windows_process_started(pid) if sys.platform == "win32" else _mac_process_started(pid)
+
+
+class _BsdInfo(ctypes.Structure):
+    """Mac libproc의 proc_bsdinfo(sys/proc_info.h). 켜진 시각 칸까지 쓴다."""
+
+    _fields_ = [
+        ("flags", ctypes.c_uint32), ("status", ctypes.c_uint32), ("xstatus", ctypes.c_uint32), ("pid", ctypes.c_uint32),
+        ("ppid", ctypes.c_uint32), ("uid", ctypes.c_uint32), ("gid", ctypes.c_uint32), ("ruid", ctypes.c_uint32),
+        ("rgid", ctypes.c_uint32), ("svuid", ctypes.c_uint32), ("svgid", ctypes.c_uint32), ("rfu_1", ctypes.c_uint32),
+        ("comm", ctypes.c_char * 16), ("name", ctypes.c_char * 32), ("nfiles", ctypes.c_uint32), ("pgid", ctypes.c_uint32),
+        ("pjobc", ctypes.c_uint32), ("e_tdev", ctypes.c_uint32), ("e_tpgid", ctypes.c_uint32), ("nice", ctypes.c_int32),
+        ("start_tvsec", ctypes.c_uint64), ("start_tvusec", ctypes.c_uint64),
+    ]  # fmt: skip
+
+
+def _mac_process_started(pid: int) -> int | None:
+    """Mac: libproc의 proc_pidinfo로 켜진 시각(마이크로초). 없거나 끝난(좀비) 프로세스는 None, 열어 볼 수 없으면 0."""
+    libproc = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+    info = _BsdInfo()
+    size = libproc.proc_pidinfo(pid, 3, ctypes.c_uint64(0), ctypes.byref(info), ctypes.sizeof(info))  # 3: PROC_PIDTBSDINFO
+    if size != ctypes.sizeof(info):
+        return 0 if ctypes.get_errno() == errno.EPERM else None
+    if info.status == 5:  # SZOMB: 끝났지만 아직 거두지 않음
+        return None
+    return info.start_tvsec * 1_000_000 + info.start_tvusec
+
+
+def _windows_process_started(pid: int) -> int | None:
+    """Windows: 켜진 시각(Windows 시각 값)."""
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.OpenProcess.restype = ctypes.c_void_p
     handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION

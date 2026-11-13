@@ -56,3 +56,12 @@ def put_behind(hwnd: int, front: int) -> None:
 def bring_forward(hwnd: int) -> bool:
     """앞으로 가져와 초점을 준다. Windows가 막으면 False(F10은 애드온이 AllowSetForegroundWindow로 허락해 둔다)."""
     return bool(user32.SetForegroundWindow(hwnd))
+
+
+def native_window(win_id: int) -> int:
+    """Qt 창의 winId를 창 번호로(Windows는 winId가 곧 창 번호, macapi와 짝을 맞춘 것)."""
+    return win_id
+
+
+def hide_from_dock() -> None:
+    """macapi와 짝을 맞춘 것. Windows는 Qt.Tool이 작업 표시줄에서 이미 뺀다."""

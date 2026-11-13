@@ -21,9 +21,8 @@ from pathlib import Path
 
 from blender_tutor.manual_chunks import load_chunks
 from blender_tutor.menu_names import MenuName, MenuNames, Source, Status, _english_key, build_menu_names
-from blender_tutor.paths import MENU_ALIASES
+from blender_tutor.paths import MENU_ALIASES, default_blender
 
-BLENDER = r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
 LABELS_SCRIPT = Path(__file__).with_name("blender_ui_labels.py")
 
 UiLabels = Mapping[str, Mapping[str, Mapping]]  # 영어 → 문맥 → {"count": 쓰는 곳 수, "where": 쓰는 곳 몇 개}
@@ -135,7 +134,7 @@ def main(argv: list[str]) -> int:
         return 1
     labels = data / "menu_names" / "ui_labels.json"
     if not labels.exists():
-        dump_labels(labels, os.environ.get("BLENDER", BLENDER))
+        dump_labels(labels, default_blender())
     ui = json.loads(labels.read_text(encoding="utf-8"))
     many, titles = scope_names(
         data / "chunks" / "manual_chunks.jsonl", data / "beginner_scope" / "scope.jsonl",

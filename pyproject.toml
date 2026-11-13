@@ -14,6 +14,9 @@ dependencies = [
     "rank-bm25>=0.2.2",
     "PySide6-Essentials>=6.12",
     "anthropic>=2.7",  # 질문 바꾸기·분야 고르기·답변(Claude Haiku 5.5, HISTORY [270])
+    # Mac에서 도우미 창이 Blender를 따라가게 앞 프로그램·창을 읽고 옮긴다(blender_tutor/macapi.py, HISTORY [312])
+    "pyobjc-framework-Cocoa>=13; sys_platform == 'darwin'",
+    "pyobjc-framework-Quartz>=13; sys_platform == 'darwin'",
 ]
 
 [project.optional-dependencies]
