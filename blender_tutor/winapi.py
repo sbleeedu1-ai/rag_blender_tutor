@@ -43,9 +43,10 @@ def put_on_top(hwnd: int) -> None:
     user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_KEEP)
 
 
-def put_behind(hwnd: int, front: int) -> None:
+def put_behind(hwnd: int, front: int, blender: int = 0) -> None:
     """맨 위를 풀고 front 창 바로 뒤로.
 
+    blender는 macapi와 짝을 맞춘 것(Windows는 쓰지 않는다).
     front가 늘 맨 위인 창(Alt+Tab 고르기 화면 등)이면 맨 위만 푼다. 그런 창 바로 뒤에 놓으면 Windows가 도로 맨 위 창으로 만든다.
     """
     user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_KEEP)
@@ -61,6 +62,29 @@ def bring_forward(hwnd: int) -> bool:
 def native_window(win_id: int) -> int:
     """Qt 창의 winId를 창 번호로(Windows는 winId가 곧 창 번호, macapi와 짝을 맞춘 것)."""
     return win_id
+
+
+def lost_top(hwnd: int) -> bool:
+    """macapi와 짝을 맞춘 것. Windows는 초점을 잃어도 맨 위가 풀리지 않는다."""
+    return False
+
+
+def elsewhere(blenders, hwnd: int, shown: bool) -> bool:
+    """macapi와 짝을 맞춘 것(다른 데스크톱 다루기는 Mac만, HISTORY [312])."""
+    return False
+
+
+def same_space(hwnd: int, front: int) -> bool:
+    """macapi와 짝을 맞춘 것(데스크톱 구별은 Mac만). 늘 같은 곳으로 본다."""
+    return True
+
+
+def watch_activation(callback) -> None:
+    """macapi와 짝을 맞춘 것. Windows는 0.1초마다 보는 것으로 충분했다."""
+
+
+def watch_clicks(on_click) -> None:
+    """macapi와 짝을 맞춘 것. Windows는 0.1초마다 보는 것으로 충분했다."""
 
 
 def hide_from_dock() -> None:

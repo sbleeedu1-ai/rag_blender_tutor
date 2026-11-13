@@ -95,11 +95,13 @@ class HelperWindow(QWidget):
     answered = Signal(bool)  # 물음에 [네](True)/[아니요](False)
 
     def __init__(self):
-        super().__init__(None, Qt.FramelessWindowHint | Qt.Tool)  # Tool: 작업 표시줄·Alt+Tab에 나오지 않음
+        # Windows는 Tool: 작업 표시줄·Alt+Tab에 나오지 않음. Mac은 보통 창: Qt의 Tool 창은 초점을 잃을 때마다 맨 위를 풀어
+        # Blender를 누르거나 Esc를 하면 창이 0.2초 뒤로 갔다 오며 깜빡였다(2026-11-13 실측, HISTORY [312]). Dock·Cmd+Tab에서
+        # 빼는 일은 Mac에서 macapi.hide_from_dock이 한다
+        kind = Qt.Window if sys.platform == "darwin" else Qt.Tool
+        super().__init__(None, Qt.FramelessWindowHint | kind)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)  # Blender를 따라 보일 때 초점을 빼앗지 않는다
-        # Mac은 Tool 창을 프로그램이 뒤로 가면 숨긴다. Blender가 앞일 때도 보이게 늘 보이는 Tool 창으로(HISTORY [312])
-        self.setAttribute(Qt.WA_MacAlwaysShowToolWindow)
         self.setMouseTracking(True)
         self.setMinimumSize(MIN_WIDTH, MIN_HEIGHT)
         self.setGeometry(_home())

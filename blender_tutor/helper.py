@@ -46,6 +46,7 @@ WARM_UP_ENV = "BLENDER_TUTOR_WARM_UP"  # 1이면 엔진을 만든 뒤 예열한�
 REASONING_ENV = "BLENDER_TUTOR_REASONING"  # 답변 모델의 생각 수준(none·low·medium). 없으면 명세 기본 none(티켓 33 실측용)
 
 FOLLOW_EVERY_MS = 100  # Blender를 따라 창 자리를 다시 보는 간격
+ACTIVATION_SETTLE_MS = 120  # Mac: 앞 앱이 바뀐 뒤 그 앱의 창이 맨 위로 올라올 때까지 기다렸다 자리를 다시 맞추는 시간
 # 작업 상태 흐름을 늘 기록한다(검수 동안 쓰려고, 2026-10-26 사용자 결정). 코드 동결 전에 False로 바꾼다(티켓 37)
 RECORD_STREAM = True
 NO_DATA = "설명서 자료(data/)가 없어 답할 수 없어요. HANDOFF.md의 'data/ 다시 만들기'를 봐 주세요."
@@ -96,6 +97,10 @@ class Helper:
         self._show_progress()
         self._timer = QTimer(interval=FOLLOW_EVERY_MS, timeout=self._follow)
         self._timer.start()
+        self._activation = screen_api.watch_activation(self._on_activation)  # Mac: 앞 앱이 바뀌면 0.1초를 기다리지 않고 바로
+        self._clicks = screen_api.watch_clicks(self._on_click)  # Mac: 누르는 순간 먼저(권한이 없으면 None)
+        if self._clicks is None and sys.platform == "darwin":
+            log.info("입력 모니터링 권한이 없어 누르는 순간 옮기기를 쓰지 않음(앞 앱 알림으로만 옮김)")
         threading.Thread(target=self._prepare_engine, daemon=True).start()
 
     def on_message(self, message: Message) -> None:
@@ -205,6 +210,31 @@ class Helper:
         if window:
             screen_api.bring_forward(window)
 
+    def _on_activation(self) -> None:
+        """Mac: 앞 앱이 바뀐 즉시 옮기고(새 앞 앱을 덮지 않게), 그 앱의 창이 맨 위로 올라간 뒤 자리를 한 번 더 맞춘다.
+        알림이 오는 순간에는 새 앞 앱의 창이 아직 아래에 있어, 그 창 '바로 뒤'에 놓으면 Blender 뒤까지 내려가 사라졌다
+        (2026-11-13 실측: Mail을 누르자 차례가 Mail, Blender, 도우미, HISTORY [312])."""
+        self._follow()
+        QTimer.singleShot(ACTIVATION_SETTLE_MS, self._follow_again)
+
+    def _on_click(self, window: int, pid: int) -> None:
+        """Mac: 마우스를 누른 순간. 누른 창이 Blender면 바로 맨 위로, 같은 데스크톱의 다른 프로그램이면 바로 Blender 위로 내린다.
+        도우미 자신·바탕·숨김·내린 상태는 따라가기(_follow)가 정한 대로 둔다."""
+        blenders = self._receiver.blenders()
+        if pid == self._own_pid or not self.window.isVisible() or self.window.put_away:
+            return
+        hwnd = screen_api.native_window(int(self.window.winId()))
+        if pid in blenders.values():
+            screen_api.put_on_top(hwnd)
+            self._moved = (Place.TOP, window)
+        elif screen_api.same_space(hwnd, window):
+            screen_api.put_behind(hwnd, window, self._front.window(blenders) or 0)
+            self._moved = (Place.BEHIND, window)
+
+    def _follow_again(self) -> None:
+        self._moved = None  # 자리가 같아도 다시 옮긴다
+        self._follow()
+
     # ---- Blender 따라가기(0.1초마다)
     def _follow(self) -> None:
         blenders = self._receiver.blenders()
@@ -212,13 +242,18 @@ class Helper:
         self._front.saw_foreground(front_pid, blenders)
         if self._front.window(blenders) != self._progress_of:  # 다른 Blender로 옮겨 갔거나 닫혔다
             self._show_progress()
+        hwnd = screen_api.native_window(int(self.window.winId()))
+        if screen_api.elsewhere(blenders, hwnd, self.window.isVisible()):  # Mac: 다른 데스크톱을 보는 중이면 그대로
+            return
         shown = screen_api.any_shown(blenders)
         self._tray.blender_shown(shown)
         screen = Screen(front_pid, taskbar, frozenset(blenders.values()), shown)
         where = place(screen, self._own_pid, self.window.put_away)
-        if not needs_move(where, front_hwnd, self._moved):
+        # Mac은 도우미가 초점을 잃으면 맨 위가 풀려서, 자리가 그대로 맨 위여도 실제로 내려왔으면 다시 올린다
+        if not needs_move(where, front_hwnd, self._moved) and not (where == Place.TOP and screen_api.lost_top(hwnd)):
             return
-        hwnd = screen_api.native_window(int(self.window.winId()))
+        if where == Place.BEHIND and not screen_api.same_space(hwnd, front_hwnd):  # Mac: 데스크톱을 옮기는 도중이면 그대로
+            return
         if where == Place.HIDDEN:
             self.window.hide()
         else:
@@ -226,7 +261,7 @@ class Helper:
             if where == Place.TOP:
                 screen_api.put_on_top(hwnd)
             else:
-                screen_api.put_behind(hwnd, front_hwnd)
+                screen_api.put_behind(hwnd, front_hwnd, self._front.window(blenders) or 0)
         self._moved = (where, front_hwnd)
 
 
