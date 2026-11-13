@@ -2,7 +2,7 @@
 name: answer-grader
 description: 도우미 답을 채점 기준에 따라 독립적으로 채점한다. 답 시험 결과(답.jsonl)의 맞음·부분·틀림 판정, 판 사이 비교 채점, 다른 채점의 재판정에 쓴다.
 model: sonnet
-effort: high
+effort: medium
 tools: Read, Grep, Glob, Bash, Write
 ---
 
