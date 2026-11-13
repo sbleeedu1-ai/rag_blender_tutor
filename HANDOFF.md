@@ -1,6 +1,6 @@
 # 인수인계
 
-마지막 갱신: 2026-11-13 오후 · Claude Code(Opus 5.5) · 집 Mac(`/Volumes/mac_ssd/proj/rag_blender_tutor`) · PR #43 병합 전에 씀
+마지막 갱신: 2026-11-13 오후(PR #46 병합 뒤) · Claude Code(Opus 5.5) · 집 Mac(`/Volumes/mac_ssd/proj/rag_blender_tutor`) · PR #43 병합 전에 씀
 
 ## 11-13 상태 (답 채점 끝)
 
@@ -8,12 +8,11 @@
 - 사용자 범위: "채점까지만 해", 판정은 "advisor에게 판단을 맡겨". 제품 코드는 바꾸지 않았다.
 - 실행 뒤 독립 검토(Sonnet) 끝, 판정 그대로, 처리 표는 `docs/experiment.md` 맨 끝. 눈여겨볼 것: D 전부가 `고른 분야`가 두 판에서 달라진 19문항에서 나왔다(나머지 35문항 D 0, 결과 본 뒤 설명).
 
-## 11-13 오후: Mac에서 도우미·애드온 돌게 하기 (진행 중, 다른 브랜치)
+## 11-13 오후: Mac에서 도우미·애드온 돌게 하기 (끝, PR #46 병합)
 
-- 브랜치 `feat/mac-support`, [PR #46](https://github.com/sbleeedu1-ai/rag_blender_tutor/pull/46) 열림·미병합. 기록은 그 브랜치 HISTORY [312]·[313], 티켓 47(Windows 같은 깜빡임, needs-triage).
-- 된 것: Mac 창 따라가기(`blender_tutor/macapi.py`), 애드온 창 번호·켜기, 설치 폴더, 데스크톱 전환 처리, 도우미를 서명한 파이썬 복사본 앱 묶음(`BlenderTutorHelper.app`, 애드온 폴더 안)으로 감싸 `open`으로 켬 → 입력 모니터링 권한이 도우미에만 잡힘. pytest 730·애드온 자체 시험 통과. 도우미 권한: 이동식 볼륨·입력 모니터링 허용, 로컬 네트워크는 꺼도 질문·답 됨(사용자 확인, 왜 물었는지 미확인).
-- 깜빡임(다시 생겼던 것): 해결, `feat/mac-support` HISTORY [314]. 원인은 권한이 아니라 경주였다(엿듣기 신호가 10-40ms 늦음). 누름을 붙잡고(손쉬운 사용 권한) 도우미가 실제로 올라갈 때까지 기다리게 고침. 사용자 "와 이제 진짜 된듯?". 남은 결정: 처음 쓰는 사람에게 손쉬운 사용 권한을 물을지(지금은 묻지 않음, 사용자가 직접 더함).
-- 주의: 새 앱 묶음은 처음 켤 때 Mac이 권한 창(이동식 볼륨·로컬 네트워크·입력 모니터링)을 띄우고, 답하기 전엔 도우미가 멈춰 자체 시험이 10초 제한으로 실패한다. 사용자의 '입력 모니터링' 목록에 python3.13 줄(끄고 지우라고 권함)이 남았을 수 있다.
+- [PR #46](https://github.com/sbleeedu1-ai/rag_blender_tutor/pull/46) main에 병합(cab5ba8), `feat/mac-support`는 로컬·원격 지움, 이 브랜치에 main을 당겨옴. 기록 HISTORY [312]-[316], 티켓 47(Windows 같은 깜빡임)·48(README에 권한과 보내는 자료 설명), 둘 다 needs-triage.
+- 지금 Mac 동작: 창 동작은 ADR-0001 그대로. 도우미는 앱 묶음 `BlenderTutorHelper.app`(애드온 폴더 안)으로 `open`해 켜서 권한이 도우미에만 잡힌다. 손쉬운 사용 권한을 처음 한 번만 묻고(표시 파일 `~/Library/Application Support/blender_tutor/accessibility_asked`), 있으면 누름을 붙잡아 Blender로 돌아올 때 깜빡이지 않는다. 입력 모니터링·로컬 네트워크는 묻지 않는다. 프로젝트가 바깥 SSD라 '제거 가능한 볼륨'은 허용해야 도우미가 켜진다.
+- 검증: Mac pytest 730, Windows CI 통과(d146408), 사용자 눈 확인(깜빡임 0/14, 권한 창). 강의실 Windows PC에서는 다시 확인하지 않음(receiver 서버 바꿈은 Windows에도 감).
 
 ## 다음 할 일
 
