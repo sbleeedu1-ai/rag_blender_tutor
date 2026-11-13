@@ -129,7 +129,7 @@
 | 개발 도구 | `blender_tutor/data_manifest.py` | Git 밖 `data/`·`results/`를 다른 PC·드라이브와 견주는 목록 만들기·대조. 크기와 시각만 보고 내용을 읽지 않으며, 홀드아웃은 이름 없이 수·크기만 적는다 | 35 |
 | 만드는 사람 | `blender_tutor/course_check.py` | 연습 과정 파일 검사. 설명서 자료와 맞댈 때 청크 파일은 답 엔진과 같은 `manual_chunks.load_chunks`로 읽는다 | 15, 24, 31 |
 | 만드는 사람 | `courses/*.yaml` | 연습 과정(검 `sword.yaml`, 방패 `shield.yaml`, 공통 준비 `_common.yaml`). 파일 하나를 더하면 코드를 고치지 않고 연습 과정이 늘어난다(티켓 36에서 확인). 화면에 보이는 메뉴·버튼 이름은 `[[Edit > Preferences]]`처럼 감싸 쓴다(바뀐 글은 늘 영어 이름으로 끝나 조사는 영어 이름에 맞춘다. 한국어 이름에 "를"이 든 것(모디파이어를 추가)은 뒤에 "~ 칸을"·"~ 순서로"처럼 이름씨를 넣어 조사가 겹치지 않게). 검은 티켓 32에서 사용자가 따라 하며 고침. 방패도 티켓 36에서 사용자가 두 번 따라 하며 고침. 안내의 숫자는 참고값이고, 창은 안내 말을 문장마다 줄을 바꿔 보이며 파일의 빈 줄(큰따옴표 글 속 `\n\n`)은 문단으로 남김 | 16, 32, 36 |
-| 설치 | `blender_tutor/install_addon.py` | 애드온을 Blender 애드온 폴더(Windows APPDATA, Mac `~/Library/Application Support`)에 복사하고 `config.json`(도우미 켜는 법·비밀 글자)을 적음 | 25, HISTORY [312] |
+| 설치 | `blender_tutor/install_addon.py` | 애드온을 Blender 애드온 폴더(Windows APPDATA, Mac `~/Library/Application Support`)에 복사하고 `config.json`(도우미 켜는 법·비밀 글자)을 적음. Mac은 도우미를 감싼 앱 묶음 `BlenderTutorHelper.app`을 애드온 폴더 안에 만들고 `open`으로 켜게 적는다(입력 모니터링 권한이 Blender가 아니라 도우미에 잡히게, 비밀 글자는 `--token-file`로) | 25, HISTORY [312]·[313] |
 | 공통 | `blender_tutor/paths.py` | 프로젝트 폴더 위치(`PROJECT`), 연습 과정 폴더, 메뉴 이름 표 3개(`MENU_ALIASES`·`MENU_CHOICES`·`MENU_TITLES`, `menu_tables/`), 분야 표 2개(`FIELDS`·`BUNDLES`, `state_tables/`), 진행 기록 폴더 고르기(설정 폴더에 쓸 수 없으면 사용자 폴더, 설정 폴더는 `settings_base`: Windows APPDATA, Mac Application Support), 자체 시험·메뉴 검수가 띄울 Blender 위치(`default_blender`: 환경 변수 `BLENDER` → 운영체제 기본 자리). 함께 쓰는 경로가 늘면 여기에 | 26 뒤, 27, HISTORY [312] |
 | 시험 | `tests/` | 기본 테스트(API 키·Blender 없이) | 각 티켓 |
 | 시험 | `addon/selftest.py` | Blender를 화면 없이 띄워 애드온을 확인(기본 테스트 밖) | 25 |
