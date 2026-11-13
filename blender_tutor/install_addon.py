@@ -13,6 +13,7 @@ import os
 import plistlib
 import secrets
 import shutil
+import subprocess
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -34,20 +35,23 @@ def default_addons_dir(platform: str = sys.platform, environ: Mapping[str, str] 
 MAC_APP = "BlenderTutorHelper.app"  # Mac: 도우미를 감싼 앱 묶음(애드온 폴더 안)
 
 
-def install(addons_dir: Path, python: Path, platform: str = sys.platform) -> Path:
+def install(addons_dir: Path, python: Path, platform: str = sys.platform, sign: bool = True) -> Path:
     """애드온을 addons_dir에 복사(덮어쓰기)하고 config.json을 적는다. 설치한 폴더를 돌려준다.
 
     다시 설치해도 비밀 글자는 그대로 둔다. 이미 켜진 도우미 프로그램이 지난 비밀 글자로 받고 있을 수 있어서다.
-    Mac은 도우미를 자기 이름의 앱 묶음으로 감싸 open으로 켠다(mac_app).
+    Mac은 도우미를 자기 이름의 앱 묶음으로 감싸 open으로 켠다(mac_app, sign은 앱 묶음에 서명할지: 시험은 끈다).
     """
     target = addons_dir / ADDON_NAME
     config_path = target / "config.json"
     token = json.loads(config_path.read_text(encoding="utf-8"))["token"] if config_path.exists() else secrets.token_hex(32)
-    shutil.copytree(SOURCE, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", "config.json"))
+    shutil.copytree(SOURCE, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", "config.json", MAC_APP))
     command = [str(python), "-m", "blender_tutor.helper"]
     if platform == "darwin":
-        app = mac_app(target / MAC_APP, python)
-        command = ["open", "-n", "-g", "-a", str(app), "--args", "--token-file", str(config_path)]
+        app, packages = mac_app(target / MAC_APP, python, sign)
+        # 앱의 실행 파일은 맨 파이썬이라 가상 환경 꾸러미(.pth까지)를 덧붙이고 도우미를 __main__으로 돌린다
+        start = (f"import site, sys, runpy; site.addsitedir({str(packages)!r}); sys.path.insert(0, {str(PROJECT)!r}); "
+                 "sys.argv = ['blender_tutor.helper', *sys.argv[1:]]; runpy.run_module('blender_tutor.helper', run_name='__main__')")
+        command = ["open", "-n", "-g", "-a", str(app), "--args", "-c", start, "--token-file", str(config_path)]
     config = {
         "command": command,
         "cwd": str(PROJECT),
@@ -58,15 +62,21 @@ def install(addons_dir: Path, python: Path, platform: str = sys.platform) -> Pat
     return target
 
 
-def mac_app(app: Path, python: Path) -> Path:
-    """Mac: 도우미를 켜는 작은 앱 묶음을 만든다(다시 만들면 덮어씀).
+def mac_app(app: Path, python: Path, sign: bool) -> tuple[Path, Path]:
+    """Mac: 도우미를 켜는 작은 앱 묶음을 새로 만든다. (앱, 가상 환경 꾸러미 폴더)를 돌려준다.
 
-    Blender가 도우미를 직접 켜면 Mac은 Blender를 책임자로 보아 입력 모니터링 권한이 'Blender' 전체에 잡혔다
-    (다른 애드온도 입력을 엿들을 수 있게 됨, HISTORY [313]). 이 앱을 open으로 켜면 Mac이 켠 앱이 되어 권한이
-    'Blender 첫걸음 도우미'에만 잡힌다. LSUIElement: Dock·Cmd+Tab에 나오지 않는다(메뉴 막대 아이콘만).
+    Blender가 도우미를 직접 켜면 Mac은 Blender를 책임자로 보아 입력 모니터링 권한이 'Blender' 전체에 잡혔고, 앱 묶음의
+    셸 스크립트로 파이썬을 켜면 'python3.13' 실행 파일에 잡혔다(그 파이썬으로 도는 모든 스크립트, HISTORY [313]).
+    그래서 실행 파일 자리에 파이썬 복사본을 두고 서명해, Mac이 이 앱('Blender 첫걸음 도우미')을 주인으로 보게 한다.
+    파이썬은 자기 표준 라이브러리를 실행 파일 자리로 찾으므로 원래 자리(PYTHONHOME)를 알려 준다.
+    LSUIElement: Dock·Cmd+Tab에 나오지 않는다(메뉴 막대 아이콘만).
     """
+    real = Path(os.path.realpath(python))  # 가상 환경 python → Blender에 딸린 python3.13
+    packages = python.parent.parent / "lib" / real.name / "site-packages"
+    shutil.rmtree(app, ignore_errors=True)  # 지난 판의 실행 파일·서명이 섞이지 않게
     executable = app / "Contents" / "MacOS" / "helper"
-    executable.parent.mkdir(parents=True, exist_ok=True)
+    executable.parent.mkdir(parents=True)
+    shutil.copy2(real, executable)
     info = {
         "CFBundleIdentifier": "local.rag-blender-tutor.helper",
         "CFBundleName": "Blender Tutor Helper",
@@ -75,11 +85,12 @@ def mac_app(app: Path, python: Path) -> Path:
         "CFBundlePackageType": "APPL",
         "CFBundleVersion": "0.1.0",
         "LSUIElement": True,
+        "LSEnvironment": {"PYTHONHOME": str(real.parent.parent)},
     }
     (app / "Contents" / "Info.plist").write_bytes(plistlib.dumps(info))
-    executable.write_text(f'#!/bin/sh\ncd "{PROJECT}"\nexec "{python}" -m blender_tutor.helper "$@"\n', encoding="utf-8")
-    executable.chmod(0o755)
-    return app
+    if sign:  # 인증서 없는 이 PC용 서명. 앱 이름·식별자로 권한을 묻게 한다
+        subprocess.run(["codesign", "--force", "--sign", "-", str(app)], check=True, capture_output=True)
+    return app, packages
 
 
 def main() -> int:
