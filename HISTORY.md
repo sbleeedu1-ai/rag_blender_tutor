@@ -2735,3 +2735,15 @@
 - 사용자: X에서 하위 에이전트 모델·노력치 지정을 봤다며 공식 가이드 여부를 물음 → Claude가 공식 문서(code.claude.com/docs/en/sub-agents, 앞 100,000자 읽음)에서 `.claude/agents/*.md` 머리의 `model`·`effort` 칸을 확인(공식 문서). 맡길 일로 테스트 실행·결과 집계와 넓은 찾기·독립 채점을 권하고, 코드 고치기는 맥락이 필요해 메인 세션이 하자고 함. 사용자 "그럼 그걸 토대로 위에 너가 말한거처럼 공식 가이드에 맞게 만들어보자 3개 만들면 되겠네?".
 - 만든 것: `test-runner`(haiku·low, Bash·Read, 유료 명령 안 함), `record-reader`(haiku·medium, 읽기만, 보고 첫 줄에 읽은 범위·마지막 항목, holdout 안 엶), `answer-grader`(sonnet·high, `docs/agents/grading.md`를 처음부터 끝까지 읽고 채점, HANDOFF·HISTORY·experiment는 지시가 허락할 때만, 지정 폴더에만 씀). 채점 기준 파일이 main에 없어 PR #43 브랜치에 둠.
 - 검증: 세 파일 머리 설정이 YAML로 읽힘(실행으로 확인). 실제로 불러 돌리는 확인은 하위 에이전트 금지([279])를 풀지 사용자 판단 뒤. 새 정의가 이 세션에서 바로 잡히는지는 미확인.
+
+### [307] 2026-11-13 · 강의실 Windows와 집 Mac 둘 다에서 저장소를 쓰기 위해, AGENTS.md에 두 PC의 경로 짝과 Mac 준비 명령을 적고 Mac에서 깨지는 곳을 모은다
+
+- 번호: `exp/35-dev-bundle`(PR #43 병합 전)이 [306]까지 써서 겹치지 않게 [307]로 둔다. 이 브랜치는 main에서 갈라졌다.
+- 사용자: 집 Mac 세션에서 "생각해보니 집 pc 용으로 쓰긴해야하네" → 윈도우 경로는 남기고 Mac 경로를 함께 적기로 함(그 세션이 이 일을 따로 띄움).
+- 훅(실행으로 확인): 훅 명령은 `.venv/Scripts/python.exe`([182])인데 Mac에서도 돌고 있었다. 11-13 00:09에 `.venv`를 만들며 누군가 `.venv/Scripts/python.exe → ../bin/python` 바로가기를 둔 덕이고, 기록은 없었다. 바로가기가 없는 곳(이 worktree)에서는 같은 명령이 exit 127로 실패한다. 훅 스크립트 8개를 `settings.json`의 명령 글자 그대로 bash로 불러 모두 기대대로 답함(브랜치 지우기 거부, `rm` 확인 요청, 잘라 읽기 거부, 없는 번호 [9999] 거부, 압축 전 기록 확인, 세션 끝·시작 알림, 압축 뒤 원문). 실제 세션에서는 `git branch -d`가 훅에 막히는 것을 봄. 압축·세션 시작·끝은 손으로만 불러 봄.
+- 결정(Claude): `settings.json`은 그대로 두고 바로가기를 Mac 준비 명령에 넣는다. 명령을 OS마다 고르게 바꾸는 안은 강의실 PC에서 시험할 수 없고, 틀리면 실패하면 막는 설정 탓에 강의실 터미널이 모두 막힌다([182]과 같은 사고).
+- Mac 준비 명령: `python`이 없고 시스템 `python3`는 3.9(`requires-python >=3.12`)라 Blender 안 파이썬 3.13으로 만든다. 스크래치패드에서 venv 만들기·바로가기·`Blender --version`(5.2.4)까지 실행으로 확인, `pip install`은 안 돌림.
+- pytest(Mac, 이 브랜치 코드): 717 passed, 3 skipped(`data/` 자료 없음).
+- Mac에서 깨지는 곳(실행으로 확인): 도우미 `import blender_tutor.helper`가 `ctypes.WinDLL` 없음으로 실패(`winapi.py`), `receiver.process_started`도 같은 Windows 함수. 애드온 `Sender.launch`의 `subprocess.CREATE_NO_WINDOW`·`CREATE_NEW_PROCESS_GROUP`가 Mac에 없음, `_own_window`·도우미 부르기의 `ctypes.windll`. `install_addon`의 기본 폴더가 `APPDATA` 없음으로 `KeyError`(`--addons-dir`로 피함). `settings_selftest.py`는 Blender 옆 `5.2/` 폴더에서 템플릿을 찾아 Mac의 `.app` 모양과 다름(추측, 안 돌림). `selftest.py`·`menu_review.py`의 Blender 기본 위치는 환경 변수 `BLENDER`로 바꿀 수 있음. 진행 기록 폴더(`paths.py`)는 Mac에서 사용자 폴더로 가서 돈다. 이 곳들은 [44]에서 "이번엔 Windows 전용, 바꿀 곳을 모아 적음"으로 정했고 애드온 머리글에 목록이 있다. 사용자가 "지금은 안 고침"을 골라 그대로 둔다(Mac에서는 도우미·애드온이 돌지 않음).
+- `.DS_Store`(Mac이 폴더마다 만드는 숨김 파일): 사용자 "넣어"로 `.gitignore`에 더함.
+- 남은 것: worktree 세션에서는 훅이 원래 저장소 폴더의 훅·HISTORY를 보는 것으로 보인다(이 worktree에는 `.venv`가 없는데 훅이 돎, 추측). 그래서 worktree에서 고친 HISTORY는 번호 확인 훅이 보지 않는다(Mac만의 일은 아님).
