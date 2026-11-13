@@ -1,6 +1,6 @@
 # 인수인계
 
-마지막 갱신: 2026-11-13 저녁(전체 점검과 그 뒤 논의까지) · Claude Code(Fable 5.2) · 집 Mac(`/Volumes/mac_ssd/proj/rag_blender_tutor`) · PR #43 병합 전에 씀
+마지막 갱신: 2026-11-13 밤(전체 점검, 그 뒤 논의, luna·지금 답 채점까지) · Claude Code(Fable 5.2) · 집 Mac(`/Volumes/mac_ssd/proj/rag_blender_tutor`) · PR #43 병합 전에 씀
 
 ## 11-13 저녁: 프로젝트 전체 점검 (끝, 기록만)
 
@@ -9,7 +9,8 @@
 - 제품 코드·테스트는 바꾸지 않았다. 유료 호출 0.
 - 점검 뒤 사용자가 정한 것([318], 주고받은 전체는 같은 폴더 `의견_반박_합의.md`): 우선순위는 ① 채점하는 AI 고정 ② luna 답을 지금 기준으로 채점해 "고치기 전" 값으로 두기 ③ 보고서 7절 차의 코드 지적 고치기 ④ 기록·문서 정리. 개발 PC는 이 Mac과 집 PC(Windows, 확인용)이고 강의실 PC 자료는 지웠다. 목표는 개발셋 54문항 중 50문항 맞음, 채점 기준은 엄격하게 유지, 채점 노력치는 medium.
 - **다음 세션의 초점(아래 "다음 할 일"보다 먼저)**: 채점하는 AI 고르기. 같은 30답을 Sonnet medium·Opus medium·Codex가 따로 매기고, 갈린 답만 사용자가 판정하며(질문·답·설명서 대목·각 채점자 이유를 나란히 보임), 사용자가 5개쯤 답대로 Blender에서 직접 따라 해 본다. 사용자 판정과 더 잘 맞는 쪽으로 고정한다. 30답을 어디서 뽑을지는 정하지 않았다.
-- **사용자가 정해야 할 것**: Claude가 권한 순서(채점하는 AI 고르기 → luna 답과 지금 답을 섞어 채점 → 기록·문서 정리 → 답을 안 바꾸는 코드 수정 → 답을 바꾸는 수정을 하나씩)에 사용자 답이 아직 없다. 2차 문항 50개, 천장 측정, 결과 기록 2GB를 눈으로 읽을지도 미정이다. 아래 "다음 할 일"은 점검 전에 적은 목록이라 참고로만 본다.
+- **채점은 끝났고 풀이는 안 열었다([319], `docs/experiment.md` 맨 끝 절)**: luna 답 54개와 지금 답 54개를 이름을 가리고 섞은 108답을 Codex(1차 묶음)와 Sonnet 5.5 medium(2차 묶음)이 따로 매겼다. 묶음 `results/20261113/162119_luna_지금_채점묶음/`, 풀이 `results/20261113/162119_luna_지금_풀이/풀이.json`. **풀이를 열거나 집계하기 전에** 실험 기록의 빈칸 넷(판정 기준에 대한 사용자 확인, 측정 점검, 독립 검토, 목표 검토)을 채운다. `results/20261113/094504_답시험_채점/풀이.json`도 열지 않는다(답 이름이 같아 이번 묶음이 풀린다).
+- **사용자가 정해야 할 것**: 위 채점의 판정 기준(Claude 제안은 실험 기록에 있음). Claude가 권한 순서(채점하는 AI 고르기 → luna 답과 지금 답을 섞어 채점 → 기록·문서 정리 → 답을 안 바꾸는 코드 수정 → 답을 바꾸는 수정을 하나씩)에 사용자 답이 아직 없다. 2차 문항 50개, 천장 측정, 결과 기록 2GB를 눈으로 읽을지도 미정이다. 아래 "다음 할 일"은 점검 전에 적은 목록이라 참고로만 본다.
 - 안 한 것: 드라이브와 이 Mac의 결과 폴더 대조(기록이 인용한 약 62개 폴더와 11-07·11-08 로그가 이 Mac에 없다. 어느 PC에 있었는지는 확인 못 함). 보고서의 "강의실 PC에만 있는" 문구 고치기. 사용자가 청한 직접 읽기(테스트 42파일, 조사 자료, 옛 실험 기록, HISTORY 전문, 커밋 diff. `.env`와 마지막 확인용 자료는 열지 않는다).
 - 점검에서 나온 것 중 모르면 실수할 것: 답 시험(`evaluate.py`)이 돌리기 전에 보여 주는 어림 비용은 지금 기본값에서 실제 답변 모델 요금의 약 1/3이다(54질문 $0.035 대 $0.096-0.098). 승인받을 때는 지난 `설정.json`의 실제 요금으로 어림한다. 12판 A판(설정 값 없음)의 `설정.json`에도 설정 칸은 모두 true로 적혀 있어, 칸만 보고 판을 가르면 틀린다.
 
@@ -61,7 +62,7 @@
 
 ## 참고
 
-- [실험 기록](docs/experiment.md)(맨 끝 2-a·2-b·본시험 절) · [결정 이력](HISTORY.md) [290]-[318] · [채점 기준](docs/agents/grading.md) · [검토 처리](docs/agents/review.md)
+- [실험 기록](docs/experiment.md)(맨 끝 2-a·2-b·본시험 절) · [결정 이력](HISTORY.md) [290]-[319] · [채점 기준](docs/agents/grading.md) · [검토 처리](docs/agents/review.md)
 - [티켓35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md) · [명세](.scratch/mvp-roundtrip/spec.md) · [구조](STRUCTURE.md)
 - 공식 가이드: [Prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) · [Prompting Claude Haiku 5.5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-haiku-5-5)
 
