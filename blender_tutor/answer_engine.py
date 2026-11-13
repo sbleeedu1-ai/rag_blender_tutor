@@ -328,7 +328,7 @@ class AnswerEngine:
         sent = list(dict.fromkeys(preview + results))
         similar = self._similar_courses(vectors[-1]) if recommend else []
         messages = _messages(question, state, recent, self._widened(sent, preview), similar, step, lines)
-        marks = _MenuMarks(self._menu_names if state.korean_screen else None)
+        marks = _MenuMarks(self._menu_names if state.korean_screen else None, question)
         try:
             for text in model.stream(messages, self._settings.timeout):
                 if text := marks.feed(text):
@@ -520,11 +520,12 @@ class _MenuMarks:
     """답 글 속 [[Add > Mesh]] 표시를 화면 글로 바꾼다(티켓 23). 표시가 조각 사이에 갈려 와도 닫힐 때까지 모아 둔다.
 
     names가 있으면(한국어 화면에 번역 켜짐) 단마다 "추가(Add)"처럼 한국어(영어), 영어로 보이는 단은 영어 그대로.
-    names가 없으면 표시만 떼고 영어 그대로.
+    names가 없으면 표시만 떼고 영어 그대로. question에 영어로 쓴 단은 영어(한국어)로(menu_names.screen_path).
     """
 
-    def __init__(self, names: MenuNames | None):
+    def __init__(self, names: MenuNames | None, question: str = ""):
         self._names = names
+        self._question = question
         self._held = ""  # 아직 내보내지 않은 글(열린 표시나, 표시의 시작일지 모르는 마지막 '[')
 
     def feed(self, text: str) -> str:
@@ -543,7 +544,7 @@ class _MenuMarks:
             elif end < 0:
                 break  # 닫힐 때까지 모은다
             else:
-                shown += [held[:start], screen_path(held[inner:end], self._names)]
+                shown += [held[:start], screen_path(held[inner:end], self._names, self._question)]
                 held = held[end + len(MARK_CLOSE) :]
         else:
             start = len(held) - 1 if held.endswith(MARK_OPEN[0]) else len(held)

@@ -580,15 +580,32 @@ SCREEN_NAMES = [
 ]  # fmt: skip
 
 
-def shown(pieces, state=KOREAN_SCREEN, choices=None) -> str:
+def shown(pieces, state=KOREAN_SCREEN, choices=None, question="메시 추가") -> str:
     """가짜 모델이 pieces를 낼 때 사용자가 보는 답 글(조각을 이어 붙인 것)."""
     names = MenuNames(SCREEN_NAMES, choices or {})
     engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
-    return "".join(event.text for event in engine.answer("메시 추가", state, []) if isinstance(event, Piece))
+    return "".join(event.text for event in engine.answer(question, state, []) if isinstance(event, Piece))
 
 
 def test_한국어_화면에_번역이_켜져_있으면_메뉴_이름을_한국어_괄호_영어로():
     assert shown(("[[Add > Mesh]]를 누르세요.",)) == "추가(Add) > 메시(Mesh)를 누르세요."
+
+
+@pytest.mark.parametrize(
+    "question, expected",
+    [
+        ("Add 메뉴가 어디예요?", "Add(추가) > 메시(Mesh)를 누르세요."),  # 질문이 영어로 쓴 이름만 영어(한국어)
+        ("add > mesh 눌렀는데 안 보여요", "Add(추가) > Mesh(메시)를 누르세요."),  # 대소문자는 가리지 않는다
+        ("Addon 설치하고 메시 추가", "추가(Add) > 메시(Mesh)를 누르세요."),  # 더 긴 영어 낱말 속 글자는 아님
+    ],
+)
+def test_질문에_영어로_쓴_메뉴_이름은_영어_괄호_한국어로(question, expected):
+    assert shown(("[[Add > Mesh]]를 누르세요.",), question=question) == expected
+
+
+def test_질문에_영어_이름이_있어도_영어_화면이면_영어만():
+    english = replace(STATE, language="en_US", translate_interface=True)
+    assert shown(("[[Add > Mesh]]를 누르세요.",), english, question="Add 메뉴가 어디예요?") == "Add > Mesh를 누르세요."
 
 
 @pytest.mark.parametrize(
