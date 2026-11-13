@@ -2500,4 +2500,5 @@
 - Mac 준비 명령: `python`이 없고 시스템 `python3`는 3.9(`requires-python >=3.12`)라 Blender 안 파이썬 3.13으로 만든다. 스크래치패드에서 venv 만들기·바로가기·`Blender --version`(5.2.4)까지 실행으로 확인, `pip install`은 안 돌림.
 - pytest(Mac, 이 브랜치 코드): 717 passed, 3 skipped(`data/` 자료 없음).
 - Mac에서 깨지는 곳(실행으로 확인): 도우미 `import blender_tutor.helper`가 `ctypes.WinDLL` 없음으로 실패(`winapi.py`), `receiver.process_started`도 같은 Windows 함수. 애드온 `Sender.launch`의 `subprocess.CREATE_NO_WINDOW`·`CREATE_NEW_PROCESS_GROUP`가 Mac에 없음, `_own_window`·도우미 부르기의 `ctypes.windll`. `install_addon`의 기본 폴더가 `APPDATA` 없음으로 `KeyError`(`--addons-dir`로 피함). `settings_selftest.py`는 Blender 옆 `5.2/` 폴더에서 템플릿을 찾아 Mac의 `.app` 모양과 다름(추측, 안 돌림). `selftest.py`·`menu_review.py`의 Blender 기본 위치는 환경 변수 `BLENDER`로 바꿀 수 있음. 진행 기록 폴더(`paths.py`)는 Mac에서 사용자 폴더로 가서 돈다. 이 곳들은 [44]에서 "이번엔 Windows 전용, 바꿀 곳을 모아 적음"으로 정했고 애드온 머리글에 목록이 있다. 사용자가 "지금은 안 고침"을 골라 그대로 둔다(Mac에서는 도우미·애드온이 돌지 않음).
+- `.DS_Store`(Mac이 폴더마다 만드는 숨김 파일): 사용자 "넣어"로 `.gitignore`에 더함.
 - 남은 것: worktree 세션에서는 훅이 원래 저장소 폴더의 훅·HISTORY를 보는 것으로 보인다(이 worktree에는 `.venv`가 없는데 훅이 돎, 추측). 그래서 worktree에서 고친 HISTORY는 번호 확인 훅이 보지 않는다(Mac만의 일은 아님).

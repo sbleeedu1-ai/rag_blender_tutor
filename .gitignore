@@ -20,3 +20,6 @@ __pycache__/
 
 # 실험 결과(웹 질문 원문 포함, 커밋하지 않음 — HISTORY [102])
 results/
+
+# Mac이 폴더마다 만드는 숨김 파일(HISTORY [307])
+.DS_Store
