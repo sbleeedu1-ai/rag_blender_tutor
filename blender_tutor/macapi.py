@@ -171,8 +171,8 @@ def watch_clicks(on_click) -> object | None:
     Mac은 누른 창을 먼저 올리고 앞 앱 알림은 그 뒤에 보내, 알림으로 움직이면 Blender를 누를 때 도우미가 0.1초 가려졌다
     (2026-11-13 실측, HISTORY [312]). '손쉬운 사용' 권한이 있으면 누름을 잠깐 붙잡아 Blender가 받기 전에 옮긴다. 없고
     '입력 모니터링' 권한만 있으면 엿듣기만 하는데, Blender를 누른 신호가 10-40ms 늦게 와 가끔 Blender가 먼저 올라온다
-    (같은 날 실측). 둘 다 없으면 입력 모니터링 허락을 처음 한 번 묻고 None을 돌려준다(그동안은 알림 방식만 쓴다).
-    돌려준 값을 붙잡아 두어야 이어진다.
+    (같은 날 실측). 손쉬운 사용 권한이 없으면 그 허락을 묻고, 입력 모니터링도 없으면 None을 돌려준다(그동안은 알림
+    방식만 쓴다. 권한 창을 둘 띄우지 않으려고 입력 모니터링은 묻지 않는다). 돌려준 값을 붙잡아 두어야 이어진다.
     """
     taps = []
 
@@ -192,14 +192,16 @@ def watch_clicks(on_click) -> object | None:
         return event
 
     mask = Quartz.CGEventMaskBit(Quartz.kCGEventLeftMouseDown)
-    tap = None
-    for option in (Quartz.kCGEventTapOptionDefault, Quartz.kCGEventTapOptionListenOnly):  # 붙잡기는 손쉬운 사용 권한이 있어야 만들어진다
-        if option == Quartz.kCGEventTapOptionListenOnly and not Quartz.CGPreflightListenEventAccess():
-            Quartz.CGRequestListenEventAccess()
+    tap = Quartz.CGEventTapCreate(  # 붙잡기는 손쉬운 사용 권한이 있어야 만들어진다
+        Quartz.kCGSessionEventTap, Quartz.kCGHeadInsertEventTap, Quartz.kCGEventTapOptionDefault, mask, heard, None
+    )
+    if tap is None:
+        _ask_accessibility()
+        if not Quartz.CGPreflightListenEventAccess():  # 이미 받아 둔 입력 모니터링이 있으면 그동안 엿듣기라도
             return None
-        tap = Quartz.CGEventTapCreate(Quartz.kCGSessionEventTap, Quartz.kCGHeadInsertEventTap, option, mask, heard, None)
-        if tap is not None:
-            break
+        tap = Quartz.CGEventTapCreate(
+            Quartz.kCGSessionEventTap, Quartz.kCGHeadInsertEventTap, Quartz.kCGEventTapOptionListenOnly, mask, heard, None
+        )
     if tap is None:
         return None
     taps.append(tap)
@@ -207,6 +209,16 @@ def watch_clicks(on_click) -> object | None:
     Quartz.CFRunLoopAddSource(Quartz.CFRunLoopGetMain(), source, Quartz.kCFRunLoopCommonModes)
     Quartz.CGEventTapEnable(tap, True)
     return tap, source, heard
+
+
+def _ask_accessibility() -> None:
+    """시스템 설정 '손쉬운 사용'에 이 앱을 켜 달라는 Mac 안내 창을 띄운다(pyobjc에 이 함수가 없어 ctypes로 부른다)."""
+    services = ctypes.CDLL("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices")
+    services.AXIsProcessTrustedWithOptions.restype = ctypes.c_bool
+    services.AXIsProcessTrustedWithOptions.argtypes = [ctypes.c_void_p]
+    prompt = objc.objc_object(c_void_p=ctypes.c_void_p.in_dll(services, "kAXTrustedCheckOptionPrompt").value)
+    options = AppKit.NSDictionary.dictionaryWithObject_forKey_(True, prompt)
+    services.AXIsProcessTrustedWithOptions(objc.pyobjc_id(options))
 
 
 def hide_from_dock() -> None:

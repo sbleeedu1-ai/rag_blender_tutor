@@ -103,7 +103,7 @@ class Helper:
         self._activation = screen_api.watch_activation(self._on_activation)  # Mac: 앞 앱이 바뀌면 0.1초를 기다리지 않고 바로
         self._clicks = screen_api.watch_clicks(self._on_click)  # Mac: 누르는 순간 먼저(권한이 없으면 None)
         if self._clicks is None and sys.platform == "darwin":
-            log.info("입력 모니터링 권한이 없어 누르는 순간 옮기기를 쓰지 않음(앞 앱 알림으로만 옮김)")
+            log.info("손쉬운 사용·입력 모니터링 권한이 없어 누르는 순간 옮기기를 쓰지 않음(앞 앱 알림으로만 옮김)")
         threading.Thread(target=self._prepare_engine, daemon=True).start()
 
     def on_message(self, message: Message) -> None:

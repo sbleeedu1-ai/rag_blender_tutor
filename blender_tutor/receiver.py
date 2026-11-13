@@ -15,6 +15,7 @@ import errno
 import json
 import logging
 import secrets
+import socketserver
 import sys
 import threading
 import time
@@ -24,6 +25,15 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from blender_tutor.setting_fields import SettingLines
 from blender_tutor.work_state import WorkState
+
+class _LocalServer(HTTPServer):
+    """내 PC 안(127.0.0.1)에서만 받는 HTTP 서버. 기본 HTTPServer는 켤 때 자기 주소의 이름을 네트워크에 물어(socket.getfqdn)
+    Mac이 '로컬 네트워크' 권한을 물었다(추측, HISTORY [314]). 그 이름은 쓰지 않으니 묻지 않는다."""
+
+    def server_bind(self) -> None:
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
 
 PORT = 8766  # 시제품(티켓 01)과 같은 번호. 설치 명령이 애드온 설정 파일에 함께 적는다
 TOKEN_ENV = "BLENDER_TUTOR_TOKEN"  # 애드온이 받는 쪽을 켤 때 비밀 글자를 넘기는 환경 변수
@@ -163,7 +173,7 @@ class Receiver:
         self._started: dict[int, object] = {}  # 프로세스 번호 → 처음 받았을 때 그 프로세스가 켜진 시각
         self._heard = False  # Blender가 한 번이라도 보냈나
         self._rejected = False  # 비밀 글자는 맞는데 모양이 틀린 봉투를 받은 적이 있나(설치 명령을 다시 돌리지 않은 옛 애드온)
-        self._server = HTTPServer(("127.0.0.1", port), self._handler())
+        self._server = _LocalServer(("127.0.0.1", port), self._handler())
         # 끌 때 기다리는 시간(기본 0.5초)을 줄인다
         self._thread = threading.Thread(target=self._server.serve_forever, args=(0.05,), daemon=True)
 
