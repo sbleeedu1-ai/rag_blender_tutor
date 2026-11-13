@@ -10,6 +10,7 @@
 """
 
 import html
+import sys
 
 from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPainterPath, QPen, QPixmap
@@ -30,7 +31,7 @@ EDGE = 8  # 가장자리에서 이 폭 안을 끌면 크기 조절
 CORNER = 24  # 모서리에서 이만큼 안쪽 네모를 끌면 대각선 조절(둥근 모서리의 투명한 곳은 클릭이 아래 창으로 가서 넓게 잡음)
 MOVE_BAND = 40  # 맨 위 이 높이 안을 끌면 창 옮기기
 PANEL_ALPHA = 235  # 판 진하기(0-255, 사용자 결정 HISTORY [18])
-FONT = "Malgun Gothic"
+FONT = "Apple SD Gothic Neo" if sys.platform == "darwin" else "Malgun Gothic"  # 운영체제 기본 한글 글꼴(HISTORY [312])
 THINKING = "생각 중…"
 COURSES_UNREADABLE = "연습 과정 파일을 읽지 못했어요. 질문은 그대로 할 수 있어요."  # 검 파일이 늘 있으니 빈 목록은 읽기 실패
 STEP_ROWS = 5  # '단계 ▼' 목록에 한 번에 보이는 줄 수(넘으면 스크롤, 사용자 결정)
@@ -94,7 +95,11 @@ class HelperWindow(QWidget):
     answered = Signal(bool)  # 물음에 [네](True)/[아니요](False)
 
     def __init__(self):
-        super().__init__(None, Qt.FramelessWindowHint | Qt.Tool)  # Tool: 작업 표시줄·Alt+Tab에 나오지 않음
+        # Windows는 Tool: 작업 표시줄·Alt+Tab에 나오지 않음. Mac은 보통 창: Qt의 Tool 창은 초점을 잃을 때마다 맨 위를 풀어
+        # Blender를 누르거나 Esc를 하면 창이 0.2초 뒤로 갔다 오며 깜빡였다(2026-11-13 실측, HISTORY [312]). Dock·Cmd+Tab에서
+        # 빼는 일은 Mac에서 macapi.hide_from_dock이 한다
+        kind = Qt.Window if sys.platform == "darwin" else Qt.Tool
+        super().__init__(None, Qt.FramelessWindowHint | kind)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)  # Blender를 따라 보일 때 초점을 빼앗지 않는다
         self.setMouseTracking(True)

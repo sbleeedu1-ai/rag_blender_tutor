@@ -205,3 +205,13 @@ def test_알린_설정_값이_한도_안에_안_오면_다시_청한다(receiver
     assert receiver.settings_for(1) is None and wants(receiver, 1) is False  # 한도 안: 다시 청하지 않음
     monkeypatch.setattr(module, "PENDING_LIMIT", 0.0)
     assert receiver.settings_for(1) is None and wants(receiver, 1) is True  # 한도 지남: 다시 청함
+
+
+def test_프로세스_켜진_시각은_켜진_동안_같고_없는_번호는_None():
+    import os
+
+    from blender_tutor.receiver import process_started
+
+    mine = process_started(os.getpid())
+    assert mine and mine == process_started(os.getpid())
+    assert process_started(2**22 + 12345) is None  # 쓰이지 않는 번호

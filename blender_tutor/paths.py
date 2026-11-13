@@ -1,6 +1,8 @@
 """이 프로젝트의 폴더 위치. 여러 파일이 함께 쓰는 경로는 여기 한 곳에 둔다."""
 
 import os
+import sys
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -19,7 +21,7 @@ def progress_records(app_data: Path | None, home: Path) -> Path:
 
     Windows 설정 폴더(APPDATA) 아래에 폴더를 만들고 써 볼 수 없으면(값이 없음, 관리되는 PC에서 쓰기가 막힘 등)
     사용자 폴더 아래로. 둘 다 안 되면 설정 폴더 쪽을 돌려주고, 기록은 진행 관리가 메모리에만 둔다.
-    맥을 붙일 때는 맥의 설정 폴더 자리(~/Library/Application Support)를 먼저 보게 바꾼다.
+    app_data는 운영체제의 설정 폴더(settings_base: Windows APPDATA, Mac ~/Library/Application Support).
     """
     places = [base / "blender_tutor" / "progress" for base in (app_data, home) if base is not None]
     for place in places:
@@ -34,7 +36,40 @@ def progress_records(app_data: Path | None, home: Path) -> Path:
     return places[0]
 
 
+def settings_base(platform: str, environ: Mapping[str, str], home: Path) -> Path | None:
+    """프로그램 설정을 두는 사용자 폴더. APPDATA가 있으면 그것(Windows 기본, 자체 시험이 임시 폴더로 바꿀 때 Mac도),
+    없으면 Mac은 ~/Library/Application Support, Windows는 None."""
+    if app_data := environ.get("APPDATA"):
+        return Path(app_data)
+    return home / "Library" / "Application Support" if platform == "darwin" else None
+
+
 def default_progress_records() -> Path:
     """이 PC의 진행 기록 폴더(도우미를 켤 때 한 번 고른다)."""
-    app_data = os.environ.get("APPDATA")
-    return progress_records(Path(app_data) if app_data else None, Path.home())
+    return progress_records(settings_base(sys.platform, os.environ, Path.home()), Path.home())
+
+
+WINDOWS_BLENDER = r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
+
+
+def mac_blender_apps(home: Path) -> list[Path]:
+    """Mac에서 Blender.app을 찾아볼 자리: 응용 프로그램 폴더, 사용자 응용 프로그램 폴더, 바깥 저장소의 응용 프로그램 폴더."""
+    return [Path("/Applications/Blender.app"), home / "Applications" / "Blender.app", *sorted(Path("/Volumes").glob("*/Applications/Blender.app"))]
+
+
+def blender_executable(platform: str, environ: Mapping[str, str], mac_apps: Iterable[Path]) -> str:
+    """자체 시험·메뉴 검수가 띄울 Blender 실행 파일. 환경 변수 BLENDER가 먼저다.
+
+    Mac은 앱 묶음(Blender.app) 안의 Contents/MacOS/Blender를 mac_apps 차례로 찾고, 없으면 첫 자리를 돌려준다(실행이 실패해 알린다).
+    """
+    if "BLENDER" in environ:
+        return environ["BLENDER"]
+    if platform != "darwin":
+        return WINDOWS_BLENDER
+    candidates = [app / "Contents" / "MacOS" / "Blender" for app in mac_apps]
+    return str(next((path for path in candidates if path.exists()), candidates[0] if candidates else Path("Blender")))
+
+
+def default_blender() -> str:
+    """이 PC의 Blender 실행 파일(blender_executable을 지금 운영체제로)."""
+    return blender_executable(sys.platform, os.environ, mac_blender_apps(Path.home()))

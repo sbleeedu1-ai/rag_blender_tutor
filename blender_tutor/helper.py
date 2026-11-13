@@ -2,12 +2,14 @@
 
 애드온이 Blender를 켤 때 켜 준다(config.json의 명령). 마지막 Blender가 닫히거나 트레이에서 끝내면 끝난다.
 손으로 켤 때: `set BLENDER_TUTOR_TOKEN=<애드온 폴더 config.json의 token>` 뒤 `.venv\\Scripts\\python -m blender_tutor.helper`
+(Mac: `BLENDER_TUTOR_TOKEN=<token> .venv/bin/python -m blender_tutor.helper`)
 
 부품끼리 잇기만 한다. 판단은 window_rules, 질문 한 번의 순서는 question_flow, 대화는 conversation, 진행은 course_desk, 그리기는 helper_window에 있고 각각 시험한다.
-이 파일과 winapi는 실제 화면·Blender가 있어야 해서 애드온 자체 시험과 눈 확인으로 본다.
+이 파일과 winapi(Mac은 macapi)는 실제 화면·Blender가 있어야 해서 애드온 자체 시험과 눈 확인으로 본다.
 """
 
 import argparse
+import json
 import logging
 import os
 import platform
@@ -22,7 +24,10 @@ from PySide6.QtCore import QCoreApplication, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication
 
-from blender_tutor import winapi
+if sys.platform == "win32":
+    from blender_tutor import winapi as screen_api
+else:  # Mac(HISTORY [312]): 같은 이름의 함수를 pyobjc로
+    from blender_tutor import macapi as screen_api
 from blender_tutor.answer_engine import Event, Settings
 from blender_tutor.conversation import PROGRAM_ERROR, Conversation
 from blender_tutor.course_desk import CourseDesk, Line
@@ -42,6 +47,8 @@ WARM_UP_ENV = "BLENDER_TUTOR_WARM_UP"  # 1이면 엔진을 만든 뒤 예열한�
 REASONING_ENV = "BLENDER_TUTOR_REASONING"  # 답변 모델의 생각 수준(none·low·medium). 없으면 명세 기본 none(티켓 33 실측용)
 
 FOLLOW_EVERY_MS = 100  # Blender를 따라 창 자리를 다시 보는 간격
+ACTIVATION_SETTLE_MS = 120  # Mac: 앞 앱이 바뀐 뒤 그 앱의 창이 맨 위로 올라올 때까지 기다렸다 자리를 다시 맞추는 시간
+CLICK_SETTLE_S = 0.3  # Mac: 누른 앱이 앞 앱으로 알려지기까지 따라가기가 누른 결과를 뒤집지 않고 기다리는 시간
 # 작업 상태 흐름을 늘 기록한다(검수 동안 쓰려고, 2026-10-26 사용자 결정). 코드 동결 전에 False로 바꾼다(티켓 37)
 RECORD_STREAM = True
 NO_DATA = "설명서 자료(data/)가 없어 답할 수 없어요. HANDOFF.md의 'data/ 다시 만들기'를 봐 주세요."
@@ -73,6 +80,7 @@ class Helper:
         self._stopwatch = Stopwatch(records.parent / "timings.jsonl", platform.node())
         self._own_pid = os.getpid()
         self._moved: tuple[Place, int] | None = None  # 지난번에 옮긴 (자리, 그때 앞 창 번호)
+        self._clicked: tuple[int, float] | None = None  # Mac: 마지막으로 누른 순간 옮긴 (그 창 프로세스 번호, 시각)
         self._progress_of: int | None = None  # 연습 과정 카드에 진행을 보이는 Blender 창 번호
         self.window = HelperWindow()
         self._tray = Tray(self._tray_show, app.quit)
@@ -92,6 +100,16 @@ class Helper:
         self._show_progress()
         self._timer = QTimer(interval=FOLLOW_EVERY_MS, timeout=self._follow)
         self._timer.start()
+        self._activation = screen_api.watch_activation(self._on_activation)  # Mac: 앞 앱이 바뀌면 0.1초를 기다리지 않고 바로
+        # Mac: 누르는 순간 먼저(권한이 없으면 None). 손쉬운 사용 권한은 처음 한 번만 묻는다(거부한 사람에게 켤 때마다 묻지
+        # 않게, HISTORY [316]). 물었다는 표시는 진행 기록 옆에 둔다
+        asked = records.parent / "accessibility_asked"
+        self._clicks = screen_api.watch_clicks(self._on_click, ask=not asked.exists())
+        if sys.platform == "darwin":
+            asked.parent.mkdir(parents=True, exist_ok=True)
+            asked.touch()
+        if self._clicks is None and sys.platform == "darwin":
+            log.info("손쉬운 사용·입력 모니터링 권한이 없어 누르는 순간 옮기기를 쓰지 않음(앞 앱 알림으로만 옮김)")
         threading.Thread(target=self._prepare_engine, daemon=True).start()
 
     def on_message(self, message: Message) -> None:
@@ -184,45 +202,82 @@ class Helper:
 
     def _bring_up(self) -> None:
         self.window.summon()
-        hwnd = int(self.window.winId())
-        winapi.put_on_top(hwnd)
-        if not winapi.bring_forward(hwnd):
+        hwnd = screen_api.native_window(int(self.window.winId()))
+        screen_api.put_on_top(hwnd)
+        if not screen_api.bring_forward(hwnd):
             log.info("Windows가 앞으로 가져오기를 막음(입력칸 초점 없음)")
         self._moved = (Place.TOP, hwnd)
 
     def _tray_show(self) -> None:
         """트레이 보이기: 보이는 Blender가 있으면 F10과 똑같이, 모두 최소화면 막는다(안내는 아이콘 글)."""
-        if winapi.any_shown(self._receiver.blenders()):
+        if screen_api.any_shown(self._receiver.blenders()):
             self._bring_up()
 
     def _back_to_blender(self) -> None:
         """Esc: 마지막으로 앞에 있던 Blender로 초점을 돌린다(창은 그대로, Blender가 앞이니 그 위에 남는다)."""
         window = self._front.window(self._receiver.blenders())
         if window:
-            winapi.bring_forward(window)
+            screen_api.bring_forward(window)
+
+    def _on_activation(self) -> None:
+        """Mac: 앞 앱이 바뀐 즉시 옮기고(새 앞 앱을 덮지 않게), 그 앱의 창이 맨 위로 올라간 뒤 자리를 한 번 더 맞춘다.
+        알림이 오는 순간에는 새 앞 앱의 창이 아직 아래에 있어, 그 창 '바로 뒤'에 놓으면 Blender 뒤까지 내려가 사라졌다
+        (2026-11-13 실측: Mail을 누르자 차례가 Mail, Blender, 도우미, HISTORY [312])."""
+        self._follow()
+        QTimer.singleShot(ACTIVATION_SETTLE_MS, self._follow_again)
+
+    def _on_click(self, window: int, pid: int) -> None:
+        """Mac: 마우스를 누른 순간. 누른 창이 Blender면 바로 맨 위로, 같은 데스크톱의 다른 프로그램이면 바로 Blender 위로 내린다.
+        도우미 자신·바탕·숨김·내린 상태는 따라가기(_follow)가 정한 대로 둔다."""
+        blenders = self._receiver.blenders()
+        if pid == self._own_pid or not self.window.isVisible() or self.window.put_away:
+            return
+        hwnd = screen_api.native_window(int(self.window.winId()))
+        if pid in blenders.values():
+            screen_api.put_on_top(hwnd)
+            self._moved = (Place.TOP, window)
+        elif screen_api.same_space(hwnd, window):
+            screen_api.put_behind(hwnd, window, self._front.window(blenders) or 0)
+            self._moved = (Place.BEHIND, window)
+        else:
+            return
+        self._clicked = (pid, time.monotonic())
+
+    def _follow_again(self) -> None:
+        self._moved = None  # 자리가 같아도 다시 옮긴다
+        self._follow()
 
     # ---- Blender 따라가기(0.1초마다)
     def _follow(self) -> None:
         blenders = self._receiver.blenders()
-        front_hwnd, front_pid, taskbar = winapi.foreground()
+        front_hwnd, front_pid, taskbar = screen_api.foreground()
         self._front.saw_foreground(front_pid, blenders)
         if self._front.window(blenders) != self._progress_of:  # 다른 Blender로 옮겨 갔거나 닫혔다
             self._show_progress()
-        shown = winapi.any_shown(blenders)
+        # Mac: 누른 앱이 아직 앞 앱으로 알려지기 전이면 지난 앞 앱 기준으로 되돌리지 않는다(2026-11-13 실측: Blender를 누른 직후
+        # 0.1초 따라가기가 아직 Mail을 앞 앱으로 읽고 도우미를 내려 깜빡였다)
+        if self._clicked and front_pid != self._clicked[0] and time.monotonic() - self._clicked[1] < CLICK_SETTLE_S:
+            return
+        hwnd = screen_api.native_window(int(self.window.winId()))
+        if screen_api.elsewhere(blenders, hwnd, self.window.isVisible()):  # Mac: 다른 데스크톱을 보는 중이면 그대로
+            return
+        shown = screen_api.any_shown(blenders)
         self._tray.blender_shown(shown)
         screen = Screen(front_pid, taskbar, frozenset(blenders.values()), shown)
         where = place(screen, self._own_pid, self.window.put_away)
-        if not needs_move(where, front_hwnd, self._moved):
+        # Mac은 도우미가 초점을 잃으면 맨 위가 풀려서, 자리가 그대로 맨 위여도 실제로 내려왔으면 다시 올린다
+        if not needs_move(where, front_hwnd, self._moved) and not (where == Place.TOP and screen_api.lost_top(hwnd)):
             return
-        hwnd = int(self.window.winId())
+        if where == Place.BEHIND and not screen_api.same_space(hwnd, front_hwnd):  # Mac: 데스크톱을 옮기는 도중이면 그대로
+            return
         if where == Place.HIDDEN:
             self.window.hide()
         else:
             self.window.show()  # 초점은 빼앗지 않는다(WA_ShowWithoutActivating)
             if where == Place.TOP:
-                winapi.put_on_top(hwnd)
+                screen_api.put_on_top(hwnd)
             else:
-                winapi.put_behind(hwnd, front_hwnd)
+                screen_api.put_behind(hwnd, front_hwnd, self._front.window(blenders) or 0)
         self._moved = (where, front_hwnd)
 
 
@@ -265,9 +320,13 @@ def _courses() -> list[Course]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Blender 첫걸음 도우미 창을 켭니다.")
     parser.add_argument("--port", type=int, default=PORT, help=f"받을 자리 번호(기본 {PORT}, 자체 시험은 다른 번호를 씀)")
+    # Mac은 애드온이 open으로 앱 묶음을 켜서 환경 변수가 넘어오지 않는다. 그때 애드온 config.json에서 비밀 글자를 읽는다
+    parser.add_argument("--token-file", type=Path, default=None, help="비밀 글자를 읽을 애드온 config.json(환경 변수가 없을 때)")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     token = os.environ.get(TOKEN_ENV)
+    if not token and args.token_file:
+        token = json.loads(args.token_file.read_text(encoding="utf-8"))["token"]
     if not token:
         log.error("환경 변수 %s가 없습니다. 애드온이 켜 주거나, 애드온 config.json의 token을 넣고 켜세요.", TOKEN_ENV)
         return 2
@@ -276,6 +335,7 @@ def main() -> int:
     QCoreApplication.setAttribute(Qt.AA_UseSoftwareOpenGL)
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # 창을 숨겨도 트레이에 남는다
+    screen_api.hide_from_dock()  # Mac: Dock·Cmd+Tab에 나오지 않게(Windows는 Qt.Tool이 이미 뺌)
     app.setFont(QFont(FONT, 10))
     bridge = _Bridge()
     helper: Helper | None = None

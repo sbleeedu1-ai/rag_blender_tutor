@@ -27,9 +27,10 @@ if "bpy" not in sys.modules:  # 1) 보통 파이썬: 임시 폴더에 설치하�
 
     sys.path.insert(0, str(PROJECT))
     from blender_tutor.install_addon import ADDON_NAME, install
+    from blender_tutor.paths import default_blender
     from blender_tutor.receiver import TOKEN_HEADER
 
-    blender = os.environ.get("BLENDER", r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe")
+    blender = default_blender()
     with tempfile.TemporaryDirectory() as scripts:
         target = install(Path(scripts) / "addons", Path(sys.executable))
         config = json.loads((target / "config.json").read_text(encoding="utf-8"))
