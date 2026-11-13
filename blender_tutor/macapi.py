@@ -165,14 +165,14 @@ def watch_activation(callback) -> object:
     )
 
 
-def watch_clicks(on_click) -> object | None:
+def watch_clicks(on_click, ask: bool = True) -> object | None:
     """마우스 왼쪽 단추를 누르는 순간 on_click(누른 자리 창 번호, 그 창 프로세스 번호)을 부른다(누름은 그대로 흘려보낸다).
 
     Mac은 누른 창을 먼저 올리고 앞 앱 알림은 그 뒤에 보내, 알림으로 움직이면 Blender를 누를 때 도우미가 0.1초 가려졌다
     (2026-11-13 실측, HISTORY [312]). '손쉬운 사용' 권한이 있으면 누름을 잠깐 붙잡아 Blender가 받기 전에 옮긴다. 없고
     '입력 모니터링' 권한만 있으면 엿듣기만 하는데, Blender를 누른 신호가 10-40ms 늦게 와 가끔 Blender가 먼저 올라온다
-    (같은 날 실측). 손쉬운 사용 권한이 없으면 그 허락을 묻고, 입력 모니터링도 없으면 None을 돌려준다(그동안은 알림
-    방식만 쓴다. 권한 창을 둘 띄우지 않으려고 입력 모니터링은 묻지 않는다). 돌려준 값을 붙잡아 두어야 이어진다.
+    (같은 날 실측). 손쉬운 사용 권한이 없으면 ask일 때 그 허락을 묻고, 입력 모니터링도 없으면 None을 돌려준다(그동안은
+    알림 방식만 쓴다. 권한 창을 둘 띄우지 않으려고 입력 모니터링은 묻지 않는다). 돌려준 값을 붙잡아 두어야 이어진다.
     """
     taps = []
 
@@ -196,7 +196,8 @@ def watch_clicks(on_click) -> object | None:
         Quartz.kCGSessionEventTap, Quartz.kCGHeadInsertEventTap, Quartz.kCGEventTapOptionDefault, mask, heard, None
     )
     if tap is None:
-        _ask_accessibility()
+        if ask:
+            _ask_accessibility()
         if not Quartz.CGPreflightListenEventAccess():  # 이미 받아 둔 입력 모니터링이 있으면 그동안 엿듣기라도
             return None
         tap = Quartz.CGEventTapCreate(

@@ -83,7 +83,7 @@ def watch_activation(callback) -> None:
     """macapi와 짝을 맞춘 것. Windows는 0.1초마다 보는 것으로 충분했다."""
 
 
-def watch_clicks(on_click) -> None:
+def watch_clicks(on_click, ask: bool = True) -> None:
     """macapi와 짝을 맞춘 것. Windows는 0.1초마다 보는 것으로 충분했다."""
 
 

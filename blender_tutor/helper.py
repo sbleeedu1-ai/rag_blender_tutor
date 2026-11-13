@@ -101,7 +101,13 @@ class Helper:
         self._timer = QTimer(interval=FOLLOW_EVERY_MS, timeout=self._follow)
         self._timer.start()
         self._activation = screen_api.watch_activation(self._on_activation)  # Mac: 앞 앱이 바뀌면 0.1초를 기다리지 않고 바로
-        self._clicks = screen_api.watch_clicks(self._on_click)  # Mac: 누르는 순간 먼저(권한이 없으면 None)
+        # Mac: 누르는 순간 먼저(권한이 없으면 None). 손쉬운 사용 권한은 처음 한 번만 묻는다(거부한 사람에게 켤 때마다 묻지
+        # 않게, HISTORY [316]). 물었다는 표시는 진행 기록 옆에 둔다
+        asked = records.parent / "accessibility_asked"
+        self._clicks = screen_api.watch_clicks(self._on_click, ask=not asked.exists())
+        if sys.platform == "darwin":
+            asked.parent.mkdir(parents=True, exist_ok=True)
+            asked.touch()
         if self._clicks is None and sys.platform == "darwin":
             log.info("손쉬운 사용·입력 모니터링 권한이 없어 누르는 순간 옮기기를 쓰지 않음(앞 앱 알림으로만 옮김)")
         threading.Thread(target=self._prepare_engine, daemon=True).start()
