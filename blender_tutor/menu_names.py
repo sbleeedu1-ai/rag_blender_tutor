@@ -233,20 +233,27 @@ def _by_count(names: Iterable[MenuName]) -> list[MenuName]:
 _Catalog = dict[str, dict[str, list[str]]]  # ko.po: 영어 → 한국어 → 문맥들
 
 
-def screen_path(path: str, names: "MenuNames | None") -> str:
+def screen_path(path: str, names: "MenuNames | None", asked: str = "") -> str:
     """메뉴 이름 표시 하나의 속(Add > Mesh)을 화면 글로 바꾼다.
 
     names가 있으면(한국어 화면에 번역 켜짐) 단마다 "추가(Add)"처럼 한국어(영어)로, 영어로 보이는 단과 화면 글자가 영어와
     같은 단(X-Ray)은 영어 하나로. names가 없으면 영어 그대로.
+    asked(사용자 질문)에 영어로 쓴 단은 "Add(추가)"처럼 영어(한국어)로 둔다. 사용자가 부른 이름을 앞에 두어 같은 것임을 알게
+    한다(HISTORY [311]). 대소문자는 가리지 않고, 더 긴 영어 낱말 속 글자(Addon의 Add)는 물은 것으로 치지 않는다.
     """
     parts = [part.strip() for part in re.split(r"[>‣]", path)]
     if names:
         parents = ["", *parts[:-1]]  # 단마다 바로 앞 단(같은 이름도 메뉴마다 글자가 달라서, 티켓 31)
-        parts = [
-            f"{korean}({part})" if (korean := names.korean(part, parent)) and korean != part else part
-            for part, parent in zip(parts, parents)
-        ]
+        parts = [_shown_part(part, names.korean(part, parent), asked) for part, parent in zip(parts, parents)]
     return " > ".join(parts)
+
+
+def _shown_part(part: str, korean: str | None, asked: str) -> str:
+    if not korean or korean == part:
+        return part
+    if re.search(rf"(?<![A-Za-z]){re.escape(part)}(?![A-Za-z])", asked, re.IGNORECASE):
+        return f"{part}({korean})"
+    return f"{korean}({part})"
 
 
 def screen_marks(text: str, names: "MenuNames | None") -> str:

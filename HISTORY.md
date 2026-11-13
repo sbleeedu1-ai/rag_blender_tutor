@@ -2502,3 +2502,11 @@
 - Mac에서 깨지는 곳(실행으로 확인): 도우미 `import blender_tutor.helper`가 `ctypes.WinDLL` 없음으로 실패(`winapi.py`), `receiver.process_started`도 같은 Windows 함수. 애드온 `Sender.launch`의 `subprocess.CREATE_NO_WINDOW`·`CREATE_NEW_PROCESS_GROUP`가 Mac에 없음, `_own_window`·도우미 부르기의 `ctypes.windll`. `install_addon`의 기본 폴더가 `APPDATA` 없음으로 `KeyError`(`--addons-dir`로 피함). `settings_selftest.py`는 Blender 옆 `5.2/` 폴더에서 템플릿을 찾아 Mac의 `.app` 모양과 다름(추측, 안 돌림). `selftest.py`·`menu_review.py`의 Blender 기본 위치는 환경 변수 `BLENDER`로 바꿀 수 있음. 진행 기록 폴더(`paths.py`)는 Mac에서 사용자 폴더로 가서 돈다. 이 곳들은 [44]에서 "이번엔 Windows 전용, 바꿀 곳을 모아 적음"으로 정했고 애드온 머리글에 목록이 있다. 사용자가 "지금은 안 고침"을 골라 그대로 둔다(Mac에서는 도우미·애드온이 돌지 않음).
 - `.DS_Store`(Mac이 폴더마다 만드는 숨김 파일): 사용자 "넣어"로 `.gitignore`에 더함.
 - 남은 것: worktree 세션에서는 훅이 원래 저장소 폴더의 훅·HISTORY를 보는 것으로 보인다(이 worktree에는 `.venv`가 없는데 훅이 돎, 추측). 그래서 worktree에서 고친 HISTORY는 번호 확인 훅이 보지 않는다(Mac만의 일은 아님).
+
+### [311] 2026-11-13 · 사용자가 영어로 부른 메뉴 이름을 답에서 바로 알아보게, 한국어 화면에서 질문에 영어로 쓴 이름은 "영어(한국어)"로 보인다
+
+- 번호: `exp/35-dev-bundle`(PR #43 병합 전)이 [308]-[310]을 써서 겹치지 않게 [311]로 둔다. 이 브랜치는 main(a2716e1)에서 갈라졌다.
+- 계기: [310] 채점 기준 ②를 정하다 사용자 제안 "영어로 물어보면 영어(한국어) 한국어로 물어보면 한국어(영어) 이렇게 하기로? 아 물론 블렌더 환경이 한국어 설정일때만이지만." → 질문 전체 언어가 아니라는 사용자 설명 "메뉴 이름같은걸 영어로 물어봤을때 얘기긴해. 너가 말한 'With Automatic Weights가 안 보여요' 예시처럼", 처리는 "지금 고쳐야지 ㅇㅇ".
+- 바꾼 것: `menu_names.screen_path`에 `asked`(질문 글)를 받아, 한국어 화면에서 질문에 영어로 쓴 단은 `Add(추가)`, 나머지는 그대로 `추가(Add)`. 대소문자는 가리지 않고 더 긴 영어 낱말 속 글자(Addon의 Add)는 물은 것으로 치지 않는다. 답 엔진 `_MenuMarks`가 질문을 넘긴다. 영어 화면·번역 꺼짐은 그대로 영어만. 연습 과정 안내 말(`screen_marks`)은 질문이 없어 그대로.
+- 판단은 Claude: 같은 대화의 앞 질문은 보지 않고 지금 질문만 본다(단순하게). 모델이 `[[ ]]`로 감싸지 않아 영어만 남는 답([310] 예)은 이 변경으로 고쳐지지 않는다(원인 미확인, 따로 볼 일).
+- 검증: 새 테스트 4개(질문 속 영어 이름·대소문자·더 긴 낱말·영어 화면)를 먼저 써서 실패를 본 뒤 구현, `.venv/bin/python -m pytest` 725개 통과(Mac, 2026-11-13). 개발 문항으로 답을 다시 돌리지는 않음(유료).
