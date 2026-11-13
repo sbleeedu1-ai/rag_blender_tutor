@@ -5,16 +5,16 @@
 ## 프로젝트
 
 - 무엇: Blender 5.2를 처음 쓰는 사람이 3D 아이템을 만들 때, 공식 설명서를 근거로 다음 조작을 쉬운 한국어로 안내하는 도우미
-- 두 PC: 강의실은 Windows, 집은 Mac이다. 이 문서의 명령은 Windows 모양으로 적으니 Mac에서는 아래 짝대로 바꿔 쓴다(HISTORY [307]).
+- 두 PC: 개발은 집 Mac에서 하고, 집 PC(Windows)는 Windows에서도 도는지 확인하는 데 쓴다(2026-11-13부터, HISTORY [318]. 강의실 PC는 더 쓰지 않고 그 자료는 지웠다). 이 문서의 명령은 Windows 모양으로 적으니 Mac에서는 아래 짝대로 바꿔 쓴다(HISTORY [307]). Windows 칸의 경로는 강의실 PC 때 적은 것이고, 집 PC에서도 같은지는 아직 확인하지 않았다.
 
-  | | Windows(강의실) | Mac(집) |
+  | | Windows(집 PC, 확인용) | Mac(집, 개발) |
   |---|---|---|
   | 저장소 | `C:\WORK\rag_blender_tutor` | `/Volumes/mac_ssd/proj/rag_blender_tutor` |
   | 가상 환경 파이썬 | `.venv\Scripts\python` | `.venv/bin/python` |
   | Blender | `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe` | `/Volumes/mac_ssd/Applications/Blender.app/Contents/MacOS/Blender` |
   | 지울 파일 옮길 곳 | `C:\WORK\trash\` | `/Volumes/mac_ssd/proj/trash/` |
 
-  Mac에서는 도우미 창·애드온 설치·애드온 자체 시험이 아직 돌지 않는다(제품은 Windows 전용으로 만들었다, HISTORY [44]). 테스트·연습 과정 파일 검사·문서 도구는 돈다.
+  Mac에서도 도우미 창·애드온 설치·애드온 자체 시험이 돈다(PR #46, HISTORY [312]-[316]). GitHub의 자동 테스트(CI)는 Windows에서만 돈다.
 - 준비: Windows `python -m venv .venv` 뒤 `.venv\Scripts\python -m pip install -e ".[dev]"`. Mac은 Blender 안 파이썬으로 `/Volumes/mac_ssd/Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13 -m venv .venv` 뒤 `.venv/bin/python -m pip install -e ".[dev]"`, 이어서 `mkdir -p .venv/Scripts && ln -s ../bin/python .venv/Scripts/python.exe`(훅이 두 PC 모두 `.venv/Scripts/python.exe`를 부르므로 그 이름의 바로가기를 둔다. 없으면 터미널 명령이 모두 막힌다, HISTORY [182]·[307])
 - 실행: 도우미 창은 Blender를 켜면 애드온이 함께 켠다(F10으로 부름, 손으로는 `.venv\Scripts\python -m blender_tutor.helper`, 환경 변수 `BLENDER_TUTOR_TOKEN` 필요). 애드온 설치 `.venv\Scripts\python -m blender_tutor.install_addon`(뒤에 Blender 환경 설정에서 애드온 켜기) · 애드온 자체 시험(Blender를 화면 없이 띄움, 기본 테스트 밖) `.venv\Scripts\python addon\selftest.py` · 연습 과정 파일 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` · 테스트: `.venv\Scripts\python -m pytest` (테스트는 API 키 없이 돌게 만들고 늘 통과 상태로 둔다. 통과 못 하면 곧 문제라는 신호가 되게)
 
