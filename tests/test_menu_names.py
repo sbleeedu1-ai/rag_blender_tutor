@@ -19,7 +19,7 @@ from blender_tutor.menu_names import (
     build_menu_names,
     load_menu_names,
     read_po,
-    screen_marks,
+    screen_marks, screen_path,
 )
 
 PO = r'''
@@ -372,6 +372,11 @@ def test_표시를_한국어_화면이면_한국어와_영어로_바꾸고_화�
     text = "[[Add > Mesh]]에서 고르고 [[X-Ray]]와 [[At Center]]를 보세요."
     assert screen_marks(text, SCREEN) == "추가(Add) > 메시(Mesh)에서 고르고 X-Ray와 At Center를 보세요."
     assert screen_marks(text, None) == "Add > Mesh에서 고르고 X-Ray와 At Center를 보세요."
+
+
+def test_물은_영어_이름은_영어를_앞에_두고_화면_글자가_영어와_같으면_한_번만_쓴다():
+    assert screen_path("Add > Mesh > X-Ray", SCREEN, asked="mesh랑 X-Ray가 왜") == "추가(Add) > Mesh(메시) > X-Ray"
+    assert screen_path("Add > Mesh", None, asked="Add") == "Add > Mesh"
 
 
 def test_사전_파일이_있으면_고정_짝과_함께_읽고_없으면_None(tmp_path):
