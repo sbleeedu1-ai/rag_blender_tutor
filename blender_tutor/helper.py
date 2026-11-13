@@ -48,6 +48,7 @@ REASONING_ENV = "BLENDER_TUTOR_REASONING"  # 답변 모델의 생각 수준(none
 
 FOLLOW_EVERY_MS = 100  # Blender를 따라 창 자리를 다시 보는 간격
 ACTIVATION_SETTLE_MS = 120  # Mac: 앞 앱이 바뀐 뒤 그 앱의 창이 맨 위로 올라올 때까지 기다렸다 자리를 다시 맞추는 시간
+CLICK_SETTLE_S = 0.3  # Mac: 누른 앱이 앞 앱으로 알려지기까지 따라가기가 누른 결과를 뒤집지 않고 기다리는 시간
 # 작업 상태 흐름을 늘 기록한다(검수 동안 쓰려고, 2026-10-26 사용자 결정). 코드 동결 전에 False로 바꾼다(티켓 37)
 RECORD_STREAM = True
 NO_DATA = "설명서 자료(data/)가 없어 답할 수 없어요. HANDOFF.md의 'data/ 다시 만들기'를 봐 주세요."
@@ -79,6 +80,7 @@ class Helper:
         self._stopwatch = Stopwatch(records.parent / "timings.jsonl", platform.node())
         self._own_pid = os.getpid()
         self._moved: tuple[Place, int] | None = None  # 지난번에 옮긴 (자리, 그때 앞 창 번호)
+        self._clicked: tuple[int, float] | None = None  # Mac: 마지막으로 누른 순간 옮긴 (그 창 프로세스 번호, 시각)
         self._progress_of: int | None = None  # 연습 과정 카드에 진행을 보이는 Blender 창 번호
         self.window = HelperWindow()
         self._tray = Tray(self._tray_show, app.quit)
@@ -231,6 +233,9 @@ class Helper:
         elif screen_api.same_space(hwnd, window):
             screen_api.put_behind(hwnd, window, self._front.window(blenders) or 0)
             self._moved = (Place.BEHIND, window)
+        else:
+            return
+        self._clicked = (pid, time.monotonic())
 
     def _follow_again(self) -> None:
         self._moved = None  # 자리가 같아도 다시 옮긴다
@@ -243,6 +248,10 @@ class Helper:
         self._front.saw_foreground(front_pid, blenders)
         if self._front.window(blenders) != self._progress_of:  # 다른 Blender로 옮겨 갔거나 닫혔다
             self._show_progress()
+        # Mac: 누른 앱이 아직 앞 앱으로 알려지기 전이면 지난 앞 앱 기준으로 되돌리지 않는다(2026-11-13 실측: Blender를 누른 직후
+        # 0.1초 따라가기가 아직 Mail을 앞 앱으로 읽고 도우미를 내려 깜빡였다)
+        if self._clicked and front_pid != self._clicked[0] and time.monotonic() - self._clicked[1] < CLICK_SETTLE_S:
+            return
         hwnd = screen_api.native_window(int(self.window.winId()))
         if screen_api.elsewhere(blenders, hwnd, self.window.isVisible()):  # Mac: 다른 데스크톱을 보는 중이면 그대로
             return

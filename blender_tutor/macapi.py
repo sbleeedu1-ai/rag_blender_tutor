@@ -8,6 +8,7 @@ native_window로 바꿔 쓴다.
 
 import ctypes
 import os
+import time
 
 import AppKit
 import objc
@@ -64,6 +65,13 @@ def put_on_top(window: int) -> None:
     )
     own.setLevel_(AppKit.NSFloatingWindowLevel)
     own.orderFrontRegardless()
+    _flush()
+    # 창 서버가 실제로 맨 위 층에 둘 때까지 기다린다(최대 50ms). 누름을 붙잡은 동안 기다려야 Blender가 그 뒤에 올라온다:
+    # 비우기만 하고 바로 놓아주면 Blender가 먼저 올라와 거의 매번 깜빡였다(2026-11-13 실측, 비우면 6-12ms 안에 반영)
+    deadline = time.monotonic() + 0.05
+    info = _info(window)
+    while info is not None and info[Quartz.kCGWindowLayer] != AppKit.NSFloatingWindowLevel and time.monotonic() < deadline:
+        info = _info(window)
 
 
 def put_behind(window: int, front: int, blender: int = 0) -> None:
@@ -78,6 +86,13 @@ def put_behind(window: int, front: int, blender: int = 0) -> None:
         own.orderWindow_relativeTo_(AppKit.NSWindowAbove, blender)
     elif front:
         own.orderWindow_relativeTo_(AppKit.NSWindowBelow, front)
+    _flush()
+
+
+def _flush() -> None:
+    """바꾼 층·차례를 창 서버에 바로 보낸다. 누름을 붙잡은 처리(watch_clicks) 안에서는 처리가 끝날 때까지 보내지 않아
+    100ms를 기다려도 그대로였다(2026-11-13 실측)."""
+    Quartz.CATransaction.flush()
 
 
 def bring_forward(window: int) -> bool:
@@ -151,18 +166,20 @@ def watch_activation(callback) -> object:
 
 
 def watch_clicks(on_click) -> object | None:
-    """마우스 왼쪽 단추를 누르는 순간 on_click(누른 자리 창 번호, 그 창 프로세스 번호)을 부른다(누르기만 엿듣고 막지 않음).
+    """마우스 왼쪽 단추를 누르는 순간 on_click(누른 자리 창 번호, 그 창 프로세스 번호)을 부른다(누름은 그대로 흘려보낸다).
 
     Mac은 누른 창을 먼저 올리고 앞 앱 알림은 그 뒤에 보내, 알림으로 움직이면 Blender를 누를 때 도우미가 0.1초 가려졌다
-    (2026-11-13 실측, HISTORY [312]). 누르는 순간을 엿들으면 그보다 먼저 옮길 수 있다. 시스템 설정 '입력 모니터링' 권한이
-    필요하고, 없으면 처음 한 번 허락을 묻고 None을 돌려준다(그동안은 알림 방식만 쓴다). 돌려준 값을 붙잡아 두어야 이어진다.
+    (2026-11-13 실측, HISTORY [312]). '손쉬운 사용' 권한이 있으면 누름을 잠깐 붙잡아 Blender가 받기 전에 옮긴다. 없고
+    '입력 모니터링' 권한만 있으면 엿듣기만 하는데, Blender를 누른 신호가 10-40ms 늦게 와 가끔 Blender가 먼저 올라온다
+    (같은 날 실측). 둘 다 없으면 입력 모니터링 허락을 처음 한 번 묻고 None을 돌려준다(그동안은 알림 방식만 쓴다).
+    돌려준 값을 붙잡아 두어야 이어진다.
     """
-    if not Quartz.CGPreflightListenEventAccess():
-        Quartz.CGRequestListenEventAccess()
-        return None
+    taps = []
 
     def heard(proxy, kind, event, refcon):
-        if kind == Quartz.kCGEventLeftMouseDown:
+        if kind in (Quartz.kCGEventTapDisabledByTimeout, Quartz.kCGEventTapDisabledByUserInput):  # 늦게 답해 꺼졌으면 다시 켠다
+            Quartz.CGEventTapEnable(taps[0], True)
+        elif kind == Quartz.kCGEventLeftMouseDown:
             x, y = Quartz.CGEventGetLocation(event)
             for item in Quartz.CGWindowListCopyWindowInfo(
                 Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements, Quartz.kCGNullWindowID
@@ -174,12 +191,18 @@ def watch_clicks(on_click) -> object | None:
                     break
         return event
 
-    tap = Quartz.CGEventTapCreate(
-        Quartz.kCGSessionEventTap, Quartz.kCGHeadInsertEventTap, Quartz.kCGEventTapOptionListenOnly,
-        Quartz.CGEventMaskBit(Quartz.kCGEventLeftMouseDown), heard, None,
-    )
+    mask = Quartz.CGEventMaskBit(Quartz.kCGEventLeftMouseDown)
+    tap = None
+    for option in (Quartz.kCGEventTapOptionDefault, Quartz.kCGEventTapOptionListenOnly):  # 붙잡기는 손쉬운 사용 권한이 있어야 만들어진다
+        if option == Quartz.kCGEventTapOptionListenOnly and not Quartz.CGPreflightListenEventAccess():
+            Quartz.CGRequestListenEventAccess()
+            return None
+        tap = Quartz.CGEventTapCreate(Quartz.kCGSessionEventTap, Quartz.kCGHeadInsertEventTap, option, mask, heard, None)
+        if tap is not None:
+            break
     if tap is None:
         return None
+    taps.append(tap)
     source = Quartz.CFMachPortCreateRunLoopSource(None, tap, 0)
     Quartz.CFRunLoopAddSource(Quartz.CFRunLoopGetMain(), source, Quartz.kCFRunLoopCommonModes)
     Quartz.CGEventTapEnable(tap, True)
