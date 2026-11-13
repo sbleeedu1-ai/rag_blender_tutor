@@ -70,5 +70,6 @@ def test_Mac은_도우미를_파이썬_복사본을_실행_파일로_둔_앱_묶
     assert info["LSEnvironment"]["PYTHONHOME"] == str(base)
     command = config_of(tmp_path / "addons")["command"]
     assert command[:7] == ["open", "-n", "-g", "-a", str(app), "--args", "-c"]
-    assert str(tmp_path / "venv" / "lib" / "python3.13" / "site-packages") in command[7]  # 가상 환경 꾸러미를 덧붙임
+    # 가상 환경 꾸러미를 덧붙임. 경로는 파이썬 글자로 넣으므로 repr로 견준다(Windows CI에서는 \가 \\가 된다)
+    assert f"site.addsitedir({str(tmp_path / 'venv' / 'lib' / 'python3.13' / 'site-packages')!r})" in command[7]
     assert command[8:] == ["--token-file", str(target / "config.json")]
