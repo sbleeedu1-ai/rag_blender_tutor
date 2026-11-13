@@ -10,7 +10,7 @@
 
 ## 다음 할 일
 
-1. **기준 빈곳 두 가지를 사용자에게 한 항목씩 묻는다**(채점자 4명 이상이 따로 짚음, 지금 다시 채점하지 않음): ① 본론이 맞고 곁가지 사실 하나가 틀린 답을 `docs/agents/grading.md` 3절대로 틀림으로 볼지 부분으로 볼지 ② 한국어 화면(ko_KR)에서 영어 이름만 쓴 답. 정하면 `grading.md`에 넣는다.
+1. (끝남, [310]·[311]) 기준 빈곳: ① 곁가지 사실 오류는 틀림 유지 ② 한국어 화면에서 영어 이름만 쓰면 부분(`grading.md` 3절). 함께 나온 제품 변경 "질문에 영어로 쓴 메뉴 이름은 영어(한국어)"는 PR #45로 main 병합(7046091) 뒤 이 브랜치로 가져옴(6fbbc56, pytest 728 통과). 남은 것: 모델이 `[[ ]]`로 감싸지 않아 영어만 남는 답의 원인(안 잼).
 2. 답 모델 개선(사용자 동의 [304], advisor도 이것을 먼저 권함): ① Haiku 답 모델 생각 수준 none → low·medium을 잰다(유료, 실행 전 사용자 확인). ② 모자라면 Sonnet 5.5 답 모델(요금 20배, 54문항 답 약 $0.1 → $1.9 어림). Sonnet 5.5는 thinking disabled가 400이라 끌 때 `between_tools`(claude_model.thinking_for는 아직 disabled만 보냄). 근거: 검색 적중이 새로 생긴 10문항에서도 맞음이 0 → 1로만 늘었다([308]).
 3. 돈 안 드는 확인(판정에 안 씀, 하고 싶으면 사용자에게 묻고): ① 분야 고르기가 질문 바꾸기 결과를 쓰는지 코드로 본다(19문항 몰림의 원인) ② 갈린 17답 중 기존 판 13답의 이유 읽기 ③ `답.jsonl` 검색 결과로 원인 칸 세기 ④ Sonnet 채점자 폭을 [E2] 648답 재채점으로 재기(구독 사용량 큼).
 4. **보류**: 새 질문 바꾸기 제품 반영(`answer_engine.py` `REWRITE_PROMPT` 2b예시없음, `engine_setup.py` `REWRITE_EFFORT` medium·`REWRITE_MAX_TOKENS` 2000). 답이 나아진 근거가 없고 첫 글자 +0.79초 비용은 확실하다. 2번 뒤 다시 볼지 정한다.
@@ -24,7 +24,7 @@
 
 ## Git·검증
 
-- 브랜치 `exp/35-dev-bundle`, [PR #43](https://github.com/sbleeedu1-ai/rag_blender_tutor/pull/43) 초안·미병합. 11-13에 main(PR #44, a2716e1)을 이 브랜치로 병합(4122458). main 병합은 사용자 확인 뒤.
+- 브랜치 `exp/35-dev-bundle`, [PR #43](https://github.com/sbleeedu1-ai/rag_blender_tutor/pull/43) 초안·미병합. 11-13에 main(PR #44 a2716e1, PR #45 7046091)을 이 브랜치로 병합(4122458, 6fbbc56). main 병합은 사용자 확인 뒤.
 - 11-13 채점: 묶음 `data/eval/dev50/answer_grade_pack.py`(Git 제외, 무료), 집계 `results/20261113/094504_답시험_채점/집계.py`(무료, 출력 `집계_출력.txt`). 가짜 판정으로 집계 무료 점검 뒤 실제 집계. 제품 pytest는 제품 코드를 안 바꿔 돌리지 않음(PR #44 세션이 Mac에서 717 통과 보고).
 - 최종 자료 점검: `python -B -m pytest tests/test_data_manifest.py -q -p no:cacheprovider` 6개 통과. 처음 샌드박스 실행은 기존 임시 폴더 권한 때문에 준비 단계 4개가 실패했고, 같은 명령을 권한이 있는 환경에서 다시 실행해 통과했다. `data/manifests/`에 기록이 늘어도 자료 목록이 바뀌지 않는 것과 사용자 지정 원문 폴더의 업로드 제외를 확인했다. 전체 제품 시험은 제품 동작을 바꾸지 않아 추가 실행하지 않았다.
 - 검증: 세 실행기 무료 점검(통신 차단, 가짜 자료로 5초/전부/먼저1개 분리·예시만 빠짐·조건 순서)을 통과한 뒤 유료 실행. 결과는 기록 줄 수 270/180/486과 `설정.json` 끝 시각·멈춤 없음을 확인했다. 실험 기록 검사 `pytest tests/test_experiment_record.py -q -p no:cacheprovider` 10개 통과. 제품 전체 pytest는 제품 코드를 안 바꿔 오늘 재실행하지 않았다.
