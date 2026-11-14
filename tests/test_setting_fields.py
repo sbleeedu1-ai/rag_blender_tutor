@@ -89,6 +89,30 @@ def test_넘길_줄은_늘_보내는_줄_다음에_고른_분야_차례로_겹�
     assert len(lines_for(many, ())) == MAX_LINES
 
 
+def test_설정_줄에_든_사용자_폴더는_가리고_나머지_경로는_그대로_넘긴다():
+    # 줄의 값은 Blender에서 읽은 값의 repr 글이라 Windows 구분 글자가 둘씩 겹쳐 있다. 계정 이름이 모델에 가지 않게 한다(HISTORY [323])
+    settings = SettingLines(
+        (
+            r"Preferences.filepaths.asset_libraries[User Library].path = 'C:\\Users\\some one\\Documents\\Blender\\Assets'",
+            "Image[wood].filepath = '/Users/someone/Pictures/wood.png'",
+            "Image[linux].filepath = '/home/someone/wood.png'",
+            r"Scene[Scene].render.filepath = '/tmp\\'",  # 사용자 폴더가 아닌 절대 경로
+            "Image[rel].filepath = '//textures/wood.png'",  # .blend 기준 상대 경로
+            "Text[note].name = 'https://example.com/home/page'",  # 경로가 아닌 글
+        ),
+        {"MO": (r"Preferences.filepaths.temporary_directory = 'D:\\Users\\someone\\Temp\\'",)},
+    )
+    assert lines_for(settings, ("MO",)) == [
+        r"Preferences.filepaths.asset_libraries[User Library].path = '(사용자 폴더)\\Documents\\Blender\\Assets'",
+        "Image[wood].filepath = '(사용자 폴더)/Pictures/wood.png'",
+        "Image[linux].filepath = '(사용자 폴더)/wood.png'",
+        r"Scene[Scene].render.filepath = '/tmp\\'",
+        "Image[rel].filepath = '//textures/wood.png'",
+        "Text[note].name = 'https://example.com/home/page'",
+        r"Preferences.filepaths.temporary_directory = '(사용자 폴더)\\Temp\\'",
+    ]
+
+
 # 답 엔진에 붙였을 때
 
 
