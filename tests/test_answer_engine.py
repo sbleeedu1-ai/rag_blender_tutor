@@ -4,6 +4,7 @@
 질문을 넣고 나온 답 조각·근거 목록·검색 결과·오류 표시와, 모델이 받은 것만 본다.
 """
 
+import json
 import threading
 import time
 from dataclasses import replace
@@ -482,6 +483,23 @@ def test_모델에_검색_청크_글과_작업_상태와_질문을_넘긴다():
     assert '"mode": "OBJECT"' in sent and '"name": "Cube"' in sent
     assert '"view"' not in sent  # 시점 숫자는 화면 조작 감지에만 쓰고 모델에는 넘기지 않는다
     assert question in sent
+
+
+@pytest.mark.parametrize(
+    "path, name",
+    [
+        ("C:\\Users\\someone\\scenes\\boolean_wrong\\상자.blend", "상자.blend"),  # Windows에서 찍은 상태는 Mac에서도 같게
+        ("/Users/someone/scenes/boolean_wrong/상자.blend", "상자.blend"),
+        ("", ""),  # 저장 전
+    ],
+)
+def test_열린_파일은_폴더_없이_파일_이름만_모델에_넘긴다(path, name):
+    # 폴더 이름에는 사용자 계정 이름이 들 수 있고, 시험 장면은 폴더 이름이 원인을 말한다(HISTORY [321]·[322])
+    model = FakeModel()
+    ask(model=model, state=replace(STATE, file_path=path))
+    sent = model.calls[0][-1]["content"]
+    assert f'"file_path": {json.dumps(name, ensure_ascii=False)}' in sent
+    assert "someone" not in sent and "boolean_wrong" not in sent
 
 
 def test_최근_대화를_차례대로_넘기고_지난_질문은_기억하지_않는다():

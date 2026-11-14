@@ -180,7 +180,7 @@
 | `selected_objects` 고른 물체 이름 | `["Cube"]` | 답 엔진 |
 | `language` 화면 언어 | `ko_KR` | 답 엔진(메뉴 이름을 한국어로 보일지) |
 | `translate_interface` 인터페이스 번역 켜짐 | `true` | 답 엔진(같음) |
-| `file_path` 열린 파일 | `C:/work/sword.blend`, 저장 전이면 `""` | 답 엔진 |
+| `file_path` 열린 파일 | `C:/work/sword.blend`, 저장 전이면 `""` | 답 엔진(모델에는 폴더를 떼고 파일 이름 `sword.blend`만 넘긴다) |
 | `scene_object_count` 장면 물체 수 | `3` | 조건 "물체 수 늘어남" |
 | `blender_version` | `5.2.2 LTS` | 답 엔진 |
 | `edit_selected` 편집 모드에서 고른 개수 | `{"VERT": 4}`, 메시 편집 모드가 아니면 `{}` | 조건 "고른 면 수", 답 엔진 |

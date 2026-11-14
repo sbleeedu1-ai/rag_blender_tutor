@@ -4,6 +4,7 @@
 """
 
 import threading
+from dataclasses import replace
 
 import pytest
 
@@ -110,6 +111,14 @@ def test_설정_값을_받으면_분야를_골라_늘_보내는_줄과_그_분�
     # 평가에서 검색이 왜 흔들리는지 보려고 바꾼 검색어와 실제로 넘긴 설정 줄을 알린다
     assert events[-1].query == "bevel width"
     assert events[-1].lines == ("bpy.context.object.location = (0, 0, 0)", "bpy.context.object.modifiers['Bevel'].segments = 1")
+
+
+def test_분야_고르기에도_열린_파일은_폴더_없이_파일_이름만_넘긴다():
+    field_model = FakeFieldModel({"분야": ["MO"]})
+    state = replace(STATE, file_path="C:\\Users\\someone\\scenes\\boolean_wrong\\상자.blend")
+    list(engine(field_model).answer("베벨이 안 둥글어", state, [], settings=SETTINGS))
+    sent = field_model.calls[0][0][1]["content"]
+    assert '"file_path": "상자.blend"' in sent and "someone" not in sent and "boolean_wrong" not in sent
 
 
 def test_분야_고르기가_실패하면_묶음_없이_생각을_올린_모델로_답한다():

@@ -570,8 +570,12 @@ def _failure(error: Exception, results: list[Chunk]) -> Failure:
 
 
 def _for_model(state: WorkState) -> dict:
-    """모델에 넘길 작업 상태. 시점(거리·각도·중심 숫자)은 화면 조작 감지에만 쓰고 답에는 도움이 안 되어 뺀다."""
-    return {key: value for key, value in state.to_json().items() if key != "view"}
+    """모델에 넘길 작업 상태. 시점(거리·각도·중심 숫자)은 화면 조작 감지에만 쓰고 답에는 도움이 안 되어 뺀다.
+    열린 파일은 폴더를 떼고 파일 이름만 넘긴다(폴더에는 사용자 계정 이름이 들 수 있고 답에 쓰이지 않는다, HISTORY [322]).
+    Windows에서 찍은 경로도 Mac에서 같게 잘리도록 두 구분 글자를 모두 본다."""
+    sent = {key: value for key, value in state.to_json().items() if key != "view"}
+    sent["file_path"] = re.split(r"[\\/]", state.file_path)[-1]
+    return sent
 
 
 def _messages(
