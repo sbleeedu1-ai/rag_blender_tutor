@@ -4,6 +4,7 @@
 """
 
 import threading
+from dataclasses import replace
 
 import pytest
 
@@ -88,6 +89,30 @@ def test_넘길_줄은_늘_보내는_줄_다음에_고른_분야_차례로_겹�
     assert len(lines_for(many, ())) == MAX_LINES
 
 
+def test_설정_줄에_든_사용자_폴더는_가리고_나머지_경로는_그대로_넘긴다():
+    # 줄의 값은 Blender에서 읽은 값의 repr 글이라 Windows 구분 글자가 둘씩 겹쳐 있다. 계정 이름이 모델에 가지 않게 한다(HISTORY [323])
+    settings = SettingLines(
+        (
+            r"Preferences.filepaths.asset_libraries[User Library].path = 'C:\\Users\\some one\\Documents\\Blender\\Assets'",
+            "Image[wood].filepath = '/Users/someone/Pictures/wood.png'",
+            "Image[linux].filepath = '/home/someone/wood.png'",
+            r"Scene[Scene].render.filepath = '/tmp\\'",  # 사용자 폴더가 아닌 절대 경로
+            "Image[rel].filepath = '//textures/wood.png'",  # .blend 기준 상대 경로
+            "Text[note].name = 'https://example.com/home/page'",  # 경로가 아닌 글
+        ),
+        {"MO": (r"Preferences.filepaths.temporary_directory = 'D:\\Users\\someone\\Temp\\'",)},
+    )
+    assert lines_for(settings, ("MO",)) == [
+        r"Preferences.filepaths.asset_libraries[User Library].path = '(사용자 폴더)\\Documents\\Blender\\Assets'",
+        "Image[wood].filepath = '(사용자 폴더)/Pictures/wood.png'",
+        "Image[linux].filepath = '(사용자 폴더)/wood.png'",
+        r"Scene[Scene].render.filepath = '/tmp\\'",
+        "Image[rel].filepath = '//textures/wood.png'",
+        "Text[note].name = 'https://example.com/home/page'",
+        r"Preferences.filepaths.temporary_directory = '(사용자 폴더)\\Temp\\'",
+    ]
+
+
 # 답 엔진에 붙였을 때
 
 
@@ -107,6 +132,17 @@ def test_설정_값을_받으면_분야를_골라_늘_보내는_줄과_그_분�
     assert "render.engine" not in content  # 고르지 않은 분야의 줄은 넘기지 않는다
     assert '"검색어": "bevel width"' in field_model.calls[0][0][1]["content"]  # 바꾼 검색어로 고른다
     assert isinstance(events[-1], Done) and events[-1].fields == ("MO",) and not events[-1].field_failed
+    # 평가에서 검색이 왜 흔들리는지 보려고 바꾼 검색어와 실제로 넘긴 설정 줄을 알린다
+    assert events[-1].query == "bevel width"
+    assert events[-1].lines == ("bpy.context.object.location = (0, 0, 0)", "bpy.context.object.modifiers['Bevel'].segments = 1")
+
+
+def test_분야_고르기에도_열린_파일은_폴더_없이_파일_이름만_넘긴다():
+    field_model = FakeFieldModel({"분야": ["MO"]})
+    state = replace(STATE, file_path="C:\\Users\\someone\\scenes\\boolean_wrong\\상자.blend")
+    list(engine(field_model).answer("베벨이 안 둥글어", state, [], settings=SETTINGS))
+    sent = field_model.calls[0][0][1]["content"]
+    assert '"file_path": "상자.blend"' in sent and "someone" not in sent and "boolean_wrong" not in sent
 
 
 def test_분야_고르기가_실패하면_묶음_없이_생각을_올린_모델로_답한다():
@@ -124,6 +160,14 @@ def test_분야_고르기가_한도를_넘기면_기다리지_않고_실패로_�
     events = list(engine(FakeFieldModel(wait=hold), FakeModel(), fallback, Settings(field_timeout=0.05)).answer("베벨", STATE, [], settings=SETTINGS))
     hold.set()
     assert events[-1].field_failed and fallback.calls
+
+
+def test_분야_묶음을_끄면_분야를_고르지_않고_늘_보내는_줄만_넘긴다():
+    model, field_model = FakeModel(), FakeFieldModel()
+    events = list(engine(field_model, model, settings=Settings(field_lines=False)).answer("베벨", STATE, [], settings=SETTINGS))
+    content = model.calls[0][-1]["content"]
+    assert not field_model.calls and "location = (0, 0, 0)" in content and "segments = 1" not in content
+    assert events[-1].fields == () and not events[-1].field_failed
 
 
 def test_설정_값이_없으면_분야를_고르지_않고_설정_칸도_넣지_않는다():

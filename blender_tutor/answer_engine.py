@@ -181,6 +181,8 @@ class Settings:
     # 설정 값의 1-a(그 상황일 때 늘)·2(계산) 초안 줄을 넘길지. 개발셋에서 끈 판과 견준다(사용자 "어차피 할거면 … 지금 하는게", [270])
     situation_lines: bool = True
     computed_lines: bool = True
+    # 분야 묶음을 넘길지. 끄면 분야를 고르지 않고 늘 보내는 줄만 넘긴다(개발셋에서 묶음 몫을 가르려고, 검토 A5)
+    field_lines: bool = True
 
     def __post_init__(self):
         object.__setattr__(self, "reasoning", Reasoning(self.reasoning))  # "low"처럼 글자로 줘도 받고, 모르는 이름이면 ValueError
@@ -217,6 +219,10 @@ class Done:
     # 고른 분야(설정 값을 받지 않았거나 분야 고르기가 실패했으면 빈 묶음)와 실패 여부. 평가와 시간 기록용
     fields: tuple[str, ...] = ()
     field_failed: bool = False
+    # 검색에 쓴 글(바꾼 검색어, 질문 바꾸기가 없으면 질문과 맥락을 이은 글)과 답변 모델에 실제로 넘긴 설정 줄.
+    # 평가에서 검색·답이 왜 흔들리는지 보려고 알린다(티켓 35). 창은 쓰지 않는다
+    query: str = ""
+    lines: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -307,7 +313,7 @@ class AnswerEngine:
         try:
             query = self._rewritten(rewrite) if rewrite else "\n".join([question, *context.values()])
             # 분야 고르기는 바꾼 검색어가 나온 뒤 임베딩과 동시에 부른다(명세). 실패해도 답은 멈추지 않는다(묶음 없이 답함)
-            chosen = self._start_fields(question, query, state) if settings is not None and self._field_model else None
+            chosen = self._start_fields(question, query, state) if settings is not None and self._field_model and self._settings.field_lines else None
             # 비슷한 연습 과정은 검색어(직전 질문·조작에 끌림)가 아니라 질문만으로 고른다.
             # 질문만의 벡터는 따로 부르지 않고 같은 호출에 글을 하나 더 실어 받는다(비용은 질문 길이만큼 늚)
             texts = [query, question] if recommend and question != query else [query]
@@ -340,7 +346,7 @@ class AnswerEngine:
             return
         if text := marks.finish():
             yield Piece(text)
-        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed)
+        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed, query, tuple(lines))
 
     def _start_fields(self, question: str, query: str, state: WorkState) -> Future:
         """분야 고르기를 뒤에서 부른다. 결과(분야 코드 묶음)나 오류는 돌려준 Future에 담긴다."""
@@ -564,8 +570,12 @@ def _failure(error: Exception, results: list[Chunk]) -> Failure:
 
 
 def _for_model(state: WorkState) -> dict:
-    """모델에 넘길 작업 상태. 시점(거리·각도·중심 숫자)은 화면 조작 감지에만 쓰고 답에는 도움이 안 되어 뺀다."""
-    return {key: value for key, value in state.to_json().items() if key != "view"}
+    """모델에 넘길 작업 상태. 시점(거리·각도·중심 숫자)은 화면 조작 감지에만 쓰고 답에는 도움이 안 되어 뺀다.
+    열린 파일은 폴더를 떼고 파일 이름만 넘긴다(폴더에는 사용자 계정 이름이 들 수 있고 답에 쓰이지 않는다, HISTORY [322]).
+    Windows에서 찍은 경로도 Mac에서 같게 잘리도록 두 구분 글자를 모두 본다."""
+    sent = {key: value for key, value in state.to_json().items() if key != "view"}
+    sent["file_path"] = re.split(r"[\\/]", state.file_path)[-1]
+    return sent
 
 
 def _messages(

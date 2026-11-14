@@ -5,16 +5,16 @@
 ## 프로젝트
 
 - 무엇: Blender 5.2를 처음 쓰는 사람이 3D 아이템을 만들 때, 공식 설명서를 근거로 다음 조작을 쉬운 한국어로 안내하는 도우미
-- 두 PC: 강의실은 Windows, 집은 Mac이다. 이 문서의 명령은 Windows 모양으로 적으니 Mac에서는 아래 짝대로 바꿔 쓴다(HISTORY [307]).
+- 두 PC: 개발은 집 Mac에서 하고, 집 PC(Windows)는 Windows에서도 도는지 확인하는 데 쓴다(2026-11-13부터, HISTORY [318]. 강의실 PC는 더 쓰지 않고 그 자료는 지웠다). 이 문서의 명령은 Windows 모양으로 적으니 Mac에서는 아래 짝대로 바꿔 쓴다(HISTORY [307]). Windows 칸의 경로는 강의실 PC 때 적은 것이고, 집 PC에서도 같은지는 아직 확인하지 않았다.
 
-  | | Windows(강의실) | Mac(집) |
+  | | Windows(집 PC, 확인용) | Mac(집, 개발) |
   |---|---|---|
   | 저장소 | `C:\WORK\rag_blender_tutor` | `/Volumes/mac_ssd/proj/rag_blender_tutor` |
   | 가상 환경 파이썬 | `.venv\Scripts\python` | `.venv/bin/python` |
   | Blender | `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe` | `/Volumes/mac_ssd/Applications/Blender.app/Contents/MacOS/Blender` |
   | 지울 파일 옮길 곳 | `C:\WORK\trash\` | `/Volumes/mac_ssd/proj/trash/` |
 
-  Mac에서는 도우미 창·애드온 설치·애드온 자체 시험이 아직 돌지 않는다(제품은 Windows 전용으로 만들었다, HISTORY [44]). 테스트·연습 과정 파일 검사·문서 도구는 돈다.
+  Mac에서도 도우미 창·애드온 설치·애드온 자체 시험이 돈다(PR #46, HISTORY [312]-[316]). GitHub의 자동 테스트(CI)는 Windows에서만 돈다.
 - 준비: Windows `python -m venv .venv` 뒤 `.venv\Scripts\python -m pip install -e ".[dev]"`. Mac은 Blender 안 파이썬으로 `/Volumes/mac_ssd/Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13 -m venv .venv` 뒤 `.venv/bin/python -m pip install -e ".[dev]"`, 이어서 `mkdir -p .venv/Scripts && ln -s ../bin/python .venv/Scripts/python.exe`(훅이 두 PC 모두 `.venv/Scripts/python.exe`를 부르므로 그 이름의 바로가기를 둔다. 없으면 터미널 명령이 모두 막힌다, HISTORY [182]·[307])
 - 실행: 도우미 창은 Blender를 켜면 애드온이 함께 켠다(F10으로 부름, 손으로는 `.venv\Scripts\python -m blender_tutor.helper`, 환경 변수 `BLENDER_TUTOR_TOKEN` 필요). 애드온 설치 `.venv\Scripts\python -m blender_tutor.install_addon`(뒤에 Blender 환경 설정에서 애드온 켜기) · 애드온 자체 시험(Blender를 화면 없이 띄움, 기본 테스트 밖) `.venv\Scripts\python addon\selftest.py` · 연습 과정 파일 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` · 테스트: `.venv\Scripts\python -m pytest` (테스트는 API 키 없이 돌게 만들고 늘 통과 상태로 둔다. 통과 못 하면 곧 문제라는 신호가 되게)
 
@@ -44,9 +44,10 @@
 - 작업은 브랜치에서 하고 커밋·푸시·PR까지 스스로 진행한다(main은 보호되어 작업 브랜치에만 올라간다. 푸시 전에 커밋할 파일 목록을 보고 비밀 정보가 없는지 확인한다. 공개 저장소라 푸시하면 바로 공개된다). main 병합은 확인 뒤. main에 병합한 브랜치는 로컬·원격 모두 지운다.
 - 실험 결과는 `results/<날짜>/<시각>_<이름>/`(예: `results/20261030/092311_이름/`, 시각은 시작 시각 시분초라 날짜 폴더 안의 이름순이 실행 순서)에 새로 남기고 덮어쓰지 않는다. 비교 평가로 선택을 하는 프로젝트에서는 평가 자료를 개발용과 마지막 확인용으로 처음부터 나눈다.
   - 평가 문항·채점 차례·시간 표본을 구현 편의로 빼지 않는다(빼면 시험이 실제 사용과 어긋난다). 빼야 하면 요구 변경으로 드러내 묻는다(HISTORY [57]·[59]).
-- 검토(코드 검토·다른 AI의 점검) 결과는 기준이 있으면 Claude가 기준대로 처리하고 중요한 것 2개 안팎만 보이며, 기준이 없으면 번호를 붙여 한 항목씩 판단받는다(사용자 판단 없이 고치고 넘어가지 않게). 받았을 때 `docs/agents/review.md`를 따른다. 이 규칙이 `implement` 스킬의 "검토 뒤 커밋"보다 먼저다.
+- 작업 중 결정(측정 문턱, 문항 정답 위치, 검토 지적의 처리 등)은 Claude가 advisor와 정해 진행하고, 마지막에 정한 것과 근거를 한 번에 보인다. 사용자는 그 결과를 보고 판단한다(2026-11-14 사용자 "대부분의 결정은 어드바이저랑 하고 마지막의 마지막 최종결정한거를 나한테 보여주면", HISTORY [337]). 돈이 드는 실행·main 병합·삭제와, 사용자가 이미 정한 것(목표 54 중 50, 엄격 채점 기준)을 바꾸는 일은 실행 전에 묻는다. 검토(코드 검토·다른 AI의 점검) 결과를 받았을 때는 `docs/agents/review.md`를 따른다. 이 규칙이 `implement` 스킬의 "검토 뒤 커밋"보다 먼저다.
 - 측정·비교 실험은 `experiment-checklist` 스킬의 체크리스트를 채운 뒤 돌린다(가설·기준 없이 돌린 실험이 되풀이돼서). 제품 규칙은 Blender 사용 전체에 맞춰 만들고(개발 문항에 맞춘 규칙이 되지 않게), 개발 문항과 장면은 규칙을 고정한 뒤 점검으로만 쓴다. 시험에서 일부러 바꾼 값은 세지 않는다. 평가 결과는 코드의 `turn`을 옮긴 "차례" 대신 "문항"·"질문"으로 말한다.
 - `experiment-checklist` 스킬로 돌리는 시험을 실행할 때마다 사용자 확인 창을 띄우는 훅은 제안하지 않는다(사용자가 긴 시험을 내내 지켜볼 수 없다). 비용·병합·삭제 확인은 그대로 받는다.
+- 하위 에이전트의 노력치(effort)는 medium 이하로 고른다. high 이상은 사용자가 명시적으로 요청했을 때만 쓴다(사용량이 너무 많이 들어서, 2026-11-13 HISTORY [309]). `.claude/agents/*.md` 정의와 띄울 때 주는 값 모두 같다.
 - Blender 동작을 전제로 삼을 때는 정답지에 가장 가까운 공식 파이썬 문서(`docs.blender.org/api/5.2/`, `data/blender_api_5.2/`에 내려받음)를 먼저 읽고 근거 쪽을 적는다. 항목은 `.venv\Scripts\python .claude\tools\api_doc.py <이름>`(Mac `.venv/bin/python .claude/tools/api_doc.py <이름>`)으로 끝까지 읽는다(시험 전 훅이 돌린 기록을 확인한다, HISTORY [214]). 문서에 없으면 Blender 소스를 보거나 실행으로 확인하고, 기록에 `공식 문서`·`소스 코드`·`실행으로 확인`·`추측`을 나눠 적는다. 사용자용 설명서가 아니라 개발 참고용이다(도우미 검색 자료에 넣지 않는다).
 - 세션 기록을 찾을 때(`session-search`) 제외 낱말은 `holdout,홀드아웃,봉인`이다(마지막 확인용 문항이 개발 쪽에 새지 않게).
 - `HANDOFF.md`는 병합 전에 같은 PR에 넣으므로 맨 위 갱신 줄에 "PR #N 병합 전에 씀"을 적는다. 이어받을 때는 그 PR이 병합됐는지 git으로 먼저 본다.

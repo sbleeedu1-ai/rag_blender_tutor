@@ -35,6 +35,20 @@ def test_rewriting_does_not_list_itself(tmp_path):
     assert set(read_list(data / LIST_NAME)) == {"eval/a.json", "holdout/*"}
 
 
+def test_saved_drive_records_do_not_change_source_inventory(tmp_path):
+    data = _tree(tmp_path)
+    records = data / "manifests" / "20261112"
+    records.mkdir(parents=True)
+    record = records / "드라이브.tsv"
+    record.write_text("경로\t크기\n", encoding="utf-8")
+    main([], tmp_path)
+    before = read_list(data / LIST_NAME)
+    record.write_text("경로\t크기\n원격 자료\t123\n", encoding="utf-8")
+    main([], tmp_path)
+    assert read_list(data / LIST_NAME) == before
+    assert set(before) == {"eval/a.json", "holdout/*"}
+
+
 def test_compare_finds_changed_and_missing_but_skips_not_uploaded(tmp_path, capsys):
     data = _tree(tmp_path)
     main([], tmp_path)
@@ -42,8 +56,9 @@ def test_compare_finds_changed_and_missing_but_skips_not_uploaded(tmp_path, caps
     other.write_bytes((data / LIST_NAME).read_bytes())
     (data / "eval" / "a.json").write_text("1234567", encoding="utf-8")
     (data / "eval" / "새것.json").write_text("1", encoding="utf-8")
-    (data / "models").mkdir()
-    (data / "models" / "큰것.bin").write_text("1", encoding="utf-8")
+    for folder in ("models", "hf_cache", "manual_en_5.2", "blender_api_5.2"):
+        (data / folder).mkdir()
+        (data / folder / "큰것.bin").write_text("1", encoding="utf-8")
     assert main(["--compare", str(other)], tmp_path) == 0
     out = capsys.readouterr().out
     assert "[여기에만] 1개" in out and "eval/새것.json" in out

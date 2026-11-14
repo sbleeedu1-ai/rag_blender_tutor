@@ -84,5 +84,5 @@ def test_기록에_남기는_설정은_엔진_설정에_최근_대화_쌍_수를
     # 시간 기록 줄과 평가 결과(설정.json)가 이 모양 하나를 함께 써서 서로 맞대 볼 수 있다(티켓 29)
     assert settings_record(Settings(reasoning="low"), 5) == {
         "top_k": 8, "timeout": 10.0, "rewrite_timeout": 5.0, "field_timeout": 5.0, "use_bm25": False, "reasoning": "low",
-        "fallback_reasoning": "low", "situation_lines": True, "computed_lines": True, "recent_pairs": 5,
+        "fallback_reasoning": "low", "situation_lines": True, "computed_lines": True, "field_lines": True, "recent_pairs": 5,
     }
