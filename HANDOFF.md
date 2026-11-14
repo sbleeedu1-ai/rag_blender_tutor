@@ -1,6 +1,6 @@
 # 인수인계
 
-마지막 갱신: 2026-11-14 저녁(직접 읽기 끝 [321], 모델에 가는 경로 두 곳 고침 [322]·[323], 이상한 숫자를 원자료로 확인 [324], 문항마다 핵심·설명서 조각·기준을 맞대 읽고 개선 방향을 적음 [325]-[328]) · Claude Code(Fable 5.2) · 집 Mac(`/Volumes/mac_ssd/proj/rag_blender_tutor`) · PR #43 병합 전에 씀
+마지막 갱신: 2026-11-14 저녁(직접 읽기 끝 [321], 모델에 가는 경로 두 곳 고침 [322]·[323], 이상한 숫자를 원자료로 확인 [324], 문항마다 핵심·설명서 조각·기준을 맞대 읽고 개선 방향을 적음 [325]-[328], 설명서와 공식 파이썬 문서를 Mac에 풀어 둠 [328]·[329]) · Claude Code(Fable 5.2) · 집 Mac(`/Volumes/mac_ssd/proj/rag_blender_tutor`) · PR #43 병합 전에 씀
 
 ## 11-14: 전체 점검의 직접 읽기 (끝, 기록만)
 
@@ -55,7 +55,7 @@
 ## 주의
 
 - **채점 묶음의 `풀이.json`은 채점자가 쓰는 폴더(공유 스크래치패드 포함) 밖에 둔다.** 이번에 채점자 스크립트 자리에 옮겨 두어 둘이 이름을 봤다(읽은 호출 0, 작업 기록 전수 확인). 채점자 여럿이 스크래치패드를 같이 쓰면 임시 스크립트가 서로 덮이니 채점자마다 하위 폴더를 지시문에 정해 준다.
-- Mac 경로: Blender `/Volumes/mac_ssd/Applications/Blender.app/Contents/MacOS/Blender`(5.2.4), 파이썬 `.venv/bin/python`. 두 PC 경로 짝은 `AGENTS.md`(PR #44, [307]). 이 Mac에는 `data/blender_api_5.2/`가 없다(묶음째 없음. 받는 법: `https://docs.blender.org/api/5.2/blender_python_reference_5_2.zip` 약 95MB를 받아 `data/eval/state_generic/api_to_text.py`로 풂. 사용자 확인을 기다리는 중 [328]). 설명서 원문은 11-14에 `data/manual_en_5.2/html/blender_manual_v520_en.html/`에 풀어 두었다(HTML 2,361쪽, 지금 조각 파일과 같은 판).
+- Mac 경로: Blender `/Volumes/mac_ssd/Applications/Blender.app/Contents/MacOS/Blender`(5.2.4), 파이썬 `.venv/bin/python`. 두 PC 경로 짝은 `AGENTS.md`(PR #44, [307]). 공식 파이썬 문서는 11-14에 이 Mac에도 받아 두었다([329]): `data/blender_api_5.2/`에 `api.zip`(공식 주소, 99,940,559바이트, 11-14 01:54 GMT 판), `html/`(원문 2,192쪽), `txt/`(2,191쪽, `.claude/tools/api_doc.py`가 읽는 자리). 설명서 원문은 11-14에 `data/manual_en_5.2/html/blender_manual_v520_en.html/`에 풀어 두었다(HTML 2,361쪽, 지금 조각 파일과 같은 판).
 - 백그라운드 "완료" 알림을 믿지 말고 결과 파일을 직접 센다(이번엔 채점 파일마다 표 36줄 확인).
 
 ## Git·검증

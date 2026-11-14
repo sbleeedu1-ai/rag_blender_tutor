@@ -2980,3 +2980,9 @@
 - 한 것: `data/blender_manual_html.zip`을 `data/manual_en_5.2/html/`에 풂(HTML 2,361쪽, 1.3GB, Git 제외). 이 원문으로 조각을 다시 만들면 지금 조각 파일과 8,997줄 내용이 모두 같다(줄 끝 글자만 다름). 개발 49문항에 걸린 조각 115개 중 앞부분만 읽었던 것과 안 찍었던 것을 끝까지 읽음(장부 12-17). 가른 결과는 [325]-[327] 그대로.
 - 새로 본 것: Q40의 정답 위치 조각에 "The functionality of this importer is deprecated, use the new FBX Importer instead"가 있다. 정답 핵심은 그 옛 가져오기를 쓰라고 하고, 켜라는 옵션은 설명서에 이름만 있다.
 - 못 한 것: 개발자 문서(`data/blender_api_5.2/`)는 이 Mac에 묶음째 없다. 내려받아야 해서(공식 주소, 약 95MB) 사용자 확인을 기다림.
+
+### [329] 2026-11-14 · Blender 동작을 확인할 때 집 Mac에서도 공식 문서를 읽을 수 있게, 공식 파이썬 문서를 내려받아 풀어 둔다
+
+- 사용자: "네, 받아줘"(Claude가 파일 이름 `blender_python_reference_5_2.zip`, 출처 `https://docs.blender.org/api/5.2/`, 크기 약 95MB를 알린 뒤).
+- 한 것: `data/blender_api_5.2/api.zip`으로 받음(99,940,559바이트, 서버가 알린 크기와 같음, 묶음 검사 오류 없음, 서버의 고친 시각 2026-11-14 01:54 GMT). 원문은 `html/`에 풂(HTML 2,192쪽, 빌드 임시 자료 `.doctrees`는 뺌). 저장소의 `data/eval/state_generic/api_to_text.py`를 읽은 뒤 돌려 `txt/` 2,191쪽(글자 10,406,406)을 만듦. `.claude/tools/api_doc.py bpy.ops.object.transform_apply`가 항목을 끝까지 보여 줌(실행으로 확인). 전부 Git 제외.
+- 알아 둘 것: 문서는 날마다 다시 만들어지는 판이라, 11-06쯤 Windows PC에 받은 사본과 줄 번호가 다를 수 있다(쪽 수 2,191은 기록과 같음). 옛 기록의 "파일·줄" 인용을 이 Mac에서 그대로 맞대면 어긋날 수 있다.
