@@ -999,8 +999,9 @@ def test_조각을_어떻게_나눠_흘려도_한꺼번에_바꾼_것과_같다(
 
 
 # 티켓 50 가(HISTORY [358]-[360]): 모델이 스스로 옮긴 이름. 흔히 옮기는 말 목록은 지어낸 것
-COMMON = {"Orthographic": ["직교 투영", "직교"], "Face": ["면", "페이스"], "Bevel": ["모깎기", "모서리 다듬기"], "Orbit": ["회전"]}
-COMMON_EXTRA = {**SCREEN_EXTRA, "Orthographic": "정사법", "Orbit": "궤도"}
+COMMON = {"Orthographic": ["직교 투영", "직교"], "Face": ["면", "페이스"], "Bevel": ["모깎기", "모서리 다듬기"], "Orbit": ["회전"],
+          "UV Editor": ["UV 편집기"], "Value": ["명도"], "Mirror": ["좌우 대칭 거울 복사 기능"]}
+COMMON_EXTRA = {**SCREEN_EXTRA, "Orthographic": "정사법", "Orbit": "궤도", "UV Editor": "UV 에디터", "Value": "값", "Mirror": "미러"}
 
 
 def shown_common(pieces) -> str:
@@ -1016,9 +1017,9 @@ def shown_common(pieces) -> str:
         ("모깎기(Bevel)를 씁니다.", "베벨(Bevel)을 씁니다."),  # 조사도 화면 글자에
         ("면 선택 모드(Face)를 켭니다.", "페이스(Face) 선택 모드를 켭니다."),  # 꼬리는 괄호 뒤로(㉠ [360])
         ("먼저 면(Face) 고르기", "먼저 페이스(Face) 고르기"),
-        ("화면이 회전(Orbit)합니다.", "화면이 회전(궤도, Orbit)합니다."),
+        ("화면이 회전(Orbit)합니다.", "화면이 회전(궤도, Orbit)합니다."),  # 괄호 뒤 '하다' 꼴은 목록으로 안 바꿈(지금 꼴 그대로)
         ("모깎기(Bevel) 하나를 겁니다.", "베벨(Bevel) 하나를 겁니다."),  # 띄어 쓴 '하나'는 '하다' 꼴이 아니다
-        ("모깎기(Bevel)하나", "베벨(Bevel)하나"),  # 괄호 뒤 '하다' 꼴은 목록으로 안 바꿈(지금 꼴 그대로)
+        ("모깎기(Bevel)하나", "베벨(Bevel)하나"),  # 붙여 쓴 '하나'도
         ("옆면(Face) 고르기", "옆면(페이스, Face) 고르기"),  # 목록 말 앞에 한글이 붙어 있으면 다른 낱말
         ("평평한 쪽(Face) 고르기", "평평한 쪽(페이스, Face) 고르기"),  # 목록에 없는 말은 지금 꼴 그대로(꼴 미정)
         ("페이스(Face)를", "페이스(Face)를"),  # 이미 화면 글자
@@ -1026,6 +1027,7 @@ def shown_common(pieces) -> str:
         ("베벨 노드(Bevel)에", "베벨(Bevel) 노드에"),  # '노드'도 꼬리
         ("먼저 베벨 노드(Bevel)만", "먼저 베벨(Bevel) 노드만"),  # 앞에 다른 글이 있어도
         ("종류가 '직교(Orthographic)'로", "종류가 '정사법(Orthographic)'으로"),  # 따옴표·굵은 글씨 뒤 조사도 화면 글자에
+        ("명도 값(Value)로 바꿉니다.", "값(Value)으로 바꿉니다."),  # 화면 글자가 꼬리 낱말로 끝나면 꼬리를 또 붙이지 않는다
         ("**모깎기(Bevel)**를 씁니다.", "**베벨(Bevel)**을 씁니다."),
     ],
 )
@@ -1042,7 +1044,8 @@ def test_흔히_옮기는_말도_되풀이되면_두번째부터_화면_글자�
 def test_흔히_옮기는_말을_조각으로_흘려도_같다(seed):
     import random
 
-    text = "먼저 직교 투영(Orthographic)으로 바꾸고 면 선택 모드(Face)를 켭니다. 그다음 모깎기(Bevel)를 씁니다."
+    text = ("먼저 직교 투영(Orthographic)으로 바꾸고 면 선택 모드(Face)를 켭니다. 그다음 모깎기(Bevel)를 씁니다. "
+            "여기서 UV 편집기(UV Editor)를 열고 좌우 대칭 거울 복사 기능(Mirror)을 씁니다.")  # 영어가 든 말, 긴 말
     rng, parts, i = random.Random(seed), [], 0
     while i < len(text):
         k = rng.randint(1, 6)

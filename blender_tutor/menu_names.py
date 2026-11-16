@@ -398,6 +398,7 @@ _HANGUL = re.compile(r"[가-힣]")
 _RUN = re.compile(r"(?<![A-Za-z0-9_.`/\\-])[A-Z][A-Za-z0-9'\-]*(?:\.\.\.|…)?(?: [A-Za-z0-9][A-Za-z0-9'\-]*(?:\.\.\.|…)?)*")
 _QUOTE_BEFORE = re.compile(r"설명서(?:의|에서|에는|에)\s*[\"“'‘]?\s*$")
 _MAX_WORDS = 6
+_HOLD_COMMON_WORDS = 6  # 흔히 옮기는 말(+꼬리) 앞부분으로 더 붙잡는 낱말 수 한도(목록 말은 대부분 4낱말 이하)
 _HOLD_WORDS = 30  # 답이 흐르는 동안 붙잡는 영어 덩이의 낱말 수 한도(이보다 긴 덩이는 이름 하나로 맞을 일이 없다)
 
 
@@ -495,6 +496,8 @@ def screen_prose(
                 if not core.endswith(_squash(parts[0][1])) or (tail and _squash(head[at:]).removesuffix(_squash(tail)) == _squash(parts[0][1])):
                     new = _shown_part(parts[0][0], parts[0][1], asked, seen)
                     end = e + 1
+                    if tail and _squash(parts[0][1]).endswith(_squash(tail)):
+                        tail = ""  # 화면 글자가 꼬리 낱말로 끝나면("값") 꼬리를 또 붙이지 않는다("값(Value) 값" 막기)
                     if tail:
                         new += " " + tail
                     else:
@@ -571,10 +574,13 @@ def prose_cut(text: str, hold: set[str] | frozenset = frozenset()) -> int:
 
 def _hold_common(text: str, cut: int, hold: set[str] | frozenset) -> int:
     """cut 바로 앞 낱말 1-3개가 hold의 줄이면(뒤에 붙잡은 낱말과 이어 목록 말이 될 수 있으면) 가장 긴 줄의 시작까지 붙잡는다."""
-    for k in (3, 2, 1):
+    for k in range(_HOLD_COMMON_WORDS, 0, -1):
         m = re.search(rf"(?<!\S)((?:[^\s()]+ ){{{k}}})$", text[:cut])
-        if m and not re.search(r"[A-Za-z0-9]", m.group(1)) and m.group(1).strip().lstrip("*_'\"“‘`") in hold:  # 영어 덩이 가운데서 자르지 않게
-            return m.start(1)
+        if not m or m.group(1).strip().lstrip("*_'\"“‘`") not in hold:
+            continue
+        if re.match(r"[A-Za-z0-9]", m.group(1)) and re.search(r"[A-Za-z0-9.…] $", text[: m.start(1)]):
+            continue  # 영어 덩이 가운데서 자르지 않게("Separate RGB"의 RGB부터 붙잡으면 Separate만 따로 바뀐다)
+        return m.start(1)
     return cut
 
 
