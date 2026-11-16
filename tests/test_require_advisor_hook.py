@@ -118,3 +118,28 @@ def test_hooks_folder_is_in_scope(repo, tmp_path):
     (repo / ".claude" / "hooks" / "h.py").write_text("y = 2\n", encoding="utf-8")
     git(repo, "add", ".claude/hooks/h.py")
     assert denied(hook.decide("git commit -m 훅", str(repo), transcript(tmp_path, HUMAN)))
+
+
+def test_commit_with_path_args_sees_unstaged(repo, tmp_path):
+    change(repo, "blender_tutor/a.py", stage=False)
+    t = transcript(tmp_path, HUMAN)
+    assert denied(hook.decide("git commit -qm 고침 blender_tutor/a.py", str(repo), t))
+    assert denied(hook.decide("git commit -m 고침 -- blender_tutor/a.py", str(repo), t))
+
+
+def test_unresolvable_cd_falls_back_to_cwd(repo, tmp_path):
+    change(repo, "blender_tutor/a.py")
+    assert denied(hook.decide('cd "$D" && git commit -m 고침', str(repo), transcript(tmp_path, HUMAN)))
+
+
+def test_only_assistant_lines_count_as_result(repo, tmp_path):
+    change(repo, "blender_tutor/a.py")
+    blob = dict(OK, type="api-request-blob")
+    assert denied(hook.decide("git commit -m 고침", str(repo), transcript(tmp_path, HUMAN, CALL, blob)))
+
+
+def test_non_commit_command_needs_no_transcript_path():
+    """하위 에이전트 입력에 transcript_path가 없어도 커밋이 아닌 Bash는 막지 않는다(onFailure block)."""
+    payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": "."})
+    done = subprocess.run([sys.executable, str(HOOKS / "require_advisor.py")], input=payload, capture_output=True, text=True)
+    assert done.returncode == 0 and done.stdout == ""

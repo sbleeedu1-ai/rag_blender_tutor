@@ -3272,3 +3272,7 @@
 - 한 것: `.claude/hooks/require_advisor.py`를 PreToolUse Bash·PowerShell로 옮김(Write·Edit 연결과 기록 파일은 뺌). 커밋에 `blender_tutor/`·`addon/`·`.claude/hooks/` 파일이 들고 마지막 사용자 메시지 뒤 advisor 결과(성공·오류)가 없으면 거부. 같은 명령에 `git add`나 `commit -a`가 있으면 스테이징 전 파일도 본다. 명령 나누기는 `deny_cut_output.py`의 것을 씀.
 - 확인: `tests/test_require_advisor_hook.py` 11개(먼저 11개 실패를 봄), 전체 pytest 802 통과. 가짜 기록(advisor 없음)으로 손으로 돌려 거부 문구가 나오고, 이 세션 기록으로는 통과.
 - 못 보는 것: `--amend`·병합·체리픽, 하위 에이전트(agent_id 키가 오는지 확인 안 함), advisor 도구가 없는 세션에서는 범위 커밋이 계속 막힘.
+
+### [364] 2026-11-16 · advisor 커밋 훅이 조용히 통과시키던 꼴 셋을 막고, 하위 에이전트 Bash가 막히지 않게 한다
+- 제안: advisor 검토([363] 뒤). 고친 것: 경로를 붙인 커밋(`git commit -m x 파일`)도 스테이징 전 파일을 봄, `cd "$D"`처럼 풀지 못하는 폴더는 입력 cwd로 봄, advisor 결과는 assistant 줄만 셈(api-request-blob 줄 제외), 커밋이 아닌 명령에서는 transcript_path를 읽지 않음.
+- 확인: 훅 테스트 15개(새 4개는 먼저 실패를 봄). 실제 하네스에서 거부가 뜨는 것은 아직 못 봄: advisor 결과가 있는 차례라 통과만 봤다. 다음 차례 첫머리에 advisor 전에 시험 파일로 `git commit --dry-run`을 보내 확인한다.
