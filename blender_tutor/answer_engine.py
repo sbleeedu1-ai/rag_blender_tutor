@@ -591,6 +591,7 @@ class _MenuMarks:
         self._ticks += text.count("`")
         return text
 
+
 def _object_names(state: WorkState) -> tuple[str, ...]:
     """답 글에서 화면 글로 바꾸지 않을 이름: 작업 상태의 물체 이름(아웃라이너에 보이는 글자 그대로 불러야 한다, 티켓 49)."""
     active = (state.active_object.name,) if state.active_object else ()

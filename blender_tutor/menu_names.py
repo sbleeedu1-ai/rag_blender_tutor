@@ -314,15 +314,13 @@ def looks_like_name(english: str) -> bool:
             and not re.search(r'[%{}.:;!?"\\]', english))
 
 
-def extra_names(names: "MenuNames", titles: Iterable[str], po_text: str, full_po_text: str) -> dict[str, str]:
+def extra_names(names: "MenuNames", po_text: str, full_po_text: str) -> dict[str, str]:
     """넓힌 목록: 사전에 없는 화면 이름 → 한국어 화면 글자(티켓 49).
 
     10-27 번역 이름표 규칙 B(HISTORY [68], translate.screen_words)와 같이 ko.po에서 번역이 하나뿐인 이름 꼴의 문구를 담되,
-    사전 만들기처럼 fr.po(번역률 100%)로 한국어 번역이 빠진 문맥(화면이 영어)이 있는 문구는 뺀다. 키 이름과
-    제목 검수에서 떨어진 이름도 뺀다. 사전에 있는 이름은 사전이 정한다.
+    사전 만들기처럼 fr.po(번역률 100%)로 한국어 번역이 빠진 문맥(화면이 영어)이 있는 문구는 뺀다. 키 이름도 뺀다.
+    사전에 있는 이름(제목 검수에서 떨어진 이름 포함)은 사전이 정한다.
     """
-    passed = set(titles)
-    rejected = {name.english for name in names if name.sources == (Source.TITLE,) and name.english not in passed}
     found: dict[str, dict[str, set[str]]] = {}
     for context, english, korean in read_po(po_text):
         found.setdefault(english, {}).setdefault(korean, set()).add(context)
@@ -331,7 +329,7 @@ def extra_names(names: "MenuNames", titles: Iterable[str], po_text: str, full_po
         used.setdefault(english, set()).add(context)
     extra = {}
     for english, koreans in found.items():
-        if (english in rejected or english in KEY_NAMES or names.get(english) is not None
+        if (english in KEY_NAMES or names.get(english) is not None
                 or not looks_like_name(english) or len(koreans) != 1):
             continue
         korean, contexts = next(iter(koreans.items()))
@@ -345,6 +343,7 @@ _HANGUL = re.compile(r"[가-힣]")
 _RUN = re.compile(r"(?<![A-Za-z0-9_.`/\\-])[A-Z][A-Za-z0-9'\-]*(?:\.\.\.|…)?(?: [A-Za-z0-9][A-Za-z0-9'\-]*(?:\.\.\.|…)?)*")
 _QUOTE_BEFORE = re.compile(r"설명서(?:의|에서|에는|에)\s*[\"“'‘]?\s*$")
 _MAX_WORDS = 6
+_HOLD_WORDS = 30  # 답이 흐르는 동안 붙잡는 영어 덩이의 낱말 수 한도(이보다 긴 덩이는 이름 하나로 맞을 일이 없다)
 
 
 def _squash(text: str) -> str:
@@ -441,14 +440,16 @@ def prose_cut(text: str) -> int:
     if text.count("`") % 2 and len(text) - tick <= 200:
         cut = tick
     cut = min(cut, re.search(r"\S*$", text[: len(text.rstrip(" "))]).start())
+    joined = 0  # 앞으로 이어 붙인 영어 낱말 수. 한도가 없으면 긴 영어 글에서 조각마다 처음부터 다시 돌아 매우 느려진다(검토 지적)
     while True:
         moved = cut
         paren = text.rfind("(", 0, cut)
         if paren > text.rfind(")", 0, cut) and cut - paren <= 80:
             moved = re.search(r"\S*\s*$", text[:paren]).start()
-        if moved >= 2 and text[moved - 1] == " " and re.search(r"[A-Za-z0-9.…]$", text[: moved - 1]) and (
+        if joined < _HOLD_WORDS and moved >= 2 and text[moved - 1] == " " and re.search(r"[A-Za-z0-9.…]$", text[: moved - 1]) and (
                 moved == len(text) or re.match(r"[A-Za-z0-9]", text[moved:])):
             moved = re.search(r"\S*$", text[: moved - 1]).start()  # 빈칸 하나로 이어진 앞 영어 낱말
+            joined += 1
         if moved == cut:
             return cut
         cut = moved
@@ -471,6 +472,8 @@ def load_menu_names(
         return None
     extra_path = data_dir / "menu_names" / EXTRA_FILE
     extra = json.loads(extra_path.read_text(encoding="utf-8")) if extra_path.exists() else {}
+    if not isinstance(extra, dict) or not all(isinstance(k, str) and isinstance(v, str) and k and v for k, v in extra.items()):
+        raise ValueError(f"넓힌 목록 {extra_path}: '영어 이름': '한국어 화면 글자' 모양이어야 함(menu_names extra로 다시 만든다)")
     return MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles), extra)
 
 
@@ -656,7 +659,7 @@ def main(argv: list[str]) -> int:
 def _main_extra(po: Path, full_po: Path, out: Path) -> int:
     """사전 폴더의 menu_names.json으로 넓힌 목록을 만들어 같은 폴더에 쓴다."""
     names = MenuNames.load(out / "menu_names.json", MenuNames.load_choices(MENU_CHOICES), MenuNames.load_titles(MENU_TITLES))
-    extra = extra_names(names, MenuNames.load_titles(MENU_TITLES), po.read_text(encoding="utf-8"), full_po.read_text(encoding="utf-8"))
+    extra = extra_names(names, po.read_text(encoding="utf-8"), full_po.read_text(encoding="utf-8"))
     (out / EXTRA_FILE).write_text(json.dumps(extra, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
     print(f"넓힌 목록 {len(extra)}개 → {out / EXTRA_FILE}")
     return 0

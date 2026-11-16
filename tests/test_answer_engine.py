@@ -902,3 +902,27 @@ def test_영어_이름과_괄호가_조각_사이에_갈려_와도_바꾼다():
 def test_영어_화면이면_감싸지_않은_이름은_그대로():
     english = replace(STATE, language="en_US", translate_interface=True)
     assert shown(("지금 Bevel과 면(Face)",), english) == "지금 Bevel과 면(Face)"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "지금 [[Add > Mesh]]에서 Bevel 모디파이어의 Segments를 올리고 면(Face)을 고르세요.",
+        "`Bevel` 값과 `Scale` 값을 보고 Merge by Distance를 누르세요.",  # 백틱이 조각 사이에 갈릴 수 있다
+        "the quick brown fox jumps over the lazy Bevel 이라는 영어 문장",  # 일곱 낱말이 넘는 영어 끝의 이름
+        "설명 (the quick brown fox jumps over the lazy dog Bevel 닫히지 않은 괄호",
+        "Scale(크기 조절)과 Bevel(또는 Segments)와 Origins와 Set Parent To 메뉴",
+    ],
+)
+def test_조각을_어떻게_나눠_흘려도_한꺼번에_바꾼_것과_같다(text):
+    import random
+
+    whole = shown((text,))
+    rng = random.Random(7)
+    for _ in range(100):
+        pieces, i = [], 0
+        while i < len(text):
+            n = rng.randint(1, 6)
+            pieces.append(text[i : i + n])
+            i += n
+        assert shown(tuple(pieces)) == whole

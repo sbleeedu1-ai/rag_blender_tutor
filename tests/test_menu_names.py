@@ -20,7 +20,7 @@ from blender_tutor.menu_names import (
     extra_names,
     load_menu_names,
     read_po,
-    screen_marks, screen_path,
+    prose_cut, screen_marks, screen_path,
 )
 
 PO = r'''
@@ -429,7 +429,7 @@ msgstr "Diviser"
 
 
 def test_넓힌_목록은_사전에_없고_ko_po_번역이_하나뿐인_화면_이름만_담는다():
-    extra = extra_names(SCREEN, [], EXTRA_PO, EXTRA_FULL_PO)
+    extra = extra_names(SCREEN, EXTRA_PO, EXTRA_FULL_PO)
     assert extra == {"Origins": "오리진"}
     # Divide: fr.po로 보면 Color 문맥은 한국어 번역이 없어 화면이 영어일 수 있다 / Strength: 번역이 둘
     # Space: 키 이름 / the selected objects: 이름 꼴이 아님 / Mesh: 사전에 이미 있음(사전이 먼저)
@@ -452,3 +452,23 @@ def test_넓힌_목록_파일이_있으면_함께_읽는다(tmp_path):
     (tmp_path / "titles.json").write_text("[]", encoding="utf-8")
     names = load_menu_names(tmp_path, tmp_path / "choices.json", tmp_path / "titles.json")
     assert names.korean("Origins") == "오리진"
+
+
+@pytest.mark.parametrize("content", ['["Origins"]', '{"Origins": 1}', '{"": "오리진"}'])
+def test_넓힌_목록_파일_모양이_틀리면_바로_알린다(tmp_path, content):
+    (tmp_path / "menu_names").mkdir()
+    SCREEN.save(tmp_path / "menu_names" / "menu_names.json")
+    (tmp_path / "menu_names" / "screen_extra.json").write_text(content, encoding="utf-8")
+    (tmp_path / "choices.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "titles.json").write_text("[]", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_menu_names(tmp_path, tmp_path / "choices.json", tmp_path / "titles.json")
+
+
+def test_흐르는_답을_붙잡는_자리는_긴_영어_글에서도_빨리_정한다():
+    import time
+    text = "설명 (" + "the quick brown fox jumps over " * 80
+    began = time.perf_counter()
+    cut = prose_cut(text)
+    assert time.perf_counter() - began < 0.1
+    assert 0 < cut < len(text)  # 닫히지 않은 괄호라도 글 전체를 붙잡지는 않는다
