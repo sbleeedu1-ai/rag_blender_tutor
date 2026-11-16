@@ -131,8 +131,9 @@ class MenuNames:
         # 흐름 붙잡기용: 뒤에 낱말이 더 이어지면 목록 말(+꼬리)이 될 수 있는 낱말 줄("직교 투영"의 "직교", 꼬리가 붙을 "면",
         # "면 선택 모드"의 "면 선택"). 꼬리 가운데 여러 낱말은 "선택 모드"뿐이다
         self.common_prefixes: set[str] = set()
-        for variants in self._common.values():
-            for v in variants:
+        for english, variants in self._common.items():
+            glyph = self.korean(english)  # 화면 글자 + 꼬리도 꼬리를 괄호 뒤로 옮기므로 함께
+            for v in (*variants, *([" ".join(glyph.split())] if glyph and _HANGUL.search(glyph) else [])):
                 words = v.split()
                 self.common_prefixes.update(" ".join(words[:k]) for k in range(1, len(words) + 1))
                 self.common_prefixes.add(f"{v} 선택")
@@ -406,7 +407,8 @@ def _squash(text: str) -> str:
 
 # 이름 뒤에 모델이 붙이는 종류 낱말(꼬리). "면 선택 모드(Face)" → "페이스(Face) 선택 모드"(㉠, HISTORY [360]).
 # 목록 시험의 맞추기 코드(124619_흔히옮기는말_견주기/자리.py TAILS)와 같다
-COMMON_TAILS = ("선택 모드", "모드", "도구", "창", "값", "방식", "브러시", "물체", "버튼", "옵션", "메뉴", "패널", "탭", "항목", "칸", "설정", "기능")
+COMMON_TAILS = ("선택 모드", "모드", "도구", "창", "값", "방식", "브러시", "물체", "버튼", "옵션", "메뉴", "패널", "탭", "항목", "칸", "설정", "기능",
+                "노드")  # '노드'는 11-16 밤에 더함(화면 종류 낱말, "이미지 텍스처 노드(이미지 텍스처, Image Texture)"가 남아서, [373])
 _TAIL_RE = "|".join(re.escape(t).replace(r"\ ", r"\s*") for t in sorted(COMMON_TAILS, key=len, reverse=True))
 
 
@@ -483,13 +485,14 @@ def screen_prose(
             # 모델이 스스로 옮긴 말이 흔히 옮기는 말이면 앞말을 통째로 화면 글자로(티켓 50 가). 괄호 뒤가 '하다' 꼴이면
             # 앞말은 동사의 일부라("화면이 회전(Orbit)합니다") 바꾸지 않는다
             head = before.rstrip()[:-1]
-            span = (_common_span(head, names.common(parts[0][0]))
+            span = (_common_span(head, (*names.common(parts[0][0]), parts[0][1]))  # 화면 글자 자신 + 꼬리도 ㉠으로
                     if whole and after.startswith(")") and not re.match(r"\)(하(?!나)|합|했|해|함|한|할)", after) else None)
             floor = max(start, edits[-1][1] if edits else 0)
             if span and span[0] >= floor:
                 at, tail = span
                 core = _squash(head).removesuffix(_squash(tail))
-                if not core.endswith(_squash(parts[0][1])):  # 앞말이 이미 화면 글자로 끝나면 둔다("에지를 베벨(Bevel Edges)")
+                # 앞말이 이미 화면 글자로 끝나면 둔다("에지를 베벨(Bevel Edges)"). 화면 글자 + 꼬리면 꼬리만 괄호 뒤로
+                if not core.endswith(_squash(parts[0][1])) or (tail and _squash(head[at:]).removesuffix(_squash(tail)) == _squash(parts[0][1])):
                     new = _shown_part(parts[0][0], parts[0][1], asked, seen)
                     end = e + 1
                     if tail:
