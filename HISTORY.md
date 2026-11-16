@@ -3266,3 +3266,9 @@
 - 한 것: `.claude/hooks/require_advisor.py`(PreToolUse Write|Edit, 막지 않고 `require_advisor.log`에 판정만). 규칙은 마지막 사람 메시지 뒤 advisor 결과(성공·오류)가 있는지. 시점 시험: advisor 답 직후 Edit에서 call·result 모두 참, 0.007초.
 - 재생(`results/20261116/165500_advisor훅_재생/결과.md`): 범위 안 쓰기 89개 중 Bash 약 80(어림), Edit/Write 9-10. 11-14 뒤 38개 중 막혔을 것 24(사용자가 직접 시킨 차례 포함). 커밋할 때 막기로 재면 11-14 뒤 커밋 6개 중 4개. advisor 한 번 약 1분 46초.
 - 결정 대기: 어디서 막을지(커밋할 때 / Bash에도 정규식) 사용자에게 묻는다. 그 전에는 막는 방식으로 바꾸지 않는다.
+
+### [363] 2026-11-16 · advisor 상의를 빠짐없이 지키게, 고칠 때가 아니라 커밋할 때 제품 코드·훅 변경을 막는 훅으로 바꾼다
+- 제안: Claude(advisor와 정함). 고치는 길(Edit·Write·Bash)이 여러 갈래라 다 지킬 수 없어서([362]), 어느 길로 고쳤든 지나가는 커밋에서 본다. 사용자 "뭐 그래도 나은 대안이네 어차피 git 으로 관리되는 이상 고친 후라도 막고 상의해서 잘못 고친거면 되돌리면 그만이니?", 남는 빈틈(바로 도는 훅, 이미 쓴 유료 시험, Git 밖 자료)을 들은 뒤 "ㅇㅇ".
+- 한 것: `.claude/hooks/require_advisor.py`를 PreToolUse Bash·PowerShell로 옮김(Write·Edit 연결과 기록 파일은 뺌). 커밋에 `blender_tutor/`·`addon/`·`.claude/hooks/` 파일이 들고 마지막 사용자 메시지 뒤 advisor 결과(성공·오류)가 없으면 거부. 같은 명령에 `git add`나 `commit -a`가 있으면 스테이징 전 파일도 본다. 명령 나누기는 `deny_cut_output.py`의 것을 씀.
+- 확인: `tests/test_require_advisor_hook.py` 11개(먼저 11개 실패를 봄), 전체 pytest 802 통과. 가짜 기록(advisor 없음)으로 손으로 돌려 거부 문구가 나오고, 이 세션 기록으로는 통과.
+- 못 보는 것: `--amend`·병합·체리픽, 하위 에이전트(agent_id 키가 오는지 확인 안 함), advisor 도구가 없는 세션에서는 범위 커밋이 계속 막힘.

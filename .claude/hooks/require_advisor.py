@@ -1,34 +1,33 @@
-"""제품 코드·훅을 고치기 전에 advisor와 상의했는지 보는 훅(PreToolUse, Write·Edit). HISTORY [361] 회고 A.
+"""제품 코드·훅을 advisor와 상의하지 않고 커밋하지 않게 막는 훅(PreToolUse, Bash·PowerShell). HISTORY [361] 회고 A, [362]·[363].
 
-- 대상: 저장소의 `blender_tutor/`, `addon/`, `.claude/hooks/` 아래 파일. 다른 파일은 보지 않는다.
+- 왜 커밋 때인가: 지난 기록(2026-11-12-16)에서 범위 파일 쓰기 89개 중 약 80개가 Edit·Write가 아니라 Bash(sed·파이썬 heredoc)였다.
+  고치는 길은 여러 갈래라 다 못 지키므로, 어느 길로 고쳤든 지나가는 커밋에서 본다. 커밋 전이면 잘못 고친 것은 git으로 되돌린다.
+  사용자 "어차피 git 으로 관리되는 이상 고친 후라도 막고 상의해서 잘못 고친거면 되돌리면 그만이니?" → "ㅇㅇ".
+- 대상: 커밋에 들어갈 `blender_tutor/`·`addon/`·`.claude/hooks/` 파일. 명령에 `git add`나 `commit -a`가 함께 있으면
+  아직 스테이징 전이라 스테이징 안 된 것·새 파일도 보고, 없으면 스테이징된 것만 본다(범위 파일이 더러운 채 문서만 커밋할 때 막지 않게).
 - 규칙: 세션 기록(transcript_path)에서 마지막 사람 메시지(`origin.kind == "human"`, restore_after_compact.py와 같은 판별) 뒤에
-  advisor 호출(`server_tool_use`, name "advisor")이 하나라도 있으면 통과. 결과가 성공이든 오류(overloaded 등)든, 결과 줄이
-  안 적혔든 호출만 본다(2026-11-16 이 세션 기록: 호출 68 중 성공 54·오류 2·결과 줄 없음 12).
-- 하위 에이전트(입력에 agent_id가 있음)는 advisor가 없어 보지 않는다.
-- 지금은 기록만 한다: 막지 않고 판정을 `.claude/hooks/require_advisor.log`에 적는다(막는 방식으로 바꾸기 전에 시점 확인용).
-- 못 잡는 것: Bash(sed·heredoc)로 고친 파일, 말로 한 제안. 2026-11-16 지난 기록 재생: 범위 안 쓰기 89개 중 Bash 약 80(어림).
-- 하위 에이전트에서 agent_id 키가 실제로 오는지는 확인하지 않았다(재생에서 하위 에이전트의 범위 안 편집은 0건).
+  advisor 결과(`advisor_tool_result`, 성공·오류 모두)가 있으면 통과. 호출 줄만 있고 결과가 없으면(편집과 같은 메시지에 보냈거나 끊김) 막는다.
+- 명령 나누기는 deny_cut_output.py의 linked_pieces·git_subcommand를 쓴다(커밋 메시지·heredoc·echo 속 "git commit" 글자는 안 본다).
+  커밋 명령이 아니면 기록·git을 읽지 않고 바로 끝낸다.
+- 못 보는 것: 커밋 전에 이미 효과가 난 것(고친 훅은 바로 돈다, 고친 코드로 돌린 유료 시험, Git 밖 `results/`·`data/`),
+  `--amend`·병합·체리픽, 말로 한 제안. advisor 도구가 없는 세션에서는 범위 커밋이 계속 막힌다.
+  하위 에이전트(입력에 agent_id)는 advisor가 없어 보지 않는다. 그 키가 실제로 오는지는 확인하지 않았다.
 """
 
 import json
+import os
+import subprocess
 import sys
-import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from deny_cut_output import git_subcommand, linked_pieces
+
 SCOPES = ("blender_tutor", "addon", ".claude/hooks")
-LOG = Path(__file__).with_suffix(".log")
-CHUNK = 1 << 20  # 끝에서 1MB씩 거슬러 읽는다
-
-
-def in_scope(file_path: str) -> bool:
-    if not file_path:
-        return False
-    try:
-        rel = Path(file_path).resolve().relative_to(ROOT.resolve())
-    except ValueError:
-        return False
-    return any(rel.as_posix() == s or rel.as_posix().startswith(s + "/") for s in SCOPES)
+PATHSPECS = [f":(top){s}" for s in SCOPES]
+CHUNK = 1 << 20  # 기록 파일을 끝에서 1MB씩 거슬러 읽는다
+REASON = ("advisor와 상의하지 않은 제품 코드·훅 커밋이다(마지막 사용자 메시지 뒤 advisor 결과 없음): {files}. "
+          "advisor를 불러 이 변경을 검토받은 뒤 같은 커밋을 다시 한다. 잘못 고친 것이면 되돌린다. "
+          "advisor를 부를 수 없으면(도구 없음 등) 사용자에게 알린다.")
 
 
 def _is_human(entry: dict) -> bool:
@@ -39,15 +38,13 @@ def _is_human(entry: dict) -> bool:
     )
 
 
-def _has_advisor_call(entry: dict) -> bool:
+def _has_block(entry: dict, block_type: str) -> bool:
     content = (entry.get("message") or {}).get("content")
-    return isinstance(content, list) and any(
-        b.get("type") == "server_tool_use" and b.get("name") == "advisor" for b in content
-    )
+    return isinstance(content, list) and any(isinstance(b, dict) and b.get("type") == block_type for b in content)
 
 
 def lines_from_end(path: Path):
-    """기록 파일을 끝에서부터 한 줄씩(덜 적힌 마지막 줄 포함, 읽지 못하는 줄은 건너뜀)."""
+    """기록 파일을 끝에서부터 한 줄씩(덜 적힌 마지막 줄 포함, 읽지 못하는 줄은 consulted가 건너뜀)."""
     with path.open("rb") as f:
         f.seek(0, 2)
         pos, rest = f.tell(), b""
@@ -61,47 +58,88 @@ def lines_from_end(path: Path):
         yield rest
 
 
-def _has_advisor_result(entry: dict) -> bool:
-    content = (entry.get("message") or {}).get("content")
-    return isinstance(content, list) and any(b.get("type") == "advisor_tool_result" for b in content)
-
-
-def consulted(transcript: Path) -> dict:
-    """마지막 사람 메시지 뒤의 advisor 호출·결과(성공·오류)가 보이는지. human=False면 사람 메시지를 못 찾음."""
-    seen = {"call": False, "result": False, "human": False}
+def consulted(transcript: Path) -> bool:
+    """마지막 사람 메시지 뒤에 advisor 결과(성공·오류)가 있는지."""
     for raw in lines_from_end(transcript):
-        if b'"advisor' not in raw and b'"human"' not in raw:
+        if b"advisor_tool_result" not in raw and b'"human"' not in raw:
             continue
         try:
             entry = json.loads(raw)
         except json.JSONDecodeError:
             continue
-        seen["call"] |= _has_advisor_call(entry)
-        seen["result"] |= _has_advisor_result(entry)
+        if _has_block(entry, "advisor_tool_result"):
+            return True
         if _is_human(entry):
-            seen["human"] = True
-            return seen
-    return seen
+            return False
+    return False
+
+
+def _git_dir(words: list[str], here: str) -> str:
+    """git 조각의 -C 값(여럿이면 차례로 이어 붙임)."""
+    for index, word in enumerate(words[:-1]):
+        if word == "-C":
+            here = os.path.join(here, words[index + 1])
+    return here
+
+
+def _commits_all(words: list[str]) -> bool:
+    """commit 뒤 -a·--all(-am처럼 붙은 꼴 포함)."""
+    after = words[words.index("commit") + 1:] if "commit" in words else []
+    return any(w == "--all" or (w.startswith("-") and not w.startswith("--") and "a" in w[1:]) for w in after)
+
+
+def commit_targets(command: str, cwd: str) -> tuple[str, bool] | None:
+    """커밋 조각이 있으면 (저장소 폴더, 스테이징 안 된 것도 볼지), 없으면 None."""
+    here, added = cwd, False
+    for _, words in linked_pieces(command.replace("\\", "/")):
+        if words and words[0] == "cd" and len(words) > 1:
+            here = os.path.join(here, words[1])
+            continue
+        sub = git_subcommand(words)
+        if sub == "add":
+            added = True
+        elif sub == "commit":
+            return _git_dir(words, here), added or _commits_all(words)
+    return None
+
+
+def scope_files(repo: str, with_unstaged: bool) -> list[str]:
+    """커밋에 들어갈 범위 파일. git 저장소가 아니면 빈 목록(이 훅이 볼 커밋이 아님)."""
+    if with_unstaged:
+        args = ["status", "--porcelain=v1", "--untracked-files=all", "--", *PATHSPECS]
+    else:
+        args = ["diff", "--cached", "--name-only", "--", *PATHSPECS]
+    done = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, encoding="utf-8")
+    if done.returncode != 0:
+        return []
+    lines = [line for line in done.stdout.splitlines() if line.strip()]
+    if with_unstaged:
+        lines = [line[3:].split(" -> ")[-1] for line in lines]
+    return lines
+
+
+def decide(command: str, cwd: str, transcript: Path) -> dict | None:
+    """훅의 답(hookSpecificOutput) 또는 None(관여하지 않음)."""
+    target = commit_targets(command, cwd)
+    if target is None:
+        return None
+    files = scope_files(*target)
+    if not files or consulted(transcript):
+        return None
+    return {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+            "permissionDecisionReason": REASON.format(files=", ".join(files[:5]) + (" 등" if len(files) > 5 else ""))}
 
 
 def main() -> None:
     sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
     payload = json.load(sys.stdin)
-    file_path = (payload.get("tool_input") or {}).get("file_path") or ""
-    if not in_scope(file_path) or payload.get("agent_id"):
+    if payload.get("agent_id"):
         return
-    start = time.perf_counter()
-    verdict = consulted(Path(payload["transcript_path"]))
-    took = time.perf_counter() - start
-    with LOG.open("a", encoding="utf-8") as f:
-        f.write(json.dumps({
-            "time": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "tool": payload.get("tool_name"),
-            "file": file_path,
-            "consulted": verdict,
-            "seconds": round(took, 3),
-            "keys": sorted(payload),
-        }, ensure_ascii=False) + "\n")
+    command = (payload.get("tool_input") or {}).get("command") or ""
+    answer = decide(command, payload.get("cwd") or os.getcwd(), Path(payload["transcript_path"]))
+    if answer:
+        print(json.dumps({"hookSpecificOutput": answer}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
