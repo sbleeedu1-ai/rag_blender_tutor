@@ -122,6 +122,8 @@ class MenuNames:
         self._in_questions = _question_index(self._by_english.values(), passed)  # english_in이 쓰는 표
         self._passed = passed
         self._extra = {_english_key(english): korean for english, korean in extra.items()}
+        # 화면 글자에 쓰인 낱말 모음: 앞말 끝 낱말이 여기 있으면 '-어'로 끝나도 이어 주는 꼴로 보지 않는다("모디파이어", [393])
+        self.glyph_words = frozenset(w for name in self._by_english.values() for t in name.translations for w in t.korean.split())
         kinds = {_squash(tail) for tail in COMMON_TAILS}
         self._common = {
             _english_key(english): tuple(sorted({" ".join(v.split()) for v in variants if v.strip() and _squash(v) not in kinds},
@@ -456,7 +458,7 @@ def screen_prose(
     """[[ ]]로 감싸지 않은 답 글 속 블렌더 이름을 화면 글로 바꾼다(한국어 화면일 때만 부른다, 티켓 49).
 
     - 맨 영어 "Bevel 모디파이어" → "베벨(Bevel) 모디파이어"(질문에 영어로 쓴 이름은 "Bevel(베벨)", [311])
-    - 화면과 다른 한국어를 붙인 "면(Face)" → 괄호 속에 화면 글자를 넣어 "면(페이스, Face)"
+    - 화면과 다른 한국어를 붙인 "면(Face)" → 앞말 뒤에 따옴표 친 화면 글자 "면 '페이스'(Face)"(Fable 꼴, 시험 중 [393])
     - 화면과 다른 한국어 설명이 뒤에 붙은 "Scale(크기 조절)" → "스케일(Scale, 크기 조절)"
     그대로 두는 것: 코드(백틱 속·밑줄·점으로 이은 이름), 단축키(뒤에 '키', +로 이음), "설명서의 …" 인용, keep(작업 상태의
     물체 이름), 프로그램 이름, 대문자 값, 사전·넓힌 목록에 없는 낱말이 섞인 덩이, 화면도 영어인 이름.
@@ -511,12 +513,17 @@ def screen_prose(
                             end += particle.end()
                     edits.append((at, end, new))
                     continue
-            # 한국어(영어) 꼴: 괄호 속이 이 이름 하나이고 괄호 앞 한국어가 화면 글자와 다르면 괄호 속에 화면 글자를 넣는다.
-            # 앞 글은 이름을 옮긴 말이 아니라 설명("옵션(Only Selected)")이나 동사("녹여(Dissolve)")일 때가 많아 고치지 않는다
+            # 한국어(영어) 꼴(Fable 꼴, HISTORY [393]): 괄호 속이 이 이름 하나이고 괄호 앞 한국어가 화면 글자와 다르면,
+            # 앞말은 두고 그 뒤에 따옴표 친 화면 글자를 붙인다("세계 배경(World)이" → "세계 배경 '월드'(World)가").
+            # 앞말은 설명("옵션(Only Selected)")이나 동사일 때가 많아 지우지 않는다. 거부된 "면(페이스, Face)"를 대신한다([349])
             if glossed and whole and after.startswith(")"):
                 korean = parts[0][1]
                 if not _squash(before[: glossed.end()].rstrip()[:-1]).endswith(_squash(korean)):
-                    edits.append((s, e, f"{korean}, {parts[0][0]}"))
+                    edit = _fable_form(before, after, parts[0][0], korean, names, max(start, edits[-1][1] if edits else 0))
+                    if edit:
+                        edits.append((edit[0], e + edit[1], edit[2]))
+                    else:
+                        continue  # 모델 꼴 그대로면 화면 글자를 아직 안 보였으니 '보인 짝'에 넣지 않는다("회전(Orbit)합니다" 뒤 [[Orbit]])
                 if seen is not None:
                     seen.add(parts[0])  # 모델이 직접 쓴 "에디트 모드(Edit Mode)"도 보인 것으로
             continue
@@ -543,6 +550,51 @@ def screen_prose(
             changed.append((text[a:b], new))
         text = text[:a] + new + text[b:]
     return text
+
+
+_HADA_AFTER = re.compile(r"\)(하(?!나)|합|했|해|함|한|할)")  # 괄호에 바로 붙은 '하다' 꼴("회전(Orbit)합니다")
+_CONNECT = re.compile(r"(고|거나|며|면서|여|어|아|해|서|게|채|지)$")  # 이어 주는 꼴로 끝난 앞말("녹여", "펼치고")
+_DROP_PREV = re.compile(r"([.,:)\]]|의|에서|에|은|는|을|를)$")
+
+
+def _stem(word: str) -> str:
+    return re.sub(r"(을|를|에|의|으로|로|이|가|은|는)$", "", word) if len(word) > 2 else word
+
+
+def _fable_form(before: str, after: str, english: str, korean: str, names: "MenuNames", floor: int) -> tuple[int, int, str] | None:
+    """한국어(영어) 자리를 Fable 꼴로 바꿀 (시작, 괄호 뒤로 더 먹는 길이, 새 글). 바꾸지 않으면 None.
+
+    Fable 재검토(`results/20261116/214634_72자리_fable검토/02_꼴_만들기.py`)의 고른 조합: 괄호 뒤 '하다' 꼴과 이어 주는 꼴은 모델 꼴 그대로,
+    앞말이 화면 글자의 낱말뿐이면 앞말을 지우고 이름만, 괄호 뒤가 닫는 따옴표면 따옴표를 앞말 뒤로, 나머지는 앞말 뒤에 '화면 글자'(영어)."""
+    if _HADA_AFTER.match(after):
+        return None
+    head = before.rstrip()[:-1]  # 괄호 앞 글
+    words = head.split(" ")
+    last = words[-1].strip("*'\"“‘")
+    if _CONNECT.search(last) and last not in names.glyph_words:
+        return None
+    paren = len(before.rstrip()) - 1
+    rest = after[1:]
+    named = f"'{korean}'({english})"
+    glyph = {_stem(w) for w in korean.split()}
+    k = 0
+    while k < len(words) and words[-1 - k] and _stem(words[-1 - k]) in glyph:
+        k += 1
+    if k:
+        prev = words[-1 - k] if k < len(words) else ""
+        if prev == "" or _DROP_PREV.search(prev):
+            at = len(" ".join(words[: len(words) - k])) + (1 if k < len(words) else 0)
+            particle = PARTICLE.match(rest)
+            if at >= floor:
+                return at, 1 + (particle.end() if particle else 0), named + (fit_particle(korean, particle.group()) if particle else "")
+    if paren < floor:
+        return None
+    quote = re.match(r"['\"”’]", rest)
+    if quote:
+        particle = PARTICLE.match(rest[1:])
+        return paren, 2 + (particle.end() if particle else 0), quote.group() + " " + named + (fit_particle(korean, particle.group()) if particle else "")
+    particle = PARTICLE.match(rest)
+    return paren, 1 + (particle.end() if particle else 0), " " + named + (fit_particle(korean, particle.group()) if particle else "")
 
 
 def prose_cut(text: str, hold: set[str] | frozenset = frozenset()) -> int:

@@ -869,8 +869,12 @@ def test_바꾸면_안_되는_영어는_그대로_둔다(text):
 
 def test_화면과_다른_한국어를_붙인_이름은_화면_글자로_고친다():
     # 괄호 앞 글은 이름을 옮긴 말이 아니라 설명·동사일 때가 많아(옵션(Only Selected), 녹여(Dissolve)) 고치지 않고 괄호 속에 넣는다
-    assert shown(("3을 눌러 면(Face) 고르기",)) == "3을 눌러 면(페이스, Face) 고르기"
-    assert shown(("모서리 다듬기(Bevel)를",)) == "모서리 다듬기(베벨, Bevel)를"
+    assert shown(("3을 눌러 면(Face) 고르기",)) == "3을 눌러 면 '페이스'(Face) 고르기"
+    assert shown(("모서리 다듬기(Bevel)를",)) == "모서리 다듬기 '베벨'(Bevel)을"
+    assert shown(("1. 평평한 쪽(Face) 고르기",)) == "1. 평평한 쪽 '페이스'(Face) 고르기"  # Fable 꼴([393])
+    assert shown(("메뉴에서 병합(Merge by Distance)을",)) == "메뉴에서 '거리로 병합'(Merge by Distance)을"  # 앞말이 화면 글자 낱말뿐이면 지움
+    assert shown(("하나로 녹여(Dissolve) 없앱니다",)) == "하나로 녹여(Dissolve) 없앱니다"  # 이어 주는 꼴은 모델 꼴 그대로
+    assert shown(("하나로 녹여(Dissolve) 없앱니다. 다시 [[Dissolve]]",)).endswith("다시 " + shown(("[[Dissolve]]",)))  # 모델 꼴로 둔 이름은 아직 안 보인 것
     assert shown(("Scale(크기 조절)을 쓰세요.",)) == "스케일(Scale, 크기 조절)을 쓰세요."
     assert shown(("Bevel(또는 Segments)로",)) == "베벨(Bevel, 또는 Segments)로"  # 고친 괄호 속 영어는 다시 건드리지 않는다
     assert shown(("베벨(Bevel)과 스케일 (Scale), Bevel(베벨)",)) == "베벨(Bevel)과 스케일 (Scale), Bevel(베벨)"  # 이미 화면 글자
@@ -897,7 +901,7 @@ def test_질문에_영어로_쓴_이름은_감싸지_않아도_영어_괄호_한
 
 def test_영어_이름과_괄호가_조각_사이에_갈려_와도_바꾼다():
     pieces = ("A로 Merge by ", "Distance를 고르고 3으로 면(", "Face) 고", "르기. 끝에 Bevel")
-    assert shown(pieces) == "A로 거리로 병합(Merge by Distance)을 고르고 3으로 면(페이스, Face) 고르기. 끝에 베벨(Bevel)"
+    assert shown(pieces) == "A로 거리로 병합(Merge by Distance)을 고르고 3으로 면 '페이스'(Face) 고르기. 끝에 베벨(Bevel)"
 
 
 @pytest.mark.parametrize(
@@ -1017,11 +1021,11 @@ def shown_common(pieces) -> str:
         ("모깎기(Bevel)를 씁니다.", "베벨(Bevel)을 씁니다."),  # 조사도 화면 글자에
         ("면 선택 모드(Face)를 켭니다.", "페이스(Face) 선택 모드를 켭니다."),  # 꼬리는 괄호 뒤로(㉠ [360])
         ("먼저 면(Face) 고르기", "먼저 페이스(Face) 고르기"),
-        ("화면이 회전(Orbit)합니다.", "화면이 회전(궤도, Orbit)합니다."),  # 괄호 뒤 '하다' 꼴은 목록으로 안 바꿈(지금 꼴 그대로)
+        ("화면이 회전(Orbit)합니다.", "화면이 회전(Orbit)합니다."),  # 괄호 뒤 '하다' 꼴은 모델 꼴 그대로([393])
         ("모깎기(Bevel) 하나를 겁니다.", "베벨(Bevel) 하나를 겁니다."),  # 띄어 쓴 '하나'는 '하다' 꼴이 아니다
         ("모깎기(Bevel)하나", "베벨(Bevel)하나"),  # 붙여 쓴 '하나'도
-        ("옆면(Face) 고르기", "옆면(페이스, Face) 고르기"),  # 목록 말 앞에 한글이 붙어 있으면 다른 낱말
-        ("평평한 쪽(Face) 고르기", "평평한 쪽(페이스, Face) 고르기"),  # 목록에 없는 말은 지금 꼴 그대로(꼴 미정)
+        ("옆면(Face) 고르기", "옆면 '페이스'(Face) 고르기"),  # 목록 말 앞에 한글이 붙어 있으면 다른 낱말
+        ("평평한 쪽(Face) 고르기", "평평한 쪽 '페이스'(Face) 고르기"),  # 목록에 없는 말은 Fable 꼴([393])
         ("페이스(Face)를", "페이스(Face)를"),  # 이미 화면 글자
         ("페이스 선택 모드(Face)를", "페이스(Face) 선택 모드를"),  # 앞말이 화면 글자 + 꼬리여도 꼬리는 괄호 뒤로(㉠)
         ("베벨 노드(Bevel)에", "베벨(Bevel) 노드에"),  # '노드'도 꼬리
