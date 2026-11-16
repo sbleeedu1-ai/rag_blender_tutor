@@ -23,6 +23,7 @@ BARE_SYMBOL = "- ① 괄호 뒤에 조사가 올 때만 ㉮ 꼴을 쓴다."
 def test_지난_실수는_막힌다():
     hits = check_reply.problems(PAST_MISTAKE)
     assert any("곧" in h for h in hits)
+    assert any("더 나은 방향은 없는거야?" in h and "[377]" in h for h in hits)  # 거부한 까닭(사용자 원문)을 함께 보인다
     assert any("㉮" in h for h in check_reply.problems(BARE_SYMBOL))
 
 
@@ -47,6 +48,7 @@ def test_권하는_답에_거부한_꼴이면_막힌다():
 def test_거부한_꼴은_answer_forms_표에서_읽는다():
     patterns = check_reply.rejected_patterns()
     assert len(patterns) >= 3
+    assert all(quote and history.startswith("[") for _, quote, history, _ in patterns)
 
 
 def _transcript(tmp_path, entries):
