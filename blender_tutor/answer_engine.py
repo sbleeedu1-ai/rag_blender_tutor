@@ -22,8 +22,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
-from blender_tutor.korean_particles import fit_particle
-from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, MenuNames, last_korean, prose_cut, screen_path, screen_prose
+from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, MenuNames, prose_cut, screen_path, screen_prose, with_particle
 from blender_tutor.progress import Course, Step
 from blender_tutor.setting_fields import FieldModel, SettingLines, choose_fields, lines_for
 from blender_tutor.work_state import WorkState
@@ -567,8 +566,10 @@ class _MenuMarks:
                 # 앞 글을 먼저 다 내보낸 뒤 표시를 바꾼다(되풀이 이름을 나온 차례대로 기억해야 흘려 넣어도 같다)
                 before = self._plain(held[:start]) + self._plain("", done=True)
                 shown = screen_path(held[inner:end], self._names, self._question, self._seen if self._names else None)
+                if self._names:
+                    shown, rest = with_particle(shown, rest)
                 out += [before, self._send(shown)]
-                held = fit_particle(last_korean(shown), rest) if self._names else rest
+                held = rest
         else:
             start = len(held) - 1 if held.endswith(MARK_OPEN[0]) else len(held)
         self._held = held[start:]

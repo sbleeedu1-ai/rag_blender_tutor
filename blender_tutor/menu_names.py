@@ -318,6 +318,26 @@ def last_korean(shown: str) -> str:
     return head if re.search(r"[가-힣]$", head) else ""
 
 
+# 뒤에 조사가 바로 붙으면 "앞으로로"·"추가를 누르기를"처럼 읽히는 화면 글자: 조사·어미로 끝나거나(앞으로, 거리에 의해, 선택되지
+# 않은) 목적어 조사가 든 명령 구절(리프 뼈대를 무시). 끝 글자만 보므로 "무게"처럼 멀쩡한 낱말도 걸리지만 고친 꼴이
+# "'무게' 항목을"이라 해가 작다(티켓 50, HISTORY [355]·[356])
+_AWKWARD_END = re.compile(r"(으로|에서|의해|에|게|않은|없는|있는|[은는한운된른])$")
+_AWKWARD_MID = re.compile(r"[가-힣](을|를|으로|에서) ")
+
+
+def with_particle(shown: str, text: str) -> tuple[str, str]:
+    """바꾼 이름 shown과 그 뒤 글 text: 맨 앞 조사를 화면 글자에 맞춘다. 어색한 화면 글자면 따옴표로 묶고 '항목'을 넣어
+    "'앞으로'(Forward) 항목으로"처럼 조사를 '항목'에 붙인다. 조사가 없거나 화면 글자가 한글이 아니면 그대로."""
+    particle = PARTICLE.match(text)
+    head = last_korean(shown)
+    if not particle or not head:
+        return shown, text
+    if _AWKWARD_END.search(head) or _AWKWARD_MID.search(head):
+        at = shown.rfind(head)
+        return f"{shown[:at]}'{head}'{shown[at + len(head):]} 항목", fit_particle("항목", text)
+    return shown, fit_particle(head, text)
+
+
 def looks_like_name(english: str) -> bool:
     """ko.po 문구 가운데 화면 이름 같은 것: 대문자로 시작하는 다섯 낱말 이하, 관사로 시작하지 않고 문장 부호·자리표시가 없음."""
     words = english.split()
@@ -443,7 +463,7 @@ def screen_prose(
         if shown != match.group():
             particle = PARTICLE.match(after)  # 모델이 영어 이름에 맞춰 쓴 조사를 화면 글자에 맞춘다(티켓 50)
             if particle:
-                edits.append((s, particle.end() + e, shown + fit_particle(last_korean(shown), particle.group())))
+                edits.append((s, particle.end() + e, "".join(with_particle(shown, particle.group()))))
             else:
                 edits.append((s, e, shown))
     for a, b, new in sorted(edits, reverse=True):

@@ -598,7 +598,8 @@ SCREEN_NAMES = [
     _name("Bevel", "베벨"), _name("Segments", "부분"), _name("Face", "페이스"), _name("Scale", "스케일"),
     _name("Merge by Distance", "거리로 병합"), _name("Cube", "큐브"), _name("Axis", "축"),
 ]  # fmt: skip
-SCREEN_EXTRA = {"Origins": "오리진", "Set Parent To": "다음으로 부모를 설정", "X-Ray": "X-Ray", "S": "S", "W": "W"}  # 넓힌 목록(티켓 49)
+SCREEN_EXTRA = {"Origins": "오리진", "Set Parent To": "다음으로 부모를 설정", "X-Ray": "X-Ray", "S": "S", "W": "W",
+                "Forward": "앞으로", "Unselected": "선택되지 않은"}  # 넓힌 목록(티켓 49)
 
 
 def shown(pieces, state=KOREAN_SCREEN, choices=None, question="메시 추가") -> str:
@@ -936,6 +937,22 @@ def test_표시_뒤_조사를_화면_글자에_맞춘다(pieces, expected):
 def test_감싸지_않은_이름을_바꾸면_뒤_조사도_화면_글자에_맞춘다():
     assert shown(("Axis로 두고 Add을 누르고 Face(면)을 보세요.",)) == (
         "축(Axis)으로 두고 추가(Add)를 누르고 페이스(Face, 면)를 보세요.")  # 풀이 괄호 뒤 조사도 괄호 앞 화면 글자에
+
+
+@pytest.mark.parametrize(
+    "pieces, expected",
+    [
+        # 조사·어미로 끝나거나 명령 구절인 화면 글자 뒤에 조사가 바로 붙으면 "앞으로로"처럼 읽혀,
+        # 따옴표로 묶고 '항목'을 넣는다(티켓 50, HISTORY [355]·[356]). 되풀이면 영어 괄호만 빠진다
+        (("[[Forward]]로 두고 다시 [[Forward]]는 -Z",), "'앞으로'(Forward) 항목으로 두고 다시 '앞으로' 항목은 -Z"),
+        (("[[Unselected]]은 끄세요.",), "'선택되지 않은'(Unselected) 항목은 끄세요."),
+        (("[[Set Parent To]]를 누르세요.",), "'다음으로 부모를 설정'(Set Parent To) 항목을 누르세요."),
+        (("Forward를 고르세요.",), "'앞으로'(Forward) 항목을 고르세요."),  # 감싸지 않은 이름도
+        (("[[Forward]] 칸",), "앞으로(Forward) 칸"),  # 조사가 바로 붙지 않으면 그대로
+    ],
+)
+def test_어색한_화면_글자에_조사가_붙으면_따옴표와_항목으로(pieces, expected):
+    assert shown(pieces) == expected
 
 
 def test_같은_이름이_되풀이되면_처음_한_번만_영어_괄호():
