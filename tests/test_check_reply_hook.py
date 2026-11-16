@@ -62,3 +62,43 @@ def test_마지막_사람_메시지_뒤의_답_글만_본다(tmp_path):
     old = {"type": "assistant", "message": {"content": [{"type": "text", "text": "권함: 배경, 곧 월드(World)가"}]}}
     new = {"type": "assistant", "message": {"content": [{"type": "text", "text": "새 답"}]}}
     assert check_reply.turn_text(_transcript(tmp_path, [old, human, new])) == "새 답"
+
+
+# 11-16 밤 실제 실수 둘([392]). 글은 실제 답 줄을 옮겼고, 도구 호출은 그 차례의 실제 호출 가운데 이 규칙이 보는 것만 옮겼다.
+NO_SEARCH_1 = "1. **목록이 못 잡는 72자리의 꼴.** 권하는 안은 D입니다."  # 20:23 차례(실제 호출: 목록 파일을 읽은 python -c, 기록 읽기 없음)
+NO_SEARCH_1_TOOLS = [("Bash", {"command": ".venv/bin/python -c \"import json;d=json.load(open('data/menu_names/common_ko.json'))\""})]
+NO_SEARCH_2 = "**권하는 길**\n- 흔들림 자체를 줄이는 방법도 확인해 볼 만합니다. 예를 들어 모델의 무작위성 설정(temperature)을 낮추는 것입니다."  # 23:5x 차례
+NO_SEARCH_2_WRITES = [("Bash", {"command": "cat >> HISTORY.md <<'EOF'\n...\nEOF\ngit add HISTORY.md .scratch/mvp-roundtrip/spec.md && git commit -q -m x && git log --oneline -1"})]
+
+
+def _turn(tmp_path, reply, tools=()):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    calls = [{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": n, "input": i}]}} for n, i in tools]
+    text = {"type": "assistant", "message": {"content": [{"type": "text", "text": reply}]}}
+    return _transcript(tmp_path, [human, *calls, text])
+
+
+def test_기록을_안_찾고_제안하면_막힌다(tmp_path):
+    for reply, tools in ((NO_SEARCH_1, NO_SEARCH_1_TOOLS), (NO_SEARCH_2, NO_SEARCH_2_WRITES)):
+        hits = check_reply.turn_problems(_turn(tmp_path, reply, tools))
+        assert any("기록을 찾지 않았다" in h for h in hits), reply
+
+
+def test_한계_다른_주제로_기록을_읽었으면_통과한다(tmp_path):
+    other = [("Bash", {"command": "sed -n '/^### \\[342\\]/,/^### \\[343\\]/p' HISTORY.md"})]  # temperature 차례에 실제로 있던 읽기
+    assert not any("기록을 찾지 않았다" in h for h in check_reply.turn_problems(_turn(tmp_path, NO_SEARCH_2, NO_SEARCH_2_WRITES + other)))
+
+
+def test_지난_실수를_말하는_제안은_권유가_아니다(tmp_path):
+    assert check_reply.turn_problems(_turn(tmp_path, "오늘만 해도 기록을 안 찾고 제안한 게 두 번입니다.")) == []
+
+
+def test_그_차례에_기록을_찾았으면_통과(tmp_path):
+    for tools in ([("Bash", {"command": "grep -n temperature HISTORY.md"})],
+                  [("Grep", {"pattern": "temp", "path": "docs/experiment.md"})],
+                  [("Read", {"file_path": "/x/HISTORY.md"})]):
+        assert not any("기록을 찾지 않았다" in h for h in check_reply.turn_problems(_turn(tmp_path, NO_SEARCH_2, tools)))
+
+
+def test_제안이_없으면_기록_검사를_안_한다(tmp_path):
+    assert check_reply.turn_problems(_turn(tmp_path, "시험이 끝났습니다. 결과는 13.0입니다.")) == []

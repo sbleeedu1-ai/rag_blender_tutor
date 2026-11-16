@@ -11,7 +11,11 @@
 - 규칙 2: 답이 무엇을 권하면(권함·권하는·권합니다·추천·제안), 거부한 꼴(answer-forms.md 표의 "검사" 칸 정규식)이 든 줄을 찾는다.
   같은 줄에 거부·지금 제품·지금 꼴 같은 말이 있으면 설명으로 보고 넘긴다.
 - 막으면 거부한 까닭(표의 사용자 원문·HISTORY)을 Claude에게 돌려주고 Claude가 답을 고쳐 다시 낸다. stop_hook_active면(이미 한 번 막혀 고치는 중) 보지 않는다.
-- 못 보는 것: 거부한 꼴을 다른 모양으로 바꿔 쓴 것, 정해 둔 차례를 어긴 권유, 말이 길고 어려운 것.
+- 규칙 3([392]): 답이 무엇을 권하는데 그 차례(마지막 사람 메시지 뒤)에 기록(HISTORY·실험 기록·인계·답 꼴·티켓)을 찾은 도구 호출이 없으면 막는다.
+  전역 지침 "제안하기 전에는 HISTORY.md와 git 이력에서 그 주제를 찾아" 를 11-16에 두 번 어김("왜 확인안하지?", temperature 제안).
+  읽기(grep·sed -n·Read 등)만 찾기로 치고 쓰기(>>·git add)는 안 친다. 지난 일을 말하는 줄(실수·했습니다 등)의 '제안'은 권유로 안 본다.
+  한계: 그 차례에 기록을 다른 주제로 읽었으면 통과한다(temperature 제안 차례는 [342]를 읽어서 이 규칙으로도 못 막는다).
+- 못 보는 것: 거부한 꼴을 다른 모양으로 바꿔 쓴 것, 정해 둔 차례를 어긴 권유, 말이 길고 어려운 것, 찾긴 했으나 다른 낱말로 찾아 놓친 것.
 """
 
 import json
@@ -24,6 +28,10 @@ FORMS = ROOT / "docs" / "agents" / "answer-forms.md"
 SYMBOLS = re.compile(r"[㉠-㉻]")
 QUOTED = re.compile(r"[\"“][^\"”]{4,}[\"”]")  # 기호 옆에 실제 꼴이 따옴표로 있으면 풀어 쓴 것으로 본다
 RECOMMENDS = re.compile(r"권함|권하는|권합니다|권해|추천|제안")
+RECORDS = re.compile(r"HISTORY\.md|experiment\.md|HANDOFF\.md|answer-forms\.md|rules-enforced\.md|\.scratch|session-search|git log -S|git log --grep")
+READS = re.compile(r"\bgrep\b|\brg\b|sed -n|\bawk\b|\bhead\b|\btail\b|\bcat\b(?!\s*>)|git log -S|git log --grep|session-search")
+WRITES = re.compile(r">>|>\s*\S|git add|git commit|write_text")
+PAST = re.compile(r"실수|잘못|했습니다|였습니다|했던|한 것|한 게|어긴|거부된")
 EXPLAINS = re.compile(r"거부|지금 제품|지금 꼴|지금:|전:|예전|않|말고")
 
 
@@ -57,23 +65,54 @@ def _is_human(entry: dict) -> bool:
             and not (entry.get("isMeta") or entry.get("isCompactSummary") or entry.get("isSidechain")))
 
 
-def turn_text(transcript: Path) -> str:
-    """마지막 사람 메시지 뒤 Claude가 쓴 글."""
+def _turn_blocks(transcript: Path) -> list[dict]:
+    """마지막 사람 메시지 뒤 Claude 메시지의 내용 조각(글·도구 호출)."""
     entries = [json.loads(line) for line in transcript.read_text(encoding="utf-8").splitlines() if line.strip()]
     start = max((i for i, e in enumerate(entries) if _is_human(e)), default=-1) + 1
-    texts = []
+    blocks = []
     for e in entries[start:]:
         content = (e.get("message") or {}).get("content") if e.get("type") == "assistant" else None
         if isinstance(content, list):
-            texts += [c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text"]
-    return "\n".join(texts)
+            blocks += [c for c in content if isinstance(c, dict)]
+    return blocks
+
+
+def _reads_records(name: str, args: dict) -> bool:
+    """기록을 읽은 호출인가. 쓰기(>>·git add·git commit)와 커밋 뒤 git log --oneline -1은 찾기로 치지 않는다."""
+    if name in ("Grep", "Read"):
+        return bool(RECORDS.search(json.dumps(args, ensure_ascii=False)))
+    if name != "Bash":
+        return False
+    for part in re.split(r"[;&|\n]+", args.get("command", "")):
+        if RECORDS.search(part) and READS.search(part) and not WRITES.search(part):
+            return True
+    return False
+
+
+def turn_text(transcript: Path) -> str:
+    """마지막 사람 메시지 뒤 Claude가 쓴 글."""
+    return "\n".join(b.get("text", "") for b in _turn_blocks(transcript) if b.get("type") == "text")
+
+
+def turn_problems(transcript: Path) -> list[str]:
+    """규칙 1·2(답 글)와 규칙 3(권하는데 그 차례에 기록을 안 찾음)."""
+    blocks = _turn_blocks(transcript)
+    text = "\n".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+    found = problems(text)
+    searched = any(b.get("type") == "tool_use" and _reads_records(b.get("name", ""), b.get("input") or {}) for b in blocks)
+    recommends = any(RECOMMENDS.search(line) and not PAST.search(line) for line in text.splitlines())
+    if recommends and not searched:
+        found.append("권하기 전에 기록을 찾지 않았다(이 차례에 HISTORY.md·docs/experiment.md·HANDOFF.md·answer-forms.md·티켓을 찾은 호출이 없음). "
+                     "그 주제를 기록에서 찾아 관련 결정 원문을 함께 들고, 못 찾으면 어디서 어떤 낱말로 찾았는지 쓴다. "
+                     "까닭(사용자 원문): \"그러니까 왜 확인안하지?\", \"이런거 좀 찾아보라니까\" [392]")
+    return found
 
 
 def main() -> int:
     data = json.load(sys.stdin)
     if data.get("stop_hook_active") or not data.get("transcript_path"):
         return 0
-    found = problems(turn_text(Path(data["transcript_path"])))
+    found = turn_problems(Path(data["transcript_path"]))
     if found:
         print(json.dumps({"decision": "block", "reason": "답을 고쳐 다시 낸다(HISTORY [378]): " + " / ".join(found)}, ensure_ascii=False))
     return 0
