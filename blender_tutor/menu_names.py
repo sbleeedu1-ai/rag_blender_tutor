@@ -14,7 +14,7 @@ from pathlib import Path
 
 from blender_tutor.korean_particles import PARTICLE, fit_particle
 from blender_tutor.manual_chunks import Chunk, chunk_manual
-from blender_tutor.paths import MENU_ALIASES, MENU_CHOICES, MENU_TITLES
+from blender_tutor.paths import MENU_ALIASES, MENU_CHOICES, MENU_COMMON, MENU_TITLES
 
 DEFAULT_CONTEXT = "*"  # 문맥 없는 일반 문구. Blender Python도 이렇게 적는다(bpy.app.translations.contexts.default)
 _PATH_SEP = "‣"  # 설명서 메뉴 경로의 구분 글자(Add ‣ Mesh)
@@ -590,13 +590,10 @@ def screen_marks(text: str, names: "MenuNames | None") -> str:
 
 
 EXTRA_FILE = "screen_extra.json"  # 넓힌 목록(extra_names). data/에 두고 커밋하지 않는다(번역 글자가 들어 있음)
-# 흔히 옮기는 말 목록(티켓 50 가). Haiku로 사전 이름마다 미리 만든 것(results/20261116/124619_흔히옮기는말_견주기/방법1_전체2_섞음.json을
-# 옮김, HISTORY [360]). data/에 두고 커밋하지 않는다. 없으면 이 바꾸기 없이 돈다
-COMMON_FILE = "common_ko.json"
 
 
 def load_menu_names(
-    data_dir: Path, menu_choices: Path = MENU_CHOICES, menu_titles: Path = MENU_TITLES
+    data_dir: Path, menu_choices: Path = MENU_CHOICES, menu_titles: Path = MENU_TITLES, menu_common: Path = MENU_COMMON
 ) -> MenuNames | None:
     """메뉴 이름 사전(data_dir/menu_names/menu_names.json과 저장소의 고정 짝·통과 제목). 사전 파일이 없으면 None(영어 그대로 보임)."""
     names_path = data_dir / "menu_names" / "menu_names.json"
@@ -606,8 +603,9 @@ def load_menu_names(
     extra = json.loads(extra_path.read_text(encoding="utf-8")) if extra_path.exists() else {}
     if not isinstance(extra, dict) or not all(isinstance(k, str) and isinstance(v, str) and k and v for k, v in extra.items()):
         raise ValueError(f"넓힌 목록 {extra_path}: '영어 이름': '한국어 화면 글자' 모양이어야 함(menu_names extra로 다시 만든다)")
-    common_path = data_dir / "menu_names" / COMMON_FILE
-    common = json.loads(common_path.read_text(encoding="utf-8"))["lists"] if common_path.exists() else {}
+    # 흔히 옮기는 말 목록(티켓 50 가, HISTORY [360]·[376]). Haiku가 만든 낱말이고 화면 글자와 같은 말은 빼서 저장소에 둔다
+    common_path = menu_common
+    common = json.loads(common_path.read_text(encoding="utf-8"))["lists"]
     if not isinstance(common, dict) or not all(isinstance(k, str) and isinstance(v, list) and all(isinstance(x, str) for x in v)
                                                for k, v in common.items()):
         raise ValueError(f"흔히 옮기는 말 목록 {common_path}: {{'lists': {{'영어 이름': ['한국어 말', …]}}}} 모양이어야 함")
