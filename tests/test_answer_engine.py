@@ -840,9 +840,9 @@ def test_감싼_이름이_사전에_없으면_넓힌_목록으로_바꾼다():
 
 def test_감싸지_않은_영어_이름도_한국어_화면이면_화면_글자로_바꾼다():
     text = "지금 Bevel 모디파이어는 Segments가 1이에요. Origins를 끄고 Set Parent To 메뉴를 여세요."
-    assert shown((text,)) == ("지금 베벨(Bevel) 모디파이어는 부분(Segments)가 1이에요. "
-                              "오리진(Origins)를 끄고 다음으로 부모를 설정(Set Parent To) 메뉴를 여세요.")
-    assert shown(("Merge by Distance를 고르세요.",)) == "거리로 병합(Merge by Distance)를 고르세요."  # 긴 이름 먼저
+    assert shown((text,)) == ("지금 베벨(Bevel) 모디파이어는 부분(Segments)이 1이에요. "
+                              "오리진(Origins)을 끄고 다음으로 부모를 설정(Set Parent To) 메뉴를 여세요.")
+    assert shown(("Merge by Distance를 고르세요.",)) == "거리로 병합(Merge by Distance)을 고르세요."  # 긴 이름 먼저
 
 
 @pytest.mark.parametrize(
@@ -896,7 +896,57 @@ def test_질문에_영어로_쓴_이름은_감싸지_않아도_영어_괄호_한
 
 def test_영어_이름과_괄호가_조각_사이에_갈려_와도_바꾼다():
     pieces = ("A로 Merge by ", "Distance를 고르고 3으로 면(", "Face) 고", "르기. 끝에 Bevel")
-    assert shown(pieces) == "A로 거리로 병합(Merge by Distance)를 고르고 3으로 면(페이스, Face) 고르기. 끝에 베벨(Bevel)"
+    assert shown(pieces) == "A로 거리로 병합(Merge by Distance)을 고르고 3으로 면(페이스, Face) 고르기. 끝에 베벨(Bevel)"
+
+
+@pytest.mark.parametrize(
+    "pieces, expected",
+    [
+        # 표시 바로 뒤에 모델이 덧붙인 괄호(단축키·풀이)는 지운다. 겹친 괄호가 되지 않게(티켓 50 나)
+        (("[[Face]](단축키 Alt-F)를 누르세요.",), "페이스(Face)를 누르세요."),
+        (("[[Face]] (Alt-F)를 누르세요.",), "페이스(Face)를 누르세요."),
+        # 괄호 속에 표시가 든 것은 풀이가 아니라 내용이라 둔다
+        (("[[Face]](또는 [[Add]])를 누르세요.",), "페이스(Face)(또는 추가(Add))를 누르세요."),
+        # 조각 사이에 갈려 와도 같다
+        (("[[Fa", "ce]]", "(단축", "키 Alt-F)", "를 누르세요."), "페이스(Face)를 누르세요."),
+    ],
+)
+def test_표시_뒤에_덧붙인_괄호는_지운다(pieces, expected):
+    assert shown(pieces) == expected
+
+
+@pytest.mark.parametrize(
+    "pieces, expected",
+    [
+        # 모델이 영어 이름에 맞춰 쓴 조사를 화면 글자 받침에 맞춘다(티켓 50, 번역 때 [91]과 같은 규칙)
+        (("[[Add]]을 누르세요.",), "추가(Add)를 누르세요."),
+        (("[[Axis]]로 맞추세요.",), "축(Axis)으로 맞추세요."),
+        (("[[Bevel]]으로 다듬어요.",), "베벨(Bevel)로 다듬어요."),  # ㄹ 받침 뒤는 '로'
+        (("[[Face]]이 하나 생겨요.",), "페이스(Face)가 하나 생겨요."),
+        (("[[Segments]]이 1이에요.",), "부분(Segments)이 1이에요."),  # 받침이 있으면 그대로
+        (("[[Add]]", "을 누르세요."), "추가(Add)를 누르세요."),  # 조사가 다음 조각에 와도
+        (("[[Add]]이라는 메뉴",), "추가(Add)이라는 메뉴"),  # 뒤가 한글이면 조사인지 몰라 둔다
+        (("[[Snap Base]]을 켜세요.",), "Snap Base을 켜세요."),  # 화면 글자가 영어면 둔다
+    ],
+)
+def test_표시_뒤_조사를_화면_글자에_맞춘다(pieces, expected):
+    assert shown(pieces) == expected
+
+
+def test_감싸지_않은_이름을_바꾸면_뒤_조사도_화면_글자에_맞춘다():
+    assert shown(("Axis로 두고 Add을 누르고 Face(면)을 보세요.",)) == (
+        "축(Axis)으로 두고 추가(Add)를 누르고 페이스(Face, 면)를 보세요.")  # 풀이 괄호 뒤 조사도 괄호 앞 화면 글자에
+
+
+def test_같은_이름이_되풀이되면_처음_한_번만_영어_괄호():
+    """답이 쓸데없이 길어지지 않게, 낱말 표의 '처음 한 번만'과 같이(티켓 50 라, HISTORY [353])."""
+    text = ("[[Add > Mesh]]를 누르고 Bevel을 켠 뒤 다시 [[Add]]와 [[Bevel]]을 보세요.",)
+    assert shown(text) == "추가(Add) > 메시(Mesh)를 누르고 베벨(Bevel)을 켠 뒤 다시 추가와 베벨을 보세요."
+
+
+def test_영어_화면이면_덧붙인_괄호와_조사는_그대로():
+    english = replace(STATE, language="en_US", translate_interface=True)
+    assert shown(("[[Face]](단축키 Alt-F)을 누르고 [[Face]]",), english) == "Face(단축키 Alt-F)을 누르고 Face"
 
 
 def test_영어_화면이면_감싸지_않은_이름은_그대로():
@@ -912,6 +962,9 @@ def test_영어_화면이면_감싸지_않은_이름은_그대로():
         "the quick brown fox jumps over the lazy Bevel 이라는 영어 문장",  # 일곱 낱말이 넘는 영어 끝의 이름
         "설명 (the quick brown fox jumps over the lazy dog Bevel 닫히지 않은 괄호",
         "Scale(크기 조절)과 Bevel(또는 Segments)와 Origins와 Set Parent To 메뉴",
+        # 티켓 50: 표시 뒤 덧붙인 괄호·조사·되풀이 이름
+        "[[Face]](단축키 Alt-F)을 누르고 [[Add > Mesh]] (메시 추가)이 나오면 다시 [[Face]]을 고르세요.",
+        "[[Axis]]로 [[Bevel]]으로 Bevel 값과 [[Bevel]](또는 [[Add]])를 끝에 [[Face]]",
     ],
 )
 def test_조각을_어떻게_나눠_흘려도_한꺼번에_바꾼_것과_같다(text):

@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+from blender_tutor.korean_particles import PARTICLE, fit_particle
 from blender_tutor.manual_chunks import Chunk, chunk_manual
 from blender_tutor.paths import MENU_ALIASES, MENU_CHOICES, MENU_TITLES
 
@@ -284,27 +285,37 @@ def _by_count(names: Iterable[MenuName]) -> list[MenuName]:
 _Catalog = dict[str, dict[str, list[str]]]  # ko.po: 영어 → 한국어 → 문맥들
 
 
-def screen_path(path: str, names: "MenuNames | None", asked: str = "") -> str:
+def screen_path(path: str, names: "MenuNames | None", asked: str = "", seen: set | None = None) -> str:
     """메뉴 이름 표시 하나의 속(Add > Mesh)을 화면 글로 바꾼다.
 
     names가 있으면(한국어 화면에 번역 켜짐) 단마다 "추가(Add)"처럼 한국어(영어)로, 영어로 보이는 단과 화면 글자가 영어와
     같은 단(X-Ray)은 영어 하나로. names가 없으면 영어 그대로.
     asked(사용자 질문)에 영어로 쓴 단은 "Add(추가)"처럼 영어(한국어)로 둔다. 사용자가 부른 이름을 앞에 두어 같은 것임을 알게
     한다(HISTORY [311]). 대소문자는 가리지 않고, 더 긴 영어 낱말 속 글자(Addon의 Add)는 물은 것으로 치지 않는다.
+    seen을 주면(답 하나 동안 이미 보인 (영어, 화면 글자) 짝) 되풀이되는 단은 괄호 없이 하나만 보인다(티켓 50, 처음 한 번만).
     """
     parts = [part.strip() for part in re.split(r"[>‣]", path)]
     if names:
         parents = ["", *parts[:-1]]  # 단마다 바로 앞 단(같은 이름도 메뉴마다 글자가 달라서, 티켓 31)
-        parts = [_shown_part(part, names.screen(part, parent)[1], asked) for part, parent in zip(parts, parents)]
+        parts = [_shown_part(part, names.screen(part, parent)[1], asked, seen) for part, parent in zip(parts, parents)]
     return " > ".join(parts)
 
 
-def _shown_part(part: str, korean: str | None, asked: str) -> str:
+def _shown_part(part: str, korean: str | None, asked: str, seen: set | None = None) -> str:
     if not korean or korean == part:
         return part
-    if re.search(rf"(?<![A-Za-z]){re.escape(part)}(?![A-Za-z])", asked, re.IGNORECASE):
-        return f"{part}({korean})"
-    return f"{korean}({part})"
+    first = re.search(rf"(?<![A-Za-z]){re.escape(part)}(?![A-Za-z])", asked, re.IGNORECASE)  # 사용자가 부른 이름을 앞에
+    if seen is not None:
+        if (part, korean) in seen:
+            return part if first else korean
+        seen.add((part, korean))
+    return f"{part}({korean})" if first else f"{korean}({part})"
+
+
+def last_korean(shown: str) -> str:
+    """바꾼 이름에서 조사가 붙는 한국어: 마지막 단의 괄호 앞 글("추가(Add)" → "추가"). 한글로 끝나지 않으면 빈 글(조사 안 고침)."""
+    head = re.split(r"[>‣]", shown)[-1].split("(")[0].strip()
+    return head if re.search(r"[가-힣]$", head) else ""
 
 
 def looks_like_name(english: str) -> bool:
@@ -375,7 +386,8 @@ def _run_parts(words: list[str], names: "MenuNames", keep: set[str], in_path: bo
 
 
 def screen_prose(
-    text: str, names: "MenuNames", asked: str = "", keep: Iterable[str] = (), start: int = 0, changed: list | None = None
+    text: str, names: "MenuNames", asked: str = "", keep: Iterable[str] = (), start: int = 0, changed: list | None = None,
+    seen: set | None = None,
 ) -> str:
     """[[ ]]로 감싸지 않은 답 글 속 블렌더 이름을 화면 글로 바꾼다(한국어 화면일 때만 부른다, 티켓 49).
 
@@ -386,6 +398,7 @@ def screen_prose(
     물체 이름), 프로그램 이름, 대문자 값, 사전·넓힌 목록에 없는 낱말이 섞인 덩이, 화면도 영어인 이름.
     start 앞 글은 앞뒤를 보는 데만 쓰고 바꾸지 않는다(답이 흐르는 동안 이미 내보낸 글).
     changed를 주면 바꾼 자리마다 (원래 글, 바뀐 글)을 덧붙인다(저장된 답으로 검증할 때 쓴다).
+    seen은 screen_path와 같다(답 하나 동안 이미 보인 짝은 괄호 없이, 괄호 꼴로 보인 짝은 여기에 더함).
     """
     keep = set(keep)
     edits: list[tuple[int, int, str]] = []
@@ -412,16 +425,27 @@ def screen_prose(
                 korean = parts[0][1]
                 if not _squash(before[: glossed.end()].rstrip()[:-1]).endswith(_squash(korean)):
                     edits.append((s, e, f"{korean}, {parts[0][0]}"))
+                if seen is not None:
+                    seen.add(parts[0])  # 모델이 직접 쓴 "에디트 모드(Edit Mode)"도 보인 것으로
             continue
         explained = re.match(r"\s*\(\s*([^()\n]*)\)", after)
         if explained and _HANGUL.match(explained.group(1)):
             # 영어(한국어) 꼴: 괄호 속이 화면 글자로 시작하면 그대로, 아니면 화면 글자를 앞에 두고 설명은 괄호 속에 남긴다
             if whole and not _squash(explained.group(1)).startswith(_squash(parts[0][1])):
-                edits.append((s, e + explained.end(), f"{parts[0][1]}({parts[0][0]}, {explained.group(1)})"))
+                new = f"{parts[0][1]}({parts[0][0]}, {explained.group(1)})"
+                particle = PARTICLE.match(after[explained.end() :])  # 괄호 뒤 조사도 괄호 앞 화면 글자에([91])
+                end = e + explained.end() + (particle.end() if particle else 0)
+                edits.append((s, end, new + (fit_particle(last_korean(new), particle.group()) if particle else "")))
+            if whole and seen is not None:
+                seen.add(parts[0])
             continue
-        shown = " ".join(english if english in keep else _shown_part(english, korean, asked) for english, korean in parts)
+        shown = " ".join(english if english in keep else _shown_part(english, korean, asked, seen) for english, korean in parts)
         if shown != match.group():
-            edits.append((s, e, shown))
+            particle = PARTICLE.match(after)  # 모델이 영어 이름에 맞춰 쓴 조사를 화면 글자에 맞춘다(티켓 50)
+            if particle:
+                edits.append((s, particle.end() + e, shown + fit_particle(last_korean(shown), particle.group())))
+            else:
+                edits.append((s, e, shown))
     for a, b, new in sorted(edits, reverse=True):
         if changed is not None:
             changed.append((text[a:b], new))

@@ -22,7 +22,8 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
-from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, MenuNames, prose_cut, screen_path, screen_prose
+from blender_tutor.korean_particles import fit_particle
+from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, MenuNames, last_korean, prose_cut, screen_path, screen_prose
 from blender_tutor.progress import Course, Step
 from blender_tutor.setting_fields import FieldModel, SettingLines, choose_fields, lines_for
 from blender_tutor.work_state import WorkState
@@ -55,6 +56,7 @@ def area_of(page_path: str) -> str:
     return "/".join(parts[:2]) if parts[0] in BIG_FIELDS and len(parts) > 1 else parts[0]
 
 
+PAREN_LIMIT = 60  # 표시 뒤 덧붙인 괄호로 볼 길이 한도(넘으면 내용으로 보고 둔다, 티켓 50)
 MARK_LIMIT = 80  # 표시가 열린 뒤 이만큼(글자) 닫히지 않으면 표시가 아닌 글로 보고 그대로 낸다
 
 TIMEOUT_MESSAGE = "답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
@@ -529,6 +531,8 @@ class _MenuMarks:
     names가 없으면 표시만 떼고 영어 그대로. question에 영어로 쓴 단은 영어(한국어)로(menu_names.screen_path).
     names가 있으면 표시 밖 글의 감싸지 않은 이름과 화면과 다른 한국어도 화면 글로 바꾼다(menu_names.screen_prose, 티켓 49).
     keep은 바꾸지 않을 이름(작업 상태의 물체 이름). 표시를 바꾼 글은 다시 손대지 않는다.
+    한국어 화면이면 티켓 50(HISTORY [353]): 표시 바로 뒤에 모델이 덧붙인 괄호("(단축키 Alt-F)")는 지우고, 뒤 조사는 화면 글자
+    받침에 맞추며, 답 하나에서 되풀이되는 이름은 처음 한 번만 괄호 영어를 붙인다. 그래서 닫힌 표시도 뒤 글을 볼 때까지 붙잡는다.
     """
 
     def __init__(self, names: MenuNames | None, question: str = "", keep: tuple[str, ...] = ()):
@@ -539,9 +543,10 @@ class _MenuMarks:
         self._prose = ""  # 표시 밖 글 가운데 다음 조각과 이어질 수 있어 붙잡은 끝부분(이름·괄호가 끝날 때까지)
         self._shown = ""  # 내보낸 글의 끝부분(앞뒤를 볼 때만 씀)
         self._ticks = 0  # 내보낸 글 전체의 백틱 수(끝부분만 보면 코드 속인지 틀려서)
+        self._seen: set = set()  # 이 답에서 이미 괄호 영어와 함께 보인 (영어, 화면 글자) 짝
 
-    def feed(self, text: str) -> str:
-        """조각 하나를 받아 지금 내보낼 수 있는 글을 돌려준다."""
+    def feed(self, text: str, done: bool = False) -> str:
+        """조각 하나를 받아 지금 내보낼 수 있는 글을 돌려준다. done이면 더 올 글이 없다(닫힌 표시를 더 붙잡지 않음)."""
         held, out = self._held + text, []
         while (start := held.find(MARK_OPEN)) >= 0:
             inner = start + len(MARK_OPEN)
@@ -556,8 +561,14 @@ class _MenuMarks:
             elif end < 0:
                 break  # 닫힐 때까지 모은다
             else:
-                out += [self._plain(held[:start]), self._fixed(screen_path(held[inner:end], self._names, self._question))]
-                held = held[end + len(MARK_CLOSE) :]
+                rest = self._after_mark(held[end + len(MARK_CLOSE) :], done)
+                if rest is None:
+                    break  # 표시 뒤 괄호·조사를 볼 때까지 모은다
+                # 앞 글을 먼저 다 내보낸 뒤 표시를 바꾼다(되풀이 이름을 나온 차례대로 기억해야 흘려 넣어도 같다)
+                before = self._plain(held[:start]) + self._plain("", done=True)
+                shown = screen_path(held[inner:end], self._names, self._question, self._seen if self._names else None)
+                out += [before, self._send(shown)]
+                held = fit_particle(last_korean(shown), rest) if self._names else rest
         else:
             start = len(held) - 1 if held.endswith(MARK_OPEN[0]) else len(held)
         self._held = held[start:]
@@ -567,9 +578,29 @@ class _MenuMarks:
     def finish(self) -> str:
         """답이 끝났거나 끊겼을 때 남은 글. 닫히지 않은 표시는 기호만 뗀다(사용자에게 [[가 보이지 않게)."""
         held, self._held = self._held, ""
+        out = self.feed(held, done=True)  # 뒤 글을 기다리며 붙잡은 닫힌 표시를 바꿔 낸다
+        held, self._held = self._held, ""
         if held.startswith(MARK_OPEN):
-            return self._fixed(held[len(MARK_OPEN) :])
-        return self._plain(held, done=True)
+            return out + self._fixed(held[len(MARK_OPEN) :])
+        return out + self._plain(held, done=True)
+
+    def _after_mark(self, rest: str, done: bool) -> str | None:
+        """닫힌 표시 뒤 글. 한국어 화면이면 모델이 덧붙인 단축키·풀이 괄호를 지운다. 괄호·조사를 더 봐야 하면 None."""
+        if self._names is None:
+            return rest
+        paren = re.match(r" ?\(", rest)
+        if paren:
+            close = rest.find(")", paren.end())
+            if close < 0 and not done and len(rest) <= PAREN_LIMIT:
+                return None
+            inside = rest[paren.end() : close]
+            if 0 <= close <= PAREN_LIMIT and MARK_OPEN not in inside and "(" not in inside:
+                rest = rest[close + 1 :]  # 괄호 속에 표시가 있으면 풀이가 아니라 내용이라 둔다
+        elif not done and rest in ("", " "):
+            return None
+        if not done and len(rest) < 3 and re.fullmatch(r"[가-힣]*", rest):
+            return None  # 조사가 아직 다 오지 않았을 수 있다
+        return rest
 
     def _plain(self, text: str, done: bool = False) -> str:
         """표시 밖 글. 한국어 화면이면 붙잡은 끝부분과 이어 바꿀 수 있는 데까지 바꿔 낸다."""
@@ -580,7 +611,7 @@ class _MenuMarks:
         text, self._prose = text[:cut], text[cut:]
         # 끝부분 앞에서 코드가 열려 있었으면 백틱 하나를 앞에 붙여 짝을 맞춘다
         before = ("`" if (self._ticks - self._shown.count("`")) % 2 else "") + self._shown
-        return self._send(screen_prose(before + text, self._names, self._question, self._keep, len(before))[len(before) :])
+        return self._send(screen_prose(before + text, self._names, self._question, self._keep, len(before), seen=self._seen)[len(before) :])
 
     def _fixed(self, text: str) -> str:
         """표시를 바꾼 글: 붙잡은 표시 밖 글을 먼저 다 내고, 이 글은 그대로 낸다."""
