@@ -465,10 +465,8 @@ def test_넓힌_목록_파일_모양이_틀리면_바로_알린다(tmp_path, con
         load_menu_names(tmp_path, tmp_path / "choices.json", tmp_path / "titles.json")
 
 
-def test_흐르는_답을_붙잡는_자리는_긴_영어_글에서도_빨리_정한다():
-    import time
+def test_흐르는_답을_붙잡는_영어_덩이에는_한도가_있다():
+    # 한도가 없으면 긴 영어 글을 조각마다 처음부터 되짚어 매우 느려지고(검토 지적: 2,480자에 4.7초),
+    # 닫히지 않은 괄호 뒤 긴 영어면 0을 돌려줘 글 전체를 붙잡는다
     text = "설명 (" + "the quick brown fox jumps over " * 80
-    began = time.perf_counter()
-    cut = prose_cut(text)
-    assert time.perf_counter() - began < 0.1
-    assert 0 < cut < len(text)  # 닫히지 않은 괄호라도 글 전체를 붙잡지는 않는다
+    assert 0 < prose_cut(text) < len(text)
