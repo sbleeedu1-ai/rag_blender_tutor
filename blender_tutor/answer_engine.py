@@ -608,7 +608,7 @@ class _MenuMarks:
         if self._names is None:
             return text
         text, self._prose = self._prose + text, ""
-        cut = len(text) if done else prose_cut(text)
+        cut = len(text) if done else prose_cut(text, self._names.common_prefixes)
         text, self._prose = text[:cut], text[cut:]
         # 끝부분 앞에서 코드가 열려 있었으면 백틱 하나를 앞에 붙여 짝을 맞춘다
         before = ("`" if (self._ticks - self._shown.count("`")) % 2 else "") + self._shown

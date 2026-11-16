@@ -81,7 +81,8 @@ class MenuNames:
     """메뉴 이름 사전: 영어 이름 → 번역들, 한국어 이름 → 영어 이름들."""
 
     def __init__(
-        self, names: Iterable[MenuName], choices: Mapping[str, str] = {}, titles: Iterable[str] = (), extra: Mapping[str, str] = {}
+        self, names: Iterable[MenuName], choices: Mapping[str, str] = {}, titles: Iterable[str] = (), extra: Mapping[str, str] = {},
+        common: Mapping[str, Iterable[str]] = {},
     ):
         """choices는 번역이 여러 개인 이름에 고정한 짝: 영어 이름 → 화면이 쓰는 문맥(사용자 검수, 티켓 23).
 
@@ -92,6 +93,9 @@ class MenuNames:
 
         extra는 넓힌 목록: 사전에 없는 화면 이름 → 한국어 화면 글자(extra_names, 티켓 49). 화면 글자로 바꿀 때만 쓰고
         질문 찾기에는 넣지 않는다(검색어가 달라지지 않게).
+
+        common은 흔히 옮기는 말 목록: 영어 이름 → 모델이 그 이름을 한국어로 옮길 때 흔히 쓰는 말들(티켓 50 가, HISTORY [358]-[360]).
+        "직교 투영(Orthographic)"처럼 모델이 스스로 옮긴 앞말을 화면 글자로 통째로 바꿀 때만 쓴다. 종류 낱말(모드·창 등)은 뺀다.
         """
         self._by_english = {_english_key(name.english): name for name in names}
         self._choices: dict[tuple[str, str], str] = {}  # (앞 단, 이름) → 문맥. 앞 단이 ""이면 이름 하나의 짝
@@ -118,9 +122,27 @@ class MenuNames:
         self._in_questions = _question_index(self._by_english.values(), passed)  # english_in이 쓰는 표
         self._passed = passed
         self._extra = {_english_key(english): korean for english, korean in extra.items()}
+        kinds = {_squash(tail) for tail in COMMON_TAILS}
+        self._common = {
+            _english_key(english): tuple(sorted({" ".join(v.split()) for v in variants if v.strip() and _squash(v) not in kinds},
+                                                key=len, reverse=True))
+            for english, variants in common.items()
+        }
+        # 흐름 붙잡기용: 뒤에 낱말이 더 이어지면 목록 말(+꼬리)이 될 수 있는 낱말 줄("직교 투영"의 "직교", 꼬리가 붙을 "면",
+        # "면 선택 모드"의 "면 선택"). 꼬리 가운데 여러 낱말은 "선택 모드"뿐이다
+        self.common_prefixes: set[str] = set()
+        for variants in self._common.values():
+            for v in variants:
+                words = v.split()
+                self.common_prefixes.update(" ".join(words[:k]) for k in range(1, len(words) + 1))
+                self.common_prefixes.add(f"{v} 선택")
 
     def __iter__(self):
         return iter(self._by_english.values())
+
+    def common(self, english: str) -> tuple[str, ...]:
+        """흔히 옮기는 말들(긴 것부터). 목록에 없으면 빈 묶음."""
+        return self._common.get(_english_key(english), ())
 
     def get(self, english: str) -> MenuName | None:
         return self._by_english.get(_english_key(english))
@@ -245,7 +267,8 @@ class MenuNames:
         return json.loads(path.read_text(encoding="utf-8"))
 
     @classmethod
-    def load(cls, path: Path, choices: Mapping[str, str] = {}, titles: Iterable[str] = (), extra: Mapping[str, str] = {}) -> "MenuNames":
+    def load(cls, path: Path, choices: Mapping[str, str] = {}, titles: Iterable[str] = (), extra: Mapping[str, str] = {},
+             common: Mapping[str, Iterable[str]] = {}) -> "MenuNames":
         rows = json.loads(path.read_text(encoding="utf-8"))
         names = [
             MenuName(
@@ -257,7 +280,7 @@ class MenuNames:
             )
             for row in rows
         ]
-        return cls(names, choices, titles, extra)
+        return cls(names, choices, titles, extra, common)
 
 
 def _question_index(names: Iterable[MenuName], passed: set[str]) -> dict[str, tuple[str, ...]]:
@@ -381,6 +404,24 @@ def _squash(text: str) -> str:
     return "".join(text.split())
 
 
+# 이름 뒤에 모델이 붙이는 종류 낱말(꼬리). "면 선택 모드(Face)" → "페이스(Face) 선택 모드"(㉠, HISTORY [360]).
+# 목록 시험의 맞추기 코드(124619_흔히옮기는말_견주기/자리.py TAILS)와 같다
+COMMON_TAILS = ("선택 모드", "모드", "도구", "창", "값", "방식", "브러시", "물체", "버튼", "옵션", "메뉴", "패널", "탭", "항목", "칸", "설정", "기능")
+_TAIL_RE = "|".join(re.escape(t).replace(r"\ ", r"\s*") for t in sorted(COMMON_TAILS, key=len, reverse=True))
+
+
+def _common_span(head: str, variants: Iterable[str]) -> tuple[int, str] | None:
+    """괄호 바로 앞 글 head의 끝이 '흔히 옮기는 말 + (꼬리)'이면 (그 말이 시작하는 자리, 꼬리 글)을 돌려준다.
+    빈칸은 무시하고 맞추고("루프 컷"/"루프컷"), 말 앞이 한글·영숫자면 다른 낱말의 일부라 보지 않는다("옆면"의 "면")."""
+    text = head.rstrip()
+    for v in variants:
+        body = r"\s*".join(re.escape(ch) for ch in _squash(v))
+        m = re.search(rf"({body})(\s*(?:{_TAIL_RE}))?$", text)
+        if m and not re.search(r"[가-힣A-Za-z0-9]$", text[: m.start(1)]):
+            return m.start(1), (m.group(2) or "").strip()
+    return None
+
+
 def _run_parts(words: list[str], names: "MenuNames", keep: set[str], in_path: bool) -> list[tuple[str, str | None]] | None:
     """덩이를 긴 이름부터 맞춘 (영어, 한국어 화면 글자) 목록. 못 맞춘 낱말이 남거나, 여러 낱말 덩이가 이름 하나로 맞지 않으면
     None(통째로 둔다). "Follow Path"처럼 사전에 없는 긴 이름을 낱말마다 쪼개 바꾸면 화면에 없는 글이 된다(2026-11-16 저장된 답으로 확인)."""
@@ -439,6 +480,27 @@ def screen_prose(
         whole = len(parts) == 1 and parts[0][1] not in (None, parts[0][0]) and parts[0][0] not in keep
         glossed = re.search(r"([가-힣]+)\s*\($", before)
         if before.rstrip().endswith("("):
+            # 모델이 스스로 옮긴 말이 흔히 옮기는 말이면 앞말을 통째로 화면 글자로(티켓 50 가). 괄호 뒤가 '하다' 꼴이면
+            # 앞말은 동사의 일부라("화면이 회전(Orbit)합니다") 바꾸지 않는다
+            head = before.rstrip()[:-1]
+            span = (_common_span(head, names.common(parts[0][0]))
+                    if whole and after.startswith(")") and not re.match(r"\)(하(?!나)|합|했|해|함|한|할)", after) else None)
+            floor = max(start, edits[-1][1] if edits else 0)
+            if span and span[0] >= floor:
+                at, tail = span
+                core = _squash(head).removesuffix(_squash(tail))
+                if not core.endswith(_squash(parts[0][1])):  # 앞말이 이미 화면 글자로 끝나면 둔다("에지를 베벨(Bevel Edges)")
+                    new = _shown_part(parts[0][0], parts[0][1], asked, seen)
+                    end = e + 1
+                    if tail:
+                        new += " " + tail
+                    else:
+                        particle = PARTICLE.match(after[1:])
+                        if particle:
+                            new = "".join(with_particle(new, particle.group()))
+                            end += particle.end()
+                    edits.append((at, end, new))
+                    continue
             # 한국어(영어) 꼴: 괄호 속이 이 이름 하나이고 괄호 앞 한국어가 화면 글자와 다르면 괄호 속에 화면 글자를 넣는다.
             # 앞 글은 이름을 옮긴 말이 아니라 설명("옵션(Only Selected)")이나 동사("녹여(Dissolve)")일 때가 많아 고치지 않는다
             if glossed and whole and after.startswith(")"):
@@ -473,11 +535,12 @@ def screen_prose(
     return text
 
 
-def prose_cut(text: str) -> int:
+def prose_cut(text: str, hold: set[str] | frozenset = frozenset()) -> int:
     """답이 흐르는 동안 지금 바꿔 내보내도 되는 글의 끝(그 뒤는 다음 조각과 이어질 수 있어 붙잡는다).
 
     마지막 낱말, 그 앞에 빈칸 하나로 이어진 영어 낱말들, 자를 자리를 품은 닫히지 않은 괄호(와 그 앞 낱말·영어 덩이),
-    닫히지 않은 백틱 뒤를 붙잡는다.
+    닫히지 않은 백틱 뒤를 붙잡는다. hold(흔히 옮기는 말의 앞부분 낱말 줄, MenuNames.common_prefixes)를 주면
+    붙잡은 끝 낱말과 이어 그 줄이 되는 앞 낱말들도 붙잡는다("직교 투영(" 앞의 "직교", 티켓 50 가).
     """
     cut = len(text)
     tick = text.rfind("`")
@@ -495,8 +558,17 @@ def prose_cut(text: str) -> int:
             moved = re.search(r"\S*$", text[: moved - 1]).start()  # 빈칸 하나로 이어진 앞 영어 낱말
             joined += 1
         if moved == cut:
-            return cut
+            return _hold_common(text, cut, hold) if hold else cut
         cut = moved
+
+
+def _hold_common(text: str, cut: int, hold: set[str] | frozenset) -> int:
+    """cut 바로 앞 낱말 1-3개가 hold의 줄이면(뒤에 붙잡은 낱말과 이어 목록 말이 될 수 있으면) 가장 긴 줄의 시작까지 붙잡는다."""
+    for k in (3, 2, 1):
+        m = re.search(rf"(?<!\S)((?:[^\s()]+ ){{{k}}})$", text[:cut])
+        if m and not re.search(r"[A-Za-z0-9]", m.group(1)) and m.group(1).strip().lstrip("*_'\"“‘`") in hold:  # 영어 덩이 가운데서 자르지 않게
+            return m.start(1)
+    return cut
 
 
 def screen_marks(text: str, names: "MenuNames | None") -> str:
@@ -505,6 +577,9 @@ def screen_marks(text: str, names: "MenuNames | None") -> str:
 
 
 EXTRA_FILE = "screen_extra.json"  # 넓힌 목록(extra_names). data/에 두고 커밋하지 않는다(번역 글자가 들어 있음)
+# 흔히 옮기는 말 목록(티켓 50 가). Haiku로 사전 이름마다 미리 만든 것(results/20261116/124619_흔히옮기는말_견주기/방법1_전체2_섞음.json을
+# 옮김, HISTORY [360]). data/에 두고 커밋하지 않는다. 없으면 이 바꾸기 없이 돈다
+COMMON_FILE = "common_ko.json"
 
 
 def load_menu_names(
@@ -518,7 +593,12 @@ def load_menu_names(
     extra = json.loads(extra_path.read_text(encoding="utf-8")) if extra_path.exists() else {}
     if not isinstance(extra, dict) or not all(isinstance(k, str) and isinstance(v, str) and k and v for k, v in extra.items()):
         raise ValueError(f"넓힌 목록 {extra_path}: '영어 이름': '한국어 화면 글자' 모양이어야 함(menu_names extra로 다시 만든다)")
-    return MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles), extra)
+    common_path = data_dir / "menu_names" / COMMON_FILE
+    common = json.loads(common_path.read_text(encoding="utf-8"))["lists"] if common_path.exists() else {}
+    if not isinstance(common, dict) or not all(isinstance(k, str) and isinstance(v, list) and all(isinstance(x, str) for x in v)
+                                               for k, v in common.items()):
+        raise ValueError(f"흔히 옮기는 말 목록 {common_path}: {{'lists': {{'영어 이름': ['한국어 말', …]}}}} 모양이어야 함")
+    return MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles), extra, common)
 
 
 def build_menu_names(

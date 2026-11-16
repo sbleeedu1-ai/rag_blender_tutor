@@ -996,3 +996,51 @@ def test_조각을_어떻게_나눠_흘려도_한꺼번에_바꾼_것과_같다(
             pieces.append(text[i : i + n])
             i += n
         assert shown(tuple(pieces)) == whole
+
+
+# 티켓 50 가(HISTORY [358]-[360]): 모델이 스스로 옮긴 이름. 흔히 옮기는 말 목록은 지어낸 것
+COMMON = {"Orthographic": ["직교 투영", "직교"], "Face": ["면", "페이스"], "Bevel": ["모깎기", "모서리 다듬기"], "Orbit": ["회전"]}
+COMMON_EXTRA = {**SCREEN_EXTRA, "Orthographic": "정사법", "Orbit": "궤도"}
+
+
+def shown_common(pieces) -> str:
+    names = MenuNames(SCREEN_NAMES, extra=COMMON_EXTRA, common=COMMON)
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
+    return "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece))
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("직교 투영(Orthographic)으로 바꿉니다.", "정사법(Orthographic)으로 바꿉니다."),  # 여러 낱말 앞말을 통째로
+        ("모깎기(Bevel)를 씁니다.", "베벨(Bevel)을 씁니다."),  # 조사도 화면 글자에
+        ("면 선택 모드(Face)를 켭니다.", "페이스(Face) 선택 모드를 켭니다."),  # 꼬리는 괄호 뒤로(㉠ [360])
+        ("먼저 면(Face) 고르기", "먼저 페이스(Face) 고르기"),
+        ("화면이 회전(Orbit)합니다.", "화면이 회전(궤도, Orbit)합니다."),
+        ("모깎기(Bevel) 하나를 겁니다.", "베벨(Bevel) 하나를 겁니다."),  # 띄어 쓴 '하나'는 '하다' 꼴이 아니다
+        ("모깎기(Bevel)하나", "베벨(Bevel)하나"),  # 괄호 뒤 '하다' 꼴은 목록으로 안 바꿈(지금 꼴 그대로)
+        ("옆면(Face) 고르기", "옆면(페이스, Face) 고르기"),  # 목록 말 앞에 한글이 붙어 있으면 다른 낱말
+        ("평평한 쪽(Face) 고르기", "평평한 쪽(페이스, Face) 고르기"),  # 목록에 없는 말은 지금 꼴 그대로(꼴 미정)
+        ("페이스(Face)를", "페이스(Face)를"),  # 이미 화면 글자
+    ],
+)
+def test_흔히_옮기는_말이면_앞말을_통째로_화면_글자로(text, expected):
+    assert shown_common((text,)) == expected
+
+
+def test_흔히_옮기는_말도_되풀이되면_두번째부터_화면_글자만():
+    assert shown_common(("직교 투영(Orthographic)을 켜고 다시 직교(Orthographic)를 끕니다.",)) == (
+        "정사법(Orthographic)을 켜고 다시 정사법을 끕니다.")
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3, 4, 5])
+def test_흔히_옮기는_말을_조각으로_흘려도_같다(seed):
+    import random
+
+    text = "먼저 직교 투영(Orthographic)으로 바꾸고 면 선택 모드(Face)를 켭니다. 그다음 모깎기(Bevel)를 씁니다."
+    rng, parts, i = random.Random(seed), [], 0
+    while i < len(text):
+        k = rng.randint(1, 6)
+        parts.append(text[i : i + k])
+        i += k
+    assert shown_common(tuple(parts)) == shown_common((text,))
