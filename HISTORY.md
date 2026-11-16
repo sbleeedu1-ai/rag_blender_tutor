@@ -3276,3 +3276,11 @@
 ### [364] 2026-11-16 · advisor 커밋 훅이 조용히 통과시키던 꼴 셋을 막고, 하위 에이전트 Bash가 막히지 않게 한다
 - 제안: advisor 검토([363] 뒤). 고친 것: 경로를 붙인 커밋(`git commit -m x 파일`)도 스테이징 전 파일을 봄, `cd "$D"`처럼 풀지 못하는 폴더는 입력 cwd로 봄, advisor 결과는 assistant 줄만 셈(api-request-blob 줄 제외), 커밋이 아닌 명령에서는 transcript_path를 읽지 않음.
 - 확인: 훅 테스트 15개(새 4개는 먼저 실패를 봄). 실제 하네스에서 거부가 뜨는 것은 아직 못 봄: advisor 결과가 있는 차례라 통과만 봤다. 다음 차례 첫머리에 advisor 전에 시험 파일로 `git commit --dry-run`을 보내 확인한다.
+
+### [365] 2026-11-16 · 압축 요약이 Claude의 약속을 빼먹지 않게, 직전 압축 구간의 약속 줄을 따로 다시 넣는 훅을 더하고 advisor 커밋 훅의 실제 거부를 확인한다
+- 제안: Claude(회고 1번, [361]), advisor와 설계. 사용자 "아니 뭐 계속 이어서해".
+- advisor 커밋 훅 실제 확인: 새 차례 첫머리, advisor 전에 `.claude/hooks/` 빈 시험 파일로 `git add … && git commit --dry-run -m x` → "PreToolUse:Bash hook error: advisor와 상의하지 않은 제품 코드·훅 커밋이다(마지막 사용자 메시지 뒤 advisor 결과 없음): .claude/hooks/zz_hook_live_check.py. …". 시험 파일은 trash로.
+- 공식 문서(hooks): additionalContext는 "Claude Code measures each string on its own, even when several hooks run for the same event", 넘으면 파일 경로와 앞 2,000자만 감. 그래서 약속 줄은 사용자 원문 훅과 다른 훅 `.claude/hooks/restore_promises_after_compact.py`로 내고 사용자 원문 8,000자 몫은 그대로 둔다(옛 diff의 6,500+3,000 안은 버림).
+- 공식 문서(context-window "What survives compaction"): 프로젝트 루트 CLAUDE.md·경로 없는 규칙·자동 기억·스킬 본문(스킬당 5,000토큰)·최근 파일 5개·계획 모드 계획·compact SessionStart 훅 출력이 다시 들어간다. 앞서 "루트 CLAUDE.md만 남는다"고 한 말은 틀렸다. 대화에만 한 지시와 이전 훅 출력은 요약된다.
+- 고르는 법: 끝에서 두 번째 압축 요약 뒤의 본 세션 text 줄 중 `겠습니다|드립니다|드릴게요|할게요`. 옛 정규식은 11:57 줄("…한 표로 보여 드립니다")을 못 잡았다. 압축 구간마다 최대 45줄 4,859자이고, 11:57 구간 28줄을 읽어 보니 거의 모두 약속·계획 줄.
+- 확인: 테스트 5개(먼저 실패), 전체 pytest 811 통과. 오늘 기록을 실제 압축 지점(11-16 03:39Z·07:54Z, 요약 줄 적힘 전·후)에서 잘라 돌림: 11:57 줄 모두 남음, 티켓 50 "㉮를 돌려 실제 문장" 약속도 07:54 지점에서 남음, 길이 최대 9,010자(한도 9,500), 전체 기록 0.5초.
