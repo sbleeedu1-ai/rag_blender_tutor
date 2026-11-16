@@ -17,6 +17,7 @@ from blender_tutor.menu_names import (
     Status,
     Translation,
     build_menu_names,
+    extra_names,
     load_menu_names,
     read_po,
     screen_marks, screen_path,
@@ -387,3 +388,67 @@ def test_사전_파일이_있으면_고정_짝과_함께_읽고_없으면_None(t
     (tmp_path / "titles.json").write_text("[]", encoding="utf-8")
     names = load_menu_names(tmp_path, tmp_path / "choices.json", tmp_path / "titles.json")
     assert names.korean("Mesh") == "메시"
+
+
+# 넓힌 이름 목록(티켓 49): 사전에 없는 화면 이름을 ko.po에서 번역이 하나뿐인 것으로 더한다(10-27 번역 이름표 규칙 B, HISTORY [68]·[346])
+EXTRA_PO = '''
+msgid "Origins"
+msgstr "오리진"
+
+msgctxt "Operator"
+msgid "Origins"
+msgstr "오리진"
+
+msgid "Divide"
+msgstr "나누기"
+
+msgid "Strength"
+msgstr "강도"
+
+msgctxt "Light"
+msgid "Strength"
+msgstr "힘"
+
+msgid "Space"
+msgstr "공간"
+
+msgid "the selected objects"
+msgstr "선택된 오브젝트"
+
+msgid "Mesh"
+msgstr "메쉬"
+'''
+EXTRA_FULL_PO = '''
+msgid "Divide"
+msgstr "Diviser"
+
+msgctxt "Color"
+msgid "Divide"
+msgstr "Diviser"
+'''
+
+
+def test_넓힌_목록은_사전에_없고_ko_po_번역이_하나뿐인_화면_이름만_담는다():
+    extra = extra_names(SCREEN, [], EXTRA_PO, EXTRA_FULL_PO)
+    assert extra == {"Origins": "오리진"}
+    # Divide: fr.po로 보면 Color 문맥은 한국어 번역이 없어 화면이 영어일 수 있다 / Strength: 번역이 둘
+    # Space: 키 이름 / the selected objects: 이름 꼴이 아님 / Mesh: 사전에 이미 있음(사전이 먼저)
+
+
+def test_사전에_없는_이름은_넓힌_목록으로_바꾸되_질문_찾기에는_쓰지_않는다():
+    names = MenuNames(list(SCREEN), extra={"Origins": "오리진", "Zoom Region...": "지역 줌..."})
+    assert names.korean("Origins") == "오리진"
+    assert names.korean("Mesh") == "메시"  # 사전이 먼저
+    assert screen_path("Origins", names) == "오리진(Origins)"
+    assert screen_path("Zoom Region", names) == "지역 줌...(Zoom Region)"  # 설명서·답은 말줄임표를 떼고 쓰기도 한다
+    assert names.english_in("오리진 끄기") == ()
+
+
+def test_넓힌_목록_파일이_있으면_함께_읽는다(tmp_path):
+    (tmp_path / "menu_names").mkdir()
+    SCREEN.save(tmp_path / "menu_names" / "menu_names.json")
+    (tmp_path / "menu_names" / "screen_extra.json").write_text('{"Origins": "오리진"}', encoding="utf-8")
+    (tmp_path / "choices.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "titles.json").write_text("[]", encoding="utf-8")
+    names = load_menu_names(tmp_path, tmp_path / "choices.json", tmp_path / "titles.json")
+    assert names.korean("Origins") == "오리진"

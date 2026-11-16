@@ -22,7 +22,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
-from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, MenuNames, screen_path
+from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, MenuNames, prose_cut, screen_path, screen_prose
 from blender_tutor.progress import Course, Step
 from blender_tutor.setting_fields import FieldModel, SettingLines, choose_fields, lines_for
 from blender_tutor.work_state import WorkState
@@ -334,7 +334,7 @@ class AnswerEngine:
         sent = list(dict.fromkeys(preview + results))
         similar = self._similar_courses(vectors[-1]) if recommend else []
         messages = _messages(question, state, recent, self._widened(sent, preview), similar, step, lines)
-        marks = _MenuMarks(self._menu_names if state.korean_screen else None, question)
+        marks = _MenuMarks(self._menu_names if state.korean_screen else None, question, _object_names(state))
         try:
             for text in model.stream(messages, self._settings.timeout):
                 if text := marks.feed(text):
@@ -527,40 +527,75 @@ class _MenuMarks:
 
     names가 있으면(한국어 화면에 번역 켜짐) 단마다 "추가(Add)"처럼 한국어(영어), 영어로 보이는 단은 영어 그대로.
     names가 없으면 표시만 떼고 영어 그대로. question에 영어로 쓴 단은 영어(한국어)로(menu_names.screen_path).
+    names가 있으면 표시 밖 글의 감싸지 않은 이름과 화면과 다른 한국어도 화면 글로 바꾼다(menu_names.screen_prose, 티켓 49).
+    keep은 바꾸지 않을 이름(작업 상태의 물체 이름). 표시를 바꾼 글은 다시 손대지 않는다.
     """
 
-    def __init__(self, names: MenuNames | None, question: str = ""):
+    def __init__(self, names: MenuNames | None, question: str = "", keep: tuple[str, ...] = ()):
         self._names = names
         self._question = question
+        self._keep = keep
         self._held = ""  # 아직 내보내지 않은 글(열린 표시나, 표시의 시작일지 모르는 마지막 '[')
+        self._prose = ""  # 표시 밖 글 가운데 다음 조각과 이어질 수 있어 붙잡은 끝부분(이름·괄호가 끝날 때까지)
+        self._shown = ""  # 내보낸 글의 끝부분(앞뒤를 볼 때만 씀)
+        self._ticks = 0  # 내보낸 글 전체의 백틱 수(끝부분만 보면 코드 속인지 틀려서)
 
     def feed(self, text: str) -> str:
         """조각 하나를 받아 지금 내보낼 수 있는 글을 돌려준다."""
-        held, shown = self._held + text, []
+        held, out = self._held + text, []
         while (start := held.find(MARK_OPEN)) >= 0:
             inner = start + len(MARK_OPEN)
             end, again = held.find(MARK_CLOSE, inner), held.find(MARK_OPEN, start + 1)
             if 0 <= again and (end < 0 or again < end):
                 # 닫히기 전에 새 표시가 열리면 앞의 것은 짝이 없는 표시. [[[처럼 겹치면 앞 [ 하나만 글이다
-                shown.append(held[:start] + (held[start:again] if again < inner else held[inner:again]))
+                out += [self._plain(held[:start]), self._fixed(held[start:again] if again < inner else held[inner:again])]
                 held = held[again:]
             elif (end < 0 and len(held) - inner > MARK_LIMIT) or end - inner > MARK_LIMIT:
-                shown.append(held[:start])  # 닫히지 않는(너무 긴) 표시에 답이 멈춰 보이지 않게 기호만 떼고 낸다
+                out.append(self._plain(held[:start]))  # 닫히지 않는(너무 긴) 표시에 답이 멈춰 보이지 않게 기호만 떼고 낸다
                 held = held[inner:]
             elif end < 0:
                 break  # 닫힐 때까지 모은다
             else:
-                shown += [held[:start], screen_path(held[inner:end], self._names, self._question)]
+                out += [self._plain(held[:start]), self._fixed(screen_path(held[inner:end], self._names, self._question))]
                 held = held[end + len(MARK_CLOSE) :]
         else:
             start = len(held) - 1 if held.endswith(MARK_OPEN[0]) else len(held)
         self._held = held[start:]
-        return "".join(shown) + held[:start]
+        out.append(self._plain(held[:start]))
+        return "".join(out)
 
     def finish(self) -> str:
         """답이 끝났거나 끊겼을 때 남은 글. 닫히지 않은 표시는 기호만 뗀다(사용자에게 [[가 보이지 않게)."""
         held, self._held = self._held, ""
-        return held.replace(MARK_OPEN, "", 1)
+        if held.startswith(MARK_OPEN):
+            return self._fixed(held[len(MARK_OPEN) :])
+        return self._plain(held, done=True)
+
+    def _plain(self, text: str, done: bool = False) -> str:
+        """표시 밖 글. 한국어 화면이면 붙잡은 끝부분과 이어 바꿀 수 있는 데까지 바꿔 낸다."""
+        if self._names is None:
+            return text
+        text, self._prose = self._prose + text, ""
+        cut = len(text) if done else prose_cut(text)
+        text, self._prose = text[:cut], text[cut:]
+        # 끝부분 앞에서 코드가 열려 있었으면 백틱 하나를 앞에 붙여 짝을 맞춘다
+        before = ("`" if (self._ticks - self._shown.count("`")) % 2 else "") + self._shown
+        return self._send(screen_prose(before + text, self._names, self._question, self._keep, len(before))[len(before) :])
+
+    def _fixed(self, text: str) -> str:
+        """표시를 바꾼 글: 붙잡은 표시 밖 글을 먼저 다 내고, 이 글은 그대로 낸다."""
+        return self._plain("", done=True) + self._send(text)
+
+    def _send(self, text: str) -> str:
+        self._shown = (self._shown + text)[-40:]
+        self._ticks += text.count("`")
+        return text
+
+def _object_names(state: WorkState) -> tuple[str, ...]:
+    """답 글에서 화면 글로 바꾸지 않을 이름: 작업 상태의 물체 이름(아웃라이너에 보이는 글자 그대로 불러야 한다, 티켓 49)."""
+    active = (state.active_object.name,) if state.active_object else ()
+    return tuple(dict.fromkeys((*active, *state.selected_objects)))
+
 
 def _failure(error: Exception, results: list[Chunk]) -> Failure:
     """바깥 서비스 오류를 짧은 오류 표시로. 시간 초과면 그 문구로. 원래 오류는 도우미 기록에 남긴다(무엇이 실패했는지 가르려고)."""

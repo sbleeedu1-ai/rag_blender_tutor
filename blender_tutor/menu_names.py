@@ -21,6 +21,18 @@ _TITLE_TAIL = re.compile(r" (Modifier|Node|Tool|Constraint)$")  # 쪽 제목 "Ar
 # 메뉴 이름 표시. 답변 모델의 답(티켓 23)과 연습 과정 안내 말(티켓 32)이 메뉴 이름을 감싸고, 화면 언어에 맞게 바꾼다
 MARK_OPEN, MARK_CLOSE = "[[", "]]"
 _MARK = re.compile(r"\[\[(.+?)\]\]")
+ARTICLES = {"The", "A", "An", "This", "These", "That", "Those", "Each", "Its", "Your"}  # 문장 첫머리 관사·지시어
+# 키보드 키 이름. ko.po에는 'Space → 공간'처럼 다른 뜻으로 들어 있어 넓힌 목록에서 빼고, 답 글에서도 바꾸지 않는다(티켓 49)
+KEY_NAMES = {"Space", "Delete", "Backspace", "Tab", "Enter", "Return", "Esc", "Escape", "Home", "End", "Insert",
+             "Shift", "Ctrl", "Alt", "Cmd", "Option", "Fn", "Page Up", "Page Down", "Numpad", "Spacebar"}
+MODIFIER_KEYS = {"Shift", "Ctrl", "Alt", "Cmd", "Option", "Fn"}
+PROGRAM_NAMES = {"Blender"}  # 화면 메뉴 이름이 아니라 프로그램 이름
+# Blender가 새 물체에 붙이는 기본 이름. 답 글에서는 고르지 않은 물체 이름(불리언 대상 Cube 등)일 수 있어, 메뉴 경로(> 뒤)가 아니면
+# 바꾸지 않는다(2026-11-16 저장된 답 Q11 "대상은 Cube"로 확인)
+OBJECT_DEFAULTS = {"Cube", "Plane", "Circle", "Cylinder", "Cone", "Torus", "Grid", "Sphere", "UV Sphere", "Ico Sphere",
+                   "Icosphere", "Suzanne", "Monkey", "Camera", "Light", "Empty", "Armature", "Text", "Curve"}
+# 자리마다 화면 글자가 다른 것을 확인한 이름: 버튼은 엣지, 메뉴·글은 에지(HISTORY [80]). 메뉴마다 짝을 따로 둔 이름도 같이 본다
+PLACE_DEPENDENT = {"Edge"}
 
 
 class Source(StrEnum):
@@ -67,13 +79,18 @@ class MenuName:
 class MenuNames:
     """메뉴 이름 사전: 영어 이름 → 번역들, 한국어 이름 → 영어 이름들."""
 
-    def __init__(self, names: Iterable[MenuName], choices: Mapping[str, str] = {}, titles: Iterable[str] = ()):
+    def __init__(
+        self, names: Iterable[MenuName], choices: Mapping[str, str] = {}, titles: Iterable[str] = (), extra: Mapping[str, str] = {}
+    ):
         """choices는 번역이 여러 개인 이름에 고정한 짝: 영어 이름 → 화면이 쓰는 문맥(사용자 검수, 티켓 23).
 
         열쇠에 바로 앞 단을 붙이면("Add > Empty") 그 메뉴 아래서만 쓰는 짝이다. 같은 이름도 메뉴·패널마다
         문맥이 달라 글자가 다르게 보이기 때문이다(Empty: 추가 메뉴 "비어 있음", 속성 창 "엠프티", 티켓 31).
 
         titles는 제목에서만 뽑은 이름 가운데 검수를 통과한 영어 이름들이다(티켓 31). 이것만 질문 찾기에 쓴다.
+
+        extra는 넓힌 목록: 사전에 없는 화면 이름 → 한국어 화면 글자(extra_names, 티켓 49). 화면 글자로 바꿀 때만 쓰고
+        질문 찾기에는 넣지 않는다(검색어가 달라지지 않게).
         """
         self._by_english = {_english_key(name.english): name for name in names}
         self._choices: dict[tuple[str, str], str] = {}  # (앞 단, 이름) → 문맥. 앞 단이 ""이면 이름 하나의 짝
@@ -98,6 +115,8 @@ class MenuNames:
             if name is None or name.sources != (Source.TITLE,):
                 raise ValueError(f"통과 제목 {english!r}: 사전에 제목에서만 뽑은 이름으로 없음")
         self._in_questions = _question_index(self._by_english.values(), passed)  # english_in이 쓰는 표
+        self._passed = passed
+        self._extra = {_english_key(english): korean for english, korean in extra.items()}
 
     def __iter__(self):
         return iter(self._by_english.values())
@@ -112,7 +131,9 @@ class MenuNames:
         parent는 메뉴 경로에서 바로 앞 단의 영어다. 그 메뉴 아래 짝이 있으면 그것을, 없으면 이름 하나의 짝을 쓴다.
         """
         name = self.get(english)
-        if name is None or name.status == Status.NONE:
+        if name is None:
+            return self._extra.get(_english_key(english))
+        if name.status == Status.NONE:
             return None
         if name.status == Status.ONE:
             return name.translations[0].korean
@@ -120,6 +141,36 @@ class MenuNames:
         context = self._choices.get((parent.strip(), key)) or self._choices.get(("", key))
         korean = next((t.korean for t in name.translations if context in t.contexts), None)
         return None if korean == name.english else korean  # 고른 문맥에 번역이 없으면 화면은 영어
+
+    def screen(self, english: str, parent: str = "") -> tuple[bool, str | None]:
+        """화면 글로 바꿀 때 찾기: (사전이나 넓힌 목록에 있나, 한국어 화면 글자). 있는데 화면이 영어면 (True, None).
+
+        설명서·답은 "Zoom Region…"의 말줄임표를 떼고 쓰기도 해서, 그대로 없으면 붙인 꼴·뗀 꼴도 찾는다.
+        """
+        key = _english_key(english)
+        for candidate in dict.fromkeys((key, key + "...", key.removesuffix("..."))):
+            if self.get(candidate) is not None or candidate in self._extra:
+                return True, self.korean(candidate, parent)
+        return False, None
+
+    def in_prose(self, english: str) -> tuple[bool, str | None]:
+        """감싸지 않은 답 글 속 이름 찾기. screen과 같되 둘을 더 가린다.
+
+        - 제목에서만 뽑은 이름은 검수를 통과한 것만(일상 낱말이 섞여서, 티켓 31)
+        - 번역이 여러 개인 이름은 고정 짝의 글자가 기본 문맥(`*`)의 글자와 같을 때만 바꾼다. 짝은 검수한 한 자리의 글자인데,
+          감싸지 않은 글에는 어느 메뉴 아래인지가 없다. 기본 문맥과 다르면 자리마다 글자가 갈린다(예: Strength 고정 짝 '힘',
+          월드 배경 노드 칸은 기본 문맥 '강도', 2026-11-16 실행으로 확인)
+        """
+        name = self.get(english) or self.get(english + "...")
+        if name is not None and name.sources == (Source.TITLE,) and _english_key(name.english) not in self._passed:
+            return False, None
+        if name is not None and (name.english in PLACE_DEPENDENT or any(parent and key == _english_key(name.english) for parent, key in self._choices)):
+            return True, None  # 메뉴마다 글자가 다른 이름(Bisect·Normal 등 경로 열쇠가 있는 것)은 어느 메뉴인지 알 때만
+        if name is not None and name.status == Status.MANY:
+            korean = self.korean(name.english)
+            default = next((t.korean for t in name.translations if DEFAULT_CONTEXT in t.contexts), None)
+            return True, korean if korean is not None and korean == default else None
+        return self.screen(english)
 
     def english_for(self, korean: str) -> tuple[str, ...]:
         """한국어 블렌더 표기에 맞는 영어 이름들(질문 속 한국어 메뉴 이름으로 영어 설명서를 찾을 때, 티켓 22)."""
@@ -193,7 +244,7 @@ class MenuNames:
         return json.loads(path.read_text(encoding="utf-8"))
 
     @classmethod
-    def load(cls, path: Path, choices: Mapping[str, str] = {}, titles: Iterable[str] = ()) -> "MenuNames":
+    def load(cls, path: Path, choices: Mapping[str, str] = {}, titles: Iterable[str] = (), extra: Mapping[str, str] = {}) -> "MenuNames":
         rows = json.loads(path.read_text(encoding="utf-8"))
         names = [
             MenuName(
@@ -205,7 +256,7 @@ class MenuNames:
             )
             for row in rows
         ]
-        return cls(names, choices, titles)
+        return cls(names, choices, titles, extra)
 
 
 def _question_index(names: Iterable[MenuName], passed: set[str]) -> dict[str, tuple[str, ...]]:
@@ -244,7 +295,7 @@ def screen_path(path: str, names: "MenuNames | None", asked: str = "") -> str:
     parts = [part.strip() for part in re.split(r"[>‣]", path)]
     if names:
         parents = ["", *parts[:-1]]  # 단마다 바로 앞 단(같은 이름도 메뉴마다 글자가 달라서, 티켓 31)
-        parts = [_shown_part(part, names.korean(part, parent), asked) for part, parent in zip(parts, parents)]
+        parts = [_shown_part(part, names.screen(part, parent)[1], asked) for part, parent in zip(parts, parents)]
     return " > ".join(parts)
 
 
@@ -256,9 +307,159 @@ def _shown_part(part: str, korean: str | None, asked: str) -> str:
     return f"{korean}({part})"
 
 
+def looks_like_name(english: str) -> bool:
+    """ko.po 문구 가운데 화면 이름 같은 것: 대문자로 시작하는 다섯 낱말 이하, 관사로 시작하지 않고 문장 부호·자리표시가 없음."""
+    words = english.split()
+    return (0 < len(words) <= 5 and english[0].isupper() and words[0] not in ARTICLES
+            and not re.search(r'[%{}.:;!?"\\]', english))
+
+
+def extra_names(names: "MenuNames", titles: Iterable[str], po_text: str, full_po_text: str) -> dict[str, str]:
+    """넓힌 목록: 사전에 없는 화면 이름 → 한국어 화면 글자(티켓 49).
+
+    10-27 번역 이름표 규칙 B(HISTORY [68], translate.screen_words)와 같이 ko.po에서 번역이 하나뿐인 이름 꼴의 문구를 담되,
+    사전 만들기처럼 fr.po(번역률 100%)로 한국어 번역이 빠진 문맥(화면이 영어)이 있는 문구는 뺀다. 키 이름과
+    제목 검수에서 떨어진 이름도 뺀다. 사전에 있는 이름은 사전이 정한다.
+    """
+    passed = set(titles)
+    rejected = {name.english for name in names if name.sources == (Source.TITLE,) and name.english not in passed}
+    found: dict[str, dict[str, set[str]]] = {}
+    for context, english, korean in read_po(po_text):
+        found.setdefault(english, {}).setdefault(korean, set()).add(context)
+    used = {}
+    for context, english, _ in read_po(full_po_text):
+        used.setdefault(english, set()).add(context)
+    extra = {}
+    for english, koreans in found.items():
+        if (english in rejected or english in KEY_NAMES or names.get(english) is not None
+                or not looks_like_name(english) or len(koreans) != 1):
+            continue
+        korean, contexts = next(iter(koreans.items()))
+        if korean != english and not used.get(english, set()) - contexts:
+            extra[english] = korean
+    return extra
+
+
+_HANGUL = re.compile(r"[가-힣]")
+# 영어 덩이: 대문자로 시작하는 낱말을 빈칸 하나로 이은 것. 앞이 영어·숫자·코드 글자면 다른 낱말의 일부라 보지 않는다
+_RUN = re.compile(r"(?<![A-Za-z0-9_.`/\\-])[A-Z][A-Za-z0-9'\-]*(?:\.\.\.|…)?(?: [A-Za-z0-9][A-Za-z0-9'\-]*(?:\.\.\.|…)?)*")
+_QUOTE_BEFORE = re.compile(r"설명서(?:의|에서|에는|에)\s*[\"“'‘]?\s*$")
+_MAX_WORDS = 6
+
+
+def _squash(text: str) -> str:
+    return "".join(text.split())
+
+
+def _run_parts(words: list[str], names: "MenuNames", keep: set[str], in_path: bool) -> list[tuple[str, str | None]] | None:
+    """덩이를 긴 이름부터 맞춘 (영어, 한국어 화면 글자) 목록. 못 맞춘 낱말이 남거나, 여러 낱말 덩이가 이름 하나로 맞지 않으면
+    None(통째로 둔다). "Follow Path"처럼 사전에 없는 긴 이름을 낱말마다 쪼개 바꾸면 화면에 없는 글이 된다(2026-11-16 저장된 답으로 확인)."""
+    parts, i = [], 0
+    while i < len(words):
+        for size in range(min(_MAX_WORDS, len(words) - i), 0, -1):
+            english = " ".join(words[i : i + size])
+            if english in keep or english in PROGRAM_NAMES or (english in OBJECT_DEFAULTS and not in_path):
+                parts.append((english, None))
+                break
+            if english.isupper() or english in KEY_NAMES:
+                continue  # 대문자 값(SCULPT)·한 글자(S 키, W 단위)·키 이름은 이름으로 치지 않는다
+            found, korean = names.in_prose(english)
+            if found:
+                parts.append((english, korean))
+                break
+        else:
+            return None
+        i += size
+    if len(parts) > 1 and any(korean is not None for _, korean in parts):
+        return None
+    return parts
+
+
+def screen_prose(
+    text: str, names: "MenuNames", asked: str = "", keep: Iterable[str] = (), start: int = 0, changed: list | None = None
+) -> str:
+    """[[ ]]로 감싸지 않은 답 글 속 블렌더 이름을 화면 글로 바꾼다(한국어 화면일 때만 부른다, 티켓 49).
+
+    - 맨 영어 "Bevel 모디파이어" → "베벨(Bevel) 모디파이어"(질문에 영어로 쓴 이름은 "Bevel(베벨)", [311])
+    - 화면과 다른 한국어를 붙인 "면(Face)" → 괄호 속에 화면 글자를 넣어 "면(페이스, Face)"
+    - 화면과 다른 한국어 설명이 뒤에 붙은 "Scale(크기 조절)" → "스케일(Scale, 크기 조절)"
+    그대로 두는 것: 코드(백틱 속·밑줄·점으로 이은 이름), 단축키(뒤에 '키', +로 이음), "설명서의 …" 인용, keep(작업 상태의
+    물체 이름), 프로그램 이름, 대문자 값, 사전·넓힌 목록에 없는 낱말이 섞인 덩이, 화면도 영어인 이름.
+    start 앞 글은 앞뒤를 보는 데만 쓰고 바꾸지 않는다(답이 흐르는 동안 이미 내보낸 글).
+    changed를 주면 바꾼 자리마다 (원래 글, 바뀐 글)을 덧붙인다(저장된 답으로 검증할 때 쓴다).
+    """
+    keep = set(keep)
+    edits: list[tuple[int, int, str]] = []
+    for match in _RUN.finditer(text):
+        s, e = match.span()
+        if s < max(start, edits[-1][1] if edits else 0):
+            continue  # 이미 내보낸 글이거나, 앞에서 고친 범위 안("Edge Weight(또는 Vertex Group)"의 Vertex Group)
+        before, after = text[:s], text[e:]
+        words = match.group().split(" ")
+        if (before.count("`") % 2 or _QUOTE_BEFORE.search(before) or re.match(r"\s*키", after)
+                or re.search(r"\+\s*$", before) or re.match(r"\s*\+", after) or re.match(r"[_.][A-Za-z0-9]", after)
+                or re.search(r"[A-Za-z]/$", before) or re.match(r"/[A-Za-z]", after)
+                or MODIFIER_KEYS & set(words)):
+            continue
+        parts = _run_parts(words, names, keep, bool(re.search(r"[>‣▸]\s*$", before)))
+        if parts is None:
+            continue
+        whole = len(parts) == 1 and parts[0][1] not in (None, parts[0][0]) and parts[0][0] not in keep
+        glossed = re.search(r"([가-힣]+)\s*\($", before)
+        if before.rstrip().endswith("("):
+            # 한국어(영어) 꼴: 괄호 속이 이 이름 하나이고 괄호 앞 한국어가 화면 글자와 다르면 괄호 속에 화면 글자를 넣는다.
+            # 앞 글은 이름을 옮긴 말이 아니라 설명("옵션(Only Selected)")이나 동사("녹여(Dissolve)")일 때가 많아 고치지 않는다
+            if glossed and whole and after.startswith(")"):
+                korean = parts[0][1]
+                if not _squash(before[: glossed.end()].rstrip()[:-1]).endswith(_squash(korean)):
+                    edits.append((s, e, f"{korean}, {parts[0][0]}"))
+            continue
+        explained = re.match(r"\s*\(\s*([^()\n]*)\)", after)
+        if explained and _HANGUL.match(explained.group(1)):
+            # 영어(한국어) 꼴: 괄호 속이 화면 글자로 시작하면 그대로, 아니면 화면 글자를 앞에 두고 설명은 괄호 속에 남긴다
+            if whole and not _squash(explained.group(1)).startswith(_squash(parts[0][1])):
+                edits.append((s, e + explained.end(), f"{parts[0][1]}({parts[0][0]}, {explained.group(1)})"))
+            continue
+        shown = " ".join(english if english in keep else _shown_part(english, korean, asked) for english, korean in parts)
+        if shown != match.group():
+            edits.append((s, e, shown))
+    for a, b, new in sorted(edits, reverse=True):
+        if changed is not None:
+            changed.append((text[a:b], new))
+        text = text[:a] + new + text[b:]
+    return text
+
+
+def prose_cut(text: str) -> int:
+    """답이 흐르는 동안 지금 바꿔 내보내도 되는 글의 끝(그 뒤는 다음 조각과 이어질 수 있어 붙잡는다).
+
+    마지막 낱말, 그 앞에 빈칸 하나로 이어진 영어 낱말들, 자를 자리를 품은 닫히지 않은 괄호(와 그 앞 낱말·영어 덩이),
+    닫히지 않은 백틱 뒤를 붙잡는다.
+    """
+    cut = len(text)
+    tick = text.rfind("`")
+    if text.count("`") % 2 and len(text) - tick <= 200:
+        cut = tick
+    cut = min(cut, re.search(r"\S*$", text[: len(text.rstrip(" "))]).start())
+    while True:
+        moved = cut
+        paren = text.rfind("(", 0, cut)
+        if paren > text.rfind(")", 0, cut) and cut - paren <= 80:
+            moved = re.search(r"\S*\s*$", text[:paren]).start()
+        if moved >= 2 and text[moved - 1] == " " and re.search(r"[A-Za-z0-9.…]$", text[: moved - 1]) and (
+                moved == len(text) or re.match(r"[A-Za-z0-9]", text[moved:])):
+            moved = re.search(r"\S*$", text[: moved - 1]).start()  # 빈칸 하나로 이어진 앞 영어 낱말
+        if moved == cut:
+            return cut
+        cut = moved
+
+
 def screen_marks(text: str, names: "MenuNames | None") -> str:
     """글 속 [[메뉴 이름]] 표시를 모두 화면 글로 바꾼다(한 번에 다 있는 글, 예: 연습 과정 안내 말)."""
     return _MARK.sub(lambda match: screen_path(match.group(1), names), text)
+
+
+EXTRA_FILE = "screen_extra.json"  # 넓힌 목록(extra_names). data/에 두고 커밋하지 않는다(번역 글자가 들어 있음)
 
 
 def load_menu_names(
@@ -268,7 +469,9 @@ def load_menu_names(
     names_path = data_dir / "menu_names" / "menu_names.json"
     if not names_path.exists():
         return None
-    return MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles))
+    extra_path = data_dir / "menu_names" / EXTRA_FILE
+    extra = json.loads(extra_path.read_text(encoding="utf-8")) if extra_path.exists() else {}
+    return MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles), extra)
 
 
 def build_menu_names(
@@ -422,7 +625,12 @@ def main(argv: list[str]) -> int:
     fr.po(번역률 100%)는 Blender가 쓰는 문맥 전체를 알려고 쓴다.
 
     출력 폴더에 사전 menu_names.json과 검수 목록 review.md를 쓴다. 결과는 data/에 두고 커밋하지 않는다.
+    사전을 만든 뒤 넓힌 목록도 쓴다(screen_extra.json, 티켓 49).
+
+    넓힌 목록만 다시: python -m blender_tutor.menu_names extra <ko.po> <fr.po> <사전 폴더>
     """
+    if argv[:1] == ["extra"] and len(argv) == 4:
+        return _main_extra(Path(argv[1]), Path(argv[2]), Path(argv[3]))
     if len(argv) != 4:
         print(main.__doc__)
         return 2
@@ -442,6 +650,15 @@ def main(argv: list[str]) -> int:
     print(f"블렌더 표기 {sum(counts.values())}개 → {out}")
     print("  " + ", ".join(f"{status} {count}" for status, count in counts.items()))
     print(f"  검수 목록 → {out / 'review.md'}: 여러 개 {len(review)}개, 제목에서만 뽑은 이름 {len(title_only)}개")
+    return _main_extra(po, full_po, out)
+
+
+def _main_extra(po: Path, full_po: Path, out: Path) -> int:
+    """사전 폴더의 menu_names.json으로 넓힌 목록을 만들어 같은 폴더에 쓴다."""
+    names = MenuNames.load(out / "menu_names.json", MenuNames.load_choices(MENU_CHOICES), MenuNames.load_titles(MENU_TITLES))
+    extra = extra_names(names, MenuNames.load_titles(MENU_TITLES), po.read_text(encoding="utf-8"), full_po.read_text(encoding="utf-8"))
+    (out / EXTRA_FILE).write_text(json.dumps(extra, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
+    print(f"넓힌 목록 {len(extra)}개 → {out / EXTRA_FILE}")
     return 0
 
 

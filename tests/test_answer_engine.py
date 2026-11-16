@@ -595,12 +595,15 @@ SCREEN_NAMES = [
     _many("Edit Mode", ("에디트 모드", "*"), ("편집 모드", "Operator")),
     _many("At Center", ("센터에서", "Operator"), ("At Center", "Mesh")),
     _many("Apply", ("적용", "*"), ("신청하기", "WindowManager")),
+    _name("Bevel", "베벨"), _name("Segments", "부분"), _name("Face", "페이스"), _name("Scale", "스케일"),
+    _name("Merge by Distance", "거리로 병합"), _name("Cube", "큐브"), _name("Axis", "축"),
 ]  # fmt: skip
+SCREEN_EXTRA = {"Origins": "오리진", "Set Parent To": "다음으로 부모를 설정", "X-Ray": "X-Ray", "S": "S", "W": "W"}  # 넓힌 목록(티켓 49)
 
 
 def shown(pieces, state=KOREAN_SCREEN, choices=None, question="메시 추가") -> str:
     """가짜 모델이 pieces를 낼 때 사용자가 보는 답 글(조각을 이어 붙인 것)."""
-    names = MenuNames(SCREEN_NAMES, choices or {})
+    names = MenuNames(SCREEN_NAMES, choices or {}, extra=SCREEN_EXTRA)
     engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
     return "".join(event.text for event in engine.answer(question, state, []) if isinstance(event, Piece))
 
@@ -826,3 +829,76 @@ def test_예열은_질문_바꾸기_하나와_임베딩을_한_번씩_부른다(
     rewriters, embedder = [FakeRewriter(), FakeRewriter()], FakeEmbedder()
     AnswerEngine(CHUNKS, VECTORS, embedder, FakeModel(), rewriters=rewriters).warm_up()
     assert [len(rewriter.calls) for rewriter in rewriters] == [1, 0] and len(embedder.calls) == 1
+
+
+# 감싸지 않은 이름·화면과 다른 한국어(티켓 49). 모델이 [[ ]]로 감싸지 않아도 한국어 화면이면 사전·넓힌 목록의 이름을 화면 글자로
+
+
+def test_감싼_이름이_사전에_없으면_넓힌_목록으로_바꾼다():
+    assert shown(("[[Origins]] 체크를 끄세요.",)) == "오리진(Origins) 체크를 끄세요."
+
+
+def test_감싸지_않은_영어_이름도_한국어_화면이면_화면_글자로_바꾼다():
+    text = "지금 Bevel 모디파이어는 Segments가 1이에요. Origins를 끄고 Set Parent To 메뉴를 여세요."
+    assert shown((text,)) == ("지금 베벨(Bevel) 모디파이어는 부분(Segments)가 1이에요. "
+                              "오리진(Origins)를 끄고 다음으로 부모를 설정(Set Parent To) 메뉴를 여세요.")
+    assert shown(("Merge by Distance를 고르세요.",)) == "거리로 병합(Merge by Distance)를 고르세요."  # 긴 이름 먼저
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Cube를 고르세요.",  # 작업 상태의 물체 이름(아웃라이너에 보이는 글자 그대로)
+        "불리언 대상은 Cube로 되어 있어요.",  # 고르지 않은 물체도 기본 이름이면 물체 이름일 수 있다
+        "`Bevel` 값을 보세요.",  # 코드
+        "Space 키를 누르세요. Shift+Bevel은 없어요.",  # 단축키
+        "설명서의 Bevel 쪽을 보세요. 설명서에 \"Scale\"이 있어요.",  # 설명서 대목 인용
+        "Blender에서 SCULPT 모드예요.",  # 프로그램 이름·대문자 값
+        "Primary Bevel Axis를 바꾸세요.",  # 사전에 없는 낱말이 섞인 덩이는 통째로 둔다
+        "Edit Mode에서 Array를 보세요.",  # 번역 여러 개(고정 짝이 있어도 자리를 몰라서)·통과 안 한 제목 이름은 영어 그대로
+        "bpy.ops.Bevel 이나 Bevel_edges",  # 코드 이름 속
+        "Bevel Segments 값",  # 낱말마다는 사전에 있어도 덩이 전체가 이름 하나가 아니면(화면에 없는 글이 된다)
+        "Bevel/Segments 칸",  # 빗금으로 이은 영어
+    ],
+)
+def test_바꾸면_안_되는_영어는_그대로_둔다(text):
+    assert shown((text,)) == text
+    assert shown((text,), choices={"Edit Mode": "Operator"}) == text  # 기본 문맥과 다른 고정 짝
+
+
+def test_화면과_다른_한국어를_붙인_이름은_화면_글자로_고친다():
+    # 괄호 앞 글은 이름을 옮긴 말이 아니라 설명·동사일 때가 많아(옵션(Only Selected), 녹여(Dissolve)) 고치지 않고 괄호 속에 넣는다
+    assert shown(("3을 눌러 면(Face) 고르기",)) == "3을 눌러 면(페이스, Face) 고르기"
+    assert shown(("모서리 다듬기(Bevel)를",)) == "모서리 다듬기(베벨, Bevel)를"
+    assert shown(("Scale(크기 조절)을 쓰세요.",)) == "스케일(Scale, 크기 조절)을 쓰세요."
+    assert shown(("Bevel(또는 Segments)로",)) == "베벨(Bevel, 또는 Segments)로"  # 고친 괄호 속 영어는 다시 건드리지 않는다
+    assert shown(("베벨(Bevel)과 스케일 (Scale), Bevel(베벨)",)) == "베벨(Bevel)과 스케일 (Scale), Bevel(베벨)"  # 이미 화면 글자
+    assert shown(("거리로 병합(Merge by Distance)",)) == "거리로 병합(Merge by Distance)"  # 여러 낱말 화면 글자
+    assert shown(("엑스레이(X-Ray), X-Ray(엑스레이)",)) == "엑스레이(X-Ray), X-Ray(엑스레이)"  # 화면도 영어인 이름
+    assert shown(("S(크기 조절)를 누르고 와트(W)로",)) == "S(크기 조절)를 누르고 와트(W)로"  # 한 글자는 키·단위
+
+
+def test_번역이_여러_개인_이름은_고정_짝이_기본_문맥_글자일_때만_감싸지_않은_글에서_바꾼다():
+    assert shown(("Edit Mode에서",), choices={"Edit Mode": "*"}) == "에디트 모드(Edit Mode)에서"
+    assert shown(("Edit Mode에서",), choices={"Edit Mode": "Operator"}) == "Edit Mode에서"  # 자리마다 글자가 갈림
+    assert shown(("[[Edit Mode]]에서",), choices={"Edit Mode": "Operator"}) == "편집 모드(Edit Mode)에서"  # 감싼 이름은 짝대로
+
+
+def test_메뉴_경로_속_기본_물체_이름은_메뉴_이름으로_바꾼다():
+    nothing = replace(KOREAN_SCREEN, active_object=None, selected_objects=())  # Cube라는 물체를 고르지 않음
+    assert shown(("Shift+A > Mesh > Cube를 누르세요.",), nothing) == "Shift+A > 메시(Mesh) > 큐브(Cube)를 누르세요."
+    assert shown(("대상은 Cube예요.",), nothing) == "대상은 Cube예요."
+
+
+def test_질문에_영어로_쓴_이름은_감싸지_않아도_영어_괄호_한국어로():
+    assert shown(("Bevel을 다시 넣으세요.",), question="Bevel이 안 먹어요") == "Bevel(베벨)을 다시 넣으세요."
+
+
+def test_영어_이름과_괄호가_조각_사이에_갈려_와도_바꾼다():
+    pieces = ("A로 Merge by ", "Distance를 고르고 3으로 면(", "Face) 고", "르기. 끝에 Bevel")
+    assert shown(pieces) == "A로 거리로 병합(Merge by Distance)를 고르고 3으로 면(페이스, Face) 고르기. 끝에 베벨(Bevel)"
+
+
+def test_영어_화면이면_감싸지_않은_이름은_그대로():
+    english = replace(STATE, language="en_US", translate_interface=True)
+    assert shown(("지금 Bevel과 면(Face)",), english) == "지금 Bevel과 면(Face)"
