@@ -498,8 +498,12 @@ def screen_prose(
                     if tail:
                         new += " " + tail
                     else:
-                        particle = PARTICLE.match(after[1:])
-                        if particle:
+                        marks = re.match(r"(?:\*\*|['\"”’])*", after[1:]).group()  # 닫는 따옴표·굵은 글씨 뒤 조사도 맞춘다
+                        particle = PARTICLE.match(after[1 + len(marks):])
+                        if particle and marks:
+                            new += marks + fit_particle(last_korean(new), particle.group())
+                            end += len(marks) + particle.end()
+                        elif particle:
                             new = "".join(with_particle(new, particle.group()))
                             end += particle.end()
                     edits.append((at, end, new))
