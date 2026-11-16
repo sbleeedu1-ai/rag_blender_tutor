@@ -15,8 +15,8 @@
   | 지울 파일 옮길 곳 | `C:\WORK\trash\` | `/Volumes/mac_ssd/proj/trash/` |
 
   Mac에서도 도우미 창·애드온 설치·애드온 자체 시험이 돈다(PR #46, HISTORY [312]-[316]). GitHub의 자동 테스트(CI)는 Windows에서만 돈다.
-- 준비: Windows `python -m venv .venv` 뒤 `.venv\Scripts\python -m pip install -e ".[dev]"`. Mac은 Blender 안 파이썬으로 `/Volumes/mac_ssd/Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13 -m venv .venv` 뒤 `.venv/bin/python -m pip install -e ".[dev]"`, 이어서 `mkdir -p .venv/Scripts && ln -s ../bin/python .venv/Scripts/python.exe`(훅이 두 PC 모두 `.venv/Scripts/python.exe`를 부르므로 그 이름의 바로가기를 둔다. 없으면 터미널 명령이 모두 막힌다, HISTORY [182]·[307])
-- 실행: 도우미 창은 Blender를 켜면 애드온이 함께 켠다(F10으로 부름, 손으로는 `.venv\Scripts\python -m blender_tutor.helper`, 환경 변수 `BLENDER_TUTOR_TOKEN` 필요). 애드온 설치 `.venv\Scripts\python -m blender_tutor.install_addon`(뒤에 Blender 환경 설정에서 애드온 켜기) · 애드온 자체 시험(Blender를 화면 없이 띄움, 기본 테스트 밖) `.venv\Scripts\python addon\selftest.py` · 연습 과정 파일 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` · 테스트: `.venv\Scripts\python -m pytest` (테스트는 API 키 없이 돌게 만들고 늘 통과 상태로 둔다. 통과 못 하면 곧 문제라는 신호가 되게)
+- 준비·실행 명령(새 PC의 가상 환경, 터미널 명령이 모두 막힐 때의 `.venv/Scripts/python.exe` 바로가기, 도우미 창·애드온 설치·애드온 자체 시험·연습 과정 파일 검사): `docs/agents/setup.md`
+- 테스트: `.venv\Scripts\python -m pytest` (테스트는 API 키 없이 돌게 만들고 늘 통과 상태로 둔다. 통과 못 하면 곧 문제라는 신호가 되게)
 
 ## 기록 (저장소가 기억이다)
 
