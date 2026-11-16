@@ -23,3 +23,4 @@ results/
 
 # Mac이 폴더마다 만드는 숨김 파일(HISTORY [307])
 .DS_Store
+.claude/hooks/require_advisor.log

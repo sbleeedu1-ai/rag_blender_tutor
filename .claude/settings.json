@@ -38,6 +38,11 @@
             "command": "\"$CLAUDE_PROJECT_DIR/.venv/Scripts/python.exe\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/check_history_ref.py\"",
             "timeout": 30,
             "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.venv/Scripts/python.exe\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/require_advisor.py\"",
+            "timeout": 30
           }
         ]
       }
