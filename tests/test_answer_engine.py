@@ -602,7 +602,8 @@ SCREEN_NAMES = [
     _many("Physics", ("피직스", "*"), ("물리학", "ID")),
 ]  # fmt: skip
 SCREEN_EXTRA = {"Origins": "오리진", "Set Parent To": "다음으로 부모를 설정", "X-Ray": "X-Ray", "S": "S", "W": "W",
-                "Forward": "앞으로", "Unselected": "선택되지 않은"}  # 넓힌 목록(티켓 49)
+                "Forward": "앞으로", "Unselected": "선택되지 않은", "By Distance": "거리에 의해",
+                "Orthographic": "정사법", "Navigation Controls": "네비게이션 컨트롤"}  # 넓힌 목록(티켓 49)
 
 
 def shown(pieces, state=KOREAN_SCREEN, choices=None, question="메시 추가") -> str:
@@ -903,6 +904,26 @@ def test_Fable_꼴_뒤_굵은_글씨를_건너_조사를_맞춘다():
     assert shown(("연산이 **차집합(Difference)**으로 되어",), choices=union) == "연산이 **차집합 '차이'(Difference)**로 되어"
     assert shown(("연산이 **차집합(Diff", "erence)*", "*으", "로 되어"), choices=union) == "연산이 **차집합 '차이'(Difference)**로 되어"  # 조각으로
     assert shown(("**합치기(Merge by Distance)**으로",)) == "**합치기 '거리로 병합'(Merge by Distance)**으로"  # 받침 있는 화면 글자
+
+
+def test_Fable_꼴도_어색한_화면_글자면_항목을_넣는다():
+    # 조사·어미로 끝나는 화면 글자에 조사가 바로 붙으면 "'거리에 의해'(By Distance)를"처럼 읽혀 '항목'을 넣는다([355]-[357])
+    assert shown(("M 키를 누르고 거리로 병합(By Distance)를 골라도",)) == "M 키를 누르고 거리로 병합 '거리에 의해'(By Distance) 항목을 골라도"
+    assert shown(("선택 안 된 것과 병합(Unselected)을 켜세요.",)) == "선택 안 된 것과 병합 '선택되지 않은'(Unselected) 항목을 켜세요."
+    assert shown(("모두(By Distance)로",)) == "모두 '거리에 의해'(By Distance) 항목으로"
+    assert shown(("세계 배경(Face)이 보입니다.",)) == "세계 배경 '페이스'(Face)가 보입니다."  # 멀쩡한 화면 글자는 그대로
+    assert shown(("거리로 병합(By Distance) 옵션을",)) == "거리로 병합 '거리에 의해'(By Distance) 옵션을"  # 조사가 없으면 그대로
+
+
+@pytest.mark.parametrize("cut", range(1, 40))
+def test_Fable_꼴은_앞말을_감싼_모델_따옴표를_뗀다(cut):
+    # "'정투영' '정사법'(Orthographic)"처럼 따옴표가 겹치지 않게, 앞말을 감싼 따옴표는 떼고 화면 글자에만 둔다(2026-11-17)
+    for text, expected in [
+        ("타입이 '정투영(Orthographic)'으로 되어", "타입이 정투영 '정사법'(Orthographic)으로 되어"),
+        ("설명서의 '탐색 조작 버튼(Navigation Controls)'입니다.", "설명서의 탐색 조작 버튼 '네비게이션 컨트롤'(Navigation Controls)입니다."),
+        ('합치려면 "선택되지 않은 것 포함(Unselected)" 옵션을', "합치려면 선택되지 않은 것 포함 '선택되지 않은'(Unselected) 옵션을"),
+    ]:
+        assert shown((text[:cut], text[cut:])) == expected, (text[:cut], text[cut:])
 
 
 TABS = {"Modifiers": "*", "Render": "*"}  # 실제 고정 짝처럼 메뉴·패널 글자(기본 문맥)로 고정

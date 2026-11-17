@@ -383,6 +383,10 @@ _AWKWARD_END = re.compile(r"(으로|에서|의해|에|게|않은|없는|있는|[
 _AWKWARD_MID = re.compile(r"[가-힣](을|를|으로|에서) ")
 
 
+def _awkward(head: str) -> bool:
+    return bool(_AWKWARD_END.search(head) or _AWKWARD_MID.search(head))
+
+
 def with_particle(shown: str, text: str) -> tuple[str, str]:
     """바꾼 이름 shown과 그 뒤 글 text: 맨 앞 조사를 화면 글자에 맞춘다. 어색한 화면 글자면 따옴표로 묶고 '항목'을 넣어
     "'앞으로'(Forward) 항목으로"처럼 조사를 '항목'에 붙인다. 조사가 없거나 화면 글자가 한글이 아니면 그대로."""
@@ -390,7 +394,7 @@ def with_particle(shown: str, text: str) -> tuple[str, str]:
     head = last_korean(shown)
     if not particle or not head:
         return shown, text
-    if _AWKWARD_END.search(head) or _AWKWARD_MID.search(head):
+    if _awkward(head):
         at = shown.rfind(head)
         return f"{shown[:at]}'{head}'{shown[at + len(head):]} 항목", fit_particle("항목", text)
     return shown, fit_particle(head, text)
@@ -596,6 +600,10 @@ def screen_prose(
 
 _HADA_AFTER = re.compile(r"\)(하(?!나)|합|했|해|함|한|할)")  # 괄호에 바로 붙은 '하다' 꼴("회전(Orbit)합니다")
 _CONNECT = re.compile(r"(고|거나|며|면서|여|어|아|해|서|게|채|지)$")  # 이어 주는 꼴로 끝난 앞말("녹여", "펼치고")
+_PAIRS = {"'": "'‘", '"': '"“', "’": "‘'", "”": "“\""}  # 닫는 따옴표 → 그 짝이 될 여는 따옴표
+# 앞말을 연 따옴표: 줄 첫머리·빈칸·여는 괄호 뒤에서 열고, 괄호까지 다른 따옴표·줄바꿈이 없다(짧은 앞말만, prose_cut과 같은 길이)
+_QUOTE_HOLD = 30
+_OPENER = re.compile(rf"(?:^|(?<=[\s(]))(['\"‘“])(?=[^\s'\"‘“’”])[^'\"‘“’”\n]{{1,{_QUOTE_HOLD}}}$")
 _DROP_PREV = re.compile(r"([.,:)\]]|의|에서|에|은|는|을|를)$")
 
 
@@ -610,6 +618,8 @@ def _after_name(rest: str, korean: str, new: str, awkward: bool = True) -> tuple
         return 0, new
     if marks or not korean or not awkward:
         return len(marks) + particle.end(), new + marks + (fit_particle(korean, particle.group()) if korean else particle.group())
+    if new.endswith(")") and f"'{korean}'(" in new:  # Fable 꼴: 화면 글자가 이미 따옴표 안이라 '항목'만 넣는다
+        return particle.end(), new + (f" 항목{fit_particle('항목', particle.group())}" if _awkward(korean) else fit_particle(korean, particle.group()))
     shown, text = with_particle(new, particle.group())
     return particle.end(), shown + text
 
@@ -642,15 +652,22 @@ def _fable_form(before: str, after: str, english: str, korean: str, names: "Menu
         if prev == "" or _DROP_PREV.search(prev):
             at = len(" ".join(words[: len(words) - k])) + (1 if k < len(words) else 0)
             if at >= floor:
-                taken, new = _after_name(rest, korean, named, awkward=False)
+                taken, new = _after_name(rest, korean, named, awkward=True)
                 return at, 1 + taken, new
     if paren < floor:
         return None
     quote = re.match(r"['\"”’]", rest)
     if quote:
-        taken, new = _after_name(rest[1:], korean, quote.group() + " " + named, awkward=False)
+        # 앞말을 감싼 모델 따옴표("'정투영(Orthographic)'")는 떼고 화면 글자에만 따옴표를 둔다("정투영 '정사법'(Orthographic)").
+        # 여는 따옴표를 이미 내보냈으면(floor 앞) 따옴표를 앞말 뒤로 옮기는 꼴로 둔다. 흐름에서는 prose_cut이 여는 따옴표부터 붙잡는다
+        opener = _OPENER.search(before[:paren])
+        if opener and opener.group(1) in _PAIRS[quote.group()] and opener.start(1) >= floor:
+            inner = before[opener.end(1) : paren].rstrip()
+            taken, new = _after_name(rest[1:], korean, f"{inner} {named}")
+            return opener.start(1), 2 + taken, new
+        taken, new = _after_name(rest[1:], korean, quote.group() + " " + named, awkward=True)
         return paren, 2 + taken, new
-    taken, new = _after_name(rest, korean, " " + named, awkward=False)
+    taken, new = _after_name(rest, korean, " " + named, awkward=True)
     return paren, 1 + taken, new
 
 
@@ -661,6 +678,7 @@ def prose_cut(text: str, hold: set[str] | frozenset = frozenset(), tabs: bool = 
     닫히지 않은 백틱 뒤를 붙잡는다. hold(흔히 옮기는 말의 앞부분 낱말 줄, MenuNames.common_prefixes)를 주면
     붙잡은 끝 낱말과 이어 그 줄이 되는 앞 낱말들도 붙잡는다("직교 투영(" 앞의 "직교", 티켓 50 가).
     tabs면 속성 창 탭 이름으로 끝나는 낱말도 다음 낱말("탭"인지)이 올 때까지 붙잡는다(tab_place).
+    닫히지 않은 짧은 따옴표(_QUOTE_HOLD자 이하)는 여는 따옴표부터 붙잡는다(_fable_form이 앞말을 감싼 따옴표를 뗀다).
     """
     cut = len(text)
     tick = text.rfind("`")
@@ -669,6 +687,7 @@ def prose_cut(text: str, hold: set[str] | frozenset = frozenset(), tabs: bool = 
     cut = min(cut, re.search(r"\S*$", text[: len(text.rstrip(" "))]).start())
     joined = 0  # 앞으로 이어 붙인 영어 낱말 수. 한도가 없으면 긴 영어 글에서 조각마다 처음부터 다시 돌아 매우 느려진다(검토 지적)
     tabbed = not tabs
+    quoted = False
     while True:
         moved = cut
         paren = text.rfind("(", 0, cut)
@@ -680,6 +699,12 @@ def prose_cut(text: str, hold: set[str] | frozenset = frozenset(), tabs: bool = 
             joined += 1
         if moved == cut:
             cut = _hold_common(text, cut, hold) if hold else cut
+            opener = None if quoted else _OPENER.search(text[:cut])
+            if opener and opener.start(1) < cut:
+                # 따옴표 속 앞말이 괄호로 이어질 수 있어 여는 따옴표부터 붙잡는다(_fable_form이 따옴표를 뗀다). 길이 한도로 닫는
+                # 따옴표를 여는 것으로 잘못 봐도 잠깐만 붙잡는다
+                quoted, cut = True, opener.start(1)
+                continue
             tab = None if tabbed else _TAB_RUN.search(text[:cut])
             if not tab or tab.start() >= cut:
                 return cut
