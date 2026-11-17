@@ -81,5 +81,19 @@
  "Workspaces",
  "glTF 2.0",
  "glTF Binary (.glb)",
- "glTF Separate (.gltf + .bin + textures)"
+ "glTF Separate (.gltf + .bin + textures)",
+ "Follow Path",
+ "Shrinkwrap Hair Curves",
+ "Recalculate Normals",
+ "Displacement Only",
+ "Displacement and Bump",
+ "Material Preview",
+ "Image Node",
+ "Split To Instances",
+ "Float To Integer",
+ "Active Actions merged",
+ "Built-in Function",
+ "Burn into Image",
+ "Smooth By Angle",
+ "Undo & Redo"
 ]

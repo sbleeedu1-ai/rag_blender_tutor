@@ -128,5 +128,7 @@
  "All Transforms": "*",
  "Linear": "*",
  "Mapping": "*",
- "Top": "View3D"
+ "Top": "View3D",
+ "Edge > Edge Crease": "Operator",
+ "UV > Pack Islands": "Operator"
 }
