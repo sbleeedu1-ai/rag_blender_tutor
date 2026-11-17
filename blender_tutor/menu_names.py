@@ -459,7 +459,7 @@ def screen_prose(
 
     - 맨 영어 "Bevel 모디파이어" → "베벨(Bevel) 모디파이어"(질문에 영어로 쓴 이름은 "Bevel(베벨)", [311])
     - 화면과 다른 한국어를 붙인 "면(Face)" → 앞말 뒤에 따옴표 친 화면 글자 "면 '페이스'(Face)"(Fable 꼴, 시험 중 [393])
-    - 화면과 다른 한국어 설명이 뒤에 붙은 "Scale(크기 조절)" → "스케일(Scale, 크기 조절)"
+    - 화면과 다른 한국어 풀이가 뒤에 붙은 "Scale(크기 조절)" → 풀이 괄호를 지운 "스케일(Scale)"([349]·[353])
     그대로 두는 것: 코드(백틱 속·밑줄·점으로 이은 이름), 단축키(뒤에 '키', +로 이음), "설명서의 …" 인용, keep(작업 상태의
     물체 이름), 프로그램 이름, 대문자 값, 사전·넓힌 목록에 없는 낱말이 섞인 덩이, 화면도 영어인 이름.
     start 앞 글은 앞뒤를 보는 데만 쓰고 바꾸지 않는다(답이 흐르는 동안 이미 내보낸 글).
@@ -529,14 +529,21 @@ def screen_prose(
             continue
         explained = re.match(r"\s*\(\s*([^()\n]*)\)", after)
         if explained and _HANGUL.match(explained.group(1)):
-            # 영어(한국어) 꼴: 괄호 속이 화면 글자로 시작하면 그대로, 아니면 화면 글자를 앞에 두고 설명은 괄호 속에 남긴다
-            if whole and not _squash(explained.group(1)).startswith(_squash(parts[0][1])):
-                new = f"{parts[0][1]}({parts[0][0]}, {explained.group(1)})"
-                particle = PARTICLE.match(after[explained.end() :])  # 괄호 뒤 조사도 괄호 앞 화면 글자에([91])
-                end = e + explained.end() + (particle.end() if particle else 0)
-                edits.append((s, end, new + (fit_particle(last_korean(new), particle.group()) if particle else "")))
-            if whole and seen is not None:
-                seen.add(parts[0])
+            # 영어(한국어) 꼴: 모델이 이름 뒤에 붙인 풀이 괄호는 지우고 보통 꼴로 낸다("Union(합집합)" → "결합(Union)").
+            # 풀이를 괄호 속에 남긴 "결합(Union, 합집합)"은 거부된 꼴이고([349]), 덧붙인 괄호는 지우기로 했다([353]·[354]).
+            # 괄호 속이 화면 글자로 시작하면 영어(화면 글자) 그대로 두되 뒤에 덧붙인 것만 지운다("Focal Length(초점의 길이, Focal Length)")
+            if whole:
+                gloss = _squash(explained.group(1))
+                if gloss.startswith(_squash(parts[0][1])):
+                    # 화면 글자 뒤에 쉼표로 덧붙인 것만 지운다("Active(활성 물체)"처럼 화면 글자로 시작하는 풀이는 둔다)
+                    if re.match(rf"\s*{re.escape(parts[0][1])}\s*,", explained.group(1)):
+                        edits.append((s, e + explained.end(), f"{match.group()}({parts[0][1]})"))
+                    if seen is not None:
+                        seen.add(parts[0])
+                    continue
+                new = _shown_part(parts[0][0], parts[0][1], asked, seen)
+                taken, tail = _after_name(after[explained.end() :], last_korean(new), new)
+                edits.append((s, e + explained.end() + taken, tail))
             continue
         shown = " ".join(english if english in keep else _shown_part(english, korean, asked, seen) for english, korean in parts)
         if shown != match.group():
@@ -555,6 +562,21 @@ def screen_prose(
 _HADA_AFTER = re.compile(r"\)(하(?!나)|합|했|해|함|한|할)")  # 괄호에 바로 붙은 '하다' 꼴("회전(Orbit)합니다")
 _CONNECT = re.compile(r"(고|거나|며|면서|여|어|아|해|서|게|채|지)$")  # 이어 주는 꼴로 끝난 앞말("녹여", "펼치고")
 _DROP_PREV = re.compile(r"([.,:)\]]|의|에서|에|은|는|을|를)$")
+
+
+def _after_name(rest: str, korean: str, new: str, awkward: bool = True) -> tuple[int, str]:
+    """바꾼 이름 new 바로 뒤 글 rest의 조사를 화면 글자 korean에 맞춘다: (rest에서 먹은 길이, new + 맞춘 뒤 글).
+
+    굵은 글씨 표시(`**`)를 건너 조사를 찾는다("**차집합 '차이'(Difference)**으로" → "…**로", [374]와 같게).
+    조사가 없으면 아무것도 먹지 않는다(표시는 rest에 그대로 남는다). awkward면 어색한 화면 글자에 '항목'을 넣는다(with_particle)."""
+    marks = re.match(r"(?:\*\*)*", rest).group()
+    particle = PARTICLE.match(rest[len(marks):])
+    if not particle:
+        return 0, new
+    if marks or not korean or not awkward:
+        return len(marks) + particle.end(), new + marks + (fit_particle(korean, particle.group()) if korean else particle.group())
+    shown, text = with_particle(new, particle.group())
+    return particle.end(), shown + text
 
 
 def _stem(word: str) -> str:
@@ -584,17 +606,17 @@ def _fable_form(before: str, after: str, english: str, korean: str, names: "Menu
         prev = words[-1 - k] if k < len(words) else ""
         if prev == "" or _DROP_PREV.search(prev):
             at = len(" ".join(words[: len(words) - k])) + (1 if k < len(words) else 0)
-            particle = PARTICLE.match(rest)
             if at >= floor:
-                return at, 1 + (particle.end() if particle else 0), named + (fit_particle(korean, particle.group()) if particle else "")
+                taken, new = _after_name(rest, korean, named, awkward=False)
+                return at, 1 + taken, new
     if paren < floor:
         return None
     quote = re.match(r"['\"”’]", rest)
     if quote:
-        particle = PARTICLE.match(rest[1:])
-        return paren, 2 + (particle.end() if particle else 0), quote.group() + " " + named + (fit_particle(korean, particle.group()) if particle else "")
-    particle = PARTICLE.match(rest)
-    return paren, 1 + (particle.end() if particle else 0), " " + named + (fit_particle(korean, particle.group()) if particle else "")
+        taken, new = _after_name(rest[1:], korean, quote.group() + " " + named, awkward=False)
+        return paren, 2 + taken, new
+    taken, new = _after_name(rest, korean, " " + named, awkward=False)
+    return paren, 1 + taken, new
 
 
 def prose_cut(text: str, hold: set[str] | frozenset = frozenset()) -> int:

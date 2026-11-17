@@ -597,6 +597,7 @@ SCREEN_NAMES = [
     _many("Apply", ("적용", "*"), ("신청하기", "WindowManager")),
     _name("Bevel", "베벨"), _name("Segments", "부분"), _name("Face", "페이스"), _name("Scale", "스케일"),
     _name("Merge by Distance", "거리로 병합"), _name("Cube", "큐브"), _name("Axis", "축"),
+    _many("Union", ("결합", "*"), ("Union", "NodeTree")), _many("Difference", ("차이", "*"), ("차이점", "Color")),
 ]  # fmt: skip
 SCREEN_EXTRA = {"Origins": "오리진", "Set Parent To": "다음으로 부모를 설정", "X-Ray": "X-Ray", "S": "S", "W": "W",
                 "Forward": "앞으로", "Unselected": "선택되지 않은"}  # 넓힌 목록(티켓 49)
@@ -875,12 +876,31 @@ def test_화면과_다른_한국어를_붙인_이름은_화면_글자로_고친�
     assert shown(("메뉴에서 병합(Merge by Distance)을",)) == "메뉴에서 '거리로 병합'(Merge by Distance)을"  # 앞말이 화면 글자 낱말뿐이면 지움
     assert shown(("하나로 녹여(Dissolve) 없앱니다",)) == "하나로 녹여(Dissolve) 없앱니다"  # 이어 주는 꼴은 모델 꼴 그대로
     assert shown(("하나로 녹여(Dissolve) 없앱니다. 다시 [[Dissolve]]",)).endswith("다시 " + shown(("[[Dissolve]]",)))  # 모델 꼴로 둔 이름은 아직 안 보인 것
-    assert shown(("Scale(크기 조절)을 쓰세요.",)) == "스케일(Scale, 크기 조절)을 쓰세요."
-    assert shown(("Bevel(또는 Segments)로",)) == "베벨(Bevel, 또는 Segments)로"  # 고친 괄호 속 영어는 다시 건드리지 않는다
+    # 영어 뒤 풀이 괄호는 지운다("스케일(Scale, 크기 조절)"은 거부된 꼴 [349], 덧붙인 괄호는 지우기로 [353]·[354])
+    assert shown(("Scale(크기 조절)을 쓰세요.",)) == "스케일(Scale)을 쓰세요."
+    assert shown(("Bevel(또는 Segments)로",)) == "베벨(Bevel)로"  # 지운 괄호 속 영어는 다시 건드리지 않는다
     assert shown(("베벨(Bevel)과 스케일 (Scale), Bevel(베벨)",)) == "베벨(Bevel)과 스케일 (Scale), Bevel(베벨)"  # 이미 화면 글자
     assert shown(("거리로 병합(Merge by Distance)",)) == "거리로 병합(Merge by Distance)"  # 여러 낱말 화면 글자
     assert shown(("엑스레이(X-Ray), X-Ray(엑스레이)",)) == "엑스레이(X-Ray), X-Ray(엑스레이)"  # 화면도 영어인 이름
     assert shown(("S(크기 조절)를 누르고 와트(W)로",)) == "S(크기 조절)를 누르고 와트(W)로"  # 한 글자는 키·단위
+
+
+def test_영어_뒤_풀이_괄호는_지우고_화면_글자_꼴로_낸다():
+    # 거부된 "결합(Union, 합집합)"·"Focal Length(초점의 길이, 초점의 길이)" 꼴을 내지 않는다([349], 2026-11-17)
+    union = {"Union": "*", "Difference": "*"}
+    assert shown(("방식을 Union(합집합), Difference(차집합) 중",), choices=union) == "방식을 결합(Union), 차이(Difference) 중"
+    assert shown(("Union(합집합)과 다시 Union(합집합)을",), choices=union) == "결합(Union)과 다시 결합을"  # 두 번째는 화면 글자만
+    assert shown(("연산은 **Difference(차집합)** 입니다",), choices=union) == "연산은 **차이(Difference)** 입니다"
+    assert shown(("연산은 **Union(합집합)**을 고릅니다",), choices=union) == "연산은 **결합(Union)**을 고릅니다"
+    assert shown(("**Bevel(베벨, Bevel)** 값",)) == "**Bevel(베벨)** 값"  # 화면 글자로 시작하면 영어(화면 글자) 그대로, 뒤 풀이만 지움
+    assert shown(("Bevel(베벨 모디파이어) 값",)) == "Bevel(베벨 모디파이어) 값"  # 쉼표 없이 이어진 풀이는 둔다
+
+
+def test_Fable_꼴_뒤_굵은_글씨를_건너_조사를_맞춘다():
+    union = {"Difference": "*"}
+    assert shown(("연산이 **차집합(Difference)**으로 되어",), choices=union) == "연산이 **차집합 '차이'(Difference)**로 되어"
+    assert shown(("연산이 **차집합(Diff", "erence)*", "*으", "로 되어"), choices=union) == "연산이 **차집합 '차이'(Difference)**로 되어"  # 조각으로
+    assert shown(("**합치기(Merge by Distance)**으로",)) == "**합치기 '거리로 병합'(Merge by Distance)**으로"  # 받침 있는 화면 글자
 
 
 def test_번역이_여러_개인_이름은_고정_짝이_기본_문맥_글자일_때만_감싸지_않은_글에서_바꾼다():
@@ -940,7 +960,7 @@ def test_표시_뒤_조사를_화면_글자에_맞춘다(pieces, expected):
 
 def test_감싸지_않은_이름을_바꾸면_뒤_조사도_화면_글자에_맞춘다():
     assert shown(("Axis로 두고 Add을 누르고 Face(면)을 보세요.",)) == (
-        "축(Axis)으로 두고 추가(Add)를 누르고 페이스(Face, 면)를 보세요.")  # 풀이 괄호 뒤 조사도 괄호 앞 화면 글자에
+        "축(Axis)으로 두고 추가(Add)를 누르고 페이스(Face)를 보세요.")  # 지운 풀이 괄호 뒤 조사도 화면 글자에
 
 
 @pytest.mark.parametrize(
