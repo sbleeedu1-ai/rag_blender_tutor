@@ -93,7 +93,16 @@
  "Float To Integer",
  "Active Actions merged",
  "Built-in Function",
- "Burn into Image",
  "Smooth By Angle",
- "Undo & Redo"
+ "Undo & Redo",
+ "Math",
+ "Solid",
+ "Noise Texture",
+ "White Noise Texture",
+ "Skin",
+ "Bump Only",
+ "Point Light",
+ "Geometry Node Editor",
+ "Custom Distance",
+ "Occlusion"
 ]
