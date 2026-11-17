@@ -205,6 +205,31 @@ def test_소제목_앞의_줄표를_떼고_짝짓는다():
     assert names.get("Material Preview").translations == (Translation("머티리얼 미리보기", ("*",)),)
 
 
+def test_ko_po에서_들여쓰기_빈칸이_붙은_이름도_짝짓는다():
+    # Ctrl + P 메뉴의 하위 항목은 ko.po에 '   With Automatic Weights'처럼 앞 빈칸째 적혀 있다.
+    # 빈칸째 비교해 소제목을 사전에서 버렸고, 답이 그 이름을 영어로만 냈다(2026-11-17 중간 점검에서 찾음).
+    po = PO + (
+        '\nmsgid "   With Automatic Weights"\nmsgstr "   자동 웨이트와 함께"\n'
+        # 문장 조각용 빈칸 항목: 빈칸 없는 'Mesh' → '메시'가 이미 있으니 이쪽은 쓰지 않는다
+        '\nmsgid " Mesh"\nmsgstr " 그물"\n'
+    )
+    page = Chunk(
+        page_path="animation/armatures/skinning/parenting",
+        anchor="with-automatic-weights",
+        field="animation",
+        group="animation/armatures/skinning",
+        page_title="Armature Deform Parent",
+        headings=("With Automatic Weights",),
+        body="Body.",
+    )
+
+    names = build_menu_names([page], po)
+
+    assert ("*", "With Automatic Weights", "자동 웨이트와 함께") in read_po(po)
+    assert names.get("With Automatic Weights").translations == (Translation("자동 웨이트와 함께", ("*",)),)
+    assert [korean for _, english, korean in read_po(po) if english == "Mesh"] == ["메시"]
+
+
 def test_철자_표에_있는_이름은_화면_철자로_ko_po를_찾는다():
     # 지어낸 사전: 설명서는 "Wandsphere", 화면 메뉴는 "Wand Sphere"(Operator 문맥)를 쓴다고 치고
     po = PO + (

@@ -811,14 +811,23 @@ class _Seen:
 
 
 def read_po(text: str) -> list[tuple[str, str, str]]:
-    """ko.po 글을 (문맥, 영어, 한국어) 목록으로 읽는다. 머리말과 번역이 빈 항목은 뺀다."""
+    """ko.po 글을 (문맥, 영어, 한국어) 목록으로 읽는다. 머리말과 번역이 빈 항목은 뺀다.
+
+    앞뒤 빈칸이 붙은 영어는, 빈칸 없는 같은 영어가 ko.po에 없을 때만 빈칸을 지워 담는다.
+    Blender는 하위 메뉴 항목을 '   With Automatic Weights'처럼 빈칸으로 들여 써서, 빈칸째 두면 설명서의 같은 이름과
+    짝이 맞지 않는다(2026-11-17 찾음). 그러나 ' Preferences' → ' 기본 설정'처럼 문장 조각에 붙는 빈칸 항목도 있어,
+    빈칸 없는 항목('Preferences' → '환경 설정')이 있으면 그쪽만 쓴다(통째로 지우면 번역이 둘로 갈렸다).
+    """
     entries: list[tuple[str, str, str]] = []
+    padded: list[tuple[str, str, str]] = []  # 영어 앞뒤에 빈칸이 붙은 항목
     fields: dict[str, str] = {}
     current = None  # 지금 이어 읽는 칸(msgctxt·msgid·msgstr)
 
     def finish() -> None:
-        if fields.get("msgid") and fields.get("msgstr"):
-            entries.append((fields.get("msgctxt", DEFAULT_CONTEXT), fields["msgid"], fields["msgstr"]))
+        english, korean = fields.get("msgid", ""), fields.get("msgstr", "")
+        if english.strip() and korean.strip():
+            entry = (fields.get("msgctxt", DEFAULT_CONTEXT), english, korean)
+            (padded if english != english.strip() else entries).append(entry)
         fields.clear()
 
     for line in text.splitlines():
@@ -834,7 +843,10 @@ def read_po(text: str) -> list[tuple[str, str, str]]:
         elif not line or line.startswith("#"):
             current = None
     finish()
-    return entries
+    plain = {english for _, english, _ in entries}
+    return entries + [
+        (context, english.strip(), korean.strip()) for context, english, korean in padded if english.strip() not in plain
+    ]
 
 
 def _unquote(text: str) -> str:
