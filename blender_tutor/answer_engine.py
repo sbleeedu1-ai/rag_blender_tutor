@@ -22,7 +22,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
-from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, PAREN_LIMIT, SHORTCUT_CLOSE, SHORTCUT_OPEN, MenuNames, prose_cut, screen_path, screen_prose, shortcut_in, tab_place, with_particle
+from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, PAREN_LIMIT, SHORTCUT_CLOSE, SHORTCUT_OPEN, MenuNames, _shown_part, prose_cut, screen_path, screen_prose, shortcut_in, tab_place, with_particle
 from blender_tutor.progress import Course, Step
 from blender_tutor.setting_fields import FieldModel, SettingLines, choose_fields, lines_for
 from blender_tutor.work_state import WorkState
@@ -553,6 +553,7 @@ class _MenuMarks:
         self._seen: set = set()  # 이 답에서 이미 괄호 영어와 함께 보인 (영어, 화면 글자) 짝
         self._keys: list[str] = []  # 지운 괄호에서 옮길 단축키(문장 끝에서 넣는다)
         self._mark_key: str | None = None  # 방금 표시 뒤에서 지운 괄호의 단축키
+        self._mark_item: tuple[str, str | None] | None = None  # 방금 표시 뒤 괄호의 노드 계산 이름(영어, 머리 한국어), [436]
         self._tail = ""  # 문장 끝인지 보려고 붙잡은 마지막 '.'·'?'·'!'(다음 한 글자만 기다린다, "0.5")
         self._line = ""  # 내보낸 글의 지금 줄(표·제목 줄인지 보려고)
         self._said = ""  # 내보낸 글 전체(단축키가 이미 나왔는지 보려고)
@@ -573,14 +574,17 @@ class _MenuMarks:
             elif end < 0:
                 break  # 닫힐 때까지 모은다
             else:
-                rest = self._after_mark(held[end + len(MARK_CLOSE) :], done)
+                rest = self._after_mark(held[end + len(MARK_CLOSE) :], done, held[inner:end])
                 if rest is None:
                     break  # 표시 뒤 괄호·조사를 볼 때까지 모은다
                 # 앞 글을 먼저 다 내보낸 뒤 표시를 바꾼다(되풀이 이름을 나온 차례대로 기억해야 흘려 넣어도 같다)
                 before = self._plain(held[:start]) + self._plain("", done=True)
                 tab = self._names is not None and tab_place(self._shown, rest)  # 속성 창 탭이면 탭 글자로
                 shown = screen_path(held[inner:end], self._names, self._question, self._seen if self._names else None, tab)
-                if self._names:
+                if self._mark_item:  # 머리 제목이 계산 이름인 노드 뒤 계산 이름([436]). 맨 글 바꾸기를 다시 지나지 않게 이름과 함께 내고,
+                    item, rest = with_particle(_shown_part(*self._mark_item, self._question, self._seen), rest)  # 조사·'항목'은 계산 이름에
+                    shown += " " + item
+                elif self._names:
                     shown, rest = with_particle(shown, rest)
                 out += [before, self._send(shown)]
                 if self._mark_key:
@@ -607,9 +611,11 @@ class _MenuMarks:
             self._keys = []
         return out + self._said_now(tail) + self._send_keys()  # 답 끝: 붙잡은 '.'를 내고 남은 단축키를 넣는다
 
-    def _after_mark(self, rest: str, done: bool) -> str | None:
-        """닫힌 표시 뒤 글. 한국어 화면이면 모델이 덧붙인 단축키·풀이 괄호를 지운다. 괄호·조사를 더 봐야 하면 None."""
-        self._mark_key = None
+    def _after_mark(self, rest: str, done: bool, mark: str = "") -> str | None:
+        """닫힌 표시 뒤 글. 한국어 화면이면 모델이 덧붙인 단축키·풀이 괄호를 지운다. 괄호·조사를 더 봐야 하면 None.
+
+        mark(표시 속 글)의 끝 단이 머리 제목이 계산 이름인 노드이고 괄호 속이 그 계산 이름이면 지우지 않고 화면 꼴로 남긴다([436])."""
+        self._mark_key = self._mark_item = None
         if self._names is None:
             return rest
         paren = re.match(r" ?\(", rest)
@@ -619,8 +625,9 @@ class _MenuMarks:
                 return None
             inside = rest[paren.end() : close]
             if 0 <= close <= PAREN_LIMIT and MARK_OPEN not in inside and "(" not in inside:
+                self._mark_item = self._names.node_item(re.split(r"[>‣]", mark)[-1], inside)
                 rest = rest[close + 1 :]  # 괄호 속에 표시가 있으면 풀이가 아니라 내용이라 둔다
-                self._mark_key = shortcut_in(inside)
+                self._mark_key = None if self._mark_item else shortcut_in(inside)
         elif not done and rest in ("", " "):
             return None
         if not done and len(rest) < 3 and re.fullmatch(r"[가-힣]*", rest):

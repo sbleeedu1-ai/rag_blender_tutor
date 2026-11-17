@@ -104,5 +104,9 @@
  "Point Light",
  "Geometry Node Editor",
  "Custom Distance",
- "Occlusion"
+ "Occlusion",
+ "Burn into Image",
+ "Shader To RGB",
+ "Mask From Mesh Boundary",
+ "Mask From Face Sets Boundary"
 ]

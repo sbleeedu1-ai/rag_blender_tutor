@@ -14,7 +14,7 @@ from pathlib import Path
 
 from blender_tutor.korean_particles import PARTICLE, fit_particle
 from blender_tutor.manual_chunks import Chunk, chunk_manual
-from blender_tutor.paths import MENU_ALIASES, MENU_CHOICES, MENU_COMMON, MENU_TITLES
+from blender_tutor.paths import MENU_ALIASES, MENU_CHOICES, MENU_COMMON, MENU_TITLES, NODE_TITLE_ITEMS
 
 DEFAULT_CONTEXT = "*"  # 문맥 없는 일반 문구. Blender Python도 이렇게 적는다(bpy.app.translations.contexts.default)
 _PATH_SEP = "‣"  # 설명서 메뉴 경로의 구분 글자(Add ‣ Mesh)
@@ -41,6 +41,9 @@ PROPERTIES_TABS = ("Tool", "Scene", "Render", "Output", "View Layer", "World", "
                    "Data", "Bone", "Bone Constraints", "Material", "Texture", "Particles", "Physics", "Effects", "Strip",
                    "Strip Modifiers")
 TAB_CONTEXT = "ID"
+# 놓인 노드의 머리 제목이 목록 칸 값("곱하기")으로 바뀌는 노드: 노드 화면 이름 → {"context": 칸 번역 문맥, "items": 항목 영어}.
+# Blender v5.2.0 소스 labelfunc로 찾고 항목은 실행으로 뽑음(HISTORY [436]). 번역 글자가 없어 저장소에 둔다
+NODE_TITLES: dict[str, dict] = json.loads(NODE_TITLE_ITEMS.read_text(encoding="utf-8"))["nodes"]
 _TAB_RUN = re.compile(r"\S*(?<![A-Za-z])(?:" + "|".join(re.escape(t) for t in sorted(PROPERTIES_TABS, key=len, reverse=True))
                       + r")[)\]'\"’”*]*\s*$")
 
@@ -183,6 +186,22 @@ class MenuNames:
         name = self.get(english)
         korean = next((t.korean for t in name.translations if TAB_CONTEXT in t.contexts), None) if name else None
         return None if korean == english else korean
+
+    def node_item(self, node: str, inside: str) -> tuple[str, str | None] | None:
+        """노드 이름 뒤 괄호 속이 그 노드 머리 제목이 되는 목록 칸 항목이면 (항목 영어, 머리 한국어 또는 None), 아니면 None.
+
+        머리 글자는 머리 제목 함수의 번역 문맥 글자다(수학 노드 Power는 'NodeTree' 문맥 "전원", 실행으로 확인). 사전에 없는 항목은
+        넓힌 목록 글자, 거기도 없으면 영어 항목만(11-18 표의 151쌍을 표시 꼴로 돌려 Blender 실행 글자와 같음 134·영어만 15·
+        같은 이름 되풀이라 지움 2, 결과 폴더 20261118/001547 `14_노드괄호_대조.py`)."""
+        entry = NODE_TITLES.get(" ".join(node.split()))
+        wanted = " ".join(inside.split()).casefold()
+        item = next((i for i in entry["items"] if i.casefold() == wanted), None) if entry else None
+        if item is None or item.casefold() == node.strip().casefold():  # "Warning(Warning)"은 같은 이름 되풀이라 지운다
+            return None
+        name = self.get(item)
+        korean = (next((t.korean for t in name.translations if entry["context"] in t.contexts), None) if name
+                  else self._extra.get(_english_key(item)))
+        return item, (korean if korean != item else None)
 
     def glyphs(self, english: str) -> tuple[str, ...]:
         """이 이름의 모든 화면 글자(문맥마다 다른 번역)."""
@@ -612,7 +631,14 @@ def screen_prose(
             # 맨 영어 이름 뒤 덧붙인 단축키·값·영어 괄호("Join(Ctrl-J)")는 표시 뒤 괄호처럼 지운다([353]·[397]을 넓힘, [422]).
             # 앞만 바꾸면 "합치기(Join)(Ctrl-J)"로 괄호가 겹친다. 괄호까지가 화면 이름("Intersect (Boolean)")이면 빈칸 없이 써도 지우지 않는다
             new = _shown_part(parts[0][0], parts[0][1], asked, seen)
-            taken, tail = _after_name(after[appended.end() :], last_korean(new), new)
+            if item := names.node_item(match.group(), appended.group(1)):
+                # 머리 제목이 계산 이름인 노드("Math(Multiply)")는 지우면 화면 머리 글자가 사라져 이름으로 남긴다([436]).
+                # 조사·'항목'은 뒤 이름(계산 이름)에만 맞춘다
+                shown_item = _shown_part(*item, asked, seen)
+                taken, tail = _after_name(after[appended.end() :], last_korean(shown_item), shown_item)
+                tail = f"{new} {tail}"
+            else:
+                taken, tail = _after_name(after[appended.end() :], last_korean(new), new)
             if keys and (key := shortcut_in(appended.group(1))):
                 tail += SHORTCUT_OPEN + key + SHORTCUT_CLOSE
             edits.append((s, e + appended.end() + taken, tail))

@@ -130,5 +130,6 @@
  "Mapping": "*",
  "Top": "View3D",
  "Edge > Edge Crease": "Operator",
- "UV > Pack Islands": "Operator"
+ "UV > Pack Islands": "Operator",
+ "Copy to Selected": "Operator"
 }

@@ -1,0 +1,201 @@
+{
+ "_설명": "놓인 노드의 머리 제목이 목록 칸 값 이름으로 바뀌는 노드(Blender v5.2.0 소스 labelfunc)와 그 칸의 항목(영어)·머리 제목 함수가 쓰는 번역 문맥(Mix 둘은 node_util.cc:143·node_shader_mix.cc:146의 Color 문맥, 나머지는 칸 문맥과 같음, Fable 검토 11-18). 답에서 'Math(Multiply)'처럼 노드 이름 뒤 괄호가 이 항목이면 지우지 않고 화면 글자로 남긴다(HISTORY [436]). 뽑은 자료: results/20261118/001547_오늘결정_다시보기/노드제목_enum.*. Glare·Match String(메뉴 소켓, 문맥 모름)·Bit Math(제목이 'Bitwise <항목>')는 뺌",
+ "nodes": {
+  "Math": {
+   "context": "NodeTree",
+   "items": [
+    "Add",
+    "Subtract",
+    "Multiply",
+    "Divide",
+    "Multiply Add",
+    "Power",
+    "Logarithm",
+    "Square Root",
+    "Inverse Square Root",
+    "Absolute",
+    "Exponent",
+    "Minimum",
+    "Maximum",
+    "Less Than",
+    "Greater Than",
+    "Sign",
+    "Compare",
+    "Smooth Minimum",
+    "Smooth Maximum",
+    "Round",
+    "Floor",
+    "Ceil",
+    "Truncate",
+    "Fraction",
+    "Truncated Modulo",
+    "Floored Modulo",
+    "Wrap",
+    "Snap",
+    "Ping-Pong",
+    "Sine",
+    "Cosine",
+    "Tangent",
+    "Arcsine",
+    "Arccosine",
+    "Arctangent",
+    "Arctan2",
+    "Hyperbolic Sine",
+    "Hyperbolic Cosine",
+    "Hyperbolic Tangent",
+    "To Radians",
+    "To Degrees"
+   ]
+  },
+  "Vector Math": {
+   "context": "NodeTree",
+   "items": [
+    "Add",
+    "Subtract",
+    "Multiply",
+    "Divide",
+    "Multiply Add",
+    "Cross Product",
+    "Project",
+    "Reflect",
+    "Refract",
+    "Faceforward",
+    "Dot Product",
+    "Distance",
+    "Length",
+    "Scale",
+    "Normalize",
+    "Absolute",
+    "Power",
+    "Sign",
+    "Minimum",
+    "Maximum",
+    "Round",
+    "Floor",
+    "Ceil",
+    "Fraction",
+    "Modulo",
+    "Wrap",
+    "Snap",
+    "Sine",
+    "Cosine",
+    "Tangent"
+   ]
+  },
+  "Mix": {
+   "context": "Color",
+   "items": [
+    "Mix",
+    "Darken",
+    "Multiply",
+    "Color Burn",
+    "Lighten",
+    "Screen",
+    "Color Dodge",
+    "Add",
+    "Overlay",
+    "Soft Light",
+    "Linear Light",
+    "Difference",
+    "Exclusion",
+    "Subtract",
+    "Divide",
+    "Hue",
+    "Saturation",
+    "Color",
+    "Value"
+   ]
+  },
+  "Mix (Legacy)": {
+   "context": "Color",
+   "items": [
+    "Mix",
+    "Darken",
+    "Multiply",
+    "Color Burn",
+    "Lighten",
+    "Screen",
+    "Color Dodge",
+    "Add",
+    "Overlay",
+    "Soft Light",
+    "Linear Light",
+    "Difference",
+    "Exclusion",
+    "Subtract",
+    "Divide",
+    "Hue",
+    "Saturation",
+    "Color",
+    "Value"
+   ]
+  },
+  "Boolean Math": {
+   "context": "*",
+   "items": [
+    "And",
+    "Or",
+    "Not",
+    "Not And",
+    "Nor",
+    "Equal",
+    "Not Equal",
+    "Imply",
+    "Subtract"
+   ]
+  },
+  "Integer Math": {
+   "context": "NodeTree",
+   "items": [
+    "Add",
+    "Subtract",
+    "Multiply",
+    "Divide",
+    "Multiply Add",
+    "Absolute",
+    "Negate",
+    "Power",
+    "Minimum",
+    "Maximum",
+    "Sign",
+    "Divide Round",
+    "Divide Floor",
+    "Divide Ceiling",
+    "Floored Modulo",
+    "Modulo",
+    "Greatest Common Divisor",
+    "Least Common Multiple"
+   ]
+  },
+  "Compare": {
+   "context": "*",
+   "items": [
+    "Less Than",
+    "Less Than or Equal",
+    "Greater Than",
+    "Greater Than or Equal",
+    "Equal",
+    "Not Equal",
+    "Brighter",
+    "Darker"
+   ]
+  },
+  "Float to Integer": {
+   "context": "NodeTree",
+   "items": [
+    "Round",
+    "Floor",
+    "Ceiling",
+    "Truncate"
+   ]
+  },
+  "Warning": {
+   "context": "*",
+   "items": [
+    "Error",
+    "Warning",
+    "Info"
+   ]
+  }
+ }
+}

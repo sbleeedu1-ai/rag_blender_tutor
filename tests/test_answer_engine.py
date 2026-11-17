@@ -1163,6 +1163,39 @@ def test_괄호까지가_이름인_것은_괄호를_지우지_않는다():
 
 
 @pytest.mark.parametrize(
+    "answer, expected",
+    [
+        ("Math(Multiply) 노드와 연결합니다.", "수학(Math) 곱하기(Multiply) 노드와 연결합니다."),
+        ("[[Math]](Multiply) → 변위", "수학(Math) 곱하기(Multiply) → 변위"),  # 표시 뒤도 같게(저장된 답 Q43 꼴)
+        ("Math (power) 노드", "수학(Math) 전원(Power) 노드"),  # 노드 머리 글자는 목록 칸 문맥('NodeTree')의 글자, 대소문자는 화면 철자로
+        ("Math(Ping-Pong) 노드", "수학(Math) Ping-Pong 노드"),  # 사전에 없는 계산 이름은 영어로 남긴다
+        ("Math(계산) 노드", "수학(Math) 노드"),  # 계산 이름이 아닌 풀이는 지금처럼 지운다([422])
+        ("Bevel(Multiply)", "베벨(Bevel)"),  # 머리 제목이 바뀌는 노드가 아니면 지운다
+        # 조사는 뒤 이름(계산 이름) 받침에 맞춘다(Fable 검토 11-18: "곱하기(Multiply)과", "전원(Power)를"이 나왔다)
+        ("Math(Multiply)와 연결합니다.", "수학(Math) 곱하기(Multiply)와 연결합니다."),
+        ("[[Math]](Power)를 고릅니다.", "수학(Math) 전원(Power)을 고릅니다."),
+        # 표시 뒤에 넣은 계산 이름이 맨 글 바꾸기를 다시 지나며 기본 문맥 글자로 바뀌지 않는다(Fable 검토: "라운드" → "둥근")
+        ("[[Math]](Round) 노드", "수학(Math) 라운드(Round) 노드"),
+        ("Math(Round) 노드", "수학(Math) 라운드(Round) 노드"),
+        # 되풀이는 처음 한 번만 괄호([353]): 계산 이름도 노드 이름처럼
+        ("Math(Multiply) 노드와 Math(Multiply) 노드", "수학(Math) 곱하기(Multiply) 노드와 수학 곱하기 노드"),
+        # 조각으로 끊겨 와도 같다(통째·조각 대조)
+        (("[[Math]](Mul", "tiply)를 고릅니다."), "수학(Math) 곱하기(Multiply)를 고릅니다."),
+        (("Math(Mul", "tiply)", "를 고릅니다."), "수학(Math) 곱하기(Multiply)를 고릅니다."),
+    ],
+)
+def test_머리_제목이_계산_이름인_노드_뒤_괄호의_계산_이름은_남긴다(answer, expected):
+    # 2026-11-18: 저장된 답 Q43 "Math(Multiply) 노드"가 "수학(Math) 노드"가 되어, 놓인 노드 머리에 뜨는 "곱하기"가 사라졌다
+    # (사용자 "그냥 물어본대로 Multiply 던지 곱하기 라고 답변하면됐엇는데", [429]). 머리 제목이 목록 칸 값인 노드는 Blender 소스 labelfunc로 찾은 표
+    names = MenuNames([*SCREEN_NAMES, _name("Math", "수학"), _many("Multiply", ("곱하기", "*"), ("곱하기", "NodeTree")),
+                       _many("Power", ("파워", "*"), ("전원", "NodeTree")), _many("Round", ("둥근", "*"), ("라운드", "NodeTree"))],
+                      choices={"Round": "*"}, extra=SCREEN_EXTRA)  # fmt: skip  Round 짝을 기본 문맥으로 둬야 맨 글 바꾸기가 "둥근"으로 바꾼다
+    pieces = answer if isinstance(answer, tuple) else (answer,)
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
+    assert "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece)) == expected
+
+
+@pytest.mark.parametrize(
     "pieces, expected",
     [
         # [423] 덧붙인 단축키 괄호는 지운 뒤 그 문장 끝에 "단축키는 …입니다."로 옮긴다([353] 사용자 "단축키는 Alt-F 입니다")
