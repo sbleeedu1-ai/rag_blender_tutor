@@ -984,13 +984,15 @@ def test_영어_이름과_괄호가_조각_사이에_갈려_와도_바꾼다():
 @pytest.mark.parametrize(
     "pieces, expected",
     [
-        # 표시 바로 뒤에 모델이 덧붙인 괄호(단축키·풀이)는 지운다. 겹친 괄호가 되지 않게(티켓 50 나)
-        (("[[Face]](단축키 Alt-F)를 누르세요.",), "페이스(Face)를 누르세요."),
-        (("[[Face]] (Alt-F)를 누르세요.",), "페이스(Face)를 누르세요."),
+        # 표시 바로 뒤에 모델이 덧붙인 괄호(단축키·풀이)는 지운다. 겹친 괄호가 되지 않게(티켓 50 나).
+        # 단축키 하나뿐인 괄호는 지우고 그 문장 뒤에 "단축키는 …입니다."로 옮긴다([353] 사용자 예문, [423])
+        (("[[Face]](단축키 Alt-F)를 누르세요.",), "페이스(Face)를 누르세요. 단축키는 Alt-F입니다."),
+        (("[[Face]] (Alt-F)를 누르세요.",), "페이스(Face)를 누르세요. 단축키는 Alt-F입니다."),
+        (("[[Face]](또는 면 채우기)를 누르세요.",), "페이스(Face)를 누르세요."),  # 단축키가 아닌 풀이는 지우기만
         # 괄호 속에 표시가 든 것은 풀이가 아니라 내용이라 둔다
         (("[[Face]](또는 [[Add]])를 누르세요.",), "페이스(Face)(또는 추가(Add))를 누르세요."),
         # 조각 사이에 갈려 와도 같다
-        (("[[Fa", "ce]]", "(단축", "키 Alt-F)", "를 누르세요."), "페이스(Face)를 누르세요."),
+        (("[[Fa", "ce]]", "(단축", "키 Alt-F)", "를 누르세요."), "페이스(Face)를 누르세요. 단축키는 Alt-F입니다."),
     ],
 )
 def test_표시_뒤에_덧붙인_괄호는_지운다(pieces, expected):
@@ -1143,11 +1145,11 @@ def test_맨_영어_이름_뒤_면도_화면_글자_받침에_맞춘다():
 def test_맨_영어_이름_뒤_덧붙인_괄호는_표시_뒤처럼_지운다():
     # 2026-11-17 [422]: "Join(Ctrl-J)" → "합치기(Join)(Ctrl-J)"로 괄호가 겹쳤다(answer-forms "겹친 괄호 없음").
     # 표시 뒤 덧붙인 괄호를 지우는 규칙([353], _after_mark)과 맨 영어 뒤 한글 풀이를 지우는 규칙([397])을 맨 영어 뒤 단축키·값·영어 괄호까지 넓힌다
-    assert shown(("Bevel(Ctrl-B)로 깎습니다.",)) == "베벨(Bevel)로 깎습니다."
-    assert shown(("Bevel (Ctrl + B)을 누릅니다.",)) == "베벨(Bevel)을 누릅니다."  # 빈칸 하나 뒤 괄호, 조사는 화면 글자 받침에
+    assert shown(("Bevel(Ctrl-B)로 깎습니다.",)) == "베벨(Bevel)로 깎습니다. 단축키는 Ctrl-B입니다."  # 단축키는 문장으로([423])
+    assert shown(("Bevel (Ctrl + B)을 누릅니다.",)) == "베벨(Bevel)을 누릅니다. 단축키는 Ctrl + B입니다."  # 빈칸 하나 뒤 괄호, 조사는 화면 글자 받침에
     assert shown(("Scale(0.5)는 그대로",)) == "스케일(Scale)은 그대로"  # 값 괄호도 표시 뒤처럼 지운다
-    assert shown(("Bevel", " (Ctrl", "+B)을 누릅니다.")) == "베벨(Bevel)을 누릅니다."  # 괄호 중간에서 끊겨 와도 같다
-    assert shown(("Bevel (Ctrl+B)", "을 누릅니다.")) == "베벨(Bevel)을 누릅니다."  # 괄호가 닫힌 채 조각이 끝나도 같다(저장된 답 Q37 흐름 대조에서 찾음)
+    assert shown(("Bevel", " (Ctrl", "+B)을 누릅니다.")) == "베벨(Bevel)을 누릅니다. 단축키는 Ctrl+B입니다."  # 괄호 중간에서 끊겨 와도 같다
+    assert shown(("Bevel (Ctrl+B)", "을 누릅니다.")) == "베벨(Bevel)을 누릅니다. 단축키는 Ctrl+B입니다."  # 괄호가 닫힌 채 조각이 끝나도 같다(저장된 답 Q37 흐름 대조에서 찾음)
     assert shown(("X-Ray(Alt-Z)를 켭니다.",)) == "X-Ray(Alt-Z)를 켭니다."  # 이름이 안 바뀌면 괄호도 둔다
 
 
@@ -1158,3 +1160,57 @@ def test_괄호까지가_이름인_것은_괄호를_지우지_않는다():
         engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel((answer,)), menu_names=names)
         text = "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece))
         assert "(Legacy)" in text, answer
+
+
+@pytest.mark.parametrize(
+    "pieces, expected",
+    [
+        # [423] 덧붙인 단축키 괄호는 지운 뒤 그 문장 끝에 "단축키는 …입니다."로 옮긴다([353] 사용자 "단축키는 Alt-F 입니다")
+        (("[[Face]](Alt-F)를 누르면 면이 생겨요.", " 다음은"), "페이스(Face)를 누르면 면이 생겨요. 단축키는 Alt-F입니다. 다음은"),
+        (("[[Face]](Alt-F)를 누르면 면이 생", "겨요", ".", " 다음은"), "페이스(Face)를 누르면 면이 생겨요. 단축키는 Alt-F입니다. 다음은"),  # "." 앞뒤에서 끊김
+        (("[[Bevel]](Ctrl-B) 폭을 0.5로 바꿉니다.",), "베벨(Bevel) 폭을 0.5로 바꿉니다. 단축키는 Ctrl-B입니다."),  # 소수점은 문장 끝이 아님
+        (("1. [[Face]](Alt-F)를 누릅니다\n2. 끝",), "1. 페이스(Face)를 누릅니다 단축키는 Alt-F입니다.\n2. 끝"),  # 줄 끝에 마침표가 없어도
+        (("[[Face]](Alt-F)를 누릅니다",), "페이스(Face)를 누릅니다 단축키는 Alt-F입니다."),  # 답 끝
+        (("[[Face]](Alt-F)와 [[Bevel]](Ctrl-B)를 씁니다.",), "페이스(Face)와 베벨(Bevel)을 씁니다."),  # 한 문장에 둘이면 어느 것인지 몰라 지우기만
+        (("단축키 Alt-F로도 됩니다. [[Face]](Alt-F)를 누릅니다.",), "단축키 Alt-F로도 됩니다. 페이스(Face)를 누릅니다."),  # 앞에 이미 나온 단축키
+        (("[[Face]](Alt-F)를 누르고 Alt-F를 또 누릅니다.",), "페이스(Face)를 누르고 Alt-F를 또 누릅니다."),  # 같은 문장에 이미 씀
+        (("[[Bevel]](B)를 누릅니다.",), "베벨(Bevel)을 누릅니다."),  # 한 글자 괄호는 칸·축 이름일 수 있어 지우기만
+        # 같은 문장에 다른 키가 나오면 어느 것의 단축키인지 헷갈려 지우기만(저장된 답 Q26 "Ctrl + L로 고릅니다. 단축키는 Tab", Q28 "G로 옮기세요. 단축키는 4")
+        (("[[Face]](Tab)를 누른 뒤 Ctrl + L로 고릅니다.",), "페이스(Face)를 누른 뒤 Ctrl + L로 고릅니다."),
+        (("[[Face]](단축키 4)로 골라 G로 옮기세요.",), "페이스(Face)로 골라 G로 옮기세요."),
+        (("[[Bevel]](단축키 B)를 누릅니다.",), "베벨(Bevel)을 누릅니다. 단축키는 B입니다."),  # 단축키라고 밝힌 한 글자는 옮김
+        (("| [[Face]](Alt-F) | 채움 |\n다음",), "| 페이스(Face) | 채움 |\n다음"),  # 표 줄에는 넣지 않는다
+        # 마침표 뒤에 닫는 기호가 붙은 문장 끝은 다음 문장에 붙지 않게 지우기만(advisor 지적, 2026-11-17)
+        (("**[[Face]](Alt-F)를 누릅니다.** 그러면 면이 생깁니다.",), "**페이스(Face)를 누릅니다.** 그러면 면이 생깁니다."),
+        (("면을 채웁니다(먼저 [[Face]](Alt-F)를 누르세요.) 그러면 됩니다.",), "면을 채웁니다(먼저 페이스(Face)를 누르세요.) 그러면 됩니다."),
+        (("\"[[Face]](Alt-F)를 누릅니다.\" 그다음",), "\"페이스(Face)를 누릅니다.\" 그다음"),
+        (("Bevel(Ctrl-B)", "로 깎", "습니다.", " 끝"), "베벨(Bevel)로 깎습니다. 단축키는 Ctrl-B입니다. 끝"),  # 맨 영어 쪽도 같은 곳에서 넣는다
+    ],
+)
+def test_덧붙인_단축키_괄호는_문장_뒤로_옮긴다(pieces, expected):
+    assert shown(pieces) == expected
+
+
+def test_단축키를_옮겨도_조각을_어떻게_나눠_흘려도_같다():
+    import random
+
+    text = "1. [[Face]](Alt-F)를 누르면 면이 생겨요. 폭은 0.5로 둡니다.\n2. Bevel (Ctrl+B)을 누릅니다\n| [[Add]](Shift-A) | 표 |\n끝"
+    whole = shown((text,))
+    assert "단축키는 Alt-F입니다." in whole and "단축키는 Ctrl+B입니다." in whole and "Shift-A" not in whole
+    rng = random.Random(11)
+    for _ in range(200):
+        pieces, i = [], 0
+        while i < len(text):
+            k = rng.randint(1, 12)
+            pieces.append(text[i : i + k])
+            i += k
+        assert shown(tuple(pieces)) == whole, pieces
+
+
+def test_답이_오류로_끊기면_단축키_문장을_넣지_않는다():
+    # [423]: 끊긴 문장 뒤에 "단축키는 …입니다."가 붙으면 끊긴 줄 모르고 읽게 된다
+    from blender_tutor.answer_engine import _MenuMarks
+
+    marks = _MenuMarks(MenuNames(SCREEN_NAMES, extra=SCREEN_EXTRA))
+    text = marks.feed("[[Face]](Alt-F)를 누르") + marks.finish(cut=True)
+    assert text == "페이스(Face)를 누르"

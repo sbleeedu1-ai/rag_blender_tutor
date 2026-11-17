@@ -44,6 +44,25 @@ TAB_CONTEXT = "ID"
 _TAB_RUN = re.compile(r"\S*(?<![A-Za-z])(?:" + "|".join(re.escape(t) for t in sorted(PROPERTIES_TABS, key=len, reverse=True))
                       + r")[)\]'\"’”*]*\s*$")
 
+# 덧붙인 괄호 속 단축키(shortcut_in). 키 이름·F1-F12·Numpad·한 글자 키, 앞에 Ctrl·Alt 등을 -·+로 이음("Ctrl + R", "Shift-A")
+_SHORTCUT = re.compile(
+    r"(?:단축키(?:는|:)?\s*)?((?:(?:" + "|".join(MODIFIER_KEYS) + r")\s*[-+]\s*)*(?:F(?:1[0-2]|[1-9])|Numpad ?[0-9.+\-*/]|"
+    + "|".join(sorted(KEY_NAMES - MODIFIER_KEYS, key=len, reverse=True)) + r"|[A-Z0-9]))"
+)
+SHORTCUT_OPEN, SHORTCUT_CLOSE = "\ue000", "\ue001"  # 맨 영어 뒤 단축키 괄호를 지운 자리 표(_MenuMarks가 문장 끝으로 옮긴다, [423])
+
+
+def shortcut_in(inside: str) -> str | None:
+    """덧붙인 괄호 속이 단축키 하나뿐이면 그 단축키("Ctrl-J", "단축키 Alt-F" → "Alt-F"), 아니면 None.
+
+    한 글자 키만 있는 괄호("B", "4")는 칸·축 이름일 수 있어 뺀다(2026-11-17 Q39 "Color2(B)"는 칸 이름). "단축키 P"처럼 밝힌 것은 둔다.
+    """
+    match = _SHORTCUT.fullmatch(inside.strip())
+    if not match or (len(match[1]) == 1 and match[1] == inside.strip()):
+        return None
+    return match[1]
+
+
 
 class Source(StrEnum):
     """블렌더 표기를 설명서 어디서 뽑았나."""
@@ -490,7 +509,7 @@ def _run_parts(words: list[str], names: "MenuNames", keep: set[str], in_path: bo
 
 def screen_prose(
     text: str, names: "MenuNames", asked: str = "", keep: Iterable[str] = (), start: int = 0, changed: list | None = None,
-    seen: set | None = None,
+    seen: set | None = None, keys: bool = False,
 ) -> str:
     """[[ ]]로 감싸지 않은 답 글 속 블렌더 이름을 화면 글로 바꾼다(한국어 화면일 때만 부른다, 티켓 49).
 
@@ -502,6 +521,7 @@ def screen_prose(
     start 앞 글은 앞뒤를 보는 데만 쓰고 바꾸지 않는다(답이 흐르는 동안 이미 내보낸 글).
     changed를 주면 바꾼 자리마다 (원래 글, 바뀐 글)을 덧붙인다(저장된 답으로 검증할 때 쓴다).
     seen은 screen_path와 같다(답 하나 동안 이미 보인 짝은 괄호 없이, 괄호 꼴로 보인 짝은 여기에 더함).
+    keys면 지운 덧붙인 괄호가 단축키 하나일 때 그 자리에 표(SHORTCUT_OPEN 단축키 SHORTCUT_CLOSE)를 남긴다(_MenuMarks가 문장 끝으로 옮김, [423]).
     """
     keep = set(keep)
     edits: list[tuple[int, int, str]] = []
@@ -592,6 +612,8 @@ def screen_prose(
             # 앞만 바꾸면 "합치기(Join)(Ctrl-J)"로 괄호가 겹친다. 괄호까지가 화면 이름("Intersect (Boolean)")이면 빈칸 없이 써도 지우지 않는다
             new = _shown_part(parts[0][0], parts[0][1], asked, seen)
             taken, tail = _after_name(after[appended.end() :], last_korean(new), new)
+            if keys and (key := shortcut_in(appended.group(1))):
+                tail += SHORTCUT_OPEN + key + SHORTCUT_CLOSE
             edits.append((s, e + appended.end() + taken, tail))
             continue
         shown = " ".join(english if english in keep else _shown_part(english, korean, asked, seen) for english, korean in parts)

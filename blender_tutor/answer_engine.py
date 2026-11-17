@@ -22,7 +22,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
-from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, PAREN_LIMIT, MenuNames, prose_cut, screen_path, screen_prose, tab_place, with_particle
+from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, PAREN_LIMIT, SHORTCUT_CLOSE, SHORTCUT_OPEN, MenuNames, prose_cut, screen_path, screen_prose, shortcut_in, tab_place, with_particle
 from blender_tutor.progress import Course, Step
 from blender_tutor.setting_fields import FieldModel, SettingLines, choose_fields, lines_for
 from blender_tutor.work_state import WorkState
@@ -341,7 +341,7 @@ class AnswerEngine:
                 if text := marks.feed(text):
                     yield Piece(text)
         except Exception as error:
-            if text := marks.finish():
+            if text := marks.finish(cut=True):
                 yield Piece(text)
             yield _failure(error, results)
             return
@@ -523,6 +523,11 @@ def _read_rewrite(rewriter: Rewriter, messages: list[dict[str, str]], found: Fut
         found.set_exception(ValueError(f"검색어가 없는 질문 바꾸기 답 {text!r}"))
 
 
+# 문장 속 다른 키("Ctrl + L로", "G로", "F12", "Tab 키"): 있으면 옮긴 단축키가 어느 것의 것인지 헷갈려 넣지 않는다([423])
+_OTHER_KEY = re.compile(r"(?:Ctrl|Alt|Shift|Cmd|Option)\s*[-+]|(?<![A-Za-z0-9])(?:F(?:1[0-2]|[1-9])|Tab|Enter|Esc|Space|Delete|Home|Numpad)(?![A-Za-z])"
+                        r"|(?<![A-Za-z0-9.'’])[A-Z0-9](?![A-Za-z0-9.'’])(?=\s*(?:키|로|으로|를|을|와|과|,|\)|$))")
+
+
 class _MenuMarks:
     """답 글 속 [[Add > Mesh]] 표시를 화면 글로 바꾼다(티켓 23). 표시가 조각 사이에 갈려 와도 닫힐 때까지 모아 둔다.
 
@@ -532,6 +537,9 @@ class _MenuMarks:
     keep은 바꾸지 않을 이름(작업 상태의 물체 이름). 표시를 바꾼 글은 다시 손대지 않는다.
     한국어 화면이면 티켓 50(HISTORY [353]): 표시 바로 뒤에 모델이 덧붙인 괄호("(단축키 Alt-F)")는 지우고, 뒤 조사는 화면 글자
     받침에 맞추며, 답 하나에서 되풀이되는 이름은 처음 한 번만 괄호 영어를 붙인다. 그래서 닫힌 표시도 뒤 글을 볼 때까지 붙잡는다.
+    지운 괄호가 단축키 하나뿐이면(표시 뒤·맨 영어 뒤 모두) 그 문장 끝에 "단축키는 Alt-F입니다."로 옮긴다([353] 사용자 예문, [423]).
+    넣는 곳은 내보내는 길 한 곳(_send)이라 조각을 어떻게 나눠 흘려도 같다. 한 문장에 둘 이상이거나, 그 단축키가 답에 이미 나왔거나,
+    표·제목 줄·코드 안이면 넣지 않고 지우기만 한다.
     """
 
     def __init__(self, names: MenuNames | None, question: str = "", keep: tuple[str, ...] = ()):
@@ -543,6 +551,11 @@ class _MenuMarks:
         self._shown = ""  # 내보낸 글의 끝부분(앞뒤를 볼 때만 씀)
         self._ticks = 0  # 내보낸 글 전체의 백틱 수(끝부분만 보면 코드 속인지 틀려서)
         self._seen: set = set()  # 이 답에서 이미 괄호 영어와 함께 보인 (영어, 화면 글자) 짝
+        self._keys: list[str] = []  # 지운 괄호에서 옮길 단축키(문장 끝에서 넣는다)
+        self._mark_key: str | None = None  # 방금 표시 뒤에서 지운 괄호의 단축키
+        self._tail = ""  # 문장 끝인지 보려고 붙잡은 마지막 '.'·'?'·'!'(다음 한 글자만 기다린다, "0.5")
+        self._line = ""  # 내보낸 글의 지금 줄(표·제목 줄인지 보려고)
+        self._said = ""  # 내보낸 글 전체(단축키가 이미 나왔는지 보려고)
 
     def feed(self, text: str, done: bool = False) -> str:
         """조각 하나를 받아 지금 내보낼 수 있는 글을 돌려준다. done이면 더 올 글이 없다(닫힌 표시를 더 붙잡지 않음)."""
@@ -570,6 +583,8 @@ class _MenuMarks:
                 if self._names:
                     shown, rest = with_particle(shown, rest)
                 out += [before, self._send(shown)]
+                if self._mark_key:
+                    self._keys.append(self._mark_key)  # 이름을 내보낸 뒤에 올려야 앞 글의 문장 끝에 붙지 않는다
                 held = rest
         else:
             start = len(held) - 1 if held.endswith(MARK_OPEN[0]) else len(held)
@@ -577,17 +592,24 @@ class _MenuMarks:
         out.append(self._plain(held[:start]))
         return "".join(out)
 
-    def finish(self) -> str:
-        """답이 끝났거나 끊겼을 때 남은 글. 닫히지 않은 표시는 기호만 뗀다(사용자에게 [[가 보이지 않게)."""
+    def finish(self, cut: bool = False) -> str:
+        """답이 끝났거나 끊겼을 때 남은 글. 닫히지 않은 표시는 기호만 뗀다(사용자에게 [[가 보이지 않게).
+        cut이면(오류로 끊김) 남은 단축키 문장을 넣지 않는다(끊긴 문장 뒤에 붙으면 끊긴 줄 모른다)."""
         held, self._held = self._held, ""
         out = self.feed(held, done=True)  # 뒤 글을 기다리며 붙잡은 닫힌 표시를 바꿔 낸다
         held, self._held = self._held, ""
         if held.startswith(MARK_OPEN):
-            return out + self._fixed(held[len(MARK_OPEN) :])
-        return out + self._plain(held, done=True)
+            out += self._fixed(held[len(MARK_OPEN) :])
+        else:
+            out += self._plain(held, done=True)
+        tail, self._tail = self._tail, ""
+        if cut:
+            self._keys = []
+        return out + self._said_now(tail) + self._send_keys()  # 답 끝: 붙잡은 '.'를 내고 남은 단축키를 넣는다
 
     def _after_mark(self, rest: str, done: bool) -> str | None:
         """닫힌 표시 뒤 글. 한국어 화면이면 모델이 덧붙인 단축키·풀이 괄호를 지운다. 괄호·조사를 더 봐야 하면 None."""
+        self._mark_key = None
         if self._names is None:
             return rest
         paren = re.match(r" ?\(", rest)
@@ -598,6 +620,7 @@ class _MenuMarks:
             inside = rest[paren.end() : close]
             if 0 <= close <= PAREN_LIMIT and MARK_OPEN not in inside and "(" not in inside:
                 rest = rest[close + 1 :]  # 괄호 속에 표시가 있으면 풀이가 아니라 내용이라 둔다
+                self._mark_key = shortcut_in(inside)
         elif not done and rest in ("", " "):
             return None
         if not done and len(rest) < 3 and re.fullmatch(r"[가-힣]*", rest):
@@ -613,16 +636,55 @@ class _MenuMarks:
         text, self._prose = text[:cut], text[cut:]
         # 끝부분 앞에서 코드가 열려 있었으면 백틱 하나를 앞에 붙여 짝을 맞춘다
         before = ("`" if (self._ticks - self._shown.count("`")) % 2 else "") + self._shown
-        return self._send(screen_prose(before + text, self._names, self._question, self._keep, len(before), seen=self._seen)[len(before) :])
+        return self._send(screen_prose(before + text, self._names, self._question, self._keep, len(before), seen=self._seen, keys=True)[len(before) :])
 
     def _fixed(self, text: str) -> str:
         """표시를 바꾼 글: 붙잡은 표시 밖 글을 먼저 다 내고, 이 글은 그대로 낸다."""
         return self._plain("", done=True) + self._send(text)
 
     def _send(self, text: str) -> str:
+        """사용자에게 내보내는 글이 모두 지나는 곳. 단축키 자리 표를 떼어 모으고, 모은 단축키는 문장 끝에 넣는다."""
+        text, self._tail, out, i = self._tail + text, "", [], 0
+        while i < len(text):
+            ch = text[i]
+            if ch == SHORTCUT_OPEN:
+                close = text.find(SHORTCUT_CLOSE, i)
+                self._keys.append(text[i + 1 : close])
+                i = close + 1
+                continue
+            if self._keys and ch in ".?!":
+                if i + 1 == len(text):
+                    self._tail = text[i:]  # 문장 끝인지 다음 한 글자를 본다
+                    break
+                if text[i + 1] in " \n":
+                    out.append(self._said_now(ch))
+                    out.append(self._send_keys())
+                    i += 1
+                    continue
+                if text[i + 1] in "*)\"'”’」":
+                    self._keys = []  # "…누릅니다.**"처럼 닫는 기호가 붙은 문장 끝: 다음 문장에 붙지 않게 지우기만
+            if self._keys and ch == "\n":
+                out.append(self._send_keys())  # 마침표 없이 끝난 줄
+            out.append(self._said_now(ch))
+            i += 1
+        return "".join(out)
+
+    def _said_now(self, text: str) -> str:
         self._shown = (self._shown + text)[-40:]
         self._ticks += text.count("`")
+        self._said += text
+        self._line = text.rsplit("\n", 1)[-1] if "\n" in text else self._line + text
         return text
+
+    def _send_keys(self) -> str:
+        """모은 단축키를 "단축키는 Alt-F입니다." 한 문장으로 낸다. 둘 이상·이미 나옴·표·제목·코드 안이면 넣지 않는다."""
+        keys, self._keys = self._keys, []
+        line = self._line.lstrip()
+        said = re.search(rf"(?<![A-Za-z0-9]){re.escape(keys[0])}(?![A-Za-z0-9])", self._said) if len(keys) == 1 else None
+        sentence = re.split(r"[.?!](?=\s)|\n", self._said)[-1]  # 지금 문장(단축키를 넣을 문장)
+        if len(keys) != 1 or said or _OTHER_KEY.search(sentence) or line.startswith(("|", "#")) or self._ticks % 2:
+            return ""
+        return self._said_now(f" 단축키는 {keys[0]}입니다.")
 
 
 def _object_names(state: WorkState) -> tuple[str, ...]:
