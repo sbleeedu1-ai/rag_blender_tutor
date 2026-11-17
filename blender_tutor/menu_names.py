@@ -645,15 +645,17 @@ def _fable_form(before: str, after: str, english: str, korean: str, names: "Menu
     named = f"'{korean}'({english})"
     glyph = {_stem(w) for w in korean.split()}
     k = 0
-    while k < len(words) and words[-1 - k] and _stem(words[-1 - k]) in glyph:
+    # 모델이 붙인 굵은 글씨 표시는 낱말 비교에서 건너고 글에는 남긴다("**병합(Merge by Distance)**" → "**'거리로 병합'(…)**")
+    while k < len(words) and words[-1 - k].lstrip("*") and _stem(words[-1 - k].lstrip("*")) in glyph:
         k += 1
     if k:
         prev = words[-1 - k] if k < len(words) else ""
         if prev == "" or _DROP_PREV.search(prev):
             at = len(" ".join(words[: len(words) - k])) + (1 if k < len(words) else 0)
             if at >= floor:
+                bold = re.search(r"\*+", head[at:])  # 지우는 앞말 속 여는 굵은 글씨 표시는 이름 앞에 남긴다("거리로 **병합(" 도)
                 taken, new = _after_name(rest, korean, named, awkward=True)
-                return at, 1 + taken, new
+                return at, 1 + taken, (bold.group() if bold else "") + new
     if paren < floor:
         return None
     quote = re.match(r"['\"”’]", rest)

@@ -904,6 +904,17 @@ def test_Fable_꼴_뒤_굵은_글씨를_건너_조사를_맞춘다():
     assert shown(("연산이 **차집합(Difference)**으로 되어",), choices=union) == "연산이 **차집합 '차이'(Difference)**로 되어"
     assert shown(("연산이 **차집합(Diff", "erence)*", "*으", "로 되어"), choices=union) == "연산이 **차집합 '차이'(Difference)**로 되어"  # 조각으로
     assert shown(("**합치기(Merge by Distance)**으로",)) == "**합치기 '거리로 병합'(Merge by Distance)**으로"  # 받침 있는 화면 글자
+    # 앞말이 화면 글자 낱말뿐이면 굵은 글씨 표시를 건너 앞말을 지운다("**병합 '거리로 병합'" 되풀이 막기, 2026-11-17)
+    assert shown(("**병합(Merge by Distance)**을",)) == "**'거리로 병합'(Merge by Distance)**을"
+    assert shown(("메뉴에서 **병합(Merge by Distance)**을 고릅니다",)) == "메뉴에서 **'거리로 병합'(Merge by Distance)**을 고릅니다"
+    # 굵은 글씨가 앞말 가운데서 시작하면 앞 낱말("거리로 ")을 흐름에서 먼저 내보내 지울 수 없다(전과 같은 꼴, 저장된 답에 없음)
+    assert shown(("거리로 **병합(Merge by Distance)**을",)) == "거리로 **병합 '거리로 병합'(Merge by Distance)**을"
+
+
+@pytest.mark.parametrize("cut", range(1, 40))
+def test_굵은_글씨_앞말_지우기는_조각으로_와도_같다(cut):
+    text = "메뉴에서 **병합(Merge by Distance)**을 고릅니다"
+    assert shown((text[:cut], text[cut:])) == "메뉴에서 **'거리로 병합'(Merge by Distance)**을 고릅니다", (text[:cut], text[cut:])
 
 
 def test_Fable_꼴도_어색한_화면_글자면_항목을_넣는다():
