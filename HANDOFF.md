@@ -5,7 +5,7 @@
 ## 11-17 오후 4시: PDF 뒤 메뉴 이름 작업 되짚기 끝([421])
 
 - 한 일: 사전 빈칸 고침([415]) → 영어로 남은 이름을 원문·Blender 화면 글자로 가르고 철자 표 +63·통과 제목 +23·경로 짝 2([417]·[418]) → 넣은 86개·짝 2개를 화면 글자와 다시 맞댐, 86/86 맞음([419]) → "면/이면" 조사 고침([420]). 연습 과정 표시 135개 달라짐 0, course_check 문제 0. CI는 푸시 넷 모두 통과(마지막 2fe4325는 이 글을 쓸 때 도는 중).
-- **사용자가 정할 것(하나씩)**: ① 맨 영어 이름 뒤 단축키·값 괄호(지금 코드가 원문 324개에서 6곳 "합치기(Join)(Ctrl-J)"처럼 겹침, 정한 꼴 없음) ② 한 낱말 통과 제목 4개(Math·Solid·Skin·Occlusion) 둘지 ③ Q38 검색어 바뀜(노이즈 텍스처 → Noise Texture, 검색 결과 안 잼) ④ 보고서: 5절 숫자(7,697 → 지금 7,710), 2절 "메뉴 이름" 표 줄 낮출지(12:52에 물은 것), 7절 채점 회차(사용자 "초안은 일단 그대로").
+- **사용자가 정할 것(하나씩)**: ① (끝, [422]) 맨 영어 이름 뒤 덧붙인 괄호는 표시 뒤처럼 지움: "합치기(Join)(Ctrl-J)" → "합치기(Join)" ② 한 낱말 통과 제목 4개(Math·Solid·Skin·Occlusion) 둘지 ③ Q38 검색어 바뀜(노이즈 텍스처 → Noise Texture, 검색 결과 안 잼) ④ 보고서: 5절 숫자(7,697 → 지금 7,710), 2절 "메뉴 이름" 표 줄 낮출지(12:52에 물은 것), 7절 채점 회차(사용자 "초안은 일단 그대로").
 - **빠졌던 것(이번에 찾음, 아직 안 함)**: ① 짝 어긋남 197개 중 40개가 "화면 철자가 이미 사전에 있음"으로 검수 전에 걸러져 안 봄(그중 실제 이름 약 11: Cursor To Selected, Copy To Selected, Context menu, Anti-aliasing, Join in new Frame, Move point, Noise basis, Shader To RGB, Emission Shader, Mask From Mesh Boundary, Mask From Face Sets Boundary. 나머지는 찌꺼기 키·소문자 낱말). 오늘 고친 Clean up·Transparent shadows가 이 무리였음. ② `docs/agents/rules-enforced.md` 13줄("일부만 보고 모두 읽음이라 말함")이 장치 없이 오늘 두 번 더 어겨짐(verify 7절: 장치를 만들 차례). ③ 못 찾은 39개: 번역 원본 파일에 출처 주석이 없어(업스트림 ko.po도 주석 0) 못 가름. GitHub 코드 검색으로 Blender 소스에서 글자를 찾는 길은 남음.
 - 남은 사전 밖 문제: Bake type(모델 대소문자), Greater Than·Texture Paint·Combined(사전에 없고 문맥마다 갈림), Icosphere(짝 없음), Merge by Distance(맨 글에서는 일부러 둠), 단복수 실수, 지어낸 이름(View Transform 등), 찌꺼기 키 36개.
 
