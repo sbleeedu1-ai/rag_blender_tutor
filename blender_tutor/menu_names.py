@@ -225,8 +225,8 @@ class MenuNames:
 
         - 제목에서만 뽑은 이름은 검수를 통과한 것만(일상 낱말이 섞여서, 티켓 31)
         - 번역이 여러 개인 이름은 고정 짝의 글자가 기본 문맥(`*`)의 글자와 같을 때만 바꾼다. 짝은 검수한 한 자리의 글자인데,
-          감싸지 않은 글에는 어느 메뉴 아래인지가 없다. 기본 문맥과 다르면 자리마다 글자가 갈린다(예: Strength 고정 짝 '힘',
-          월드 배경 노드 칸은 기본 문맥 '강도', 2026-11-16 실행으로 확인)
+          감싸지 않은 글에는 어느 메뉴 아래인지가 없다. 기본 문맥과 다르면 자리마다 글자가 갈린다(예: Strength 고정 짝 '힘'은
+          월드 배경·노멀 맵 노드·태양 조명 칸 글자이고, 조각 브러시·훅 모디파이어 칸은 기본 문맥 '강도', HISTORY [425])
         """
         name = self.get(english) or self.get(english + "...")
         if name is not None and name.sources == (Source.TITLE,) and _english_key(name.english) not in self._passed:
