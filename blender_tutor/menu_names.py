@@ -436,6 +436,7 @@ _HANGUL = re.compile(r"[가-힣]")
 _RUN = re.compile(r"(?<![A-Za-z0-9_.`/\\-])[A-Z][A-Za-z0-9'\-]*(?:\.\.\.|…)?(?: [A-Za-z0-9][A-Za-z0-9'\-]*(?:\.\.\.|…)?)*")
 _QUOTE_BEFORE = re.compile(r"설명서(?:의|에서|에는|에)\s*[\"“'‘]?\s*$")
 _MAX_WORDS = 6
+PAREN_LIMIT = 60  # 이름 뒤 덧붙인 괄호로 볼 길이 한도(넘으면 내용으로 보고 둔다). 표시 뒤(_MenuMarks)·맨 영어 뒤(screen_prose)가 같이 쓴다(티켓 50, [422])
 _HOLD_COMMON_WORDS = 6  # 흔히 옮기는 말(+꼬리) 앞부분으로 더 붙잡는 낱말 수 한도(목록 말은 대부분 4낱말 이하)
 _HOLD_WORDS = 30  # 답이 흐르는 동안 붙잡는 영어 덩이의 낱말 수 한도(이보다 긴 덩이는 이름 하나로 맞을 일이 없다)
 
@@ -584,6 +585,15 @@ def screen_prose(
                 taken, tail = _after_name(after[explained.end() :], last_korean(new), new)
                 edits.append((s, e + explained.end() + taken, tail))
             continue
+        appended = re.match(r" ?\(([^()\n]*)\)", after)
+        if (whole and appended and len(appended.group(1)) <= PAREN_LIMIT
+                and not any(names.screen(match.group() + gap + f"({appended.group(1)})")[0] for gap in ("", " "))):
+            # 맨 영어 이름 뒤 덧붙인 단축키·값·영어 괄호("Join(Ctrl-J)")는 표시 뒤 괄호처럼 지운다([353]·[397]을 넓힘, [422]).
+            # 앞만 바꾸면 "합치기(Join)(Ctrl-J)"로 괄호가 겹친다. 괄호까지가 화면 이름("Intersect (Boolean)")이면 빈칸 없이 써도 지우지 않는다
+            new = _shown_part(parts[0][0], parts[0][1], asked, seen)
+            taken, tail = _after_name(after[appended.end() :], last_korean(new), new)
+            edits.append((s, e + appended.end() + taken, tail))
+            continue
         shown = " ".join(english if english in keep else _shown_part(english, korean, asked, seen) for english, korean in parts)
         if shown != match.group():
             particle = PARTICLE.match(after)  # 모델이 영어 이름에 맞춰 쓴 조사를 화면 글자에 맞춘다(티켓 50)
@@ -693,6 +703,8 @@ def prose_cut(text: str, hold: set[str] | frozenset = frozenset(), tabs: bool = 
     while True:
         moved = cut
         paren = text.rfind("(", 0, cut)
+        if text.startswith("(", cut):
+            paren = cut  # 마지막 낱말이 괄호로 시작해도("Bevel (Ctrl", "Bevel (Ctrl+B)을") 앞 이름을 붙잡는다(덧붙인 괄호를 지우려고, [422])
         if paren > text.rfind(")", 0, cut) and cut - paren <= 80:
             moved = re.search(r"\S*\s*$", text[:paren]).start()
         if joined < _HOLD_WORDS and moved >= 2 and text[moved - 1] == " " and re.search(r"[A-Za-z0-9.…]$", text[: moved - 1]) and (

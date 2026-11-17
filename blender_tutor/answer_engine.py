@@ -22,7 +22,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
-from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, MenuNames, prose_cut, screen_path, screen_prose, tab_place, with_particle
+from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, PAREN_LIMIT, MenuNames, prose_cut, screen_path, screen_prose, tab_place, with_particle
 from blender_tutor.progress import Course, Step
 from blender_tutor.setting_fields import FieldModel, SettingLines, choose_fields, lines_for
 from blender_tutor.work_state import WorkState
@@ -55,7 +55,6 @@ def area_of(page_path: str) -> str:
     return "/".join(parts[:2]) if parts[0] in BIG_FIELDS and len(parts) > 1 else parts[0]
 
 
-PAREN_LIMIT = 60  # 표시 뒤 덧붙인 괄호로 볼 길이 한도(넘으면 내용으로 보고 둔다, 티켓 50)
 MARK_LIMIT = 80  # 표시가 열린 뒤 이만큼(글자) 닫히지 않으면 표시가 아닌 글로 보고 그대로 낸다
 
 TIMEOUT_MESSAGE = "답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."

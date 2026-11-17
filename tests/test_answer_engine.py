@@ -1138,3 +1138,23 @@ def test_흔히_옮기는_말을_조각으로_흘려도_같다(seed):
 def test_맨_영어_이름_뒤_면도_화면_글자_받침에_맞춘다():
     # 2026-11-17 [420]: 저장된 답 Q43 "Bump Only면"이 "범프 만(Bump Only)면"으로 나왔다(조사 목록에 이면/면이 없어서)
     assert shown(("Bevel면 됩니다.",)) == "베벨(Bevel)이면 됩니다."
+
+
+def test_맨_영어_이름_뒤_덧붙인_괄호는_표시_뒤처럼_지운다():
+    # 2026-11-17 [422]: "Join(Ctrl-J)" → "합치기(Join)(Ctrl-J)"로 괄호가 겹쳤다(answer-forms "겹친 괄호 없음").
+    # 표시 뒤 덧붙인 괄호를 지우는 규칙([353], _after_mark)과 맨 영어 뒤 한글 풀이를 지우는 규칙([397])을 맨 영어 뒤 단축키·값·영어 괄호까지 넓힌다
+    assert shown(("Bevel(Ctrl-B)로 깎습니다.",)) == "베벨(Bevel)로 깎습니다."
+    assert shown(("Bevel (Ctrl + B)을 누릅니다.",)) == "베벨(Bevel)을 누릅니다."  # 빈칸 하나 뒤 괄호, 조사는 화면 글자 받침에
+    assert shown(("Scale(0.5)는 그대로",)) == "스케일(Scale)은 그대로"  # 값 괄호도 표시 뒤처럼 지운다
+    assert shown(("Bevel", " (Ctrl", "+B)을 누릅니다.")) == "베벨(Bevel)을 누릅니다."  # 괄호 중간에서 끊겨 와도 같다
+    assert shown(("Bevel (Ctrl+B)", "을 누릅니다.")) == "베벨(Bevel)을 누릅니다."  # 괄호가 닫힌 채 조각이 끝나도 같다(저장된 답 Q37 흐름 대조에서 찾음)
+    assert shown(("X-Ray(Alt-Z)를 켭니다.",)) == "X-Ray(Alt-Z)를 켭니다."  # 이름이 안 바뀌면 괄호도 둔다
+
+
+def test_괄호까지가_이름인_것은_괄호를_지우지_않는다():
+    # "Mix (Legacy)"처럼 괄호까지가 화면 이름이면 덧붙인 괄호가 아니다(사전 175개·넓힌 목록 270개에 이런 꼴이 있음, 2026-11-17)
+    names = MenuNames(SCREEN_NAMES, extra={**SCREEN_EXTRA, "Bevel (Legacy)": "베벨 (레거시)"})
+    for answer in ("Bevel (Legacy) 노드를 씁니다.", "Bevel(Legacy) 노드를 씁니다."):  # 모델은 빈칸 없이도 쓴다("Intersect(Boolean)", [422])
+        engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel((answer,)), menu_names=names)
+        text = "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece))
+        assert "(Legacy)" in text, answer
