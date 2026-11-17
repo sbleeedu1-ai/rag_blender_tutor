@@ -16,6 +16,7 @@
   읽기(grep·sed -n·Read 등)만 찾기로 치고 쓰기(>>·git add)는 안 친다. 지난 일을 말하는 줄(실수·했습니다 등)의 '제안'은 권유로 안 본다.
   한계: 그 차례에 기록을 다른 주제로 읽었으면 통과한다(temperature 제안 차례는 [342]를 읽어서 이 규칙으로도 못 막는다).
 - 못 보는 것: 거부한 꼴을 다른 모양으로 바꿔 쓴 것, 정해 둔 차례를 어긴 권유, 말이 길고 어려운 것, 찾긴 했으나 다른 낱말로 찾아 놓친 것.
+  화면을 안 보고 화면 글자를 단정한 것(11-17 잰 결과 헛막음이 많아 안 넣음, rules-enforced.md·[434]).
 """
 
 import json
@@ -83,7 +84,9 @@ def _reads_records(name: str, args: dict) -> bool:
         return bool(RECORDS.search(json.dumps(args, ensure_ascii=False)))
     if name != "Bash":
         return False
-    for part in re.split(r"[;&|\n]+", args.get("command", "")):
+    # 따옴표 속 글(정규식의 | 등)은 지우고 쪼갠다. 안 지우면 grep -E "a|b" HANDOFF.md가 grep과 파일 이름으로 갈려 헛막음([434])
+    command = re.sub(r"\"[^\"]*\"|'[^']*'", '""', args.get("command", ""))
+    for part in re.split(r"[;&|\n]+", command):
         if RECORDS.search(part) and READS.search(part) and not WRITES.search(part):
             return True
     return False

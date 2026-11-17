@@ -102,3 +102,10 @@ def test_그_차례에_기록을_찾았으면_통과(tmp_path):
 
 def test_제안이_없으면_기록_검사를_안_한다(tmp_path):
     assert check_reply.turn_problems(_turn(tmp_path, "시험이 끝났습니다. 결과는 13.0입니다.")) == []
+
+
+def test_따옴표_속_세로막대가_있는_grep도_기록_찾기로_본다():
+    # 2026-11-17 오후 6시 차례에서 그대로 옮긴 명령. 따옴표 속 |에서 쪼개져 grep과 HANDOFF.md가 갈려 헛막음이 났다([434])
+    command = 'cd /Volumes/mac_ssd/proj/rag_blender_tutor && grep -n -E "③ Q38|④ 보고서|빠졌던 것" HANDOFF.md | head -3 | cut -c1-200'
+    assert check_reply._reads_records("Bash", {"command": command})
+    assert not check_reply._reads_records("Bash", {"command": 'echo "grep|x" >> HANDOFF.md'})
