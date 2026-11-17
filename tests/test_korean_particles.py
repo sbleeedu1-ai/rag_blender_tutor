@@ -27,3 +27,11 @@ def test_이나_나도_받침에_맞춘다():
     assert fit_particle("나이프", "이나 에지") == "나 에지"
     assert fit_particle("스케일", "나 색") == "이나 색"
     assert fit_particle("나이프", "나이가") == "나이가"  # 뒤가 한글이면 조사인지 몰라 둔다
+
+
+def test_이면_면도_받침에_맞춘다():
+    # 2026-11-17 [419]: "Bump Only면" → "범프 만(Bump Only)면"으로 받침이 안 맞았다(조사 목록에 이면/면이 없어서)
+    assert fit_particle("범프 만", "면 형태가") == "이면 형태가"
+    assert fit_particle("추가", "이면 됩니다") == "면 됩니다"
+    assert fit_particle("추가", "면서") == "면서"  # 뒤가 한글이면 조사인지 몰라 둔다
+    assert fit_particle("범프 만", "이면서") == "이면서"

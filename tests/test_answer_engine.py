@@ -1133,3 +1133,8 @@ def test_흔히_옮기는_말을_조각으로_흘려도_같다(seed):
         parts.append(text[i : i + k])
         i += k
     assert shown_common(tuple(parts)) == shown_common((text,))
+
+
+def test_맨_영어_이름_뒤_면도_화면_글자_받침에_맞춘다():
+    # 2026-11-17 [420]: 저장된 답 Q43 "Bump Only면"이 "범프 만(Bump Only)면"으로 나왔다(조사 목록에 이면/면이 없어서)
+    assert shown(("Bevel면 됩니다.",)) == "베벨(Bevel)이면 됩니다."
