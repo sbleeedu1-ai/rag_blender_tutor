@@ -400,7 +400,7 @@ def sounds_alike(korean: str, english: str) -> bool:
 
 
 def query_of(question: str, names: Names) -> str:
-    """실제 검색어: 질문 뒤에 사전으로 찾은 영어 메뉴 이름을 덧붙인다(도우미의 검색어 첫 줄과 같음)."""
+    """실제 검색어: 질문 뒤에 사전으로 찾은 영어 메뉴 이름을 덧붙인다(10-30 [127] 전 도우미의 검색어 첫 줄과 같음, 지금 도우미는 질문 바꾸기 검색어를 씀)."""
     return " ".join((question, *names.english_in(question)))
 
 
