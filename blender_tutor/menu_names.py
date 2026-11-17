@@ -34,6 +34,15 @@ OBJECT_DEFAULTS = {"Cube", "Plane", "Circle", "Cylinder", "Cone", "Torus", "Grid
                    "Icosphere", "Suzanne", "Monkey", "Camera", "Light", "Empty", "Armature", "Text", "Curve"}
 # 자리마다 화면 글자가 다른 것을 확인한 이름: 버튼은 엣지, 메뉴·글은 에지(HISTORY [80]). 메뉴마다 짝을 따로 둔 이름도 같이 본다
 PLACE_DEPENDENT = {"Edge"}
+# 속성 창 탭 이름(Blender 5.2 RNA `SpaceProperties.context`의 고르는 값, 실행으로 확인). 탭은 `ID` 문맥 글자로 보인다:
+# 렌치 탭에 마우스를 대면 "수정자"(메뉴·패널은 "모디파이어", 사용자 스크린숏 [353]). 답에서 이름 바로 뒤나 괄호 바로 앞이 "탭"이면
+# 이 글자를 쓴다(사용자 "화면대로가 원칙인데", HISTORY [397]). 한국어 글자는 사전에서 찾는다(번역 글자를 저장소에 두지 않음)
+PROPERTIES_TABS = ("Tool", "Scene", "Render", "Output", "View Layer", "World", "Collection", "Object", "Constraints", "Modifiers",
+                   "Data", "Bone", "Bone Constraints", "Material", "Texture", "Particles", "Physics", "Effects", "Strip",
+                   "Strip Modifiers")
+TAB_CONTEXT = "ID"
+_TAB_RUN = re.compile(r"\S*(?<![A-Za-z])(?:" + "|".join(re.escape(t) for t in sorted(PROPERTIES_TABS, key=len, reverse=True))
+                      + r")[)\]'\"’”*]*\s*$")
 
 
 class Source(StrEnum):
@@ -146,6 +155,19 @@ class MenuNames:
     def common(self, english: str) -> tuple[str, ...]:
         """흔히 옮기는 말들(긴 것부터). 목록에 없으면 빈 묶음."""
         return self._common.get(_english_key(english), ())
+
+    def tab_glyph(self, english: str) -> str | None:
+        """속성 창 탭 이름이면 탭에 보이는 한국어(`ID` 문맥). 탭 이름이 아니거나 그 문맥에 번역이 없으면 None."""
+        if english not in PROPERTIES_TABS:
+            return None
+        name = self.get(english)
+        korean = next((t.korean for t in name.translations if TAB_CONTEXT in t.contexts), None) if name else None
+        return None if korean == english else korean
+
+    def glyphs(self, english: str) -> tuple[str, ...]:
+        """이 이름의 모든 화면 글자(문맥마다 다른 번역)."""
+        name = self.get(english)
+        return tuple(t.korean for t in name.translations) if name else ()
 
     def get(self, english: str) -> MenuName | None:
         return self._by_english.get(_english_key(english))
@@ -311,7 +333,7 @@ def _by_count(names: Iterable[MenuName]) -> list[MenuName]:
 _Catalog = dict[str, dict[str, list[str]]]  # ko.po: 영어 → 한국어 → 문맥들
 
 
-def screen_path(path: str, names: "MenuNames | None", asked: str = "", seen: set | None = None) -> str:
+def screen_path(path: str, names: "MenuNames | None", asked: str = "", seen: set | None = None, tab: bool = False) -> str:
     """메뉴 이름 표시 하나의 속(Add > Mesh)을 화면 글로 바꾼다.
 
     names가 있으면(한국어 화면에 번역 켜짐) 단마다 "추가(Add)"처럼 한국어(영어)로, 영어로 보이는 단과 화면 글자가 영어와
@@ -319,11 +341,13 @@ def screen_path(path: str, names: "MenuNames | None", asked: str = "", seen: set
     asked(사용자 질문)에 영어로 쓴 단은 "Add(추가)"처럼 영어(한국어)로 둔다. 사용자가 부른 이름을 앞에 두어 같은 것임을 알게
     한다(HISTORY [311]). 대소문자는 가리지 않고, 더 긴 영어 낱말 속 글자(Addon의 Add)는 물은 것으로 치지 않는다.
     seen을 주면(답 하나 동안 이미 보인 (영어, 화면 글자) 짝) 되풀이되는 단은 괄호 없이 하나만 보인다(티켓 50, 처음 한 번만).
+    tab이면(표시 바로 뒤가 "탭") 한 단짜리 속성 창 탭 이름은 탭 글자로(tab_place).
     """
     parts = [part.strip() for part in re.split(r"[>‣]", path)]
     if names:
         parents = ["", *parts[:-1]]  # 단마다 바로 앞 단(같은 이름도 메뉴마다 글자가 달라서, 티켓 31)
-        parts = [_shown_part(part, names.screen(part, parent)[1], asked, seen) for part, parent in zip(parts, parents)]
+        tab_glyph = names.tab_glyph(parts[0]) if tab and len(parts) == 1 else None
+        parts = [_shown_part(part, tab_glyph or names.screen(part, parent)[1], asked, seen) for part, parent in zip(parts, parents)]
     return " > ".join(parts)
 
 
@@ -336,6 +360,14 @@ def _shown_part(part: str, korean: str | None, asked: str, seen: set | None = No
             return part if first else korean
         seen.add((part, korean))
     return f"{part}({korean})" if first else f"{korean}({part})"
+
+
+def tab_place(before: str, after: str) -> bool:
+    """이름이 속성 창 탭을 가리키는 자리인가: 이름(과 닫는 괄호·따옴표·굵은 글씨) 바로 뒤나 여는 괄호 바로 앞이 "탭"이고,
+    이름 바로 앞이 "메뉴에서·메뉴의"가 아니다("상단 메뉴에서 [[Render]] 탭"은 맨 위 메뉴를 잘못 부른 것이라 메뉴 글자로 둔다)."""
+    if not (re.match(r"[)\]'\"’”*]*\s*탭", after) or re.search(r"탭\s*\($", before.rstrip())):
+        return False
+    return not re.search(r"메뉴(?:에서|의|에)?\s+[*'\"‘“]*(?:[^\s()]+\s*\()?$", before)
 
 
 def last_korean(shown: str) -> str:
@@ -482,13 +514,16 @@ def screen_prose(
         parts = _run_parts(words, names, keep, bool(re.search(r"[>‣▸]\s*$", before)))
         if parts is None:
             continue
+        others: tuple[str, ...] = ()  # 탭 자리면 같은 이름의 다른 글자("렌더(Render) 탭"의 렌더)도 앞말로 통째로 바꾼다
+        if len(parts) == 1 and tab_place(before, after) and (tab := names.tab_glyph(parts[0][0])):
+            parts, others = [(parts[0][0], tab)], names.glyphs(parts[0][0])
         whole = len(parts) == 1 and parts[0][1] not in (None, parts[0][0]) and parts[0][0] not in keep
         glossed = re.search(r"([가-힣]+)\s*\($", before)
         if before.rstrip().endswith("("):
             # 모델이 스스로 옮긴 말이 흔히 옮기는 말이면 앞말을 통째로 화면 글자로(티켓 50 가). 괄호 뒤가 '하다' 꼴이면
             # 앞말은 동사의 일부라("화면이 회전(Orbit)합니다") 바꾸지 않는다
             head = before.rstrip()[:-1]
-            span = (_common_span(head, (*names.common(parts[0][0]), parts[0][1]))  # 화면 글자 자신 + 꼬리도 ㉠으로
+            span = (_common_span(head, (*names.common(parts[0][0]), parts[0][1], *others))  # 화면 글자 자신 + 꼬리도 ㉠으로
                     if whole and after.startswith(")") and not re.match(r"\)(하(?!나)|합|했|해|함|한|할)", after) else None)
             floor = max(start, edits[-1][1] if edits else 0)
             if span and span[0] >= floor:
@@ -619,12 +654,13 @@ def _fable_form(before: str, after: str, english: str, korean: str, names: "Menu
     return paren, 1 + taken, new
 
 
-def prose_cut(text: str, hold: set[str] | frozenset = frozenset()) -> int:
+def prose_cut(text: str, hold: set[str] | frozenset = frozenset(), tabs: bool = False) -> int:
     """답이 흐르는 동안 지금 바꿔 내보내도 되는 글의 끝(그 뒤는 다음 조각과 이어질 수 있어 붙잡는다).
 
     마지막 낱말, 그 앞에 빈칸 하나로 이어진 영어 낱말들, 자를 자리를 품은 닫히지 않은 괄호(와 그 앞 낱말·영어 덩이),
     닫히지 않은 백틱 뒤를 붙잡는다. hold(흔히 옮기는 말의 앞부분 낱말 줄, MenuNames.common_prefixes)를 주면
     붙잡은 끝 낱말과 이어 그 줄이 되는 앞 낱말들도 붙잡는다("직교 투영(" 앞의 "직교", 티켓 50 가).
+    tabs면 속성 창 탭 이름으로 끝나는 낱말도 다음 낱말("탭"인지)이 올 때까지 붙잡는다(tab_place).
     """
     cut = len(text)
     tick = text.rfind("`")
@@ -632,6 +668,7 @@ def prose_cut(text: str, hold: set[str] | frozenset = frozenset()) -> int:
         cut = tick
     cut = min(cut, re.search(r"\S*$", text[: len(text.rstrip(" "))]).start())
     joined = 0  # 앞으로 이어 붙인 영어 낱말 수. 한도가 없으면 긴 영어 글에서 조각마다 처음부터 다시 돌아 매우 느려진다(검토 지적)
+    tabbed = not tabs
     while True:
         moved = cut
         paren = text.rfind("(", 0, cut)
@@ -642,7 +679,12 @@ def prose_cut(text: str, hold: set[str] | frozenset = frozenset()) -> int:
             moved = re.search(r"\S*$", text[: moved - 1]).start()  # 빈칸 하나로 이어진 앞 영어 낱말
             joined += 1
         if moved == cut:
-            return _hold_common(text, cut, hold) if hold else cut
+            cut = _hold_common(text, cut, hold) if hold else cut
+            tab = None if tabbed else _TAB_RUN.search(text[:cut])
+            if not tab or tab.start() >= cut:
+                return cut
+            # 탭 이름에서 한 번 더 자르고, 그 앞 영어 덩이·열린 괄호도 위 규칙으로 함께 붙잡는다("Image Texture", "(Apply Modifiers)")
+            tabbed, moved = True, tab.start()
         cut = moved
 
 

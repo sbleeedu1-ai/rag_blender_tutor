@@ -598,6 +598,8 @@ SCREEN_NAMES = [
     _name("Bevel", "베벨"), _name("Segments", "부분"), _name("Face", "페이스"), _name("Scale", "스케일"),
     _name("Merge by Distance", "거리로 병합"), _name("Cube", "큐브"), _name("Axis", "축"),
     _many("Union", ("결합", "*"), ("Union", "NodeTree")), _many("Difference", ("차이", "*"), ("차이점", "Color")),
+    _many("Modifiers", ("모디파이어", "*"), ("수정자", "ID")), _many("Render", ("렌더", "*"), ("렌더링", "ID")),
+    _many("Physics", ("피직스", "*"), ("물리학", "ID")),
 ]  # fmt: skip
 SCREEN_EXTRA = {"Origins": "오리진", "Set Parent To": "다음으로 부모를 설정", "X-Ray": "X-Ray", "S": "S", "W": "W",
                 "Forward": "앞으로", "Unselected": "선택되지 않은"}  # 넓힌 목록(티켓 49)
@@ -901,6 +903,29 @@ def test_Fable_꼴_뒤_굵은_글씨를_건너_조사를_맞춘다():
     assert shown(("연산이 **차집합(Difference)**으로 되어",), choices=union) == "연산이 **차집합 '차이'(Difference)**로 되어"
     assert shown(("연산이 **차집합(Diff", "erence)*", "*으", "로 되어"), choices=union) == "연산이 **차집합 '차이'(Difference)**로 되어"  # 조각으로
     assert shown(("**합치기(Merge by Distance)**으로",)) == "**합치기 '거리로 병합'(Merge by Distance)**으로"  # 받침 있는 화면 글자
+
+
+TABS = {"Modifiers": "*", "Render": "*"}  # 실제 고정 짝처럼 메뉴·패널 글자(기본 문맥)로 고정
+
+
+@pytest.mark.parametrize(
+    "pieces, expected",
+    [
+        # 속성 창 탭은 ID 문맥 글자(화면대로, 사용자 "화면대로가 원칙인데", 2026-11-17)
+        (("충돌은 Physics 탭에서 켭니다.",), "충돌은 물리학(Physics) 탭에서 켭니다."),
+        (("오른쪽 위 [[Render]] 탭에서 엔진을",), "오른쪽 위 렌더링(Render) 탭에서 엔진을"),
+        (("속성 창의 렌더(Render) 탭을 엽니다.",), "속성 창의 렌더링(Render) 탭을 엽니다."),  # 앞말이 같은 이름의 다른 글자면 통째로
+        (("파란 렌치 모양 탭(Modifiers)을 누릅니다.",), "파란 렌치 모양 탭 '수정자'(Modifiers)를 누릅니다."),  # 탭이 앞
+        (("[[Render]] > [[Bake]]와 [[Modifiers]]를",), "렌더(Render) > Bake와 모디파이어(Modifiers)를"),  # 탭이 아니면 메뉴 글자
+        (("상단 메뉴에서 [[Render]] 탭을 엽니다.",), "상단 메뉴에서 렌더(Render) 탭을 엽니다."),  # 메뉴라고 한 절은 둔다
+        (("[[Render]] 메뉴와 [[Render]] 탭",), "렌더(Render) 메뉴와 렌더링(Render) 탭"),  # 한 답에 둘 다
+        (("충돌은 Phys", "ics", " ", "탭", "에서 켭니다."), "충돌은 물리학(Physics) 탭에서 켭니다."),  # 조각으로
+        (("렌더(Render)", " 탭을 엽", "니다."), "렌더링(Render) 탭을 엽니다."),
+        (("오른쪽 위 [[Render]]", " ", "탭"), "오른쪽 위 렌더링(Render) 탭"),
+    ],
+)
+def test_속성_창_탭_이름은_탭_글자로(pieces, expected):
+    assert shown(pieces, choices=TABS) == expected
 
 
 def test_번역이_여러_개인_이름은_고정_짝이_기본_문맥_글자일_때만_감싸지_않은_글에서_바꾼다():

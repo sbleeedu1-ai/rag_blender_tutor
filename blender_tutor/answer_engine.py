@@ -22,7 +22,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
-from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, MenuNames, prose_cut, screen_path, screen_prose, with_particle
+from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, MenuNames, prose_cut, screen_path, screen_prose, tab_place, with_particle
 from blender_tutor.progress import Course, Step
 from blender_tutor.setting_fields import FieldModel, SettingLines, choose_fields, lines_for
 from blender_tutor.work_state import WorkState
@@ -565,7 +565,8 @@ class _MenuMarks:
                     break  # 표시 뒤 괄호·조사를 볼 때까지 모은다
                 # 앞 글을 먼저 다 내보낸 뒤 표시를 바꾼다(되풀이 이름을 나온 차례대로 기억해야 흘려 넣어도 같다)
                 before = self._plain(held[:start]) + self._plain("", done=True)
-                shown = screen_path(held[inner:end], self._names, self._question, self._seen if self._names else None)
+                tab = self._names is not None and tab_place(self._shown, rest)  # 속성 창 탭이면 탭 글자로
+                shown = screen_path(held[inner:end], self._names, self._question, self._seen if self._names else None, tab)
                 if self._names:
                     shown, rest = with_particle(shown, rest)
                 out += [before, self._send(shown)]
@@ -608,7 +609,7 @@ class _MenuMarks:
         if self._names is None:
             return text
         text, self._prose = self._prose + text, ""
-        cut = len(text) if done else prose_cut(text, self._names.common_prefixes)
+        cut = len(text) if done else prose_cut(text, self._names.common_prefixes, tabs=True)
         text, self._prose = text[:cut], text[cut:]
         # 끝부분 앞에서 코드가 열려 있었으면 백틱 하나를 앞에 붙여 짝을 맞춘다
         before = ("`" if (self._ticks - self._shown.count("`")) % 2 else "") + self._shown
