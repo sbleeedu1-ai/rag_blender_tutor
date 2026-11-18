@@ -8,7 +8,7 @@
 - run: DB를 준비하고 질문 20개 × 회차 × 조건을 돌려 results/<날짜>_<이름>/에 쓴다(폴더가 이미 있으면 멈춤).
 유료 모델을 고르면 --yes가 있어야 실행한다(어림 비용을 먼저 보고 확인받은 뒤 붙인다).
 
-예: python -m blender_tutor.search_compare run --name search_compare --note "강의실 PC, Blender에 연습 파일 열어 둠" --yes
+예: python -m blender_tutor.tools.search_compare run --name search_compare --note "강의실 PC, Blender에 연습 파일 열어 둠" --yes
 """
 
 import argparse
@@ -37,14 +37,14 @@ from blender_tutor import manual_vectors
 from blender_tutor.answer_engine import REWRITE_PROMPT, RRF_DEPTH, RRF_K, Embedder, _normalized, area_of
 from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.evaluate import _commit
-from blender_tutor.local_embeddings import MODELS as LOCAL_MODELS
-from blender_tutor.local_embeddings import LocalEmbedder
 from blender_tutor.manual_chunks import Chunk, load_chunks
 from blender_tutor.manual_vectors import PRICE_PER_MILLION, OpenAIEmbedder  # 요금표에 있는 모델만 돈이 든다
 from blender_tutor.menu_names import MenuNames
 from blender_tutor.paths import MENU_CHOICES, MENU_TITLES, PROJECT
+from blender_tutor.tools.local_embeddings import MODELS as LOCAL_MODELS
+from blender_tutor.tools.local_embeddings import LocalEmbedder
+from blender_tutor.tools.translation_check import reviewed
 from blender_tutor.translate import _tokens, pieces
-from blender_tutor.translation_check import reviewed
 
 MODELS = ("text-embedding-3-large", "bge-m3")
 TOP_KS = (4, 6, 8)  # 같은 검색 순위에서 상위 몇 개까지를 채점하나(티켓 40)

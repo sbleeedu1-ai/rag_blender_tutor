@@ -27,7 +27,7 @@ from blender_tutor.answer_model import MODEL, PRICE, OpenAIAnswerModel
 from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.manual_chunks import load_chunks
 from blender_tutor.paths import PROJECT
-from blender_tutor.search_compare import hit
+from blender_tutor.tools.search_compare import hit
 from blender_tutor.translate import pieces
 from blender_tutor.work_state import WorkState
 

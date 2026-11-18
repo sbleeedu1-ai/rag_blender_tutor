@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from blender_tutor.manual_chunks import Chunk, save_chunks
-from blender_tutor.search_compare import (
+from blender_tutor.tools.search_compare import (
     MODELS,
     TRANSLATE_PROMPT,
     Bm25,

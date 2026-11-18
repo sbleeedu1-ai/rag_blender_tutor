@@ -68,7 +68,7 @@ class LocalEmbedder:
         config = MODELS[name]
         target = model_path(name)
         if not (target / "download.json").exists():
-            raise FileNotFoundError(f"모델을 먼저 준비해 주세요: python -m blender_tutor.local_embeddings prepare --model {name}")
+            raise FileNotFoundError(f"모델을 먼저 준비해 주세요: python -m blender_tutor.tools.local_embeddings prepare --model {name}")
         start = time.perf_counter()
         import torch
         from sentence_transformers import SentenceTransformer

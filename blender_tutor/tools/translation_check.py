@@ -109,7 +109,7 @@ def reviewed(original: Path) -> dict[str, str]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """사용법: python -m blender_tutor.translation_check data/translations/ko_none.jsonl (무료)
+    """사용법: python -m blender_tutor.tools.translation_check data/translations/ko_none.jsonl (무료)
 
     고친 줄 파일이 있으면 덮어 읽은 뒤 검사하고, 걸린 곳을 같은 폴더 check_<이름>.md에 쓴다.
     """

@@ -31,7 +31,7 @@ compare = [
 ]
 
 [tool.setuptools]
-packages = ["blender_tutor"]
+packages = ["blender_tutor", "blender_tutor.tools"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -64,7 +64,7 @@ explicit_package_bases = true
 [[tool.mypy.overrides]]
 module = [
     "blender_tutor.answer_engine",
-    "blender_tutor.blender_ui_labels",
+    "blender_tutor.tools.blender_ui_labels",
     "blender_tutor.conditions",
     "blender_tutor.conversation",
     "blender_tutor.course_check",
@@ -77,14 +77,14 @@ module = [
     "blender_tutor.macapi",
     "blender_tutor.manual_chunks",
     "blender_tutor.menu_names",
-    "blender_tutor.menu_review",
+    "blender_tutor.tools.menu_review",
     "blender_tutor.progress",
     "blender_tutor.progress_record",
     "blender_tutor.question_flow",
     "blender_tutor.receiver",
-    "blender_tutor.search_compare",
-    "blender_tutor.speed_trial",
-    "blender_tutor.translation_check",
+    "blender_tutor.tools.search_compare",
+    "blender_tutor.tools.speed_trial",
+    "blender_tutor.tools.translation_check",
     "blender_tutor.winapi",
 ]
 ignore_errors = true
