@@ -295,7 +295,7 @@ Blender 5.2 설명서 HTML(zip) ──manual_chunks──▶ data/chunks/manual_
 문항 파일 + 시간 기록(%APPDATA%\blender_tutor\timings.jsonl) ──evaluate times──▶ results/<날짜>/<시각>_<이름>/ 시간.md
 ```
 
-- 실행: `.venv\Scripts\python -m blender_tutor.evaluate run <문항 파일> --name <이름> [--reasoning low] [--recent 5] [--top-k 8] [--bm25] --yes`, `... evaluate times <문항 파일> --name <이름>`. `run`은 진짜 엔진이라 차례마다 돈이 든다(none 실측 약 $0.00055)
+- 실행: `.venv\Scripts\python -m blender_tutor.evaluate run <문항 파일> --name <이름> [--reasoning low] [--recent 5] [--top-k 8] [--bm25] --yes`, `... evaluate times <문항 파일> --name <이름>`. `run`은 진짜 엔진이라 차례마다 돈이 든다(Haiku 생각 끔 실측: 답변 약 $0.0018(설정 값 있음)·$0.00082(없음), 질문 바꾸기 3번 약 $0.0006. `--yes` 없이 돌리면 `estimate_dollars`로 어림을 보인다)
 - 문항 파일은 목록 하나. 한 항목이 대화 하나이고, 시나리오형은 `차례` 목록을 가진다. 지어낸 예:
 
   ```json

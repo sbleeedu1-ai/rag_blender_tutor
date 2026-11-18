@@ -426,7 +426,9 @@ def test_run은_yes가_없으면_어림_비용만_보이고_돌리지_않는다(
     made_models.clear()
     argv = ["run", *options(tmp_path, "--name", "기준", "--data", str(tmp_path / "data"))]
     assert main(argv, now=datetime(2026, 10, 26, 9, 5)) == 2
-    assert "차례 2개 × 약 $0.00064 = 약 $0.00128" in capsys.readouterr().err
+    said = capsys.readouterr().err
+    assert "차례 2개(설정 값 있음 0개) 어림 약 $0.0031 = 답변 $0.0018 + 질문 바꾸기 $0.0013" in said
+    assert "분야 고르기·임베딩은 잰 적이 없어 뺐음" in said
     # 잰 적 없는 생각 수준은 숫자를 지어내지 않는다
     assert main([*argv, "--reasoning", "medium"], now=datetime(2026, 10, 26, 9, 5)) == 2
     assert "medium은 잰 적이 없어" in capsys.readouterr().err
@@ -501,3 +503,22 @@ def test_설정_값_파일을_적은_차례는_그것을_읽고_없으면_설정
     broken = {**SINGLE, "설정 값": "states/없음.settings.json"}
     with pytest.raises(ValueError, match="설정 값"):
         load_questions(write(tmp_path, [broken]), [SWORD])
+
+
+@pytest.mark.parametrize("turns, with_settings, actual", [
+    (54, 54, 0.097642),  # 11-17 마지막 확인 새_1(생각 끔, 설정 값 있음 54) 답변 모델 실제 요금
+    (324, 324, 0.577),  # [410] 새 지시문 3회
+    (30, 0, 0.024698),  # 11-17 설정값off_1·2·3_재(설정 값 없음 10 × 3) 합
+])
+def test_어림_답변_요금은_지난_실제_요금과_20퍼센트_안이다(turns, with_settings, actual):
+    answer, rewrite = evaluate.estimate_dollars(turns, with_settings, Settings())
+    assert abs(answer / actual - 1) < 0.2
+
+
+def test_어림_질문_바꾸기_요금은_지난_실제_요금과_20퍼센트_안이다():
+    _, rewrite = evaluate.estimate_dollars(147, 147, Settings())
+    assert abs(rewrite / 0.0881949 - 1) < 0.2  # [279] Haiku 질문 바꾸기 3번 × 147질문
+
+
+def test_잰_적_없는_생각_수준은_어림하지_않는다():
+    assert evaluate.estimate_dollars(10, 5, Settings(reasoning="low")) is None

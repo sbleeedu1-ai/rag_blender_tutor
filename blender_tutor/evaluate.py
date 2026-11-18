@@ -42,10 +42,13 @@ from blender_tutor.work_state import WorkState
 # 지금 고를 수 있는 임베딩 종류·리랭커. 리랭커와 bge-m3 같은 다른 임베딩은 아직 없어서, 켠 척하지 않게 고를 수 없게 막는다.
 # 생기는 티켓(임베딩은 31, 리랭커는 개발 평가에서 켜 보기로 할 때)에서 값을 더하고 엔진에 실제로 넘긴다
 EMBEDDINGS = engine_setup.EMBEDDINGS
-# 차례 하나의 어림 비용(달러, 답변 + 질문 바꾸기 3번 + 임베딩)에 약 10%를 얹었다(적게 보이지 않게). none은 티켓 44 실측
-# 약 $0.00058(HISTORY [135], 질문 바꾸기 3번 $0.00025 + 답변 $0.00033), low는 [131] 실측 $0.00059. medium은 잰 적이 없어 숫자를 두지 않는다.
-# 동시 호출 수를 바꾸면 함께 고친다
-DOLLARS_PER_TURN = {Reasoning.NONE: 0.00064, Reasoning.LOW: 0.00065}
+# 차례 하나의 어림 요금(달러). Haiku 5.5 실측에 약 10%를 얹었다(적게 보이지 않게). 잰 적 없는 조합은 숫자를 두지 않는다(docs/plan/01 E).
+# 답변(생각 수준, 설정 값을 보낸 차례인가): 생각 끔 + 설정 값 있음은 11-17 마지막 확인 54차례 $0.0976·11-14 천장 측정 바탕 $0.0954·
+# [410] 324차례 $0.577 → 약 $0.0018, 생각 끔 + 설정 값 없음은 11-17 설정값off 10차례 × 3번 $0.0080-0.0084 → 약 $0.00082.
+# 생각을 켠 Haiku 답(low·medium)은 evaluate로 잰 기록이 없다. 질문 바꾸기 3번은 [279] 147질문 $0.0882 → 약 $0.0006.
+# 분야 고르기·임베딩은 기록이 없어 넣지 않는다(호출.jsonl의 호출 종류별 요금으로 처음 잰다). 이전 값(none $0.00064)은 luna 때 것이었다
+ANSWER_DOLLARS = {(Reasoning.NONE, True): 0.0020, (Reasoning.NONE, False): 0.0009}
+REWRITE_DOLLARS = 0.00066
 RERANKERS = ("끔",)
 
 # 칸 이름 → 꼭 있어야 하나. 연습 과정 밖 질문이면 연습 과정·단계를 빼거나 null로 둔다
@@ -387,12 +390,7 @@ def main(
                             situation_lines=not args.no_situation, computed_lines=not args.no_computed,
                             field_lines=not args.no_fields)
         if not args.yes:
-            per_turn = DOLLARS_PER_TURN.get(settings.reasoning)
-            estimate = (
-                f"차례 {turns}개 × 약 ${per_turn:.5f} = 약 ${turns * per_turn:.5f}(어림)" if per_turn
-                else f"차례 {turns}개. 생각 수준 {settings.reasoning}은 잰 적이 없어 비용을 어림할 수 없음"
-            )
-            print(f"{estimate}. 확인받은 뒤 --yes를 붙여 다시 돌리세요.", file=sys.stderr)
+            print(f"{_estimate(dialogues, settings)}. 확인받은 뒤 --yes를 붙여 다시 돌리세요.", file=sys.stderr)
             return 2
         model = make_model(settings)
         log = CallLog()  # 바깥 호출 부품을 모두 감싸 차례마다 시각·토큰·보낸 글을 남긴다(호출.jsonl)
@@ -421,6 +419,29 @@ def main(
         _write_times(folder, args.name, timings, args.questions, timing_summary(lines, dialogues))
     print(f"결과: {folder}")
     return 0
+
+
+def estimate_dollars(turns: int, with_settings: int, settings: Settings) -> tuple[float, float] | None:
+    """(답변, 질문 바꾸기) 어림 요금(달러). with_settings는 설정 값을 보내는 차례 수. 생각 수준이 잰 적 없는 것이면 None.
+    분야 묶음을 끈 판(field_lines=False)·상황 줄을 끈 판은 따로 잰 적이 없어 켠 판 값으로 센다(보내는 줄이 적어 넘게 잡힌다)."""
+    prices = [ANSWER_DOLLARS.get((settings.reasoning, has)) for has in (True, False)]
+    counts = [with_settings, turns - with_settings]
+    if any(price is None and count for price, count in zip(prices, counts)):
+        return None
+    answer = sum(price * count for price, count in zip(prices, counts) if count)
+    return answer, turns * REWRITE_DOLLARS
+
+
+def _estimate(dialogues: Sequence[Dialogue], settings: Settings) -> str:
+    """돌리기 전에 보이는 어림 요금 글."""
+    turns = [turn for dialogue in dialogues for turn in dialogue.turns]
+    with_settings = sum(turn.settings is not None for turn in turns)
+    found = estimate_dollars(len(turns), with_settings, settings)
+    if found is None:
+        return f"차례 {len(turns)}개. 생각 수준 {settings.reasoning}은 잰 적이 없어 비용을 어림할 수 없음"
+    answer, rewrite = found
+    return (f"차례 {len(turns)}개(설정 값 있음 {with_settings}개) 어림 약 ${answer + rewrite:.4f} = 답변 ${answer:.4f} + 질문 바꾸기 ${rewrite:.4f}"
+            "(Haiku 실측 + 약 10%). 분야 고르기·임베딩은 잰 적이 없어 뺐음")
 
 
 def _commit() -> str | None:
