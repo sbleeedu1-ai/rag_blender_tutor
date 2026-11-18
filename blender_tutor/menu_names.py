@@ -36,10 +36,12 @@ OBJECT_DEFAULTS = {"Cube", "Plane", "Circle", "Cylinder", "Cone", "Torus", "Grid
                    "Icosphere", "Suzanne", "Monkey", "Camera", "Light", "Empty", "Armature", "Text", "Curve"}
 # 자리마다 화면 글자가 다른 것을 확인한 이름: 버튼은 엣지, 메뉴·글은 에지(HISTORY [80]). 메뉴마다 짝을 따로 둔 이름도 같이 본다
 PLACE_DEPENDENT = {"Edge"}
-# 사전 번역 글자가 본 화면 자리에 안 뜨고 자리마다 화면 글자가 갈려 영어로 두는 이름. 2D Animation의 '2차원 애니메이션함'(WorkSpace 문맥)은
-# 파일 > 신규('2D 애니메이션')·작업 공간 탭(영어)·작업 공간 추가 메뉴(영어) 세 자리에 없다(화면으로 봄, HISTORY [443]·[447]·[448]).
-# [[ ]] 표시와 이름 통째만 영어로 두고, 맨 글 '2D Animation'은 맨 글 규칙대로 'Animation'만 바뀐다(저장된 답 468개에 0번)
-SCREEN_ENGLISH = {"2D Animation"}
+# 작업 공간 이름 번역 문맥. 번역이 이 문맥 하나뿐인 이름(2D Animation '2차원 애니메이션함', UV Editing 'UV 편집함', Rendering '렌더링함',
+# Video Editing, 2D Full Canvas)은 영어로 둔다: 기본 파일의 작업 공간 탭은 영어다. 환경 설정 '새로운 데이터' 번역이 켜져 있으면(처음 언어를
+# 고를 때 켜짐, rna_userdef.cc rna_userdef_language_update) 작업 공간 추가(+) 메뉴와 거기서 새로 만든 탭만 'UV 편집함'으로 보여 자리마다
+# 갈린다(화면으로 봄, HISTORY [451]). 2D Animation은 파일 > 신규에서 '2D 애니메이션'으로 또 다르다. 표시와 이름 통째만 영어로 두고,
+# 맨 글 '2D Animation'은 맨 글 규칙대로 'Animation'만 바뀐다
+WORKSPACE_CONTEXT = "WorkSpace"
 # 속성 창 탭 이름(Blender 5.2 RNA `SpaceProperties.context`의 고르는 값, 실행으로 확인). 탭은 `ID` 문맥 글자로 보인다:
 # 렌치 탭에 마우스를 대면 "수정자"(메뉴·패널은 "모디파이어", 사용자 스크린숏 [353]). 답에서 이름 바로 뒤나 괄호 바로 앞이 "탭"이면
 # 이 글자를 쓴다(사용자 "화면대로가 원칙인데", HISTORY [397]). 한국어 글자는 사전에서 찾는다(번역 글자를 저장소에 두지 않음)
@@ -240,7 +242,7 @@ class MenuNames:
         name = self.get(english)
         if name is None:
             return self._extra.get(_english_key(english))
-        if name.status == Status.NONE or name.english in SCREEN_ENGLISH:
+        if name.status == Status.NONE or (name.status == Status.ONE and name.translations[0].contexts == (WORKSPACE_CONTEXT,)):
             return None
         if name.status == Status.ONE:
             return name.translations[0].korean

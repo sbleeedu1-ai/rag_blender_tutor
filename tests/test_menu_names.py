@@ -512,6 +512,22 @@ def test_본_화면_자리에_없는_사전_번역은_영어로_둔다():
     assert screen_path("2D Animation", names) == "2D Animation"
 
 
+@pytest.mark.parametrize("english, korean", [("UV Editing", "UV 편집함"), ("Rendering", "렌더링함"),
+                                             ("Video Editing", "비디오 편집함"), ("2D Full Canvas", "2D 풀 캔버스로")])
+def test_작업_공간_이름의_WorkSpace_번역은_화면에_없어_영어로_둔다(english, korean):
+    # 기본 파일의 작업 공간 탭은 영어, '새로운 데이터' 번역을 켜면 + 메뉴로 새로 만든 탭만 'UV 편집함'(화면으로 봄, 자리마다 갈림).
+    # 지난 답에 "UV 편집함(UV Editing) 작업 공간"이 나갔다. 사용자 "작업 공간은 ㅇㅋ 영어로 두자"(HISTORY [451])
+    names = MenuNames([MenuName(english, (Translation(korean, ("WorkSpace",)),), 1, "")])
+    assert names.korean(english) is None
+    assert screen_path(english, names) == english
+
+
+def test_WorkSpace_말고_다른_문맥_번역도_있는_이름은_그대로_바꾼다():
+    # 규칙은 번역이 WorkSpace 문맥 '하나뿐'일 때만이다. Geometry Nodes는 기본 문맥 번역이 함께 있어 메뉴·패널 글자로 바뀐다
+    names = MenuNames([MenuName("Geometry Nodes", (Translation("지오메트리 노드", ("*", "WorkSpace", "Preferences")),), 1, "")])
+    assert names.korean("Geometry Nodes") == "지오메트리 노드"
+
+
 def test_사전에_없는_이름은_넓힌_목록으로_바꾸되_질문_찾기에는_쓰지_않는다():
     names = MenuNames(list(SCREEN), extra={"Origins": "오리진", "Zoom Region...": "지역 줌..."})
     assert names.korean("Origins") == "오리진"
