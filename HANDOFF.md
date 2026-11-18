@@ -117,4 +117,4 @@
 - [티켓 35](.scratch/mvp-roundtrip/issues/35-유료-개발-평가와-GPT-빈손.md) · [티켓 37](.scratch/mvp-roundtrip/issues/37-유료-홀드아웃-실행.md) · [명세](.scratch/mvp-roundtrip/spec.md) · [구조](STRUCTURE.md)
 - 11-13 전체 점검 보고서(Git 밖): `results/20261113/142251_전체점검/보고서.md`(코드 지적은 7절 차, 권하는 순서는 9절)
 
-새 도구에 붙일 첫 문장: AGENTS.md와 HANDOFF.md를 읽고, `docs/plan/01-재는-장치.md`를 끝까지 읽은 뒤 그 문서대로 시작해.
+새 도구에 붙일 첫 문장: AGENTS.md와 HANDOFF.md를 읽고, `docs/plan/02-키맵-조각-빼기.md`를 끝까지 읽은 뒤 그 문서대로 시작해.
