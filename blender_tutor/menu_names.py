@@ -593,10 +593,12 @@ def _run_parts(words: list[str], names: "MenuNames", keep: set[str], in_path: bo
     return parts
 
 
-def prose_shows(names: "MenuNames", english: str) -> bool:
-    """감싸지 않은 글에 쓴 english를 screen_prose가 통째로 화면 글자로 바꾸는가. 번역이 여럿인 이름·자리마다 다른 이름·
-    '/'가 든 이름처럼 맨 글에서 영어로 남는 이름이면 False(_MenuMarks가 표시를 떼어 맨 글로 보낼지 정할 때 씀, [458])."""
-    return bool(_RUN.fullmatch(english)) and names.in_prose(english)[1] is not None
+def prose_shows(names: "MenuNames", english: str, asked: str = "") -> bool:
+    """한국어 낱말 뒤 괄호에 감싸지 않고 쓴 english("가나(Cube)")를 screen_prose가 바꾸는가. 실제로 돌려 본다: 맨 글 규칙은
+    번역이 여럿인 이름·자리마다 다른 이름·'/'가 든 이름·기본 물체 이름·키 이름·대문자 값 등을 영어로 남겨서 조건을 따로 베끼면
+    빠진다(사전 전체로 지어 본 문장에서 62개, [458]). _MenuMarks가 표시를 떼어 맨 글로 보낼지 정할 때 쓴다."""
+    glyph = names.screen(english)[1]  # 표시로 바꿀 때의 화면 글자. 맨 글 바꾸기가 이 글자를 통째로 내야 뗀다("-X 회전"처럼 낱말 하나만 바뀌면 안 뗌)
+    return bool(glyph) and glyph != english and glyph in screen_prose(f"가나({english})", names, asked)
 
 
 def screen_prose(
@@ -650,6 +652,11 @@ def screen_prose(
         if len(parts) == 1 and tab_place(before, after) and (tab := names.tab_glyph(parts[0][0])):
             parts, others = [(parts[0][0], tab)], names.glyphs(parts[0][0])
         whole = len(parts) == 1 and parts[0][1] not in (None, parts[0][0]) and parts[0][0] not in keep
+        if before.rstrip().endswith("(") and not whole and re.match(r"\s*,", after) and (close := after.find(")")) >= 0:
+            # 괄호 첫 이름이 영어로 남는 목록("측면(Front, Right)")은 뒤 이름도 영어로 둔다. 뒤만 바꾸면 "측면(Front, 오른쪽)"처럼
+            # 섞여 거부한 꼴(한국어(영어, 한국어), [349])이 된다([458])
+            skip = e + close + 1
+            continue
         glossed = re.search(r"([가-힣]+)\s*\($", before)
         if before.rstrip().endswith("(") and re.match(r"\s*,\s*[가-힣]", after):
             continue  # "원점(Origin, 물체의 기준점)": 괄호 첫머리 영어 뒤에 한국어 풀이가 이어지면 앞말의 영어 풀이라 둔다(겹침이 없던 자리, [458])

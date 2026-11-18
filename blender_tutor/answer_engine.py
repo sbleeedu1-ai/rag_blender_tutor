@@ -579,8 +579,8 @@ class _MenuMarks:
                 # 앞말이 문장 끝 말("눌러요(", "합니다(")이면 이름의 풀이가 아니라 덧말 괄호라 표시로 둔다(괄호 안 화면 글자만)
                 if (self._names and not re.search(r"[>‣]", held[inner:end]) and re.search(r"[가-힣]\s?\($", front)
                         and not re.search(r"[요다]\s?\($", front)
-                        and (held[inner:end] in self._keep or prose_shows(self._names, held[inner:end]))):
-                    # 맨 글 규칙이 영어로 남기는 이름(Normal·Edge·Strength 등)은 떼면 "법선(Normal)"처럼 화면 글자를 잃어 표시로 둔다
+                        and (held[inner:end] in self._keep or prose_shows(self._names, held[inner:end], self._question))):
+                    # 맨 글 규칙이 영어로 남기는 이름(Normal·Edge·Strength·Cube 등)은 떼면 "법선(Normal)"처럼 화면 글자를 잃어 표시로 둔다
                     # 한국어 낱말 뒤 괄호 속이 표시 하나뿐이면("격자 간격([[Increment]])") 표시 없는 같은 꼴과 같게 맨 글로 바꾼다
                     # ([393] Fable 꼴 "격자 간격 '증가'(Increment)"). 표시로 바꾸면 "격자 간격(증가(Increment))"로 괄호가 겹친다([458])
                     if after.startswith(")"):
