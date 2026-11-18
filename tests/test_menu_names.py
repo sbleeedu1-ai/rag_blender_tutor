@@ -18,6 +18,7 @@ from blender_tutor.menu_names import (
     Translation,
     build_menu_names,
     extra_names,
+    load_extra_allow,
     value_names,
     _looks_like_value,
     node_glyphs,
@@ -461,6 +462,54 @@ def test_넓힌_목록은_사전에_없고_ko_po_번역이_하나뿐인_화면_�
     assert extra == {"Origins": "오리진"}
     # Divide: fr.po로 보면 Color 문맥은 한국어 번역이 없어 화면이 영어일 수 있다 / Strength: 번역이 둘
     # Space: 키 이름 / the selected objects: 이름 꼴이 아님 / Mesh: 사전에 이미 있음(사전이 먼저)
+
+
+ALLOW_PO = '''
+msgid "-Z Forward"
+msgstr "-Z 앞으로"
+
+msgid "16-bit Signed"
+msgstr "16 비트 부호 지정"
+
+msgid "10 Meters"
+msgstr "10 미터"
+
+msgid "+Y Up"
+msgstr "+Y 위쪽"
+
+msgctxt "Operator"
+msgid "+Y Up"
+msgstr "Y 위로"
+'''
+
+
+def test_화면에서_확인한_이름은_이름_꼴_검사에_떨어져도_넓힌_목록에_넣는다():
+    # 사용자 "넓힌 목록 정하실것 1,2,3 전부 ㅇㅇ"(HISTORY [447]): 화면으로 본 이름만 예외로 받고 꼴 검사는 그대로 둔다.
+    # 10 Meters는 화면에 뜨지만 격자 단위 상태 글이라 예외 표에 없어 계속 빠진다([442])
+    extra = extra_names(SCREEN, ALLOW_PO, "", allow=("-Z Forward", "16-bit Signed"))
+    assert extra == {"-Z Forward": "-Z 앞으로", "16-bit Signed": "16 비트 부호 지정"}
+
+
+def test_예외_표의_이름이_다른_조건에_걸려_빠지면_만들_때_바로_알린다():
+    # +Y Up: 번역이 둘이라 넓힌 목록 조건(번역 하나)에 걸린다. 조용히 빠지면 예외 표만 보고 들어간 줄 안다
+    with pytest.raises(ValueError, match=r"\+Y Up"):
+        extra_names(SCREEN, ALLOW_PO, "", allow=("-Z Forward", "+Y Up"))
+
+
+def test_예외_표_파일은_영어_이름_목록이다():
+    allow = load_extra_allow()
+    assert "-Z Forward" in allow and "16-bit Signed" in allow
+    assert "-X manual" not in allow  # Rigify는 애드온이라 뺌([447])
+    assert "10 Meters" not in allow and "8-Bit Integer Value" not in allow  # 상태 글·툴팁에만 뜨는 이름([442]·[446])
+
+
+def test_본_화면_자리에_없는_사전_번역은_영어로_둔다():
+    # 2D Animation: 사전 번역 '2차원 애니메이션함'(WorkSpace 문맥)은 파일 > 신규·작업 공간 탭·작업 공간 추가 메뉴 세 자리에
+    # 안 뜬다. 신규 메뉴는 '2D 애니메이션', 탭은 영어라 자리마다 갈려 영어로 둔다(사용자 "1,2,3 전부 ㅇㅇ", [443]·[447])
+    names = MenuNames([MenuName("2D Animation", (Translation("2차원 애니메이션함", ("WorkSpace",)),), 1, "")])
+    assert names.korean("2D Animation") is None
+    assert names.screen("2D Animation") == (True, None)
+    assert screen_path("2D Animation", names) == "2D Animation"
 
 
 def test_사전에_없는_이름은_넓힌_목록으로_바꾸되_질문_찾기에는_쓰지_않는다():

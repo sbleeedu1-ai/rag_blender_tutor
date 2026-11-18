@@ -3796,3 +3796,15 @@
 - 툴팁에만 뜨는 5개(8-Bit Integer Value·2D Vector Value·3D Vector Value·2D View Minimum Grid Spacing·2D Cursor Location, 칸 글자는 "값"·"위치" 등): 사용자 "그럼 이거도 빼자 ㅇㅇ". 까닭: 답에 "2D 커서 위치"가 나가도 화면 칸에는 "위치"만 보이고 말풍선에서만 보임.
 - Node Wrangler 단축키 이름 7개("믹스 팩터 0.1% 감소" 등): 사용자 "얘는 전부 애드온 관련이면 그냥 빼". Rigify 3개("-X 매뉴얼" 등)도 애드온이라 이 말에 드는지 사용자에게 물음.
 - 남은 결정: 예외 표(가 방안)로 넣을지, Rigify 3개, 2D Animation을 영어로 둘지.
+
+### [447] 2026-11-18 · 넓힌 목록 예외 표·Rigify·2D Animation·지우기 훅을 사용자가 정한다
+- 물은 것: ① 화면 확인한 이름을 넓힌 목록 예외 표(가 방안)로 넣을지 ② Rigify 3개("-X 매뉴얼" 등)도 애드온이니 같이 뺄지 ③ 2D Animation을 영어로 둘지. 사용자: "넓힌 목록 정하실것 1,2,3 전부 ㅇㅇ". 읽은 뜻: 예외 표로 넣음, Rigify 뺌, 2D Animation 영어로 둠. 넣을 이름은 후보 화면 이름표 66과 대소문자 짝 4(8-bit Unsigned·16/24/32-bit Signed). 괄호 든 30·번역이 어색해 보인 14는 계속 미룸.
+- 지우기 확인 훅([437]): 사용자 "ㅇㅇ 애초에 뜨면 막아". 읽은 뜻: 훅이 묻던 명령(rm·rmdir·Remove-Item, git reset --hard, git clean)을 묻지 않고 막는다.
+
+### [448] 2026-11-18 · 화면으로 확인한 이름이 답에서 화면 글자로 바뀌도록, 넓힌 목록에 예외 표 70개를 붙이고 2D Animation은 영어로 둔다
+- 사용자 결정 [447]. 제품 코드: `menu_names.extra_names(…, allow=)`가 이름 꼴 검사에 떨어져도 예외 표 이름은 받는다(번역 하나·화면이 영어인 문맥 없음·사전에 없음 조건은 그대로, 걸려 빠지면 만들 때 멈춤). 예외 표 `menu_tables/screen_extra_allow.json`(영어만, 70개: 후보 화면 이름표 66 + 대소문자 짝 4). `SCREEN_ENGLISH = {"2D Animation"}`이면 `korean()`이 None(영어로 둠).
+- 화면 확인(돈 0, `results/20261118/102635_넓힌목록_꼴넓히기/화면/75-76`): 작업 공간 추가(+) 메뉴의 "일반"·"2D 애니메이션" 하위 메뉴도 작업 공간 이름이 영어("2D Animation", "Rendering", "UV Editing" 등). 그래서 "'2차원 애니메이션함'은 본 세 자리(파일 > 신규·탭·추가 메뉴)에 없음". 다른 하위 메뉴(비디오 편집 등)는 안 열어 봄.
+- 확인: 넓힌 목록 다시 만듦 14,179 → 14,249(더함 70 = 예외 표, 빠짐 0, 값 바뀜 0). 더한 70개 글자가 화면 확인 표의 화면 글자와 같음 70/70(띄어쓰기·대소문자 무시). 지은 문장 140줄(이름마다 `[[이름]]를 고릅니다.`·`이름을 고릅니다.`) 전부 읽음: 표시 문장 70/70이 "'-Z 앞으로'(-Z Forward) 항목을"처럼 바뀌고 맨 글은 전후 0/70 바뀜. 다만 맨 글은 전부터 일부 낱말만 바뀐다("-Z Forward을" → "-Z '앞으로'(Forward) 항목을", "8-bit Unsigned을" → "8-bit 서명되지 않음(Unsigned)을", 오늘 생긴 것 아님, 고치지 않음). 2D Animation은 표시해도 "2D Animation"으로 남음(전에는 "2차원 애니메이션함(2D Animation)"). 맨 글 "2D Animation을"은 전후 모두 "2D 애니메이션(Animation)을"(저장된 답 468개에 0번이라 둠). 조각으로 흘려 넣기(씨앗 3개, 71개 이름 × 4꼴) 852번 중 다름 0, 모델이 쓰는 괄호 꼴("앞쪽(-Z Forward)"·"-Z Forward(앞쪽)") 142줄 전후 바뀜 0. 저장된 답 468개: 바뀐 답 0(예외 표 이름은 맨 글로만 4번 나옴), 흐름 대조 다름 0. list_check 갈림 0·꼬리 겹침 0, course_check 문제 0, pytest 1006 통과(새 시험 4개는 고치기 전 코드에서 가져오기 오류·실패를 먼저 봄. 예외 조건 줄과 멈춤 줄을 하나씩 잠깐 지우면 각 시험이 실패함).
+- 새로 찾은 것(사용자에게 물음): 2D Animation처럼 사전 번역이 WorkSpace 문맥뿐인 이름이 넷 더 있다. UV Editing "UV 편집함", Rendering "렌더링함", Video Editing "비디오 편집함", 2D Full Canvas "2D 풀 캔버스로". 작업 공간 탭과 추가 메뉴(일반)에서 UV Editing·Rendering은 영어로 봄, 2D Full Canvas는 추가 메뉴(2D 애니메이션)에서 영어로 봄, Video Editing은 안 봄. 지난 시험 답(results/ 아래 모든 jsonl, 같은 답 되풀이 포함)에서 grep으로 "UV 편집함(UV Editing)"이 17번, "렌더링함(Rendering)"이 2번 걸렸다.
+- 안 바꾼 것: 번역 쪽(`translate.screen_words`)은 같은 꼴 검사를 쓰지만 이번 결정은 답 바꾸기라 그대로 둠. 괄호 든 30·번역이 어색해 보인 14는 계속 미룸.
+- 다른 PC: `screen_extra.json`(Git 밖)을 다시 만들어야 70개가 들어온다(`.venv\Scripts\python -m blender_tutor.menu_names extra data/ui_ko_5.2/ko.po data/ui_ko_5.2/fr.po data/menu_names`). 안 만들어도 도우미는 켜진다(옛 목록으로 돎).

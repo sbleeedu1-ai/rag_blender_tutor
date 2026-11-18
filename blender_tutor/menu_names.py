@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 
 from blender_tutor.korean_particles import PARTICLE, fit_particle
 from blender_tutor.manual_chunks import BASE_URL, Chunk, chunk_manual
-from blender_tutor.paths import MENU_ALIASES, MENU_CHOICES, MENU_COMMON, MENU_TITLES, NODE_TITLE_ITEMS
+from blender_tutor.paths import MENU_ALIASES, MENU_CHOICES, MENU_COMMON, MENU_EXTRA_ALLOW, MENU_TITLES, NODE_TITLE_ITEMS
 
 DEFAULT_CONTEXT = "*"  # 문맥 없는 일반 문구. Blender Python도 이렇게 적는다(bpy.app.translations.contexts.default)
 _PATH_SEP = "‣"  # 설명서 메뉴 경로의 구분 글자(Add ‣ Mesh)
@@ -36,6 +36,10 @@ OBJECT_DEFAULTS = {"Cube", "Plane", "Circle", "Cylinder", "Cone", "Torus", "Grid
                    "Icosphere", "Suzanne", "Monkey", "Camera", "Light", "Empty", "Armature", "Text", "Curve"}
 # 자리마다 화면 글자가 다른 것을 확인한 이름: 버튼은 엣지, 메뉴·글은 에지(HISTORY [80]). 메뉴마다 짝을 따로 둔 이름도 같이 본다
 PLACE_DEPENDENT = {"Edge"}
+# 사전 번역 글자가 본 화면 자리에 안 뜨고 자리마다 화면 글자가 갈려 영어로 두는 이름. 2D Animation의 '2차원 애니메이션함'(WorkSpace 문맥)은
+# 파일 > 신규('2D 애니메이션')·작업 공간 탭(영어)·작업 공간 추가 메뉴(영어) 세 자리에 없다(화면으로 봄, HISTORY [443]·[447]·[448]).
+# [[ ]] 표시와 이름 통째만 영어로 두고, 맨 글 '2D Animation'은 맨 글 규칙대로 'Animation'만 바뀐다(저장된 답 468개에 0번)
+SCREEN_ENGLISH = {"2D Animation"}
 # 속성 창 탭 이름(Blender 5.2 RNA `SpaceProperties.context`의 고르는 값, 실행으로 확인). 탭은 `ID` 문맥 글자로 보인다:
 # 렌치 탭에 마우스를 대면 "수정자"(메뉴·패널은 "모디파이어", 사용자 스크린숏 [353]). 답에서 이름 바로 뒤나 괄호 바로 앞이 "탭"이면
 # 이 글자를 쓴다(사용자 "화면대로가 원칙인데", HISTORY [397]). 한국어 글자는 사전에서 찾는다(번역 글자를 저장소에 두지 않음)
@@ -236,7 +240,7 @@ class MenuNames:
         name = self.get(english)
         if name is None:
             return self._extra.get(_english_key(english))
-        if name.status == Status.NONE:
+        if name.status == Status.NONE or name.english in SCREEN_ENGLISH:
             return None
         if name.status == Status.ONE:
             return name.translations[0].korean
@@ -462,13 +466,19 @@ def looks_like_name(english: str) -> bool:
             and not re.search(r'[%{}.:;!?"\\]', english))
 
 
-def extra_names(names: "MenuNames", po_text: str, full_po_text: str) -> dict[str, str]:
+def extra_names(names: "MenuNames", po_text: str, full_po_text: str, allow: Iterable[str] = ()) -> dict[str, str]:
     """넓힌 목록: 사전에 없는 화면 이름 → 한국어 화면 글자(티켓 49).
 
     10-27 번역 이름표 규칙 B(HISTORY [68], translate.screen_words)와 같이 ko.po에서 번역이 하나뿐인 이름 꼴의 문구를 담되,
     사전 만들기처럼 fr.po(번역률 100%)로 한국어 번역이 빠진 문맥(화면이 영어)이 있는 문구는 뺀다. 키 이름도 뺀다.
     사전에 있는 이름(제목 검수에서 떨어진 이름 포함)은 사전이 정한다.
+
+    allow는 이름 꼴 검사(looks_like_name)에 떨어져도 받는 이름(menu_tables/screen_extra_allow.json): "-Z Forward"처럼 부호·숫자로
+    시작하는 화면 이름을 Blender 한국어 화면에서 하나씩 보고 고른 것이다. 꼴 검사를 넓히면 "(스무스)"·"10 미터" 같은 상태 글까지
+    들어와 넓히지 않았다([441]-[447]). 다른 조건(번역 하나·화면이 영어인 문맥 없음·사전에 없음)은 그대로 따르고,
+    그 조건에 걸려 빠지는 이름이 있으면 조용히 넘어가지 않게 멈춘다.
     """
+    allow = set(allow)
     found: dict[str, dict[str, set[str]]] = {}
     for context, english, korean in read_po(po_text):
         found.setdefault(english, {}).setdefault(korean, set()).add(context)
@@ -478,12 +488,22 @@ def extra_names(names: "MenuNames", po_text: str, full_po_text: str) -> dict[str
     extra = {}
     for english, koreans in found.items():
         if (english in KEY_NAMES or names.get(english) is not None
-                or not looks_like_name(english) or len(koreans) != 1):
+                or not (looks_like_name(english) or english in allow) or len(koreans) != 1):
             continue
         korean, contexts = next(iter(koreans.items()))
         if korean != english and not used.get(english, set()) - contexts:
             extra[english] = korean
+    if missing := sorted(allow - extra.keys()):
+        raise ValueError(f"넓힌 목록 예외 표의 이름이 다른 조건(사전에 있음·번역 여럿·화면이 영어인 문맥·ko.po에 없음)에 걸려 빠짐: {missing}")
     return extra
+
+
+def load_extra_allow(path: Path = MENU_EXTRA_ALLOW) -> tuple[str, ...]:
+    """넓힌 목록 예외 표(영어 이름 목록, 번역 글자가 없어 저장소에 커밋한다). 이름마다 화면 확인 근거는 HISTORY [442]-[447]."""
+    names = json.loads(path.read_text(encoding="utf-8"))["names"]
+    if not isinstance(names, list) or not all(isinstance(n, str) and n for n in names):
+        raise ValueError(f"넓힌 목록 예외 표 {path}: {{'names': ['영어 이름', …]}} 모양이어야 함")
+    return tuple(names)
 
 
 _HANGUL = re.compile(r"[가-힣]")
@@ -1086,7 +1106,7 @@ def main(argv: list[str]) -> int:
 def _main_extra(po: Path, full_po: Path, out: Path) -> int:
     """사전 폴더의 menu_names.json으로 넓힌 목록을 만들어 같은 폴더에 쓴다."""
     names = MenuNames.load(out / "menu_names.json", MenuNames.load_choices(MENU_CHOICES), MenuNames.load_titles(MENU_TITLES))
-    extra = extra_names(names, po.read_text(encoding="utf-8"), full_po.read_text(encoding="utf-8"))
+    extra = extra_names(names, po.read_text(encoding="utf-8"), full_po.read_text(encoding="utf-8"), load_extra_allow())
     (out / EXTRA_FILE).write_text(json.dumps(extra, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
     print(f"넓힌 목록 {len(extra)}개 → {out / EXTRA_FILE}")
     return 0
