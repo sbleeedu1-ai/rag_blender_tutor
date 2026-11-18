@@ -7,7 +7,7 @@
 엔진 이름은 "임베딩+질문 바꾸기+답변"(예: text-embedding-3-large+claude-haiku-5-5×3+claude-haiku-5-5)으로 시간 기록·평가 결과에 남는다.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from blender_tutor import answer_model, claude_model, manual_vectors
@@ -65,6 +65,7 @@ def build_engine(
     embedding: str = manual_vectors.MODEL,
     rewriters: Sequence[Rewriter] | None = None,
     provider: str = "claude",
+    wrap: Callable[[str, object], object] | None = None,
 ) -> AnswerEngine:
     """data_dir(보통 data/)의 청크·설명서 벡터·메뉴 이름 사전으로 엔진을 만든다.
 
@@ -75,6 +76,8 @@ def build_engine(
     model을 주지 않으면 answer_model_for(settings)로 만든다. 평가 프로그램은 요금을 세려고 같은 함수로 만들어 넘긴다.
     엔진 이름의 답변 칸은 끼운 모델의 이름(model.model)이다. rewriters도 주면 그것을 쓴다(실측 프로그램이 호출마다 시각을 재려고 감싼 것).
     provider="claude"면 분야 고르기 모델과, 분야 고르기가 실패할 때 쓸 생각을 올린 답변 모델(fallback_reasoning)도 끼운다.
+    wrap(종류, 부품)을 주면 엔진에 끼우는 바깥 호출 부품(질문 바꾸기·답변·분야 고르기·예비 답변·임베딩)을 그것으로 감싼다
+    (평가 프로그램의 호출 기록 call_log.CallLog.wrap). 도우미 창은 주지 않는다. 연습 과정 벡터를 만드는 임베딩은 감싸지 않는다.
     """
     if embedding not in EMBEDDINGS:
         raise ValueError(f"모르는 임베딩 {embedding} (고를 수 있는 것: {', '.join(EMBEDDINGS)})")
@@ -94,6 +97,11 @@ def build_engine(
     texts = [course.search_text for course in courses]
     course_vectors = manual_vectors.cached(texts, embedder, manual_vectors.courses_path_for(embedding, data_dir), settings.timeout)
     name = f"{embedding}+{REWRITE_MODELS[provider]}×{len(rewriters)}+{model.model}"
+    if wrap:
+        rewriters = [wrap("질문 바꾸기", rewriter) for rewriter in rewriters]
+        model, embedder = wrap("답변", model), wrap("임베딩", embedder)
+        if field_model:
+            field_model, fallback = wrap("분야 고르기", field_model), wrap("예비 답변", fallback)
     return AnswerEngine(
         chunks, vectors, embedder, model, settings=settings,
         menu_names=names, courses=courses, course_vectors=course_vectors, name=name, rewriters=rewriters,

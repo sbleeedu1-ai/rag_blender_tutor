@@ -131,3 +131,18 @@ def test_기본은_Claude로_질문_바꾸기_3개_분야_고르기_답변과_�
     assert made == [("none", 600, 5.0, True)] * 3 + [("none", 4096, 10.0, False), ("none", 200, 5.0, False), ("low", 4096, 10.0, False)]
     assert events[-1].fields == ("MO",) and "b = 2" in str(fakes["claude"][3].sent[0])
     assert engine.name == "text-embedding-3-large+claude-haiku-5-5×3+claude-haiku-5-5"
+
+
+def test_기록_겉을_주면_바깥_호출_부품_다섯_종류를_모두_감싼다(tmp_path, fakes):
+    from blender_tutor.call_log import CallLog
+    from blender_tutor.setting_fields import SettingLines
+
+    log = CallLog()
+    engine = build_engine(tmp_path, wrap=log.wrap)
+    assert sorted(log.dollars()) == ["답변", "분야 고르기", "예비 답변", "임베딩", "질문 바꾸기"]  # 예비 답변은 분야 고르기가 실패할 때만 불림
+    log.start()
+    events = list(engine.answer("베벨 너비", WorkState.from_json(EDITING), [], settings=SettingLines(("a = 1",), {"MO": ("b = 2",)})))
+    log.wait_idle(5.0)
+    kinds = sorted(call["종류"] for call in log.take())
+    assert kinds == sorted(["질문 바꾸기"] * 3 + ["분야 고르기", "임베딩", "답변"])
+    assert events[-1].fields == ("MO",) and engine.name == "text-embedding-3-large+claude-haiku-5-5×3+claude-haiku-5-5"

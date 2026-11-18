@@ -11,6 +11,7 @@ from datetime import datetime
 import pytest
 
 from blender_tutor.answer_engine import AnswerEngine, Settings
+from blender_tutor.call_log import CallLog
 from blender_tutor import evaluate
 from blender_tutor.evaluate import Dialogue, Spread, Turn, load_questions, run, timing_summary
 from blender_tutor.manual_chunks import Chunk, load_chunks, save_chunks
@@ -287,14 +288,20 @@ class KeywordEmbedder:
 
 
 class PricedModel(Model):
-    """평가 프로그램이 요금을 묻는 답변 모델."""
+    """평가 프로그램이 요금을 묻는 답변 모델. 진짜 모델처럼 받은 토큰을 쌓아 센다(부를 때마다 입력 100, 출력 10)."""
 
     def __init__(self, settings):
         super().__init__()
         self.effort = settings.reasoning.value
         self.model = "가짜 답변"
+        self.input_tokens = self.output_tokens = 0
 
     reasoning_tokens = 37
+
+    def stream(self, messages, timeout):
+        self.input_tokens += 100
+        self.output_tokens += 10
+        yield from super().stream(messages, timeout)
 
     def dollars(self):
         return 0.0012
@@ -303,12 +310,13 @@ class PricedModel(Model):
 made_models: list[PricedModel] = []
 
 
-def fake_build(data_dir, model, courses, settings, embedding):
-    """진짜 엔진 만들기 대신: data_dir의 청크 파일을 읽어(없으면 FileNotFoundError) 가짜 임베딩으로 엔진을 만든다."""
+def fake_build(data_dir, model, courses, settings, embedding, wrap):
+    """진짜 엔진 만들기 대신: data_dir의 청크 파일을 읽어(없으면 FileNotFoundError) 가짜 임베딩으로 엔진을 만든다.
+    wrap은 진짜(engine_setup.build_engine)처럼 바깥 호출 부품을 기록 겉으로 감싼다."""
     chunks = load_chunks(data_dir / "chunks" / "manual_chunks.jsonl")
     vectors = [VECTORS[CHUNKS.index(chunk)] for chunk in chunks]
     return AnswerEngine(
-        chunks, vectors, KeywordEmbedder(), model, settings, courses=courses,
+        chunks, vectors, wrap("임베딩", KeywordEmbedder()), wrap("답변", model), settings, courses=courses,
         course_vectors=[[1.0, 0.0, 0.0]] * len(courses), name=f"가짜 엔진({embedding})",
     )
 
@@ -357,6 +365,40 @@ def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약
     assert "연습 과정 밖 차례 2개 중 답에 연습 과정 이름이 나온 차례 0개(없음)" in summary
     assert rows[0]["첫 글자(초)"] >= 0 and rows[0]["답 끝(초)"] >= rows[0]["첫 글자(초)"]
     assert "엔진만 잰 시간(창 없음): 첫 글자 중앙값" in summary and "(분모 2)" in summary and "잰 것: 프로그램" in summary
+
+
+def test_run은_차례마다_답_모델에_보낸_글_전문과_단계별_시각과_호출별_토큰을_남긴다(tmp_path):
+    made_models.clear()
+    assert main(["run", *run_options(tmp_path, "--name", "기록")], now=datetime(2026, 10, 26, 9, 5)) == 0
+    folder = tmp_path / "results" / "20261026" / "090500_기록"
+    rows = [json.loads(text) for text in (folder / "호출.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [row["번호"] for row in rows] == ["D01", "D02"]  # 차례마다 한 줄
+    sent = made_models[-1].calls  # 답 모델이 실제로 받은 글
+    assert [row["보낸 글"] for row in rows] == sent and "# 질문\n\nsave the blend file" in rows[0]["보낸 글"][-1]["content"]
+    assert [row["답 모델 원문"] for row in rows] == ["답1", "답2"]
+    times = rows[0]["시각(초)"]
+    assert set(times) == {"질문 바꾸기 닫힘", "분야 고르기 끝", "임베딩 끝", "답 모델 보냄", "답 모델 첫 조각", "화면 첫 조각", "답 끝"}
+    assert times["질문 바꾸기 닫힘"] is None and times["분야 고르기 끝"] is None  # 가짜 엔진에는 질문 바꾸기·분야 고르기가 없음
+    assert 0 <= times["임베딩 끝"] <= times["답 모델 보냄"] <= times["답 모델 첫 조각"] and times["화면 첫 조각"] is not None
+    answer = [call for call in rows[0]["호출"] if call["종류"] == "답변"]
+    assert [(call["입력"], call["출력"]) for call in answer] == [(100, 10)]  # 쌓인 셈이 아니라 그 호출의 몫
+    assert all("보낸 글" not in call for call in rows[0]["호출"])  # 전문은 줄 칸에 한 번만
+    settings = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    assert settings["호출 종류별 요금(달러)"] == {"임베딩": None, "답변": 0.0012}  # 가짜 임베딩은 요금을 셀 수 없음
+
+
+def test_기록_겉으로_감싸도_답과_검색_결과는_그대로다():
+    plain, wrapped = Model(), Model()
+    log = CallLog()
+    dialogues = [Dialogue("S1", "시나리오형", (turn("S1-1", "처음", ["files/blend/save.html"]), turn("S1-2", "그다음")))]
+    before = run(dialogues, engine(plain))
+    after = run(dialogues, AnswerEngine(
+        CHUNKS, VECTORS, log.wrap("임베딩", Embedder()), log.wrap("답변", wrapped), Settings(top_k=3, use_bm25=False),
+        courses=[SWORD, SHIELD], course_vectors=[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+    ), log=log)
+    assert [(r.answer, r.results, r.hit, r.query) for r in before] == [(r.answer, r.results, r.hit, r.query) for r in after]
+    assert plain.calls == wrapped.calls
+    assert [len(r.calls) for r in after] == [2, 2] and before[0].calls == ()  # 임베딩 + 답변, 기록을 안 주면 빈 묶음
 
 
 def test_run은_설정_값의_1a_2_줄을_끈_판을_설정에_남긴다(tmp_path):
