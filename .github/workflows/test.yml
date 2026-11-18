@@ -20,5 +20,7 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: 린트·코드 경계(ruff, HISTORY [472])
         run: python -m ruff check .
+      - name: 타입 검사(mypy, blender_tutor, HISTORY [472])
+        run: python -m mypy
       - name: 테스트
         run: python -m pytest

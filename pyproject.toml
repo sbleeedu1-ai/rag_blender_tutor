@@ -52,3 +52,39 @@ select = ["F", "I", "TID251"]
 
 [tool.ruff.lint.per-file-ignores]
 "!addon/blender_tutor_addon/**" = ["TID251"]
+
+# 타입 검사(HISTORY [472]): blender_tutor만 본다. 처음 켤 때 지적이 있던 23파일은 빚으로 적어 두고(ignore_errors) 고치지 않는다
+# (None 막기를 더하면 동작이 바뀌어 정리에 끼우지 않는다). 그 밖의 파일과 새 파일은 검사한다.
+# 외부 라이브러리(rank_bm25·PySide6 밖의 pyobjc·bpy 등)의 형 정보가 없는 것은 넘긴다
+[tool.mypy]
+files = ["blender_tutor"]
+ignore_missing_imports = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = [
+    "blender_tutor.answer_engine",
+    "blender_tutor.blender_ui_labels",
+    "blender_tutor.conditions",
+    "blender_tutor.conversation",
+    "blender_tutor.course_check",
+    "blender_tutor.course_desk",
+    "blender_tutor.data_manifest",
+    "blender_tutor.engine_setup",
+    "blender_tutor.evaluate",
+    "blender_tutor.helper",
+    "blender_tutor.helper_window",
+    "blender_tutor.macapi",
+    "blender_tutor.manual_chunks",
+    "blender_tutor.menu_names",
+    "blender_tutor.menu_review",
+    "blender_tutor.progress",
+    "blender_tutor.progress_record",
+    "blender_tutor.question_flow",
+    "blender_tutor.receiver",
+    "blender_tutor.search_compare",
+    "blender_tutor.speed_trial",
+    "blender_tutor.translation_check",
+    "blender_tutor.winapi",
+]
+ignore_errors = true
