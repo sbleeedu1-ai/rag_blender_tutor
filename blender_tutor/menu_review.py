@@ -11,7 +11,6 @@ Blender 안쪽 C 코드에서 그리는 글자는 뽑히지 않는다. 그래서
 """
 
 import json
-import os
 import subprocess
 import sys
 from collections.abc import Iterable, Mapping

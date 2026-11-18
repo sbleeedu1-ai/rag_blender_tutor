@@ -31,14 +31,14 @@ else:  # Mac(HISTORY [312]): 같은 이름의 함수를 pyobjc로
 from blender_tutor.answer_engine import Event, Settings
 from blender_tutor.conversation import PROGRAM_ERROR, Conversation
 from blender_tutor.course_desk import CourseDesk, Line
+from blender_tutor.engine_setup import build_engine
 from blender_tutor.helper_window import FONT, HelperWindow, Tray
+from blender_tutor.manual_vectors import MODEL as EMBEDDING
+from blender_tutor.menu_names import load_menu_names
 from blender_tutor.paths import COURSES, PROJECT, default_progress_records
 from blender_tutor.progress import Course, load_courses
 from blender_tutor.question_flow import QuestionFlow
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
-from blender_tutor.manual_vectors import MODEL as EMBEDDING
-from blender_tutor.engine_setup import build_engine
-from blender_tutor.menu_names import load_menu_names
 from blender_tutor.state_stream import RecordingDesk
 from blender_tutor.timing import Stopwatch
 from blender_tutor.window_rules import FrontBlender, Place, Screen, needs_move, place

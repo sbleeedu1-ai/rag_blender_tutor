@@ -21,11 +21,11 @@ import statistics
 import sys
 import time
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from difflib import SequenceMatcher
 from datetime import datetime
+from difflib import SequenceMatcher
 from enum import StrEnum
 from itertools import product
 from pathlib import Path
@@ -33,15 +33,16 @@ from pathlib import Path
 import numpy as np
 from rank_bm25 import BM25Okapi
 
+from blender_tutor import manual_vectors
 from blender_tutor.answer_engine import REWRITE_PROMPT, RRF_DEPTH, RRF_K, Embedder, _normalized, area_of
 from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.evaluate import _commit
-from blender_tutor import manual_vectors
+from blender_tutor.local_embeddings import MODELS as LOCAL_MODELS
+from blender_tutor.local_embeddings import LocalEmbedder
 from blender_tutor.manual_chunks import Chunk, load_chunks
 from blender_tutor.manual_vectors import PRICE_PER_MILLION, OpenAIEmbedder  # 요금표에 있는 모델만 돈이 든다
 from blender_tutor.menu_names import MenuNames
 from blender_tutor.paths import MENU_CHOICES, MENU_TITLES, PROJECT
-from blender_tutor.local_embeddings import MODELS as LOCAL_MODELS, LocalEmbedder
 from blender_tutor.translate import _tokens, pieces
 from blender_tutor.translation_check import reviewed
 
@@ -1031,7 +1032,7 @@ def _summary_markdown(name: str, rows: Sequence[dict], questions: Sequence[Quest
                 f"{_ratio(line['번역 있음'])} | {_ratio(line['번역 없음'])} | {line['중앙값']:.3f} | {line['최대값']:.3f} | "
                 f"{', '.join(line['회차마다 순위 다름']) or '-'} |"
             )
-        lines += ["", f"질문별(찾은 근거/필요 근거, 처음 정답 순위). 열 번호는 위 표의 차례.", "",
+        lines += ["", "질문별(찾은 근거/필요 근거, 처음 정답 순위). 열 번호는 위 표의 차례.", "",
                   "| 질문 | 번역 | " + " | ".join(str(number) for number in range(1, len(summary) + 1)) + " |",
                   "|---|---|" + "---|" * len(summary)]
         for question in questions:

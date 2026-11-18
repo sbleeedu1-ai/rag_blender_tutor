@@ -23,8 +23,8 @@ from datetime import datetime
 from pathlib import Path
 
 from blender_tutor.korean_particles import with_euro
-from blender_tutor.work_state import WorkState
 from blender_tutor.progress import Ask, Command, Course, Operation, Progress, Step, Withdraw
+from blender_tutor.work_state import WorkState
 
 log = logging.getLogger(__name__)
 

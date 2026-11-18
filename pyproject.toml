@@ -22,6 +22,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "ruff==0.17.5",  # 린트. Mac과 GitHub 검사가 같은 판으로 돌게 고정(HISTORY [472])
+    "mypy==2.4.1",  # 타입 검사(HISTORY [472])
 ]
 # 검색 비교의 로컬 BGE-M3·가벼운 후보 3개. PyTorch를 함께 받아 무거우므로 따로 설치한다
 compare = [
@@ -34,3 +36,19 @@ packages = ["blender_tutor"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+# 린트(HISTORY [472]): 진짜 실수(F)와 import 순서(I)만 켜고, 코드 경계(TID251)는 애드온 본체에만 건다.
+# 이 판의 ruff는 설정이 없으면 넓은 규칙 묶음을 켜므로 select를 늘 적어 둔다
+[tool.ruff]
+line-length = 140
+extend-exclude = [".scratch", "archive", "prototype", ".claude/worktrees"]
+
+[tool.ruff.lint]
+select = ["F", "I", "TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# 애드온 본체는 Blender 안 파이썬에서 돌아 blender_tutor가 없다
+"blender_tutor".msg = "애드온 본체는 Blender 안 파이썬에서 돌아 blender_tutor를 불러올 수 없다(HISTORY [472])"
+
+[tool.ruff.lint.per-file-ignores]
+"!addon/blender_tutor_addon/**" = ["TID251"]

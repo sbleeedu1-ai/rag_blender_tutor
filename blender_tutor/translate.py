@@ -16,7 +16,8 @@ from pathlib import Path
 
 from blender_tutor.beginner_scope import CHARS_PER_TOKEN, DATA, Estimate, Model, OpenAIModel, openai_key
 from blender_tutor.manual_chunks import Chunk, load_chunks
-from blender_tutor.menu_names import ARTICLES, MenuNames, looks_like_name as _looks_like_name, needs_title_check, read_po
+from blender_tutor.menu_names import ARTICLES, MenuNames, needs_title_check, read_po
+from blender_tutor.menu_names import looks_like_name as _looks_like_name
 from blender_tutor.paths import MENU_CHOICES, MENU_TITLES
 
 _PATH_SEP = "‣"  # 설명서 메뉴 경로의 구분 글자(Add ‣ Mesh)

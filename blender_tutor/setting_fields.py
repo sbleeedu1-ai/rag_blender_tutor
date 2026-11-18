@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from blender_tutor.paths import FIELDS, BUNDLES
+from blender_tutor.paths import BUNDLES, FIELDS
 
 MAX_FIELDS = 3  # 고르는 분야 수의 위 끝(가설 15·16과 같음)
 MAX_LINES = 1450  # 답변 모델에 넘기는 설정 줄의 한도(HISTORY [220]의 비용 기준)

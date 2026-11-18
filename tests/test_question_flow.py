@@ -15,8 +15,8 @@ from blender_tutor.progress import Course, Step
 from blender_tutor.question_flow import NO_STATE, OLD_ADDON, QuestionFlow
 from blender_tutor.receiver import FileEvent, Receiver
 from blender_tutor.timing import Stopwatch
-from blender_tutor.work_state import WorkState
 from blender_tutor.window_rules import FrontBlender
+from blender_tutor.work_state import WorkState
 from tests.examples import EDITING, TOKEN, send
 
 OBJECT_MODE = {**EDITING, "mode": "OBJECT", "edit_selected": {}}

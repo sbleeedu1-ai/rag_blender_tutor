@@ -10,9 +10,9 @@ from datetime import datetime
 
 import pytest
 
+from blender_tutor import evaluate
 from blender_tutor.answer_engine import AnswerEngine, Settings
 from blender_tutor.call_log import CallLog
-from blender_tutor import evaluate
 from blender_tutor.evaluate import Dialogue, Spread, Turn, load_questions, run, timing_summary
 from blender_tutor.manual_chunks import Chunk, load_chunks, save_chunks
 from blender_tutor.progress import Course, Step

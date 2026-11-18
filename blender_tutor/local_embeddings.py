@@ -13,7 +13,6 @@ from pathlib import Path
 
 from blender_tutor.paths import PROJECT
 
-
 MODELS = {
     "granite-embedding-97m-multilingual-r2": {
         "repo": "ibm-granite/granite-embedding-97m-multilingual-r2",
@@ -71,8 +70,8 @@ class LocalEmbedder:
         if not (target / "download.json").exists():
             raise FileNotFoundError(f"모델을 먼저 준비해 주세요: python -m blender_tutor.local_embeddings prepare --model {name}")
         start = time.perf_counter()
-        from sentence_transformers import SentenceTransformer
         import torch
+        from sentence_transformers import SentenceTransformer
 
         imported = time.perf_counter()
         self._model = SentenceTransformer(

@@ -8,21 +8,36 @@ Blender·창 없이 부를 수 있고, 아무것도 기억하지 않는다(최�
 import json
 import logging
 import re
-from collections.abc import Iterable, Iterator, Sequence
 import threading
 import time
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from concurrent.futures import Future, as_completed
 from dataclasses import dataclass
 from enum import StrEnum
 from itertools import islice
-from collections.abc import Mapping
 from typing import Protocol
 
 import numpy as np
 from rank_bm25 import BM25Okapi
 
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
-from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, PAREN_LIMIT, SHORTCUT_CLOSE, SHORTCUT_OPEN, MenuNames, _shown_part, paren_depth, prose_cut, prose_shows, screen_path, screen_prose, shortcut_in, tab_place, with_particle
+from blender_tutor.menu_names import (
+    MARK_CLOSE,
+    MARK_OPEN,
+    PAREN_LIMIT,
+    SHORTCUT_CLOSE,
+    SHORTCUT_OPEN,
+    MenuNames,
+    _shown_part,
+    paren_depth,
+    prose_cut,
+    prose_shows,
+    screen_path,
+    screen_prose,
+    shortcut_in,
+    tab_place,
+    with_particle,
+)
 from blender_tutor.progress import Course, Step
 from blender_tutor.setting_fields import FieldModel, SettingLines, choose_fields, lines_for
 from blender_tutor.work_state import WorkState

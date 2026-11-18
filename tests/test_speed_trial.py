@@ -7,7 +7,7 @@ import pytest
 
 from blender_tutor.answer_engine import AnswerEngine, Settings
 from blender_tutor.speed_trial import Calls, Question, TimedAnswer, TimedRewriter, run, score_queries, summarize
-from tests.test_answer_engine import ARRAY, BEVEL, CHUNKS, STATE, TOWARD_ARRAY, TOWARD_BEVEL, VECTORS
+from tests.test_answer_engine import ARRAY, CHUNKS, STATE, TOWARD_ARRAY, TOWARD_BEVEL, VECTORS
 
 
 class Counted:

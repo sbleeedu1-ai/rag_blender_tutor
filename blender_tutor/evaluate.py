@@ -387,7 +387,6 @@ def main(
     folder = args.results / f"{now:%Y%m%d}" / f"{now:%H%M%S}_{args.name}"  # 날짜 폴더 안에서 이름순이 실행 순서
     # 실패할 수 있는 읽기(엔진 만들기·시간 기록)는 폴더를 만들기 전에 한다. 빈 폴더가 남으면 같은 이름으로 다시 돌릴 수 없어서
     if args.command == "run":
-        turns = sum(len(dialogue.turns) for dialogue in dialogues)
         settings = Settings(top_k=args.top_k, use_bm25=args.bm25, reasoning=args.reasoning,
                             situation_lines=not args.no_situation, computed_lines=not args.no_computed,
                             field_lines=not args.no_fields)

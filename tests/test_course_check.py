@@ -4,10 +4,9 @@
 """
 
 from pathlib import Path
+from unittest.mock import ANY
 
 import pytest
-
-from unittest.mock import ANY
 
 from blender_tutor.course_check import Problem, check_folder, load_manual
 from blender_tutor.manual_chunks import Chunk, save_chunks

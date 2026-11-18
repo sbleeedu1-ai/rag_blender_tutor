@@ -12,7 +12,15 @@ from dataclasses import replace
 import pytest
 
 from blender_tutor.answer_engine import (
-    INSTRUCTIONS, AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source, _terms_for,
+    INSTRUCTIONS,
+    AnswerEngine,
+    Done,
+    Failure,
+    Piece,
+    Reasoning,
+    Settings,
+    Source,
+    _terms_for,
 )
 from blender_tutor.manual_chunks import Chunk, Example, MediaKind
 from blender_tutor.menu_names import MenuName, MenuNames, Translation
