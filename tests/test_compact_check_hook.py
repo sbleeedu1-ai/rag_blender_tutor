@@ -114,7 +114,7 @@ def test_설정이_직접_입력과_자동_압축_모두에_훅을_건다():
     entries = settings["hooks"]["PreCompact"]
     assert [entry["matcher"] for entry in entries] == ["manual|auto"]
     assert "check_records_before_compact.py" in entries[0]["hooks"][0]["command"]
-    assert "Stop" not in settings["hooks"]
+    assert all("check_records" not in h["command"] for e in settings["hooks"].get("Stop", []) for h in e["hooks"])  # Stop은 답 검사만([379])
 
 
 def test_자동_압축은_빠진_기록을_요약_지시문으로_넘긴다(repo):

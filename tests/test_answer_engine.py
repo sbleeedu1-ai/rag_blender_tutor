@@ -4,6 +4,7 @@
 질문을 넣고 나온 답 조각·근거 목록·검색 결과·오류 표시와, 모델이 받은 것만 본다.
 """
 
+import json
 import threading
 import time
 from dataclasses import replace
@@ -484,6 +485,23 @@ def test_모델에_검색_청크_글과_작업_상태와_질문을_넘긴다():
     assert question in sent
 
 
+@pytest.mark.parametrize(
+    "path, name",
+    [
+        ("C:\\Users\\someone\\scenes\\boolean_wrong\\상자.blend", "상자.blend"),  # Windows에서 찍은 상태는 Mac에서도 같게
+        ("/Users/someone/scenes/boolean_wrong/상자.blend", "상자.blend"),
+        ("", ""),  # 저장 전
+    ],
+)
+def test_열린_파일은_폴더_없이_파일_이름만_모델에_넘긴다(path, name):
+    # 폴더 이름에는 사용자 계정 이름이 들 수 있고, 시험 장면은 폴더 이름이 원인을 말한다(HISTORY [321]·[322])
+    model = FakeModel()
+    ask(model=model, state=replace(STATE, file_path=path))
+    sent = model.calls[0][-1]["content"]
+    assert f'"file_path": {json.dumps(name, ensure_ascii=False)}' in sent
+    assert "someone" not in sent and "boolean_wrong" not in sent
+
+
 def test_최근_대화를_차례대로_넘기고_지난_질문은_기억하지_않는다():
     model = FakeModel()
     engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(TOWARD_ARRAY), model)
@@ -577,12 +595,20 @@ SCREEN_NAMES = [
     _many("Edit Mode", ("에디트 모드", "*"), ("편집 모드", "Operator")),
     _many("At Center", ("센터에서", "Operator"), ("At Center", "Mesh")),
     _many("Apply", ("적용", "*"), ("신청하기", "WindowManager")),
+    _name("Bevel", "베벨"), _name("Segments", "부분"), _name("Face", "페이스"), _name("Scale", "스케일"),
+    _name("Merge by Distance", "거리로 병합"), _name("Cube", "큐브"), _name("Axis", "축"),
+    _many("Union", ("결합", "*"), ("Union", "NodeTree")), _many("Difference", ("차이", "*"), ("차이점", "Color")),
+    _many("Modifiers", ("모디파이어", "*"), ("수정자", "ID")), _many("Render", ("렌더", "*"), ("렌더링", "ID")),
+    _many("Physics", ("피직스", "*"), ("물리학", "ID")),
 ]  # fmt: skip
+SCREEN_EXTRA = {"Origins": "오리진", "Set Parent To": "다음으로 부모를 설정", "X-Ray": "X-Ray", "S": "S", "W": "W",
+                "Forward": "앞으로", "Unselected": "선택되지 않은", "By Distance": "거리에 의해",
+                "Orthographic": "정사법", "Navigation Controls": "네비게이션 컨트롤"}  # 넓힌 목록(티켓 49)
 
 
 def shown(pieces, state=KOREAN_SCREEN, choices=None, question="메시 추가") -> str:
     """가짜 모델이 pieces를 낼 때 사용자가 보는 답 글(조각을 이어 붙인 것)."""
-    names = MenuNames(SCREEN_NAMES, choices or {})
+    names = MenuNames(SCREEN_NAMES, choices or {}, extra=SCREEN_EXTRA)
     engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
     return "".join(event.text for event in engine.answer(question, state, []) if isinstance(event, Piece))
 
@@ -808,3 +834,508 @@ def test_예열은_질문_바꾸기_하나와_임베딩을_한_번씩_부른다(
     rewriters, embedder = [FakeRewriter(), FakeRewriter()], FakeEmbedder()
     AnswerEngine(CHUNKS, VECTORS, embedder, FakeModel(), rewriters=rewriters).warm_up()
     assert [len(rewriter.calls) for rewriter in rewriters] == [1, 0] and len(embedder.calls) == 1
+
+
+# 감싸지 않은 이름·화면과 다른 한국어(티켓 49). 모델이 [[ ]]로 감싸지 않아도 한국어 화면이면 사전·넓힌 목록의 이름을 화면 글자로
+
+
+def test_감싼_이름이_사전에_없으면_넓힌_목록으로_바꾼다():
+    assert shown(("[[Origins]] 체크를 끄세요.",)) == "오리진(Origins) 체크를 끄세요."
+
+
+def test_감싸지_않은_영어_이름도_한국어_화면이면_화면_글자로_바꾼다():
+    text = "지금 Bevel 모디파이어는 Segments가 1이에요. Origins를 끄고 Set Parent To 메뉴를 여세요."
+    assert shown((text,)) == ("지금 베벨(Bevel) 모디파이어는 부분(Segments)이 1이에요. "
+                              "오리진(Origins)을 끄고 다음으로 부모를 설정(Set Parent To) 메뉴를 여세요.")
+    assert shown(("Merge by Distance를 고르세요.",)) == "거리로 병합(Merge by Distance)을 고르세요."  # 긴 이름 먼저
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Cube를 고르세요.",  # 작업 상태의 물체 이름(아웃라이너에 보이는 글자 그대로)
+        "불리언 대상은 Cube로 되어 있어요.",  # 고르지 않은 물체도 기본 이름이면 물체 이름일 수 있다
+        "`Bevel` 값을 보세요.",  # 코드
+        "Space 키를 누르세요. Shift+Bevel은 없어요.",  # 단축키
+        "설명서의 Bevel 쪽을 보세요. 설명서에 \"Scale\"이 있어요.",  # 설명서 대목 인용
+        "Blender에서 SCULPT 모드예요.",  # 프로그램 이름·대문자 값
+        "Primary Bevel Axis를 바꾸세요.",  # 사전에 없는 낱말이 섞인 덩이는 통째로 둔다
+        "Edit Mode에서 Array를 보세요.",  # 번역 여러 개(고정 짝이 있어도 자리를 몰라서)·통과 안 한 제목 이름은 영어 그대로
+        "bpy.ops.Bevel 이나 Bevel_edges",  # 코드 이름 속
+        "Bevel Segments 값",  # 낱말마다는 사전에 있어도 덩이 전체가 이름 하나가 아니면(화면에 없는 글이 된다)
+        "Bevel/Segments 칸",  # 빗금으로 이은 영어
+    ],
+)
+def test_바꾸면_안_되는_영어는_그대로_둔다(text):
+    assert shown((text,)) == text
+    assert shown((text,), choices={"Edit Mode": "Operator"}) == text  # 기본 문맥과 다른 고정 짝
+
+
+def test_화면과_다른_한국어를_붙인_이름은_화면_글자로_고친다():
+    # 괄호 앞 글은 이름을 옮긴 말이 아니라 설명·동사일 때가 많아(옵션(Only Selected), 녹여(Dissolve)) 고치지 않고 괄호 속에 넣는다
+    assert shown(("3을 눌러 면(Face) 고르기",)) == "3을 눌러 면 '페이스'(Face) 고르기"
+    assert shown(("모서리 다듬기(Bevel)를",)) == "모서리 다듬기 '베벨'(Bevel)을"
+    assert shown(("1. 평평한 쪽(Face) 고르기",)) == "1. 평평한 쪽 '페이스'(Face) 고르기"  # Fable 꼴([393])
+    assert shown(("메뉴에서 병합(Merge by Distance)을",)) == "메뉴에서 '거리로 병합'(Merge by Distance)을"  # 앞말이 화면 글자 낱말뿐이면 지움
+    assert shown(("하나로 녹여(Dissolve) 없앱니다",)) == "하나로 녹여(Dissolve) 없앱니다"  # 이어 주는 꼴은 모델 꼴 그대로
+    assert shown(("하나로 녹여(Dissolve) 없앱니다. 다시 [[Dissolve]]",)).endswith("다시 " + shown(("[[Dissolve]]",)))  # 모델 꼴로 둔 이름은 아직 안 보인 것
+    # 영어 뒤 풀이 괄호는 지운다("스케일(Scale, 크기 조절)"은 거부된 꼴 [349], 덧붙인 괄호는 지우기로 [353]·[354])
+    assert shown(("Scale(크기 조절)을 쓰세요.",)) == "스케일(Scale)을 쓰세요."
+    assert shown(("Bevel(또는 Segments)로",)) == "베벨(Bevel)로"  # 지운 괄호 속 영어는 다시 건드리지 않는다
+    assert shown(("베벨(Bevel)과 스케일 (Scale), Bevel(베벨)",)) == "베벨(Bevel)과 스케일 (Scale), Bevel(베벨)"  # 이미 화면 글자
+    assert shown(("거리로 병합(Merge by Distance)",)) == "거리로 병합(Merge by Distance)"  # 여러 낱말 화면 글자
+    assert shown(("엑스레이(X-Ray), X-Ray(엑스레이)",)) == "엑스레이(X-Ray), X-Ray(엑스레이)"  # 화면도 영어인 이름
+    assert shown(("S(크기 조절)를 누르고 와트(W)로",)) == "S(크기 조절)를 누르고 와트(W)로"  # 한 글자는 키·단위
+
+
+def test_영어_뒤_풀이_괄호는_지우고_화면_글자_꼴로_낸다():
+    # 거부된 "결합(Union, 합집합)"·"Focal Length(초점의 길이, 초점의 길이)" 꼴을 내지 않는다([349], 2026-11-17)
+    union = {"Union": "*", "Difference": "*"}
+    assert shown(("방식을 Union(합집합), Difference(차집합) 중",), choices=union) == "방식을 결합(Union), 차이(Difference) 중"
+    assert shown(("Union(합집합)과 다시 Union(합집합)을",), choices=union) == "결합(Union)과 다시 결합을"  # 두 번째는 화면 글자만
+    assert shown(("연산은 **Difference(차집합)** 입니다",), choices=union) == "연산은 **차이(Difference)** 입니다"
+    assert shown(("연산은 **Union(합집합)**을 고릅니다",), choices=union) == "연산은 **결합(Union)**을 고릅니다"
+    assert shown(("**Bevel(베벨, Bevel)** 값",)) == "**Bevel(베벨)** 값"  # 화면 글자로 시작하면 영어(화면 글자) 그대로, 뒤 풀이만 지움
+    assert shown(("Bevel(베벨 모디파이어) 값",)) == "Bevel(베벨 모디파이어) 값"  # 쉼표 없이 이어진 풀이는 둔다
+
+
+def test_Fable_꼴_뒤_굵은_글씨를_건너_조사를_맞춘다():
+    union = {"Difference": "*"}
+    assert shown(("연산이 **차집합(Difference)**으로 되어",), choices=union) == "연산이 **차집합 '차이'(Difference)**로 되어"
+    assert shown(("연산이 **차집합(Diff", "erence)*", "*으", "로 되어"), choices=union) == "연산이 **차집합 '차이'(Difference)**로 되어"  # 조각으로
+    assert shown(("**합치기(Merge by Distance)**으로",)) == "**합치기 '거리로 병합'(Merge by Distance)**으로"  # 받침 있는 화면 글자
+    # 앞말이 화면 글자 낱말뿐이면 굵은 글씨 표시를 건너 앞말을 지운다("**병합 '거리로 병합'" 되풀이 막기, 2026-11-17)
+    assert shown(("**병합(Merge by Distance)**을",)) == "**'거리로 병합'(Merge by Distance)**을"
+    assert shown(("메뉴에서 **병합(Merge by Distance)**을 고릅니다",)) == "메뉴에서 **'거리로 병합'(Merge by Distance)**을 고릅니다"
+    # 굵은 글씨가 앞말 가운데서 시작하면 앞 낱말("거리로 ")을 흐름에서 먼저 내보내 지울 수 없다(전과 같은 꼴, 저장된 답에 없음)
+    assert shown(("거리로 **병합(Merge by Distance)**을",)) == "거리로 **병합 '거리로 병합'(Merge by Distance)**을"
+
+
+@pytest.mark.parametrize("cut", range(1, 40))
+def test_굵은_글씨_앞말_지우기는_조각으로_와도_같다(cut):
+    text = "메뉴에서 **병합(Merge by Distance)**을 고릅니다"
+    assert shown((text[:cut], text[cut:])) == "메뉴에서 **'거리로 병합'(Merge by Distance)**을 고릅니다", (text[:cut], text[cut:])
+
+
+def test_Fable_꼴도_어색한_화면_글자면_항목을_넣는다():
+    # 조사·어미로 끝나는 화면 글자에 조사가 바로 붙으면 "'거리에 의해'(By Distance)를"처럼 읽혀 '항목'을 넣는다([355]-[357])
+    assert shown(("M 키를 누르고 거리로 병합(By Distance)를 골라도",)) == "M 키를 누르고 거리로 병합 '거리에 의해'(By Distance) 항목을 골라도"
+    assert shown(("선택 안 된 것과 병합(Unselected)을 켜세요.",)) == "선택 안 된 것과 병합 '선택되지 않은'(Unselected) 항목을 켜세요."
+    assert shown(("모두(By Distance)로",)) == "모두 '거리에 의해'(By Distance) 항목으로"
+    assert shown(("세계 배경(Face)이 보입니다.",)) == "세계 배경 '페이스'(Face)가 보입니다."  # 멀쩡한 화면 글자는 그대로
+    assert shown(("거리로 병합(By Distance) 옵션을",)) == "거리로 병합 '거리에 의해'(By Distance) 옵션을"  # 조사가 없으면 그대로
+
+
+@pytest.mark.parametrize("cut", range(1, 40))
+def test_Fable_꼴은_앞말을_감싼_모델_따옴표를_뗀다(cut):
+    # "'정투영' '정사법'(Orthographic)"처럼 따옴표가 겹치지 않게, 앞말을 감싼 따옴표는 떼고 화면 글자에만 둔다(2026-11-17)
+    for text, expected in [
+        ("타입이 '정투영(Orthographic)'으로 되어", "타입이 정투영 '정사법'(Orthographic)으로 되어"),
+        ("설명서의 '탐색 조작 버튼(Navigation Controls)'입니다.", "설명서의 탐색 조작 버튼 '네비게이션 컨트롤'(Navigation Controls)입니다."),
+        ('합치려면 "선택되지 않은 것 포함(Unselected)" 옵션을', "합치려면 선택되지 않은 것 포함 '선택되지 않은'(Unselected) 옵션을"),
+    ]:
+        assert shown((text[:cut], text[cut:])) == expected, (text[:cut], text[cut:])
+
+
+TABS = {"Modifiers": "*", "Render": "*"}  # 실제 고정 짝처럼 메뉴·패널 글자(기본 문맥)로 고정
+
+
+@pytest.mark.parametrize(
+    "pieces, expected",
+    [
+        # 속성 창 탭은 ID 문맥 글자(화면대로, 사용자 "화면대로가 원칙인데", 2026-11-17)
+        (("충돌은 Physics 탭에서 켭니다.",), "충돌은 물리학(Physics) 탭에서 켭니다."),
+        (("오른쪽 위 [[Render]] 탭에서 엔진을",), "오른쪽 위 렌더링(Render) 탭에서 엔진을"),
+        (("속성 창의 렌더(Render) 탭을 엽니다.",), "속성 창의 렌더링(Render) 탭을 엽니다."),  # 앞말이 같은 이름의 다른 글자면 통째로
+        (("파란 렌치 모양 탭(Modifiers)을 누릅니다.",), "파란 렌치 모양 탭 '수정자'(Modifiers)를 누릅니다."),  # 탭이 앞
+        (("[[Render]] > [[Bake]]와 [[Modifiers]]를",), "렌더(Render) > Bake와 모디파이어(Modifiers)를"),  # 탭이 아니면 메뉴 글자
+        (("상단 메뉴에서 [[Render]] 탭을 엽니다.",), "상단 메뉴에서 렌더(Render) 탭을 엽니다."),  # 메뉴라고 한 절은 둔다
+        (("[[Render]] 메뉴와 [[Render]] 탭",), "렌더(Render) 메뉴와 렌더링(Render) 탭"),  # 한 답에 둘 다
+        (("충돌은 Phys", "ics", " ", "탭", "에서 켭니다."), "충돌은 물리학(Physics) 탭에서 켭니다."),  # 조각으로
+        (("렌더(Render)", " 탭을 엽", "니다."), "렌더링(Render) 탭을 엽니다."),
+        (("오른쪽 위 [[Render]]", " ", "탭"), "오른쪽 위 렌더링(Render) 탭"),
+    ],
+)
+def test_속성_창_탭_이름은_탭_글자로(pieces, expected):
+    assert shown(pieces, choices=TABS) == expected
+
+
+def test_번역이_여러_개인_이름은_고정_짝이_기본_문맥_글자일_때만_감싸지_않은_글에서_바꾼다():
+    assert shown(("Edit Mode에서",), choices={"Edit Mode": "*"}) == "에디트 모드(Edit Mode)에서"
+    assert shown(("Edit Mode에서",), choices={"Edit Mode": "Operator"}) == "Edit Mode에서"  # 자리마다 글자가 갈림
+    assert shown(("[[Edit Mode]]에서",), choices={"Edit Mode": "Operator"}) == "편집 모드(Edit Mode)에서"  # 감싼 이름은 짝대로
+
+
+def test_메뉴_경로_속_기본_물체_이름은_메뉴_이름으로_바꾼다():
+    nothing = replace(KOREAN_SCREEN, active_object=None, selected_objects=())  # Cube라는 물체를 고르지 않음
+    assert shown(("Shift+A > Mesh > Cube를 누르세요.",), nothing) == "Shift+A > 메시(Mesh) > 큐브(Cube)를 누르세요."
+    assert shown(("대상은 Cube예요.",), nothing) == "대상은 Cube예요."
+
+
+def test_질문에_영어로_쓴_이름은_감싸지_않아도_영어_괄호_한국어로():
+    assert shown(("Bevel을 다시 넣으세요.",), question="Bevel이 안 먹어요") == "Bevel(베벨)을 다시 넣으세요."
+
+
+def test_영어_이름과_괄호가_조각_사이에_갈려_와도_바꾼다():
+    pieces = ("A로 Merge by ", "Distance를 고르고 3으로 면(", "Face) 고", "르기. 끝에 Bevel")
+    assert shown(pieces) == "A로 거리로 병합(Merge by Distance)을 고르고 3으로 면 '페이스'(Face) 고르기. 끝에 베벨(Bevel)"
+
+
+@pytest.mark.parametrize(
+    "pieces, expected",
+    [
+        # 표시 바로 뒤에 모델이 덧붙인 괄호(단축키·풀이)는 지운다. 겹친 괄호가 되지 않게(티켓 50 나).
+        # 단축키 하나뿐인 괄호는 지우고 그 문장 뒤에 "단축키는 …입니다."로 옮긴다([353] 사용자 예문, [423])
+        (("[[Face]](단축키 Alt-F)를 누르세요.",), "페이스(Face)를 누르세요. 단축키는 Alt-F입니다."),
+        (("[[Face]] (Alt-F)를 누르세요.",), "페이스(Face)를 누르세요. 단축키는 Alt-F입니다."),
+        (("[[Face]](또는 면 채우기)를 누르세요.",), "페이스(Face)를 누르세요."),  # 단축키가 아닌 풀이는 지우기만
+        # 괄호 속에 표시가 든 것은 풀이가 아니라 내용이라 둔다
+        (("[[Face]](또는 [[Add]])를 누르세요.",), "페이스(또는 추가)를 누르세요."),  # 괄호가 남아 겹치는 자리는 화면 글자만([458], 옛 기대 "페이스(Face)(또는 추가(Add))")
+        # 조각 사이에 갈려 와도 같다
+        (("[[Fa", "ce]]", "(단축", "키 Alt-F)", "를 누르세요."), "페이스(Face)를 누르세요. 단축키는 Alt-F입니다."),
+    ],
+)
+def test_표시_뒤에_덧붙인_괄호는_지운다(pieces, expected):
+    assert shown(pieces) == expected
+
+
+@pytest.mark.parametrize(
+    "pieces, expected",
+    [
+        # 모델이 영어 이름에 맞춰 쓴 조사를 화면 글자 받침에 맞춘다(티켓 50, 번역 때 [91]과 같은 규칙)
+        (("[[Add]]을 누르세요.",), "추가(Add)를 누르세요."),
+        (("[[Axis]]로 맞추세요.",), "축(Axis)으로 맞추세요."),
+        (("[[Bevel]]으로 다듬어요.",), "베벨(Bevel)로 다듬어요."),  # ㄹ 받침 뒤는 '로'
+        (("[[Face]]이 하나 생겨요.",), "페이스(Face)가 하나 생겨요."),
+        (("[[Segments]]이 1이에요.",), "부분(Segments)이 1이에요."),  # 받침이 있으면 그대로
+        (("[[Add]]", "을 누르세요."), "추가(Add)를 누르세요."),  # 조사가 다음 조각에 와도
+        (("[[Add]]이라는 메뉴",), "추가(Add)이라는 메뉴"),  # 뒤가 한글이면 조사인지 몰라 둔다
+        (("[[Snap Base]]을 켜세요.",), "Snap Base을 켜세요."),  # 화면 글자가 영어면 둔다
+    ],
+)
+def test_표시_뒤_조사를_화면_글자에_맞춘다(pieces, expected):
+    assert shown(pieces) == expected
+
+
+def test_감싸지_않은_이름을_바꾸면_뒤_조사도_화면_글자에_맞춘다():
+    assert shown(("Axis로 두고 Add을 누르고 Face(면)을 보세요.",)) == (
+        "축(Axis)으로 두고 추가(Add)를 누르고 페이스(Face)를 보세요.")  # 지운 풀이 괄호 뒤 조사도 화면 글자에
+
+
+@pytest.mark.parametrize(
+    "pieces, expected",
+    [
+        # 조사·어미로 끝나거나 명령 구절인 화면 글자 뒤에 조사가 바로 붙으면 "앞으로로"처럼 읽혀,
+        # 따옴표로 묶고 '항목'을 넣는다(티켓 50, HISTORY [355]·[356]). 되풀이면 영어 괄호만 빠진다
+        (("[[Forward]]로 두고 다시 [[Forward]]는 -Z",), "'앞으로'(Forward) 항목으로 두고 다시 '앞으로' 항목은 -Z"),
+        (("[[Unselected]]은 끄세요.",), "'선택되지 않은'(Unselected) 항목은 끄세요."),
+        (("[[Set Parent To]]를 누르세요.",), "'다음으로 부모를 설정'(Set Parent To) 항목을 누르세요."),
+        (("Forward를 고르세요.",), "'앞으로'(Forward) 항목을 고르세요."),  # 감싸지 않은 이름도
+        (("[[Forward]] 칸",), "앞으로(Forward) 칸"),  # 조사가 바로 붙지 않으면 그대로
+    ],
+)
+def test_어색한_화면_글자에_조사가_붙으면_따옴표와_항목으로(pieces, expected):
+    assert shown(pieces) == expected
+
+
+def test_같은_이름이_되풀이되면_처음_한_번만_영어_괄호():
+    """답이 쓸데없이 길어지지 않게, 낱말 표의 '처음 한 번만'과 같이(티켓 50 라, HISTORY [353])."""
+    text = ("[[Add > Mesh]]를 누르고 Bevel을 켠 뒤 다시 [[Add]]와 [[Bevel]]을 보세요.",)
+    assert shown(text) == "추가(Add) > 메시(Mesh)를 누르고 베벨(Bevel)을 켠 뒤 다시 추가와 베벨을 보세요."
+
+
+def test_영어_화면이면_덧붙인_괄호와_조사는_그대로():
+    english = replace(STATE, language="en_US", translate_interface=True)
+    assert shown(("[[Face]](단축키 Alt-F)을 누르고 [[Face]]",), english) == "Face(단축키 Alt-F)을 누르고 Face"
+
+
+def test_영어_화면이면_감싸지_않은_이름은_그대로():
+    english = replace(STATE, language="en_US", translate_interface=True)
+    assert shown(("지금 Bevel과 면(Face)",), english) == "지금 Bevel과 면(Face)"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "지금 [[Add > Mesh]]에서 Bevel 모디파이어의 Segments를 올리고 면(Face)을 고르세요.",
+        "`Bevel` 값과 `Scale` 값을 보고 Merge by Distance를 누르세요.",  # 백틱이 조각 사이에 갈릴 수 있다
+        "the quick brown fox jumps over the lazy Bevel 이라는 영어 문장",  # 일곱 낱말이 넘는 영어 끝의 이름
+        "설명 (the quick brown fox jumps over the lazy dog Bevel 닫히지 않은 괄호",
+        "Scale(크기 조절)과 Bevel(또는 Segments)와 Origins와 Set Parent To 메뉴",
+        # 티켓 50: 표시 뒤 덧붙인 괄호·조사·되풀이 이름
+        "[[Face]](단축키 Alt-F)을 누르고 [[Add > Mesh]] (메시 추가)이 나오면 다시 [[Face]]을 고르세요.",
+        "[[Axis]]로 [[Bevel]]으로 Bevel 값과 [[Bevel]](또는 [[Add]])를 끝에 [[Face]]",
+    ],
+)
+def test_조각을_어떻게_나눠_흘려도_한꺼번에_바꾼_것과_같다(text):
+    import random
+
+    whole = shown((text,))
+    rng = random.Random(7)
+    for _ in range(100):
+        pieces, i = [], 0
+        while i < len(text):
+            n = rng.randint(1, 6)
+            pieces.append(text[i : i + n])
+            i += n
+        assert shown(tuple(pieces)) == whole
+
+
+# 티켓 50 가(HISTORY [358]-[360]): 모델이 스스로 옮긴 이름. 흔히 옮기는 말 목록은 지어낸 것
+COMMON = {"Orthographic": ["직교 투영", "직교"], "Face": ["면", "페이스"], "Bevel": ["모깎기", "모서리 다듬기"], "Orbit": ["회전"],
+          "UV Editor": ["UV 편집기"], "Value": ["명도"], "Mirror": ["좌우 대칭 거울 복사 기능"]}
+COMMON_EXTRA = {**SCREEN_EXTRA, "Orthographic": "정사법", "Orbit": "궤도", "UV Editor": "UV 에디터", "Value": "값", "Mirror": "미러"}
+
+
+def shown_common(pieces) -> str:
+    names = MenuNames(SCREEN_NAMES, extra=COMMON_EXTRA, common=COMMON)
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
+    return "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece))
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("직교 투영(Orthographic)으로 바꿉니다.", "정사법(Orthographic)으로 바꿉니다."),  # 여러 낱말 앞말을 통째로
+        ("모깎기(Bevel)를 씁니다.", "베벨(Bevel)을 씁니다."),  # 조사도 화면 글자에
+        ("면 선택 모드(Face)를 켭니다.", "페이스(Face) 선택 모드를 켭니다."),  # 꼬리는 괄호 뒤로(㉠ [360])
+        ("먼저 면(Face) 고르기", "먼저 페이스(Face) 고르기"),
+        ("화면이 회전(Orbit)합니다.", "화면이 회전(Orbit)합니다."),  # 괄호 뒤 '하다' 꼴은 모델 꼴 그대로([393])
+        ("모깎기(Bevel) 하나를 겁니다.", "베벨(Bevel) 하나를 겁니다."),  # 띄어 쓴 '하나'는 '하다' 꼴이 아니다
+        ("모깎기(Bevel)하나", "베벨(Bevel)하나"),  # 붙여 쓴 '하나'도
+        ("옆면(Face) 고르기", "옆면 '페이스'(Face) 고르기"),  # 목록 말 앞에 한글이 붙어 있으면 다른 낱말
+        ("평평한 쪽(Face) 고르기", "평평한 쪽 '페이스'(Face) 고르기"),  # 목록에 없는 말은 Fable 꼴([393])
+        ("페이스(Face)를", "페이스(Face)를"),  # 이미 화면 글자
+        ("페이스 선택 모드(Face)를", "페이스(Face) 선택 모드를"),  # 앞말이 화면 글자 + 꼬리여도 꼬리는 괄호 뒤로(㉠)
+        ("베벨 노드(Bevel)에", "베벨(Bevel) 노드에"),  # '노드'도 꼬리
+        ("먼저 베벨 노드(Bevel)만", "먼저 베벨(Bevel) 노드만"),  # 앞에 다른 글이 있어도
+        ("종류가 '직교(Orthographic)'로", "종류가 '정사법(Orthographic)'으로"),  # 따옴표·굵은 글씨 뒤 조사도 화면 글자에
+        ("명도 값(Value)로 바꿉니다.", "값(Value)으로 바꿉니다."),  # 화면 글자가 꼬리 낱말로 끝나면 꼬리를 또 붙이지 않는다
+        ("**모깎기(Bevel)**를 씁니다.", "**베벨(Bevel)**을 씁니다."),
+    ],
+)
+def test_흔히_옮기는_말이면_앞말을_통째로_화면_글자로(text, expected):
+    assert shown_common((text,)) == expected
+
+
+def test_흔히_옮기는_말도_되풀이되면_두번째부터_화면_글자만():
+    assert shown_common(("직교 투영(Orthographic)을 켜고 다시 직교(Orthographic)를 끕니다.",)) == (
+        "정사법(Orthographic)을 켜고 다시 정사법을 끕니다.")
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3, 4, 5])
+def test_흔히_옮기는_말을_조각으로_흘려도_같다(seed):
+    import random
+
+    text = ("먼저 직교 투영(Orthographic)으로 바꾸고 면 선택 모드(Face)를 켭니다. 그다음 모깎기(Bevel)를 씁니다. "
+            "여기서 UV 편집기(UV Editor)를 열고 좌우 대칭 거울 복사 기능(Mirror)을 씁니다.")  # 영어가 든 말, 긴 말
+    rng, parts, i = random.Random(seed), [], 0
+    while i < len(text):
+        k = rng.randint(1, 6)
+        parts.append(text[i : i + k])
+        i += k
+    assert shown_common(tuple(parts)) == shown_common((text,))
+
+
+def test_맨_영어_이름_뒤_면도_화면_글자_받침에_맞춘다():
+    # 2026-11-17 [420]: 저장된 답 Q43 "Bump Only면"이 "범프 만(Bump Only)면"으로 나왔다(조사 목록에 이면/면이 없어서)
+    assert shown(("Bevel면 됩니다.",)) == "베벨(Bevel)이면 됩니다."
+
+
+def test_맨_영어_이름_뒤_덧붙인_괄호는_표시_뒤처럼_지운다():
+    # 2026-11-17 [422]: "Join(Ctrl-J)" → "합치기(Join)(Ctrl-J)"로 괄호가 겹쳤다(answer-forms "겹친 괄호 없음").
+    # 표시 뒤 덧붙인 괄호를 지우는 규칙([353], _after_mark)과 맨 영어 뒤 한글 풀이를 지우는 규칙([397])을 맨 영어 뒤 단축키·값·영어 괄호까지 넓힌다
+    assert shown(("Bevel(Ctrl-B)로 깎습니다.",)) == "베벨(Bevel)로 깎습니다. 단축키는 Ctrl-B입니다."  # 단축키는 문장으로([423])
+    assert shown(("Bevel (Ctrl + B)을 누릅니다.",)) == "베벨(Bevel)을 누릅니다. 단축키는 Ctrl + B입니다."  # 빈칸 하나 뒤 괄호, 조사는 화면 글자 받침에
+    assert shown(("Scale(0.5)는 그대로",)) == "스케일(Scale)은 그대로"  # 값 괄호도 표시 뒤처럼 지운다
+    assert shown(("Bevel", " (Ctrl", "+B)을 누릅니다.")) == "베벨(Bevel)을 누릅니다. 단축키는 Ctrl+B입니다."  # 괄호 중간에서 끊겨 와도 같다
+    assert shown(("Bevel (Ctrl+B)", "을 누릅니다.")) == "베벨(Bevel)을 누릅니다. 단축키는 Ctrl+B입니다."  # 괄호가 닫힌 채 조각이 끝나도 같다(저장된 답 Q37 흐름 대조에서 찾음)
+    assert shown(("X-Ray(Alt-Z)를 켭니다.",)) == "X-Ray(Alt-Z)를 켭니다."  # 이름이 안 바뀌면 괄호도 둔다
+
+
+def test_괄호까지가_이름인_것은_괄호를_지우지_않는다():
+    # "Mix (Legacy)"처럼 괄호까지가 화면 이름이면 덧붙인 괄호가 아니다(사전 175개·넓힌 목록 270개에 이런 꼴이 있음, 2026-11-17)
+    names = MenuNames(SCREEN_NAMES, extra={**SCREEN_EXTRA, "Bevel (Legacy)": "베벨 (레거시)"})
+    for answer in ("Bevel (Legacy) 노드를 씁니다.", "Bevel(Legacy) 노드를 씁니다."):  # 모델은 빈칸 없이도 쓴다("Intersect(Boolean)", [422])
+        engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel((answer,)), menu_names=names)
+        text = "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece))
+        assert "베벨 (레거시) 노드를" in text, answer  # 괄호까지 통째로 화면 글자만([458], 옛 기대는 "(Legacy)"가 남음: "베벨(Bevel) (Legacy)")
+
+
+@pytest.mark.parametrize(
+    "answer, expected",
+    [
+        ("Math(Multiply) 노드와 연결합니다.", "수학(Math) 곱하기(Multiply) 노드와 연결합니다."),
+        ("[[Math]](Multiply) → 변위", "수학(Math) 곱하기(Multiply) → 변위"),  # 표시 뒤도 같게(저장된 답 Q43 꼴)
+        ("Math (power) 노드", "수학(Math) 전원(Power) 노드"),  # 노드 머리 글자는 목록 칸 문맥('NodeTree')의 글자, 대소문자는 화면 철자로
+        ("Math(Ping-Pong) 노드", "수학(Math) Ping-Pong 노드"),  # 사전에 없는 계산 이름은 영어로 남긴다
+        ("Math(계산) 노드", "수학(Math) 노드"),  # 계산 이름이 아닌 풀이는 지금처럼 지운다([422])
+        ("Bevel(Multiply)", "베벨(Bevel)"),  # 머리 제목이 바뀌는 노드가 아니면 지운다
+        # 조사는 뒤 이름(계산 이름) 받침에 맞춘다(Fable 검토 11-18: "곱하기(Multiply)과", "전원(Power)를"이 나왔다)
+        ("Math(Multiply)와 연결합니다.", "수학(Math) 곱하기(Multiply)와 연결합니다."),
+        ("[[Math]](Power)를 고릅니다.", "수학(Math) 전원(Power)을 고릅니다."),
+        # 표시 뒤에 넣은 계산 이름이 맨 글 바꾸기를 다시 지나며 기본 문맥 글자로 바뀌지 않는다(Fable 검토: "라운드" → "둥근")
+        ("[[Math]](Round) 노드", "수학(Math) 라운드(Round) 노드"),
+        ("Math(Round) 노드", "수학(Math) 라운드(Round) 노드"),
+        # 되풀이는 처음 한 번만 괄호([353]): 계산 이름도 노드 이름처럼
+        ("Math(Multiply) 노드와 Math(Multiply) 노드", "수학(Math) 곱하기(Multiply) 노드와 수학 곱하기 노드"),
+        # 조각으로 끊겨 와도 같다(통째·조각 대조)
+        (("[[Math]](Mul", "tiply)를 고릅니다."), "수학(Math) 곱하기(Multiply)를 고릅니다."),
+        (("Math(Mul", "tiply)", "를 고릅니다."), "수학(Math) 곱하기(Multiply)를 고릅니다."),
+        # 사전에 없는 계산 이름도 노드 머리 문맥 번역이 있으면 한국어로([438], 저장된 사전에 "Divide"가 없었다)
+        ("Math(Divide) 노드", "수학(Math) 나누기(Divide) 노드"),
+    ],
+)
+def test_머리_제목이_계산_이름인_노드_뒤_괄호의_계산_이름은_남긴다(answer, expected):
+    # 2026-11-18: 저장된 답 Q43 "Math(Multiply) 노드"가 "수학(Math) 노드"가 되어, 놓인 노드 머리에 뜨는 "곱하기"가 사라졌다
+    # (사용자 "그냥 물어본대로 Multiply 던지 곱하기 라고 답변하면됐엇는데", [429]). 머리 제목이 목록 칸 값인 노드는 Blender 소스 labelfunc로 찾은 표
+    names = MenuNames([*SCREEN_NAMES, _name("Math", "수학"), _many("Multiply", ("곱하기", "*"), ("곱하기", "NodeTree")),
+                       _many("Power", ("파워", "*"), ("전원", "NodeTree")), _many("Round", ("둥근", "*"), ("라운드", "NodeTree"))],
+                      choices={"Round": "*"}, extra=SCREEN_EXTRA, node_glyphs={"NodeTree": {"Multiply": "곱하기", "Power": "전원", "Round": "라운드", "Divide": "나누기"}})  # fmt: skip  Round 짝을 기본 문맥으로 둬야 맨 글 바꾸기가 "둥근"으로 바꾼다
+    pieces = answer if isinstance(answer, tuple) else (answer,)
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
+    assert "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece)) == expected
+
+
+@pytest.mark.parametrize(
+    "pieces, expected",
+    [
+        # [423] 덧붙인 단축키 괄호는 지운 뒤 그 문장 끝에 "단축키는 …입니다."로 옮긴다([353] 사용자 "단축키는 Alt-F 입니다")
+        (("[[Face]](Alt-F)를 누르면 면이 생겨요.", " 다음은"), "페이스(Face)를 누르면 면이 생겨요. 단축키는 Alt-F입니다. 다음은"),
+        (("[[Face]](Alt-F)를 누르면 면이 생", "겨요", ".", " 다음은"), "페이스(Face)를 누르면 면이 생겨요. 단축키는 Alt-F입니다. 다음은"),  # "." 앞뒤에서 끊김
+        (("[[Bevel]](Ctrl-B) 폭을 0.5로 바꿉니다.",), "베벨(Bevel) 폭을 0.5로 바꿉니다. 단축키는 Ctrl-B입니다."),  # 소수점은 문장 끝이 아님
+        (("1. [[Face]](Alt-F)를 누릅니다\n2. 끝",), "1. 페이스(Face)를 누릅니다 단축키는 Alt-F입니다.\n2. 끝"),  # 줄 끝에 마침표가 없어도
+        (("[[Face]](Alt-F)를 누릅니다",), "페이스(Face)를 누릅니다 단축키는 Alt-F입니다."),  # 답 끝
+        (("[[Face]](Alt-F)와 [[Bevel]](Ctrl-B)를 씁니다.",), "페이스(Face)와 베벨(Bevel)을 씁니다."),  # 한 문장에 둘이면 어느 것인지 몰라 지우기만
+        (("단축키 Alt-F로도 됩니다. [[Face]](Alt-F)를 누릅니다.",), "단축키 Alt-F로도 됩니다. 페이스(Face)를 누릅니다."),  # 앞에 이미 나온 단축키
+        (("[[Face]](Alt-F)를 누르고 Alt-F를 또 누릅니다.",), "페이스(Face)를 누르고 Alt-F를 또 누릅니다."),  # 같은 문장에 이미 씀
+        (("[[Bevel]](B)를 누릅니다.",), "베벨(Bevel)을 누릅니다."),  # 한 글자 괄호는 칸·축 이름일 수 있어 지우기만
+        # 같은 문장에 다른 키가 나오면 어느 것의 단축키인지 헷갈려 지우기만(저장된 답 Q26 "Ctrl + L로 고릅니다. 단축키는 Tab", Q28 "G로 옮기세요. 단축키는 4")
+        (("[[Face]](Tab)를 누른 뒤 Ctrl + L로 고릅니다.",), "페이스(Face)를 누른 뒤 Ctrl + L로 고릅니다."),
+        (("[[Face]](단축키 4)로 골라 G로 옮기세요.",), "페이스(Face)로 골라 G로 옮기세요."),
+        (("[[Bevel]](단축키 B)를 누릅니다.",), "베벨(Bevel)을 누릅니다. 단축키는 B입니다."),  # 단축키라고 밝힌 한 글자는 옮김
+        (("| [[Face]](Alt-F) | 채움 |\n다음",), "| 페이스(Face) | 채움 |\n다음"),  # 표 줄에는 넣지 않는다
+        # 마침표 뒤에 닫는 기호가 붙은 문장 끝은 다음 문장에 붙지 않게 지우기만(advisor 지적, 2026-11-17)
+        (("**[[Face]](Alt-F)를 누릅니다.** 그러면 면이 생깁니다.",), "**페이스(Face)를 누릅니다.** 그러면 면이 생깁니다."),
+        (("면을 채웁니다(먼저 [[Face]](Alt-F)를 누르세요.) 그러면 됩니다.",), "면을 채웁니다(먼저 페이스를 누르세요.) 그러면 됩니다."),  # 괄호 안은 화면 글자만([458])
+        (("\"[[Face]](Alt-F)를 누릅니다.\" 그다음",), "\"페이스(Face)를 누릅니다.\" 그다음"),
+        (("Bevel(Ctrl-B)", "로 깎", "습니다.", " 끝"), "베벨(Bevel)로 깎습니다. 단축키는 Ctrl-B입니다. 끝"),  # 맨 영어 쪽도 같은 곳에서 넣는다
+    ],
+)
+def test_덧붙인_단축키_괄호는_문장_뒤로_옮긴다(pieces, expected):
+    assert shown(pieces) == expected
+
+
+def test_단축키를_옮겨도_조각을_어떻게_나눠_흘려도_같다():
+    import random
+
+    text = "1. [[Face]](Alt-F)를 누르면 면이 생겨요. 폭은 0.5로 둡니다.\n2. Bevel (Ctrl+B)을 누릅니다\n| [[Add]](Shift-A) | 표 |\n끝"
+    whole = shown((text,))
+    assert "단축키는 Alt-F입니다." in whole and "단축키는 Ctrl+B입니다." in whole and "Shift-A" not in whole
+    rng = random.Random(11)
+    for _ in range(200):
+        pieces, i = [], 0
+        while i < len(text):
+            k = rng.randint(1, 12)
+            pieces.append(text[i : i + k])
+            i += k
+        assert shown(tuple(pieces)) == whole, pieces
+
+
+def test_답이_오류로_끊기면_단축키_문장을_넣지_않는다():
+    # [423]: 끊긴 문장 뒤에 "단축키는 …입니다."가 붙으면 끊긴 줄 모르고 읽게 된다
+    from blender_tutor.answer_engine import _MenuMarks
+
+    marks = _MenuMarks(MenuNames(SCREEN_NAMES, extra=SCREEN_EXTRA))
+    text = marks.feed("[[Face]](Alt-F)를 누르") + marks.finish(cut=True)
+    assert text == "페이스(Face)를 누르"
+
+
+# 괄호 겹침(HANDOFF 2번, HISTORY [458]). 지금 코드가 모델 원문 796글에 새로 만든 겹침 121자리의 실제 꼴을 이 사전 이름으로 옮겼다
+# (`results/20261118/143729_괄호겹침/갈래.md`). 사용자 결정: 이름·화면 글자에 괄호가 든 이름은 화면 글자만("어 권하는대로 해
+# 예외여도 바꾼게 훨씬 낫네"), 덧말 괄호 안 이름도 화면 글자만이고 영어는 괄호 밖에 처음 나올 때("아 ㅇㅋ 화면글자만 ㅇㅇ")
+PAREN_EXTRA = {**SCREEN_EXTRA, "glTF Binary (.glb)": "glTF 바이너리(.glb)", "Metric": "메트릭(미터법)", "Frame All": "모든 프레임",
+               "Frame Selected": "선택한 프레임", "Edge": "엣지", "Loop Cut and Slide": "루프를 잘라내고 슬라이드", "Increment": "증가",
+               "Merge Distance": "병합 거리", "Intersect": "교차", "Intersect (Boolean)": "교차 (불리언)", "Max": "최대",
+               "Vertices": "버텍스", "Front": "앞쪽", "Right": "오른쪽", "Pin": "고정", "Pole": "폴", "Rotation": "회전",
+               "Rotation & Scale": "회전 & 스케일", "Origin": "오리진", "New Edge/Face from Vertices": "버텍스에서 새로운 에지/페이스",
+               "UVMap": "UV 맵", "Boolean": "불리언", "(Unassigned)": "(할당되지 않음)"}
+
+
+def shown_paren(pieces) -> str:
+    names = MenuNames(SCREEN_NAMES, extra=PAREN_EXTRA)
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
+    return "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece))
+
+
+@pytest.mark.parametrize(
+    "answer, expected",
+    [
+        # 이름에 괄호가 든 이름: 화면 글자만(전: "glTF 바이너리(.glb)(glTF Binary (.glb))", Q35 21자리)
+        ("형식은 [[glTF Binary (.glb)]]로 둡니다.", "형식은 glTF 바이너리(.glb)로 둡니다."),
+        ("단위가 Metric인지 확인합니다.", "단위가 메트릭(미터법)인지 확인합니다."),  # 화면 글자에만 괄호(전: "메트릭(미터법)(Metric)", Q36)
+        ("편집 모드에서 Intersect (Boolean) 기능을 씁니다.", "편집 모드에서 교차 (불리언) 기능을 씁니다."),  # 전: "교차(Intersect) (Boolean)"(Q47)
+        ("[[Face > Intersect (Boolean)]] 메뉴를 씁니다.", "페이스(Face) > 교차 (불리언) 메뉴를 씁니다."),
+        # 덧말·메뉴 길 괄호 안: 화면 글자만(전: "Ctrl + R(또는 엣지(Edge) > 루프를 잘라내고 슬라이드(Loop Cut and Slide))로", Q05)
+        ("Ctrl + R(또는 [[Edge > Loop Cut and Slide]])로 고리를 정합니다.", "Ctrl + R(또는 엣지 > 루프를 잘라내고 슬라이드)로 고리를 정합니다."),
+        ("모서리 둥글림([[Bevel]] 모디파이어)은 남아 있습니다.", "모서리 둥글림(베벨 모디파이어)은 남아 있습니다."),  # Q36
+        ("Home 키(또는 Frame All)를 누르세요.", "Home 키(또는 모든 프레임)를 누르세요."),  # 맨 영어도 같게
+        ("측면(Front, Right) 보기에서 봅니다.", "측면(앞쪽, 오른쪽) 보기에서 봅니다."),  # 괄호 속 영어 목록(전: "측면(Front, 오른쪽(Right))", Q04-1)
+        ("측면(Union, Right) 보기에서 봅니다.", "측면(Union, Right) 보기에서 봅니다."),  # 첫 이름이 맨 글에서 영어로 남으면 목록을 둔다(뒤만 바뀐 "측면(Union, 오른쪽)"은 거부한 꼴)
+        ("방식(Shift Snap, Right 중 하나)", "방식(Shift Snap, Right 중 하나)"),  # 첫 이름이 키 이름 덩이라 건너뛰어도 같게(사전 전체 문장에서 19곳)
+        # 괄호 안에서 바로 앞 한국어가 이미 화면 글자면 영어는 그 풀이라 둔다(이 규칙 첫 판이 "고정(고정, 단축키 P)"·"(폴, 폴이라고"를 만듦, Q28·Q05)
+        ("UV 조각을 고정(Pin, 단축키 P)해 둡니다.", "UV 조각을 고정(Pin, 단축키 P)해 둡니다."),
+        ("적용 > 회전 & 스케일(Rotation & Scale) 메뉴를 씁니다.", "적용 > 회전 & 스케일(Rotation & Scale) 메뉴를 씁니다."),  # 저장된 답 Q35-1
+        ("교차 (불리언)(Intersect (Boolean))을 씁니다.", "교차 (불리언)(Intersect (Boolean))을 씁니다."),  # 이 규칙 첫 판이 "교차 (불리언)(교차 (불리언))"을 만듦(저장된 답 Q47)
+        # 괄호 첫머리 영어 뒤에 한국어 풀이가 이어지면 앞말의 영어 풀이라 둔다(첫 판이 "원점(오리진, 물체의 기준점)"으로 영어를 지움, 저장된 답 Q08)
+        ("원점(Origin, 물체의 기준점)만 옮겨졌어요.", "원점(Origin, 물체의 기준점)만 옮겨졌어요."),
+        ("고리가 끊어지는 곳(폴, Pole이라고 부르는 점)에서 멈춥니다.", "고리가 끊어지는 곳(폴, Pole이라고 부르는 점)에서 멈춥니다."),
+        # 괄호 안에서 화면 글자만 보인 이름은 괄호 밖에 처음 나올 때 영어를 붙인다
+        ("A(또는 [[Frame All]])를 누르고, 다시 [[Frame All]]을 누릅니다.", "A(또는 모든 프레임)를 누르고, 다시 모든 프레임(Frame All)을 누릅니다."),
+        # 한국어 낱말 뒤 괄호에 표시 하나면 표시 없는 같은 꼴과 같게([393], 전: "격자 간격(증가(Increment))", Q06)
+        ("격자 간격([[Increment]])으로 맞춰집니다.", "격자 간격 '증가'(Increment)로 맞춰집니다."),
+        ("병합 거리([[Merge Distance]])는 0.001입니다.", "병합 거리(Merge Distance)는 0.001입니다."),  # 전: "병합 거리(병합 거리(Merge Distance))"(Q12-1)
+        # 문장 끝 말 뒤는 덧말 괄호(첫 판이 "눌러요 '선택한 프레임'(Frame Selected)"를 만듦, Q21)
+        ("물체를 고르고 F를 눌러요([[Frame Selected]]).", "물체를 고르고 F를 눌러요(선택한 프레임)."),
+        # 뒤에 지우지 않는 괄호가 붙으면 화면 글자만(전: "선택한 프레임(Frame Selected)(단축키 Numpad. 또는 F)", Q21)
+        ("[[Frame Selected]](단축키 [[Numpad.]] 또는 F)를 누르세요.", "선택한 프레임(단축키 Numpad. 또는 F)를 누르세요."),
+        # 괄호와 상관없이 더 긴 영어 이름의 끝 낱말만 바꾸지 않는다(전: "3ds 최대(Max)", "from 버텍스(Vertices)")
+        ("원본이 3ds Max 같은 프로그램이면", "원본이 3ds Max 같은 프로그램이면"),
+        # '/'가 든 이름은 통째로(전: "F(New Edge/Face from 버텍스(Vertices))", 이 규칙 첫 판은 영어로 둠, 사용자 "ㅇㅇ 그럼 고치긴 하는데")
+        ("F(New Edge/Face from Vertices)는 면을 만듭니다.", "F(버텍스에서 새로운 에지/페이스)는 면을 만듭니다."),
+        ("F 키는 New Edge/Face from Vertices 기능입니다.", "F 키는 버텍스에서 새로운 에지/페이스(New Edge/Face from Vertices) 기능입니다."),
+        ('좌표는 기본 이름 "UVMap"을 씁니다.', '좌표는 기본 이름 "UVMap"을 씁니다.'),  # UV 맵 기본 이름은 자료 이름이라 둔다(사용자 "ㅇㅇ 그럼 바꾸지 말고")
+        ("메뉴의 **거리로 병합**(Merge by Distance)도 같습니다.", "메뉴의 **거리로 병합**(Merge by Distance)도 같습니다."),  # 굵은 글씨 앞말의 풀이는 둔다(첫 판 "(거리로 병합)")
+        ("G(Increment)로 옮깁니다.", "G(증가)로 옮깁니다."),  # 앞이 한국어가 아니면 덧말 괄호
+        # 앞 낱말과 괄호 속이 합쳐 괄호가 든 이름이면 이름의 일부라 둔다(첫 판 "Intersect(불리언)", 저장된 답 Q47)
+        ("설명서의 Intersect(Boolean) 기능입니다.", "설명서의 Intersect(Boolean) 기능입니다."),
+        ("Tab(Increment)로 옮깁니다.", "Tab(증가)로 옮깁니다."),
+        # 화면 글자가 통째로 괄호면 괄호 속 한국어 받침에 조사를 맞춘다(전: "(할당되지 않음)를", 11-18 괄호 든 이름 넣어 보기)
+        ("[[(Unassigned)]]를 고릅니다.", "(할당되지 않음)을 고릅니다."),
+        # 한국어 낱말과 괄호 사이 빈칸은 Fable 꼴에서 하나만(전: "형식은  '증가'(Increment)로", 빈칸 둘)
+        ("형식은 (Increment)로 둡니다.", "형식은 '증가'(Increment)로 둡니다."),
+        ("제목\n(Increment)로 둡니다.", "제목\n(증가)로 둡니다."),  # 줄바꿈 뒤 괄호는 앞말 풀이가 아니라 덧말(첫 판은 "제목 '증가'(Increment)"로 줄을 붙임)  # 여러 글자 키 뒤는 덧말 괄호(영어 낱말이면 늘 두는 판은 "Tab(Increment)")
+    ],
+)
+def test_괄호가_겹치지_않게_바꾼다(answer, expected):
+    assert shown_paren((answer,)) == expected
+    assert shown_paren(tuple(answer)) == expected  # 한 글자씩 흘려 넣어도 같다
+
+
+def test_맨_글에서_영어로_남는_이름의_표시는_떼지_않고_괄호_안_화면_글자만():
+    # 고정 짝이 기본 문맥 글자와 다른 이름(실제 사전 Strength·Normal·Edge 등)은 맨 글 규칙이 영어로 남긴다([425]). 한국어 뒤 "([[X]])"의
+    # 표시를 떼면 "모드(Edit Mode)"처럼 화면 글자를 잃는다(advisor 지적, 지어낸 문장으로 확인: "법선(Normal)", "세기(Strength)")
+    names = MenuNames(SCREEN_NAMES, {"Edit Mode": "Operator"}, extra=PAREN_EXTRA)
+    for pieces in (("모드([[Edit Mode]])로 들어갑니다.",), tuple("모드([[Edit Mode]])로 들어갑니다.")):
+        engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
+        text = "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece))
+        assert text == "모드(편집 모드)로 들어갑니다."
+
+
+def test_질문에_영어로_쓴_이름은_괄호_안에서_사용자가_쓴_영어로():
+    # [311] "Add(추가)" 꼴은 괄호 안에서 겹치므로 사용자가 쓴 영어 하나만, 괄호 밖에 처음 나올 때 영어(한국어)([458], 원문 796글 중 2자리)
+    names = MenuNames(SCREEN_NAMES, extra=PAREN_EXTRA)
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(("A(또는 [[Frame All]])를 누르고, 다시 [[Frame All]]을 누릅니다.",)), menu_names=names)
+    text = "".join(event.text for event in engine.answer("Frame All 어디 있어요?", KOREAN_SCREEN, []) if isinstance(event, Piece))
+    assert text == "A(또는 Frame All)를 누르고, 다시 Frame All(모든 프레임)을 누릅니다."
+

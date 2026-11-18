@@ -117,5 +117,19 @@
  "Mesh > Bisect": "Operator",
  "Select Similar > Crease": "Mesh",
  "Select Similar > Normal": "Mesh",
- "Transform > Randomize": "Operator"
+ "Transform > Randomize": "Operator",
+ "Difference": "*",
+ "Union": "*",
+ "Bake": "*",
+ "Up": "*",
+ "Rendered": "*",
+ "Sun": "Light",
+ "Armatures": "*",
+ "All Transforms": "*",
+ "Linear": "*",
+ "Mapping": "*",
+ "Top": "View3D",
+ "Edge > Edge Crease": "Operator",
+ "UV > Pack Islands": "Operator",
+ "Copy to Selected": "Operator"
 }

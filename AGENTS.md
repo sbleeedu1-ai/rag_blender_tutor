@@ -5,18 +5,18 @@
 ## 프로젝트
 
 - 무엇: Blender 5.2를 처음 쓰는 사람이 3D 아이템을 만들 때, 공식 설명서를 근거로 다음 조작을 쉬운 한국어로 안내하는 도우미
-- 두 PC: 강의실은 Windows, 집은 Mac이다. 이 문서의 명령은 Windows 모양으로 적으니 Mac에서는 아래 짝대로 바꿔 쓴다(HISTORY [307]).
+- 두 PC: 개발은 집 Mac에서 하고, 집 PC(Windows)는 Windows에서도 도는지 확인하는 데 쓴다(2026-11-13부터, HISTORY [318]. 강의실 PC는 더 쓰지 않고 그 자료는 지웠다). 이 문서의 명령은 Windows 모양으로 적으니 Mac에서는 아래 짝대로 바꿔 쓴다(HISTORY [307]). Windows 칸의 경로는 강의실 PC 때 적은 것이고, 집 PC에서도 같은지는 아직 확인하지 않았다.
 
-  | | Windows(강의실) | Mac(집) |
+  | | Windows(집 PC, 확인용) | Mac(집, 개발) |
   |---|---|---|
   | 저장소 | `C:\WORK\rag_blender_tutor` | `/Volumes/mac_ssd/proj/rag_blender_tutor` |
   | 가상 환경 파이썬 | `.venv\Scripts\python` | `.venv/bin/python` |
   | Blender | `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe` | `/Volumes/mac_ssd/Applications/Blender.app/Contents/MacOS/Blender` |
   | 지울 파일 옮길 곳 | `C:\WORK\trash\` | `/Volumes/mac_ssd/proj/trash/` |
 
-  Mac에서는 도우미 창·애드온 설치·애드온 자체 시험이 아직 돌지 않는다(제품은 Windows 전용으로 만들었다, HISTORY [44]). 테스트·연습 과정 파일 검사·문서 도구는 돈다.
-- 준비: Windows `python -m venv .venv` 뒤 `.venv\Scripts\python -m pip install -e ".[dev]"`. Mac은 Blender 안 파이썬으로 `/Volumes/mac_ssd/Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13 -m venv .venv` 뒤 `.venv/bin/python -m pip install -e ".[dev]"`, 이어서 `mkdir -p .venv/Scripts && ln -s ../bin/python .venv/Scripts/python.exe`(훅이 두 PC 모두 `.venv/Scripts/python.exe`를 부르므로 그 이름의 바로가기를 둔다. 없으면 터미널 명령이 모두 막힌다, HISTORY [182]·[307])
-- 실행: 도우미 창은 Blender를 켜면 애드온이 함께 켠다(F10으로 부름, 손으로는 `.venv\Scripts\python -m blender_tutor.helper`, 환경 변수 `BLENDER_TUTOR_TOKEN` 필요). 애드온 설치 `.venv\Scripts\python -m blender_tutor.install_addon`(뒤에 Blender 환경 설정에서 애드온 켜기) · 애드온 자체 시험(Blender를 화면 없이 띄움, 기본 테스트 밖) `.venv\Scripts\python addon\selftest.py` · 연습 과정 파일 검사 `.venv\Scripts\python -m blender_tutor.course_check courses` · 테스트: `.venv\Scripts\python -m pytest` (테스트는 API 키 없이 돌게 만들고 늘 통과 상태로 둔다. 통과 못 하면 곧 문제라는 신호가 되게)
+  Mac에서도 도우미 창·애드온 설치·애드온 자체 시험이 돈다(PR #46, HISTORY [312]-[316]). GitHub의 자동 테스트(CI)는 Windows에서만 돈다.
+- 준비·실행 명령(새 PC의 가상 환경, 터미널 명령이 모두 막힐 때의 `.venv/Scripts/python.exe` 바로가기, 도우미 창·애드온 설치·애드온 자체 시험·연습 과정 파일 검사): `docs/agents/setup.md`
+- 테스트: `.venv\Scripts\python -m pytest` (테스트는 API 키 없이 돌게 만들고 늘 통과 상태로 둔다. 통과 못 하면 곧 문제라는 신호가 되게)
 
 ## 기록 (저장소가 기억이다)
 
@@ -44,13 +44,14 @@
 - 작업은 브랜치에서 하고 커밋·푸시·PR까지 스스로 진행한다(main은 보호되어 작업 브랜치에만 올라간다. 푸시 전에 커밋할 파일 목록을 보고 비밀 정보가 없는지 확인한다. 공개 저장소라 푸시하면 바로 공개된다). main 병합은 확인 뒤. main에 병합한 브랜치는 로컬·원격 모두 지운다.
 - 실험 결과는 `results/<날짜>/<시각>_<이름>/`(예: `results/20261030/092311_이름/`, 시각은 시작 시각 시분초라 날짜 폴더 안의 이름순이 실행 순서)에 새로 남기고 덮어쓰지 않는다. 비교 평가로 선택을 하는 프로젝트에서는 평가 자료를 개발용과 마지막 확인용으로 처음부터 나눈다.
   - 평가 문항·채점 차례·시간 표본을 구현 편의로 빼지 않는다(빼면 시험이 실제 사용과 어긋난다). 빼야 하면 요구 변경으로 드러내 묻는다(HISTORY [57]·[59]).
-- 검토(코드 검토·다른 AI의 점검) 결과는 기준이 있으면 Claude가 기준대로 처리하고 중요한 것 2개 안팎만 보이며, 기준이 없으면 번호를 붙여 한 항목씩 판단받는다(사용자 판단 없이 고치고 넘어가지 않게). 받았을 때 `docs/agents/review.md`를 따른다. 이 규칙이 `implement` 스킬의 "검토 뒤 커밋"보다 먼저다.
+- 작업 중 결정(측정 문턱, 문항 정답 위치, 검토 지적의 처리 등)은 Claude가 advisor와 정해 진행하고, 마지막에 정한 것과 근거를 한 번에 보인다. 사용자는 그 결과를 보고 판단한다(2026-11-14 사용자 "대부분의 결정은 어드바이저랑 하고 마지막의 마지막 최종결정한거를 나한테 보여주면", HISTORY [337]). 돈이 드는 실행·main 병합·삭제와, 사용자가 이미 정한 것(목표 54 중 50, 엄격 채점 기준)을 바꾸는 일은 실행 전에 묻는다. 검토(코드 검토·다른 AI의 점검) 결과를 받았을 때는 `docs/agents/review.md`를 따른다. 이 규칙이 `implement` 스킬의 "검토 뒤 커밋"보다 먼저다.
 - 측정·비교 실험은 `experiment-checklist` 스킬의 체크리스트를 채운 뒤 돌린다(가설·기준 없이 돌린 실험이 되풀이돼서). 제품 규칙은 Blender 사용 전체에 맞춰 만들고(개발 문항에 맞춘 규칙이 되지 않게), 개발 문항과 장면은 규칙을 고정한 뒤 점검으로만 쓴다. 시험에서 일부러 바꾼 값은 세지 않는다. 평가 결과는 코드의 `turn`을 옮긴 "차례" 대신 "문항"·"질문"으로 말한다.
 - `experiment-checklist` 스킬로 돌리는 시험을 실행할 때마다 사용자 확인 창을 띄우는 훅은 제안하지 않는다(사용자가 긴 시험을 내내 지켜볼 수 없다). 비용·병합·삭제 확인은 그대로 받는다.
+- 하위 에이전트의 노력치(effort)는 medium 이하로 고른다. high 이상은 사용자가 명시적으로 요청했을 때만 쓴다(사용량이 너무 많이 들어서, 2026-11-13 HISTORY [309]). `.claude/agents/*.md` 정의와 띄울 때 주는 값 모두 같다.
 - Blender 동작을 전제로 삼을 때는 정답지에 가장 가까운 공식 파이썬 문서(`docs.blender.org/api/5.2/`, `data/blender_api_5.2/`에 내려받음)를 먼저 읽고 근거 쪽을 적는다. 항목은 `.venv\Scripts\python .claude\tools\api_doc.py <이름>`(Mac `.venv/bin/python .claude/tools/api_doc.py <이름>`)으로 끝까지 읽는다(시험 전 훅이 돌린 기록을 확인한다, HISTORY [214]). 문서에 없으면 Blender 소스를 보거나 실행으로 확인하고, 기록에 `공식 문서`·`소스 코드`·`실행으로 확인`·`추측`을 나눠 적는다. 사용자용 설명서가 아니라 개발 참고용이다(도우미 검색 자료에 넣지 않는다).
 - 세션 기록을 찾을 때(`session-search`) 제외 낱말은 `holdout,홀드아웃,봉인`이다(마지막 확인용 문항이 개발 쪽에 새지 않게).
 - `HANDOFF.md`는 병합 전에 같은 PR에 넣으므로 맨 위 갱신 줄에 "PR #N 병합 전에 씀"을 적는다. 이어받을 때는 그 PR이 병합됐는지 git으로 먼저 본다.
-- 작업 중 지울 파일은 꼭 필요한 경우가 아니면 지우지 않고 저장소 바로 위의 `trash/`(`C:\WORK\trash\<날짜>\<시각>_<원래 이름>`, Mac `/Volumes/mac_ssd/proj/trash/<날짜>/<시각>_<원래 이름>`)로 옮긴다. `mv`는 확인 훅에 걸리지 않아 작업이 끊기지 않는다. 옮길 때마다 `trash/기록.txt`에 한 줄 남긴다: 언제, 어느 프로젝트의 무엇을, 무슨 작업 중에 왜. 임시 파일은 가능하면 세션 스크래치패드에 만든다. 정말 지워야 하면 실행 전에 확인받는다(HISTORY [187]).
+- 작업 중 지울 파일은 꼭 필요한 경우가 아니면 지우지 않고 저장소 바로 위의 `trash/`(`C:\WORK\trash\<날짜>\<시각>_<원래 이름>`, Mac `/Volumes/mac_ssd/proj/trash/<날짜>/<시각>_<원래 이름>`)로 옮긴다. `rm`·`git reset --hard`·`git clean`은 훅이 막고(HISTORY [447]·[449]) `mv`는 막지 않는다. 옮길 때마다 `trash/기록.txt`에 한 줄 남긴다: 언제, 어느 프로젝트의 무엇을, 무슨 작업 중에 왜. 임시 파일은 가능하면 세션 스크래치패드에 만든다. 정말 지워야 하면 사용자에게 알려 사용자가 직접 실행한다(HISTORY [187]·[447]·[449]).
 - 공개될 것을 가정한다. 저작권 자료·남에게 받은 자료·제출물은 처음부터 `.gitignore`된 폴더에 둔다(한 번 커밋하면 이력에 남는다).
 - 자료: Blender 5.2 공식 설명서(CC BY-SA 4.0), Blender Studio 강좌(CC BY 4.0). 내려받은 원문·번역은 `data/`에 두고 커밋하지 않는다. 구글 드라이브와 견줄 때는 이름·날짜로 같다고 하지 않고 파일 수와 크기까지 맞춘다(폴더 이름만 보고 판단해 틀린 적이 있다). 드라이브의 `createdTime`이 올린 시각이고, 인계 문서의 "안 올림"은 드라이브에서 확인한다. 답에는 근거 링크와 출처를 표시하고, 평가 질문에 설명서 문장을 그대로 옮기지 않는다. 로고·상표는 쓰지 않는다.
 - 티켓 완료 조건 밖에 더한 것(편의 명령, 추가 검사, 문서 줄 등)은 미리 하나하나 묻지 않고, 티켓을 닫을 때 그 티켓 맨 아래 `## Comments`에 무엇을 더했고 왜 더했는지 항목별로 적는다(더한 것을 사용자가 나중에 볼 수 있게). 되돌리기 어렵거나 비용이 드는 추가는 먼저 묻는다. 마무리 보고에도 diff와 대조한 목록을 그대로 보인다.
@@ -59,6 +60,9 @@
 
 - 처리 규칙·검토 결과는 실제 예 하나로 설명한다: 설명서 쪽 링크와 그 원문 모습, 우리 코드가 만든 결과(청크 글·메타데이터 등)를 나란히 두고, 웹 화면(왼쪽 목록·쪽 제목·On this page)과 용어(분야·묶음·쪽·소제목·옵션)를 맞댄다. 지어낸 예를 써야 하면 지어낸 것이라고 밝힌다.
 - 용어집 용어는 문장 안에서 풀어 쓰거나 한 번만 쓴다. 설명 순서와 요약 줄 규칙은 전역 개인설정에 있다(2026-10-26 옮김, HISTORY [60]).
+
+- 끝났다고 말하거나 숫자를 보고하기 전, 사용자가 같은 실수를 다시 짚을 때는 `verify` 스킬을 따른다(되풀이된 실수와 막는 장치 표: `docs/agents/rules-enforced.md`, HISTORY [378]·[380]).
+- 답 표기(화면 글자·괄호·조사·이름 꼴)를 바꾸거나 제안하기 전에 `docs/agents/answer-forms.md`의 정한 꼴·거부한 꼴을 먼저 보고 해당 HISTORY 번호를 든다(2026-11-16 회고, HISTORY [361]).
 
 ## Agent skills
 

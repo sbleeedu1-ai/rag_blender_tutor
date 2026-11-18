@@ -22,7 +22,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
-from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, MenuNames, screen_path
+from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, PAREN_LIMIT, SHORTCUT_CLOSE, SHORTCUT_OPEN, MenuNames, _shown_part, paren_depth, prose_cut, prose_shows, screen_path, screen_prose, shortcut_in, tab_place, with_particle
 from blender_tutor.progress import Course, Step
 from blender_tutor.setting_fields import FieldModel, SettingLines, choose_fields, lines_for
 from blender_tutor.work_state import WorkState
@@ -111,13 +111,14 @@ TERM_PATTERNS = {
 }
 
 INSTRUCTIONS = """너는 Blender 5.2를 처음 쓰는 사람을 돕는 도우미다.
-- 쉬운 한국어로 짧게 답하고, 처음 나오는 용어는 한 줄로 풀어 준다.
-- 도우미 창은 글을 꾸밈 없이 그대로 보인다. 굵게(**)·제목(#)·코드(`) 같은 마크다운 기호를 쓰지 않는다. 단계는 "1." 처럼 번호로 쓴다.
+- Blender 화면의 메뉴·버튼·옵션 이름은 설명서의 영어 그대로 [[ ]]로 감싼다. 메뉴 경로는 통째로 감싸고 단 사이를 >로 가른다(예: [[Add > Mesh]]). 한국어로 옮기지 않는다(프로그램이 사용자 화면 언어에 맞춰 바꾼다).
+- 아이콘 모양이나 위치로 설명할 때는 설명에 괄호를 붙이지 말고 이름을 따로 감싼다(예: 파란 렌치 모양의 [[Modifiers]] 탭).
+- 쉬운 한국어로 짧게 답한다.
 - Blender 5.2 기준으로 답한다. 아래 '설명서 내용'에 있는 것만 근거로 쓴다.
 - 설명서 내용에 답이 없으면 지어내지 말고 "설명서에 없어요"라고 말한 뒤 가장 가까운 내용을 권한다.
-- 그림은 캡션 글만 쓴다. [그림] 자리가 중요해 보이면 "설명서 그림을 함께 보세요"라고 안내한다.
 - '작업 상태'는 사용자의 Blender 화면에서 지금 읽은 값이다. 사용자가 설명하지 않아도 이것을 보고 답한다.
-- Blender 화면의 메뉴·버튼·옵션 이름은 설명서의 영어 그대로 [[ ]]로 감싼다. 메뉴 경로는 통째로 감싸고 단 사이를 >로 가른다(예: [[Add > Mesh]]). 한국어로 옮기지 않는다(프로그램이 사용자 화면 언어에 맞춰 바꾼다)."""
+- 도우미 창은 글을 꾸밈 없이 그대로 보인다. 굵게(**)·제목(#)·코드(`) 같은 마크다운 기호를 쓰지 않는다. 단계는 "1." 처럼 번호로 쓴다.
+- 그림은 캡션 글만 쓴다. [그림] 자리가 중요해 보이면 "설명서 그림을 함께 보세요"라고 안내한다."""
 TERMS_NOTE = "- [[ ]] 밖 문장에 나오는 Blender 낱말은 아래 표기를 쓴다(Blender 한국어 화면 글자에 맞춘 것). 괄호 속 영어는 답에서 처음 한 번만 붙인다."
 
 # 설정 값 칸의 설명(가설 16 system_for의 문구를 줄 모양에 맞춤)
@@ -181,6 +182,8 @@ class Settings:
     # 설정 값의 1-a(그 상황일 때 늘)·2(계산) 초안 줄을 넘길지. 개발셋에서 끈 판과 견준다(사용자 "어차피 할거면 … 지금 하는게", [270])
     situation_lines: bool = True
     computed_lines: bool = True
+    # 분야 묶음을 넘길지. 끄면 분야를 고르지 않고 늘 보내는 줄만 넘긴다(개발셋에서 묶음 몫을 가르려고, 검토 A5)
+    field_lines: bool = True
 
     def __post_init__(self):
         object.__setattr__(self, "reasoning", Reasoning(self.reasoning))  # "low"처럼 글자로 줘도 받고, 모르는 이름이면 ValueError
@@ -217,6 +220,10 @@ class Done:
     # 고른 분야(설정 값을 받지 않았거나 분야 고르기가 실패했으면 빈 묶음)와 실패 여부. 평가와 시간 기록용
     fields: tuple[str, ...] = ()
     field_failed: bool = False
+    # 검색에 쓴 글(바꾼 검색어, 질문 바꾸기가 없으면 질문과 맥락을 이은 글)과 답변 모델에 실제로 넘긴 설정 줄.
+    # 평가에서 검색·답이 왜 흔들리는지 보려고 알린다(티켓 35). 창은 쓰지 않는다
+    query: str = ""
+    lines: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -307,7 +314,7 @@ class AnswerEngine:
         try:
             query = self._rewritten(rewrite) if rewrite else "\n".join([question, *context.values()])
             # 분야 고르기는 바꾼 검색어가 나온 뒤 임베딩과 동시에 부른다(명세). 실패해도 답은 멈추지 않는다(묶음 없이 답함)
-            chosen = self._start_fields(question, query, state) if settings is not None and self._field_model else None
+            chosen = self._start_fields(question, query, state) if settings is not None and self._field_model and self._settings.field_lines else None
             # 비슷한 연습 과정은 검색어(직전 질문·조작에 끌림)가 아니라 질문만으로 고른다.
             # 질문만의 벡터는 따로 부르지 않고 같은 호출에 글을 하나 더 실어 받는다(비용은 질문 길이만큼 늚)
             texts = [query, question] if recommend and question != query else [query]
@@ -328,19 +335,19 @@ class AnswerEngine:
         sent = list(dict.fromkeys(preview + results))
         similar = self._similar_courses(vectors[-1]) if recommend else []
         messages = _messages(question, state, recent, self._widened(sent, preview), similar, step, lines)
-        marks = _MenuMarks(self._menu_names if state.korean_screen else None, question)
+        marks = _MenuMarks(self._menu_names if state.korean_screen else None, question, _object_names(state))
         try:
             for text in model.stream(messages, self._settings.timeout):
                 if text := marks.feed(text):
                     yield Piece(text)
         except Exception as error:
-            if text := marks.finish():
+            if text := marks.finish(cut=True):
                 yield Piece(text)
             yield _failure(error, results)
             return
         if text := marks.finish():
             yield Piece(text)
-        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed)
+        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed, query, tuple(lines))
 
     def _start_fields(self, question: str, query: str, state: WorkState) -> Future:
         """분야 고르기를 뒤에서 부른다. 결과(분야 코드 묶음)나 오류는 돌려준 Future에 담긴다."""
@@ -516,45 +523,199 @@ def _read_rewrite(rewriter: Rewriter, messages: list[dict[str, str]], found: Fut
         found.set_exception(ValueError(f"검색어가 없는 질문 바꾸기 답 {text!r}"))
 
 
+# 문장 속 다른 키("Ctrl + L로", "G로", "F12", "Tab 키"): 있으면 옮긴 단축키가 어느 것의 것인지 헷갈려 넣지 않는다([423])
+_OTHER_KEY = re.compile(r"(?:Ctrl|Alt|Shift|Cmd|Option)\s*[-+]|(?<![A-Za-z0-9])(?:F(?:1[0-2]|[1-9])|Tab|Enter|Esc|Space|Delete|Home|Numpad)(?![A-Za-z])"
+                        r"|(?<![A-Za-z0-9.'’])[A-Z0-9](?![A-Za-z0-9.'’])(?=\s*(?:키|로|으로|를|을|와|과|,|\)|$))")
+
+
 class _MenuMarks:
     """답 글 속 [[Add > Mesh]] 표시를 화면 글로 바꾼다(티켓 23). 표시가 조각 사이에 갈려 와도 닫힐 때까지 모아 둔다.
 
     names가 있으면(한국어 화면에 번역 켜짐) 단마다 "추가(Add)"처럼 한국어(영어), 영어로 보이는 단은 영어 그대로.
     names가 없으면 표시만 떼고 영어 그대로. question에 영어로 쓴 단은 영어(한국어)로(menu_names.screen_path).
+    names가 있으면 표시 밖 글의 감싸지 않은 이름과 화면과 다른 한국어도 화면 글로 바꾼다(menu_names.screen_prose, 티켓 49).
+    keep은 바꾸지 않을 이름(작업 상태의 물체 이름). 표시를 바꾼 글은 다시 손대지 않는다.
+    한국어 화면이면 티켓 50(HISTORY [353]): 표시 바로 뒤에 모델이 덧붙인 괄호("(단축키 Alt-F)")는 지우고, 뒤 조사는 화면 글자
+    받침에 맞추며, 답 하나에서 되풀이되는 이름은 처음 한 번만 괄호 영어를 붙인다. 그래서 닫힌 표시도 뒤 글을 볼 때까지 붙잡는다.
+    지운 괄호가 단축키 하나뿐이면(표시 뒤·맨 영어 뒤 모두) 그 문장 끝에 "단축키는 Alt-F입니다."로 옮긴다([353] 사용자 예문, [423]).
+    넣는 곳은 내보내는 길 한 곳(_send)이라 조각을 어떻게 나눠 흘려도 같다. 한 문장에 둘 이상이거나, 그 단축키가 답에 이미 나왔거나,
+    표·제목 줄·코드 안이면 넣지 않고 지우기만 한다.
     """
 
-    def __init__(self, names: MenuNames | None, question: str = ""):
+    def __init__(self, names: MenuNames | None, question: str = "", keep: tuple[str, ...] = ()):
         self._names = names
         self._question = question
+        self._keep = keep
         self._held = ""  # 아직 내보내지 않은 글(열린 표시나, 표시의 시작일지 모르는 마지막 '[')
+        self._prose = ""  # 표시 밖 글 가운데 다음 조각과 이어질 수 있어 붙잡은 끝부분(이름·괄호가 끝날 때까지)
+        self._shown = ""  # 내보낸 글의 끝부분(앞뒤를 볼 때만 씀)
+        self._ticks = 0  # 내보낸 글 전체의 백틱 수(끝부분만 보면 코드 속인지 틀려서)
+        self._seen: set = set()  # 이 답에서 이미 괄호 영어와 함께 보인 (영어, 화면 글자) 짝
+        self._keys: list[str] = []  # 지운 괄호에서 옮길 단축키(문장 끝에서 넣는다)
+        self._mark_key: str | None = None  # 방금 표시 뒤에서 지운 괄호의 단축키
+        self._mark_item: tuple[str, str | None] | None = None  # 방금 표시 뒤 괄호의 노드 계산 이름(영어, 머리 한국어), [436]
+        self._tail = ""  # 문장 끝인지 보려고 붙잡은 마지막 '.'·'?'·'!'(다음 한 글자만 기다린다, "0.5")
+        self._line = ""  # 내보낸 글의 지금 줄(표·제목 줄인지 보려고)
+        self._said = ""  # 내보낸 글 전체(단축키가 이미 나왔는지 보려고)
 
-    def feed(self, text: str) -> str:
-        """조각 하나를 받아 지금 내보낼 수 있는 글을 돌려준다."""
-        held, shown = self._held + text, []
+    def feed(self, text: str, done: bool = False) -> str:
+        """조각 하나를 받아 지금 내보낼 수 있는 글을 돌려준다. done이면 더 올 글이 없다(닫힌 표시를 더 붙잡지 않음)."""
+        held, out = self._held + text, []
         while (start := held.find(MARK_OPEN)) >= 0:
             inner = start + len(MARK_OPEN)
             end, again = held.find(MARK_CLOSE, inner), held.find(MARK_OPEN, start + 1)
             if 0 <= again and (end < 0 or again < end):
                 # 닫히기 전에 새 표시가 열리면 앞의 것은 짝이 없는 표시. [[[처럼 겹치면 앞 [ 하나만 글이다
-                shown.append(held[:start] + (held[start:again] if again < inner else held[inner:again]))
+                out += [self._plain(held[:start]), self._fixed(held[start:again] if again < inner else held[inner:again])]
                 held = held[again:]
             elif (end < 0 and len(held) - inner > MARK_LIMIT) or end - inner > MARK_LIMIT:
-                shown.append(held[:start])  # 닫히지 않는(너무 긴) 표시에 답이 멈춰 보이지 않게 기호만 떼고 낸다
+                out.append(self._plain(held[:start]))  # 닫히지 않는(너무 긴) 표시에 답이 멈춰 보이지 않게 기호만 떼고 낸다
                 held = held[inner:]
             elif end < 0:
                 break  # 닫힐 때까지 모은다
             else:
-                shown += [held[:start], screen_path(held[inner:end], self._names, self._question)]
-                held = held[end + len(MARK_CLOSE) :]
+                after = held[end + len(MARK_CLOSE) :]
+                front = self._prose + held[:start]
+                # 앞말이 문장 끝 말("눌러요(", "합니다(")이면 이름의 풀이가 아니라 덧말 괄호라 표시로 둔다(괄호 안 화면 글자만)
+                if (self._names and not re.search(r"[>‣]", held[inner:end]) and re.search(r"[가-힣]\s?\($", front)
+                        and not re.search(r"[요다]\s?\($", front)
+                        and (held[inner:end] in self._keep or prose_shows(self._names, held[inner:end], self._question))):
+                    # 맨 글 규칙이 영어로 남기는 이름(Normal·Edge·Strength·Cube 등)은 떼면 "법선(Normal)"처럼 화면 글자를 잃어 표시로 둔다
+                    # 한국어 낱말 뒤 괄호 속이 표시 하나뿐이면("격자 간격([[Increment]])") 표시 없는 같은 꼴과 같게 맨 글로 바꾼다
+                    # ([393] Fable 꼴 "격자 간격 '증가'(Increment)"). 표시로 바꾸면 "격자 간격(증가(Increment))"로 괄호가 겹친다([458])
+                    if after.startswith(")"):
+                        held = held[:start] + held[inner:end] + after
+                        continue
+                    if not after and not done:
+                        break  # 닫는 괄호가 오는지 본다
+                rest = self._after_mark(after, done, held[inner:end])
+                if rest is None:
+                    break  # 표시 뒤 괄호·조사를 볼 때까지 모은다
+                # 앞 글을 먼저 다 내보낸 뒤 표시를 바꾼다(되풀이 이름을 나온 차례대로 기억해야 흘려 넣어도 같다)
+                before = self._plain(held[:start]) + self._plain("", done=True)
+                tab = self._names is not None and tab_place(self._shown, rest)  # 속성 창 탭이면 탭 글자로
+                # 괄호 안이거나 뒤에 지우지 않은 괄호가 남으면 괄호 영어 없이 화면 글자만([458])
+                bare = self._names is not None and (paren_depth(self._line) > 0 or bool(re.match(r" ?\(", rest)))
+                shown = screen_path(held[inner:end], self._names, self._question, self._seen if self._names else None, tab, bare)
+                if self._mark_item:  # 머리 제목이 계산 이름인 노드 뒤 계산 이름([436]). 맨 글 바꾸기를 다시 지나지 않게 이름과 함께 내고,
+                    item, rest = with_particle(_shown_part(*self._mark_item, self._question, self._seen, bare), rest)  # 조사·'항목'은 계산 이름에
+                    shown += " " + item
+                elif self._names:
+                    shown, rest = with_particle(shown, rest)
+                out += [before, self._send(shown)]
+                if self._mark_key:
+                    self._keys.append(self._mark_key)  # 이름을 내보낸 뒤에 올려야 앞 글의 문장 끝에 붙지 않는다
+                held = rest
         else:
             start = len(held) - 1 if held.endswith(MARK_OPEN[0]) else len(held)
         self._held = held[start:]
-        return "".join(shown) + held[:start]
+        out.append(self._plain(held[:start]))
+        return "".join(out)
 
-    def finish(self) -> str:
-        """답이 끝났거나 끊겼을 때 남은 글. 닫히지 않은 표시는 기호만 뗀다(사용자에게 [[가 보이지 않게)."""
+    def finish(self, cut: bool = False) -> str:
+        """답이 끝났거나 끊겼을 때 남은 글. 닫히지 않은 표시는 기호만 뗀다(사용자에게 [[가 보이지 않게).
+        cut이면(오류로 끊김) 남은 단축키 문장을 넣지 않는다(끊긴 문장 뒤에 붙으면 끊긴 줄 모른다)."""
         held, self._held = self._held, ""
-        return held.replace(MARK_OPEN, "", 1)
+        out = self.feed(held, done=True)  # 뒤 글을 기다리며 붙잡은 닫힌 표시를 바꿔 낸다
+        held, self._held = self._held, ""
+        if held.startswith(MARK_OPEN):
+            out += self._fixed(held[len(MARK_OPEN) :])
+        else:
+            out += self._plain(held, done=True)
+        tail, self._tail = self._tail, ""
+        if cut:
+            self._keys = []
+        return out + self._said_now(tail) + self._send_keys()  # 답 끝: 붙잡은 '.'를 내고 남은 단축키를 넣는다
+
+    def _after_mark(self, rest: str, done: bool, mark: str = "") -> str | None:
+        """닫힌 표시 뒤 글. 한국어 화면이면 모델이 덧붙인 단축키·풀이 괄호를 지운다. 괄호·조사를 더 봐야 하면 None.
+
+        mark(표시 속 글)의 끝 단이 머리 제목이 계산 이름인 노드이고 괄호 속이 그 계산 이름이면 지우지 않고 화면 꼴로 남긴다([436])."""
+        self._mark_key = self._mark_item = None
+        if self._names is None:
+            return rest
+        paren = re.match(r" ?\(", rest)
+        if paren:
+            close = rest.find(")", paren.end())
+            if close < 0 and not done and len(rest) <= PAREN_LIMIT:
+                return None
+            inside = rest[paren.end() : close]
+            if 0 <= close <= PAREN_LIMIT and MARK_OPEN not in inside and "(" not in inside:
+                self._mark_item = self._names.node_item(re.split(r"[>‣]", mark)[-1], inside)
+                rest = rest[close + 1 :]  # 괄호 속에 표시가 있으면 풀이가 아니라 내용이라 둔다
+                self._mark_key = None if self._mark_item else shortcut_in(inside)
+        elif not done and rest in ("", " "):
+            return None
+        if not done and len(rest) < 3 and re.fullmatch(r"[가-힣]*", rest):
+            return None  # 조사가 아직 다 오지 않았을 수 있다
+        return rest
+
+    def _plain(self, text: str, done: bool = False) -> str:
+        """표시 밖 글. 한국어 화면이면 붙잡은 끝부분과 이어 바꿀 수 있는 데까지 바꿔 낸다."""
+        if self._names is None:
+            return text
+        text, self._prose = self._prose + text, ""
+        cut = len(text) if done else prose_cut(text, self._names.common_prefixes, tabs=True)
+        text, self._prose = text[:cut], text[cut:]
+        # 끝부분 앞에서 코드가 열려 있었으면 백틱 하나를 앞에 붙여 짝을 맞춘다
+        before = ("`" if (self._ticks - self._shown.count("`")) % 2 else "") + self._shown
+        return self._send(screen_prose(before + text, self._names, self._question, self._keep, len(before), seen=self._seen, keys=True,
+                                       depth=paren_depth(self._line))[len(before) :])
+
+    def _fixed(self, text: str) -> str:
+        """표시를 바꾼 글: 붙잡은 표시 밖 글을 먼저 다 내고, 이 글은 그대로 낸다."""
+        return self._plain("", done=True) + self._send(text)
+
+    def _send(self, text: str) -> str:
+        """사용자에게 내보내는 글이 모두 지나는 곳. 단축키 자리 표를 떼어 모으고, 모은 단축키는 문장 끝에 넣는다."""
+        text, self._tail, out, i = self._tail + text, "", [], 0
+        while i < len(text):
+            ch = text[i]
+            if ch == SHORTCUT_OPEN:
+                close = text.find(SHORTCUT_CLOSE, i)
+                self._keys.append(text[i + 1 : close])
+                i = close + 1
+                continue
+            if self._keys and ch in ".?!":
+                if i + 1 == len(text):
+                    self._tail = text[i:]  # 문장 끝인지 다음 한 글자를 본다
+                    break
+                if text[i + 1] in " \n":
+                    out.append(self._said_now(ch))
+                    out.append(self._send_keys())
+                    i += 1
+                    continue
+                if text[i + 1] in "*)\"'”’」":
+                    self._keys = []  # "…누릅니다.**"처럼 닫는 기호가 붙은 문장 끝: 다음 문장에 붙지 않게 지우기만
+            if self._keys and ch == "\n":
+                out.append(self._send_keys())  # 마침표 없이 끝난 줄
+            out.append(self._said_now(ch))
+            i += 1
+        return "".join(out)
+
+    def _said_now(self, text: str) -> str:
+        self._shown = (self._shown + text)[-40:]
+        self._ticks += text.count("`")
+        self._said += text
+        self._line = text.rsplit("\n", 1)[-1] if "\n" in text else self._line + text
+        return text
+
+    def _send_keys(self) -> str:
+        """모은 단축키를 "단축키는 Alt-F입니다." 한 문장으로 낸다. 둘 이상·이미 나옴·표·제목·코드 안이면 넣지 않는다."""
+        keys, self._keys = self._keys, []
+        line = self._line.lstrip()
+        said = re.search(rf"(?<![A-Za-z0-9]){re.escape(keys[0])}(?![A-Za-z0-9])", self._said) if len(keys) == 1 else None
+        sentence = re.split(r"[.?!](?=\s)|\n", self._said)[-1]  # 지금 문장(단축키를 넣을 문장)
+        if len(keys) != 1 or said or _OTHER_KEY.search(sentence) or line.startswith(("|", "#")) or self._ticks % 2:
+            return ""
+        return self._said_now(f" 단축키는 {keys[0]}입니다.")
+
+
+def _object_names(state: WorkState) -> tuple[str, ...]:
+    """답 글에서 화면 글로 바꾸지 않을 이름: 작업 상태의 물체 이름(아웃라이너에 보이는 글자 그대로 불러야 한다, 티켓 49)."""
+    active = (state.active_object.name,) if state.active_object else ()
+    return tuple(dict.fromkeys((*active, *state.selected_objects)))
+
 
 def _failure(error: Exception, results: list[Chunk]) -> Failure:
     """바깥 서비스 오류를 짧은 오류 표시로. 시간 초과면 그 문구로. 원래 오류는 도우미 기록에 남긴다(무엇이 실패했는지 가르려고)."""
@@ -564,8 +725,12 @@ def _failure(error: Exception, results: list[Chunk]) -> Failure:
 
 
 def _for_model(state: WorkState) -> dict:
-    """모델에 넘길 작업 상태. 시점(거리·각도·중심 숫자)은 화면 조작 감지에만 쓰고 답에는 도움이 안 되어 뺀다."""
-    return {key: value for key, value in state.to_json().items() if key != "view"}
+    """모델에 넘길 작업 상태. 시점(거리·각도·중심 숫자)은 화면 조작 감지에만 쓰고 답에는 도움이 안 되어 뺀다.
+    열린 파일은 폴더를 떼고 파일 이름만 넘긴다(폴더에는 사용자 계정 이름이 들 수 있고 답에 쓰이지 않는다, HISTORY [322]).
+    Windows에서 찍은 경로도 Mac에서 같게 잘리도록 두 구분 글자를 모두 본다."""
+    sent = {key: value for key, value in state.to_json().items() if key != "view"}
+    sent["file_path"] = re.split(r"[\\/]", state.file_path)[-1]
+    return sent
 
 
 def _messages(

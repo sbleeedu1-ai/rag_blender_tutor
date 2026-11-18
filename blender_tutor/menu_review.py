@@ -20,7 +20,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from blender_tutor.manual_chunks import load_chunks
-from blender_tutor.menu_names import MenuName, MenuNames, Source, Status, _english_key, build_menu_names
+from blender_tutor.menu_names import MenuName, MenuNames, Status, _english_key, build_menu_names, needs_title_check
 from blender_tutor.paths import MENU_ALIASES, default_blender
 
 LABELS_SCRIPT = Path(__file__).with_name("blender_ui_labels.py")
@@ -104,7 +104,7 @@ def scope_names(chunks_path: Path, scope_path: Path, po: Path, full_po: Path, na
         name = whole.get(local.english)
         if name.status == Status.MANY:
             many.append(name)
-        elif name.sources == (Source.TITLE,):
+        elif needs_title_check(name.sources):
             titles.append(name)
     return many, titles
 

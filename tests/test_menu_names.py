@@ -17,9 +17,14 @@ from blender_tutor.menu_names import (
     Status,
     Translation,
     build_menu_names,
+    extra_names,
+    load_extra_allow,
+    value_names,
+    _looks_like_value,
+    node_glyphs,
     load_menu_names,
     read_po,
-    screen_marks, screen_path,
+    prose_cut, screen_marks, screen_path,
 )
 
 PO = r'''
@@ -202,6 +207,31 @@ def test_소제목_앞의_줄표를_떼고_짝짓는다():
     names = build_menu_names([page], po)
 
     assert names.get("Material Preview").translations == (Translation("머티리얼 미리보기", ("*",)),)
+
+
+def test_ko_po에서_들여쓰기_빈칸이_붙은_이름도_짝짓는다():
+    # Ctrl + P 메뉴의 하위 항목은 ko.po에 '   With Automatic Weights'처럼 앞 빈칸째 적혀 있다.
+    # 빈칸째 비교해 소제목을 사전에서 버렸고, 답이 그 이름을 영어로만 냈다(2026-11-17 중간 점검에서 찾음).
+    po = PO + (
+        '\nmsgid "   With Automatic Weights"\nmsgstr "   자동 웨이트와 함께"\n'
+        # 문장 조각용 빈칸 항목: 빈칸 없는 'Mesh' → '메시'가 이미 있으니 이쪽은 쓰지 않는다
+        '\nmsgid " Mesh"\nmsgstr " 그물"\n'
+    )
+    page = Chunk(
+        page_path="animation/armatures/skinning/parenting",
+        anchor="with-automatic-weights",
+        field="animation",
+        group="animation/armatures/skinning",
+        page_title="Armature Deform Parent",
+        headings=("With Automatic Weights",),
+        body="Body.",
+    )
+
+    names = build_menu_names([page], po)
+
+    assert ("*", "With Automatic Weights", "자동 웨이트와 함께") in read_po(po)
+    assert names.get("With Automatic Weights").translations == (Translation("자동 웨이트와 함께", ("*",)),)
+    assert [korean for _, english, korean in read_po(po) if english == "Mesh"] == ["메시"]
 
 
 def test_철자_표에_있는_이름은_화면_철자로_ko_po를_찾는다():
@@ -387,3 +417,201 @@ def test_사전_파일이_있으면_고정_짝과_함께_읽고_없으면_None(t
     (tmp_path / "titles.json").write_text("[]", encoding="utf-8")
     names = load_menu_names(tmp_path, tmp_path / "choices.json", tmp_path / "titles.json")
     assert names.korean("Mesh") == "메시"
+
+
+# 넓힌 이름 목록(티켓 49): 사전에 없는 화면 이름을 ko.po에서 번역이 하나뿐인 것으로 더한다(10-27 번역 이름표 규칙 B, HISTORY [68]·[346])
+EXTRA_PO = '''
+msgid "Origins"
+msgstr "오리진"
+
+msgctxt "Operator"
+msgid "Origins"
+msgstr "오리진"
+
+msgid "Divide"
+msgstr "나누기"
+
+msgid "Strength"
+msgstr "강도"
+
+msgctxt "Light"
+msgid "Strength"
+msgstr "힘"
+
+msgid "Space"
+msgstr "공간"
+
+msgid "the selected objects"
+msgstr "선택된 오브젝트"
+
+msgid "Mesh"
+msgstr "메쉬"
+'''
+EXTRA_FULL_PO = '''
+msgid "Divide"
+msgstr "Diviser"
+
+msgctxt "Color"
+msgid "Divide"
+msgstr "Diviser"
+'''
+
+
+def test_넓힌_목록은_사전에_없고_ko_po_번역이_하나뿐인_화면_이름만_담는다():
+    extra = extra_names(SCREEN, EXTRA_PO, EXTRA_FULL_PO)
+    assert extra == {"Origins": "오리진"}
+    # Divide: fr.po로 보면 Color 문맥은 한국어 번역이 없어 화면이 영어일 수 있다 / Strength: 번역이 둘
+    # Space: 키 이름 / the selected objects: 이름 꼴이 아님 / Mesh: 사전에 이미 있음(사전이 먼저)
+
+
+ALLOW_PO = '''
+msgid "-Z Forward"
+msgstr "-Z 앞으로"
+
+msgid "16-bit Signed"
+msgstr "16 비트 부호 지정"
+
+msgid "10 Meters"
+msgstr "10 미터"
+
+msgid "+Y Up"
+msgstr "+Y 위쪽"
+
+msgctxt "Operator"
+msgid "+Y Up"
+msgstr "Y 위로"
+'''
+
+
+def test_화면에서_확인한_이름은_이름_꼴_검사에_떨어져도_넓힌_목록에_넣는다():
+    # 사용자 "넓힌 목록 정하실것 1,2,3 전부 ㅇㅇ"(HISTORY [447]): 화면으로 본 이름만 예외로 받고 꼴 검사는 그대로 둔다.
+    # 10 Meters는 화면에 뜨지만 격자 단위 상태 글이라 예외 표에 없어 계속 빠진다([442])
+    extra = extra_names(SCREEN, ALLOW_PO, "", allow=("-Z Forward", "16-bit Signed"))
+    assert extra == {"-Z Forward": "-Z 앞으로", "16-bit Signed": "16 비트 부호 지정"}
+
+
+def test_예외_표의_이름이_다른_조건에_걸려_빠지면_만들_때_바로_알린다():
+    # +Y Up: 번역이 둘이라 넓힌 목록 조건(번역 하나)에 걸린다. 조용히 빠지면 예외 표만 보고 들어간 줄 안다
+    with pytest.raises(ValueError, match=r"\+Y Up"):
+        extra_names(SCREEN, ALLOW_PO, "", allow=("-Z Forward", "+Y Up"))
+
+
+def test_예외_표_파일은_영어_이름_목록이다():
+    allow = load_extra_allow()
+    assert "-Z Forward" in allow and "16-bit Signed" in allow
+    assert "-X manual" not in allow  # Rigify는 애드온이라 뺌([447])
+    assert "10 Meters" not in allow and "8-Bit Integer Value" not in allow  # 상태 글·툴팁에만 뜨는 이름([442]·[446])
+
+
+def test_본_화면_자리에_없는_사전_번역은_영어로_둔다():
+    # 2D Animation: 사전 번역 '2차원 애니메이션함'(WorkSpace 문맥)은 파일 > 신규·작업 공간 탭·작업 공간 추가 메뉴 세 자리에
+    # 안 뜬다. 신규 메뉴는 '2D 애니메이션', 탭은 영어라 자리마다 갈려 영어로 둔다(사용자 "1,2,3 전부 ㅇㅇ", [443]·[447])
+    names = MenuNames([MenuName("2D Animation", (Translation("2차원 애니메이션함", ("WorkSpace",)),), 1, "")])
+    assert names.korean("2D Animation") is None
+    assert names.screen("2D Animation") == (True, None)
+    assert screen_path("2D Animation", names) == "2D Animation"
+
+
+@pytest.mark.parametrize("english, korean", [("UV Editing", "UV 편집함"), ("Rendering", "렌더링함"),
+                                             ("Video Editing", "비디오 편집함"), ("2D Full Canvas", "2D 풀 캔버스로")])
+def test_작업_공간_이름의_WorkSpace_번역은_화면에_없어_영어로_둔다(english, korean):
+    # 기본 파일의 작업 공간 탭은 영어, '새로운 데이터' 번역을 켜면 + 메뉴로 새로 만든 탭만 'UV 편집함'(화면으로 봄, 자리마다 갈림).
+    # 지난 답에 "UV 편집함(UV Editing) 작업 공간"이 나갔다. 사용자 "작업 공간은 ㅇㅋ 영어로 두자"(HISTORY [451])
+    names = MenuNames([MenuName(english, (Translation(korean, ("WorkSpace",)),), 1, "")])
+    assert names.korean(english) is None
+    assert screen_path(english, names) == english
+
+
+def test_WorkSpace_말고_다른_문맥_번역도_있는_이름은_그대로_바꾼다():
+    # 규칙은 번역이 WorkSpace 문맥 '하나뿐'일 때만이다. Geometry Nodes는 기본 문맥 번역이 함께 있어 메뉴·패널 글자로 바뀐다
+    names = MenuNames([MenuName("Geometry Nodes", (Translation("지오메트리 노드", ("*", "WorkSpace", "Preferences")),), 1, "")])
+    assert names.korean("Geometry Nodes") == "지오메트리 노드"
+
+
+def test_사전에_없는_이름은_넓힌_목록으로_바꾸되_질문_찾기에는_쓰지_않는다():
+    names = MenuNames(list(SCREEN), extra={"Origins": "오리진", "Zoom Region...": "지역 줌..."})
+    assert names.korean("Origins") == "오리진"
+    assert names.korean("Mesh") == "메시"  # 사전이 먼저
+    assert screen_path("Origins", names) == "오리진(Origins)"
+    assert screen_path("Zoom Region", names) == "지역 줌...(Zoom Region)"  # 설명서·답은 말줄임표를 떼고 쓰기도 한다
+    assert names.english_in("오리진 끄기") == ()
+
+
+def test_넓힌_목록_파일이_있으면_함께_읽는다(tmp_path):
+    (tmp_path / "menu_names").mkdir()
+    SCREEN.save(tmp_path / "menu_names" / "menu_names.json")
+    (tmp_path / "menu_names" / "screen_extra.json").write_text('{"Origins": "오리진"}', encoding="utf-8")
+    (tmp_path / "choices.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "titles.json").write_text("[]", encoding="utf-8")
+    names = load_menu_names(tmp_path, tmp_path / "choices.json", tmp_path / "titles.json")
+    assert names.korean("Origins") == "오리진"
+
+
+@pytest.mark.parametrize("content", ['["Origins"]', '{"Origins": 1}', '{"": "오리진"}'])
+def test_넓힌_목록_파일_모양이_틀리면_바로_알린다(tmp_path, content):
+    (tmp_path / "menu_names").mkdir()
+    SCREEN.save(tmp_path / "menu_names" / "menu_names.json")
+    (tmp_path / "menu_names" / "screen_extra.json").write_text(content, encoding="utf-8")
+    (tmp_path / "choices.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "titles.json").write_text("[]", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_menu_names(tmp_path, tmp_path / "choices.json", tmp_path / "titles.json")
+
+
+def test_흐르는_답을_붙잡는_영어_덩이에는_한도가_있다():
+    # 한도가 없으면 긴 영어 글을 조각마다 처음부터 되짚어 매우 느려지고(검토 지적: 2,480자에 4.7초),
+    # 닫히지 않은 괄호 뒤 긴 영어면 0을 돌려줘 글 전체를 붙잡는다
+    text = "설명 (" + "the quick brown fox jumps over " * 80
+    assert 0 < prose_cut(text) < len(text)
+
+
+def test_값_목록_이름도_사전에_넣는다(tmp_path):
+    # 2026-11-18 [438]: 설명서가 "Divide: 두 값을 나눔"처럼 값 목록(field-list)으로 적은 이름은 사전에 들어가지 않아
+    # 번역이 있어도 답에서 영어로 남았다(값 목록 이름 1,544 중 번역 있는데 빠진 것 56, [357]에서 "-Z Forward"로 처음 봄)
+    page = tmp_path / "nodes" / "math.html"
+    page.parent.mkdir()
+    page.write_text('<dl class="field-list"><dt class="field-odd">Translate<span class="colon">:</span></dt><dd>옮김</dd>'
+                    '<dt class="field-even">now<span class="colon">:</span></dt><dd>CLI 값</dd>'
+                    '<dt class="field-odd"><kbd>Ctrl</kbd> Array (Legacy)</dt><dd>-</dd></dl>'
+                    '<dl class="simple"><dt>Mesh</dt><dd>옵션 목록은 청크가 맡는다</dd></dl>'
+                    '<div class="refbox"><dl class="field-list"><dt>Mode<span class="colon">:</span></dt><dd>Edit Mode</dd></dl></div>',
+                    encoding="utf-8")  # 참조 상자 머리말(Mode)은 값 이름이 아니다
+    values = value_names(tmp_path)
+    assert values == {"Translate": ["nodes/math.html"], "now": ["nodes/math.html"], "Array (Legacy)": ["nodes/math.html"]}
+
+    names = build_menu_names([chunk("first", ("Mesh",))], PO, values=values)
+
+    translate = names.get("Translate")
+    assert (translate.sources, translate.translations, translate.chunks) == ((Source.VALUE,), (Translation("옮기기", ("*",)),), 1)
+    assert names.get("now") is None  # 소문자로 시작하는 값(명령줄 값 등)은 화면 이름이 아니라 뺀다
+    assert names.get("Mesh").sources == (Source.UI,)
+
+
+def test_노드_머리_계산_이름은_그_문맥_번역을_따로_뽑는다():
+    # 2026-11-18 [438]: Divide는 ko.po NodeTree 문맥에 "나누기"가 있는데, 사전에 없고(값 목록) 넓힌 목록은 믹스 노드 Color 문맥이
+    # 영어라 빼서 "수학(Math) Divide"로 남았다. 노드 머리 칸은 문맥이 정해져 있어 그 문맥 번역만 보면 된다
+    po = PO + 'msgctxt "NodeTree"\nmsgid "Divide"\nmsgstr "나누기"\n\nmsgid "Divide"\nmsgstr "나누기"\n\nmsgctxt "NodeTree"\nmsgid "Snap"\nmsgstr "Snap"\n'
+    glyphs = node_glyphs(po, {"Math": {"context": "NodeTree", "items": ["Divide", "Snap", "Power"]},
+                              "Mix": {"context": "Color", "items": ["Divide"]}})
+    assert glyphs == {"NodeTree": {"Divide": "나누기"}}  # 번역이 영어 그대로이거나 그 문맥에 없으면 빼서 영어로 둔다(믹스 Divide는 화면도 영어)
+
+
+def test_제목과_값_목록에만_나온_이름은_제목_검수를_통과해야_바꾼다():
+    # 2026-11-18 [438]: 값 목록 이름을 넣자 제목 검수에서 떨어진 일상 낱말(Standard·Windows 등 39개)이 값 출처로 되살아났다.
+    # [418] Standard는 "Unity에서 Standard 셰이더"가 "표준"으로 바뀌어 뺀 것이다
+    def name(english, *sources):
+        return MenuName(english, (Translation("표준", ("*",)),), 1, URL, sources)
+
+    names = MenuNames([name("Standard", Source.TITLE, Source.VALUE), name("Cone", Source.TITLE, Source.VALUE),
+                       name("Strand", Source.VALUE), name("Array", Source.TITLE, Source.OPTION)], titles=["Cone"])
+    assert names.in_prose("Standard") == (False, None)  # 떨어진 제목은 값 목록에 있어도 안 바꾼다
+    assert names.in_prose("Cone") == (True, "표준")  # 통과 제목은 값 출처가 붙어도 통과 제목으로 받는다
+    assert names.in_prose("Strand") == (True, "표준")  # 값 목록에서만 나온 이름은 옵션처럼 바꾼다
+    assert names.in_prose("Array") == (True, "표준")  # 옵션 출처는 따로 된 근거라 검수 없이
+
+
+@pytest.mark.parametrize("english, kept", [("2D Vector", True), ("+X to -X", True), ("Linear Rec.709", True), ("Divide", True),
+                                           ("1024", False), ("name", False), ("Use the value.", False), ("Mode:", False)])
+def test_값_이름_꼴(english, kept):
+    # [438]: 값 목록에는 "2D Vector"·"+X to -X" 같은 화면 이름과 숫자·명령줄 값·문장이 섞여 있다
+    assert _looks_like_value(english) is kept

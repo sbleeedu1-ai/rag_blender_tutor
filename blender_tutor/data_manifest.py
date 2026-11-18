@@ -7,6 +7,7 @@
 
 - data/MANIFEST_요약.md: 폴더별 파일 수·크기·가장 새 날짜, results/ 날짜별 수·크기. 먼저 이것만 본다.
 - data/MANIFEST.tsv: 파일별 경로·크기·수정 시각. 요약이 다를 때 --compare로 대조한다.
+드라이브 목록과 대조 기록은 data/manifests/에 보관하고, 목록을 다시 세지 않도록 이 폴더는 집계에서 뺀다.
 크기와 시각만 본다(내용을 읽지 않는다). 대조는 크기가 다른 것과, 크기가 같아도 날짜가 다른 것을 따로 보여 준다.
 크기가 같고 다른 쪽 날짜만 새로우면 수만 센다.
 홀드아웃 폴더는 파일 이름을 적지 않고 묶음 한 줄(수·크기)만 적는다.
@@ -22,8 +23,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SUMMARY_NAME = "MANIFEST_요약.md"
 LIST_NAME = "MANIFEST.tsv"
+RECORDS_DIR = "manifests"
 SEALED = ("holdout", "holdout_work", "holdout_pool", "holdout_raw", "archive/holdout_20261103")  # 내용이 드러나지 않게 수·크기만
-NOT_UPLOADED = ("models", "hf_cache")  # 다시 받을 수 있어 드라이브에 올리지 않는 폴더(HISTORY [159], 사용자가 이 둘을 뺀 나머지를 올림)
+NOT_UPLOADED = ("models", "hf_cache", "manual_en_5.2", "blender_api_5.2", RECORDS_DIR)  # 사용자 지정: 다시 받을 모델·ZIP을 둔 원문·로컬 목록은 업로드 대상에서 제외
 
 
 @dataclass(frozen=True)
@@ -39,14 +41,14 @@ def _sealed_of(relative: str) -> str | None:
 
 
 def scan(data: Path) -> list[Entry]:
-    """data/ 아래를 훑는다. 목록 파일 자신은 넣지 않는다."""
+    """data/ 아래를 훑는다. 목록 파일과 대조 기록 보관 폴더는 넣지 않는다."""
     entries: list[Entry] = []
     sealed: dict[str, list[tuple[int, float]]] = defaultdict(list)
     for path in sorted(data.rglob("*")):
         if not path.is_file():
             continue
         relative = path.relative_to(data).as_posix()
-        if relative in (SUMMARY_NAME, LIST_NAME):
+        if relative in (SUMMARY_NAME, LIST_NAME) or relative.split("/", 1)[0] == RECORDS_DIR:
             continue
         stat = path.stat()
         group = _sealed_of(relative)
@@ -74,9 +76,10 @@ def summary_text(entries: list[Entry], results: Path) -> str:
     lines = [f"# data·results 목록 요약 ({datetime.now():%Y-%m-%d %H:%M} 만듦)", "",
              "로컬 상태를 파악할 때 이 표부터 본다. 드라이브 상태는 드라이브에서 따로 읽어 견준다(이 목록은 올리지 않는다).",
              "파일별 대조: `python -m blender_tutor.data_manifest --compare <다른 쪽 목록.tsv>`. 이 목록은 만든 때의 모습이니 견주기 직전에 다시 만든다.", "",
+             "드라이브 목록과 대조 기록은 `data/manifests/`에 두며, 이 보관 폴더와 목록 자신은 자료 집계에서 제외한다.", "",
              "## data", "", "| 폴더 | 파일 수 | 크기 | 가장 새 날짜 | 비고 |", "|---|---:|---:|---|---|"]
     for name, items in sorted(folders.items()):
-        note = "드라이브에 안 올림" if name in NOT_UPLOADED else ("이름 없이 수·크기만 포함" if any(e.path.endswith("/*") for e in items) else "")
+        note = "업로드 대상에서 제외" if name in NOT_UPLOADED else ("이름 없이 수·크기만 포함" if any(e.path.endswith("/*") for e in items) else "")
         lines.append(f"| {name} | {sum(e.count for e in items):,} | {_megabytes(sum(e.size for e in items))} | {max(e.modified for e in items)} | {note} |")
     lines += ["", "## results(날짜 폴더째 올린다)", "", "| 날짜 | 파일 수 | 크기 |", "|---|---:|---:|"]
     if results.is_dir():

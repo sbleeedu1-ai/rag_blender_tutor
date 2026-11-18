@@ -16,7 +16,7 @@ from pathlib import Path
 
 from blender_tutor.beginner_scope import CHARS_PER_TOKEN, DATA, Estimate, Model, OpenAIModel, openai_key
 from blender_tutor.manual_chunks import Chunk, load_chunks
-from blender_tutor.menu_names import MenuNames, Source, read_po
+from blender_tutor.menu_names import ARTICLES, MenuNames, looks_like_name as _looks_like_name, needs_title_check, read_po
 from blender_tutor.paths import MENU_CHOICES, MENU_TITLES
 
 _PATH_SEP = "‣"  # 설명서 메뉴 경로의 구분 글자(Add ‣ Mesh)
@@ -42,14 +42,6 @@ def pieces(chunks: Iterable[Chunk]) -> list[Piece]:
 
 
 _NOT_NAMES = {"Shortcut"}  # "모드·메뉴·단축키" 상자에서 블렌더 표기가 아닌 칸(단축키 글자)
-ARTICLES = {"The", "A", "An", "This", "These", "That", "Those", "Each", "Its", "Your"}  # 문장 첫머리 관사·지시어
-
-
-def _looks_like_name(english: str) -> bool:
-    """ko.po 문구 가운데 화면 이름 같은 것: 대문자로 시작하는 다섯 낱말 이하, 관사로 시작하지 않고 문장 부호·자리표시가 없음."""
-    words = english.split()
-    return (0 < len(words) <= 5 and english[0].isupper() and words[0] not in ARTICLES
-            and not re.search(r'[%{}.:;!?"\\]', english))
 
 
 def screen_words(names: MenuNames, titles: Iterable[str], po_text: str) -> dict[str, str]:
@@ -63,7 +55,7 @@ def screen_words(names: MenuNames, titles: Iterable[str], po_text: str) -> dict[
     words: dict[str, str] = {}
     rejected = set()
     for name in names:
-        if name.sources == (Source.TITLE,) and name.english not in passed:
+        if needs_title_check(name.sources) and name.english not in passed:
             rejected.add(name.english)
             continue
         korean = names.korean(name.english)
