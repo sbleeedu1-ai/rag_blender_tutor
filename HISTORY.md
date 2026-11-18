@@ -4031,3 +4031,9 @@
 - 정한 것: 첫 글자·답 끝 시간은 질문을 보낸 순간부터 잰다(`evaluate run`의 엔진 시간, 도우미 창 시간 기록의 "보냄 → 첫 글자"). F10과 붙여 넣기는 넣지 않는다. 11-17 GPT 빈손 시범에서 사용자가 정한 "그냥 답하는 시간만 볼래"(`docs/experiment.md` GPT 빈손 시범 절)와 같은 잣대다.
 - 그대로 둔 것: 도우미 창 시간 기록의 "F10 → 답 끝" 칸과 "이겼다" 기준 문구([10]·[155])는 이번에 고치지 않았다. 07의 "이겼다" 기준을 다시 쓸 때(티켓 35) 이 결정에 맞출지 함께 본다.
 - 바꾼 것: `HANDOFF.md` 사용자가 정할 것 표, `docs/plan/01` 물을 것 1. 코드 0, 유료 호출 0.
+
+### [469] 2026-11-18 · 연습 과정 메뉴 칸이 실제 화면과 맞는지 가리려고, Blender 5.2.4를 켜서 메뉴를 직접 본다
+- 사용자: "그게 실제로 아닌건지 확인은 해봄?" → Claude가 소스(`bl_ui/space_view3d.py`)로 먼저 답함 → 사용자 "그니까 켜서 확인해봐".
+- 실행으로 확인(공장 설정 `--factory-startup`, 영어 화면, 그림 `results/20261118/201022_기계지표/화면확인/` 3장): View 메뉴에 Viewport Shading 항목 없음(Toolbar·Sidebar·Tool Settings·…·Frame Selected·Frame All·Perspective/Orthographic·Local View·Viewer Node·Cameras·Viewpoint·Navigation·Align View·View Regions·Play Animation·Render 셋·Area). View > Navigation은 Orbit Left/Right/Up/Down·Orbit Opposite·Roll·Pan Left/Right/Up/Down·Zoom In·Zoom Out·Zoom Region·Dolly View·Zoom Camera 1:1·Fly·Walk. 편집 모드 Mesh > Merge는 At Center·At Cursor·Collapse·By Distance.
+- 그래서 연습 과정 메뉴 칸 8줄(D 표의 "나무와 다름"): `sword.yaml:365`·`shield.yaml:314` "View > Viewport Shading > Material Preview"는 없는 길. `_common.yaml:22` "View > Navigation > Orbit"·`:40` "… > Pan"은 실제 글자와 다름(방향이 붙은 항목만 있음). `_common.yaml:28`·`:34` Zoom In·Zoom Out, `sword.yaml:54` View > Sidebar, `sword.yaml:97` Mesh > Merge > At Center는 있음(메뉴 나무 자료가 덜 뽑혀 잘못 잡힘). 메뉴 나무(조사 2)의 View 메뉴가 한 항목뿐이던 것도 화면과 다름을 확인.
+- 이 칸은 도우미 창에 뜨지 않고 연습 과정 중 질문할 때 답 모델 입력에만 들어간다(`progress.py:124-133`). 저장된 162답에서 그 틀린 길을 옮겨 쓴 답은 0개(Q26 3번은 같은 단계의 안내 글·단축키 Z 쪽으로 답함). 고칠지는 사용자 답 대기.
