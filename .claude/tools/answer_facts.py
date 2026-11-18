@@ -4,7 +4,7 @@
 
 지표(답 하나마다):
 1. 메뉴 길: 원문의 [[ ]] 가운데 '>'(또는 '‣')로 단이 나뉜 것을 메뉴 나무와 맞댄다.
-   있음 / 있음(앞 생략: 나무의 어느 길 끝부분과 같음) / 나무와 다름(첫 단은 나무에 있는데 이 길은 없음) / 나무에 없음(첫 단이 나무에 없음.
+   있음 / 있음(앞 생략: 나무의 어느 길 끝부분과 같음) / 나무와 다름(첫 단 글자가 나무의 어느 단으로든 나오는데 이 길은 없음) / 나무에 없음(첫 단이 나무에 없음.
    메뉴 나무는 3D 뷰 머리 메뉴의 물체·메시 편집 두 모드뿐이라 다른 편집기·속성 창 길은 여기로 간다. 틀린 길이라고 단정하지 않는다).
 2. 단축키: 원문의 보조 키 조합(Ctrl·Shift·Alt·Cmd + 키)을, 같은 문장에서 가장 가까운 [[ ]] 이름이 가리키는 조작의 기본 키맵과 맞댄다.
    맞음 / 기본 키맵과 다름 / 가를 수 없음(이름이 없거나 메뉴 나무에서 조작을 못 찾음, 마우스 등 키 이름을 모름).
@@ -118,9 +118,10 @@ def shortcuts(raw: str, tree: Tree, keymap: Keymap) -> list[dict]:
         marks = [(m.start(), m.end(), m.group(1)) for m in MARK.finditer(sentence)]
         for combo in COMBO.finditer(sentence):
             parsed = _key(combo.group())
-            before = [mark for mark in marks if mark[1] <= combo.start()]
-            after = [mark for mark in marks if mark[0] >= combo.end()]
-            near = before[-1] if before else after[0] if after else None
+            # 키 앞뒤로 글자 거리가 가장 가까운 표시(같으면 앞)
+            gap = lambda mark: combo.start() - mark[1] if mark[1] <= combo.start() else max(0, mark[0] - combo.end())
+            names = [mark for mark in marks if mark[1] <= combo.start() or mark[0] >= combo.end()]  # 키를 감싼 표시([[Alt-C]])는 이름이 아니다
+            near = min(names, key=lambda mark: (gap(mark), mark[0] > combo.start()), default=None)
             name = near[2] if near else None
             targets = tree.targets.get(_segments(name)[-1], set()) if name else set()
             if parsed is None:

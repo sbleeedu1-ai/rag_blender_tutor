@@ -49,11 +49,11 @@ class CallLog:
         with self._idle:
             return list(self._records)
 
-    def wait_idle(self, timeout: float = IDLE_WAIT) -> None:
-        """뒤에서 도는 호출이 모두 끝날 때까지 기다린다. 넘기면 RuntimeError(다음 차례의 토큰 셈이 섞이지 않게 멈춤)."""
+    def wait_idle(self, timeout: float = IDLE_WAIT) -> bool:
+        """뒤에서 도는 호출이 모두 끝날 때까지 기다린다. 모두 끝났으면 True, timeout초를 넘기면 False.
+        넘겨도 멈추지 않는다(유료 실행의 앞 차례 결과를 버리지 않게). 부르는 쪽이 그 차례에 표시해 셈이 섞였을 수 있음을 알린다."""
         with self._idle:
-            if not self._idle.wait_for(lambda: self._open == 0, timeout):
-                raise RuntimeError(f"{timeout}초가 지나도 끝나지 않은 호출이 있음(다음 차례의 토큰 셈이 섞이지 않게 멈춤)")
+            return self._idle.wait_for(lambda: self._open == 0, timeout)
 
     def dollars(self) -> dict[str, float | None]:
         """종류 → 그 종류 부품들의 요금 합(달러). 요금을 셀 수 없는 부품(dollars가 없는 가짜)이 끼면 None."""
@@ -70,9 +70,11 @@ class CallLog:
             self._records.append(record)
         return record
 
-    def _end(self, record: dict, part, before: dict[str, int]) -> None:
-        for name, value in _tokens(part).items():
-            record[name] = value - before[name]
+    def _end(self, record: dict, part, before: dict[str, int], counted: bool) -> None:
+        """counted가 아니면(오류·중간에 놓음) 토큰 칸을 비운다. 속 모델은 끝까지 받아야 셈을 하므로 0이 '셌는데 0'과 섞이지 않게."""
+        if counted:
+            for name, value in _tokens(part).items():
+                record[name] = value - before[name]
         record["끝"] = self.now()
         with self._idle:
             self._open -= 1
@@ -106,7 +108,7 @@ class _TimedModel(_Timed):
     """질문 바꾸기(stream(messages))·답변(stream(messages, timeout))·분야 고르기(ask_json) 겉."""
 
     def stream(self, messages: list[dict[str, str]], *args) -> Iterator[str]:
-        record, before, text = self._log._begin(self._kind, self._slot), _tokens(self.inner), ""
+        record, before, text, finished = self._log._begin(self._kind, self._slot), _tokens(self.inner), "", False
         if self._kind in SENT_KINDS:
             record["보낸 글"] = messages
         try:
@@ -119,12 +121,15 @@ class _TimedModel(_Timed):
                     # 엔진(closed_query)처럼 빈 검색어는 쓸 수 없는 답이라 닫힘으로 치지 않는다
                     record["검색어 닫힘" if json.loads(match.group(1)).strip() else "빈 검색어"] = self._log.now()
                 yield piece
+            finished = True
         except Exception as error:
             record["오류"] = repr(error)
             raise
         finally:
             record["글"] = text
-            self._log._end(record, self.inner, before)
+            if not finished and "오류" not in record:
+                record["다 받음"] = False  # 읽는 쪽이 중간에 놓음
+            self._log._end(record, self.inner, before, finished)
 
     def ask_json(self, messages: list[dict[str, str]], schema: dict, timeout: float | None = None) -> dict:
         record, before = self._log._begin(self._kind, self._slot), _tokens(self.inner)
@@ -136,7 +141,7 @@ class _TimedModel(_Timed):
             record["오류"] = repr(error)
             raise
         finally:
-            self._log._end(record, self.inner, before)
+            self._log._end(record, self.inner, before, "오류" not in record)
 
 
 class _TimedEmbedder(_Timed):
@@ -149,5 +154,5 @@ class _TimedEmbedder(_Timed):
             record["오류"] = repr(error)
             raise
         finally:
-            self._log._end(record, self.inner, before)
+            self._log._end(record, self.inner, before, "오류" not in record)
 

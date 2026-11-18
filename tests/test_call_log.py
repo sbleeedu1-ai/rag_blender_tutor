@@ -89,6 +89,22 @@ def test_실패한_호출은_오류를_적고_오류를_그대로_올린다():
     assert "입력" not in record  # 토큰을 세지 않는 부품은 칸을 비운다(0으로 지어내지 않음)
 
 
+def test_끝까지_받지_못한_호출은_토큰을_0으로_적지_않는다():
+    log = CallLog()
+    model = log.wrap("답변", ClaudeModel("claude-haiku-5-5", "k", client=FakeClient(pieces=("가", "나"))))
+    log.start()
+    stream = model.stream(MESSAGES, 10.0)
+    next(stream)
+    stream.close()  # 읽는 쪽이 중간에 놓음: 모델은 마지막 셈을 하지 못한다
+    [record] = log.take()
+    assert record["다 받음"] is False and "입력" not in record and "끝" in record
+    broken = log.wrap("분야 고르기", ClaudeModel("claude-haiku-5-5", "k", client=FakeClient(stop="max_tokens")))
+    log.start()
+    with pytest.raises(ValueError):
+        broken.ask_json(MESSAGES, {"type": "object"})
+    assert "입력" not in log.take()[0]  # 오류로 끝난 호출은 셈이 그 호출 몫인지 알 수 없어 비운다
+
+
 def test_같은_종류는_만든_차례로_몇째를_매기고_종류별_요금을_합친다():
     log = CallLog()
     first = log.wrap("질문 바꾸기", ClaudeModel("claude-haiku-5-5", "k", client=FakeClient(), schema={}))
@@ -116,9 +132,8 @@ def test_뒤에서_도는_호출이_끝나기를_기다린다():
     next(stream)  # 엔진처럼 검색어만 받고 나머지는 뒤에서 읽힌다
     worker = threading.Thread(target=lambda: list(stream))
     worker.start()
-    with pytest.raises(RuntimeError, match="끝나지 않은 호출"):
-        log.wait_idle(timeout=0.05)
+    assert log.wait_idle(timeout=0.05) is False  # 넘기면 알리고 멈추지 않는다(앞 차례 결과를 버리지 않게)
     release.set()
-    log.wait_idle(timeout=5.0)
+    assert log.wait_idle(timeout=5.0) is True
     worker.join()
     assert "끝" in log.take()[0]

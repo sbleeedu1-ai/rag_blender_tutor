@@ -522,3 +522,22 @@ def test_어림_질문_바꾸기_요금은_지난_실제_요금과_20퍼센트_�
 
 def test_잰_적_없는_생각_수준은_어림하지_않는다():
     assert evaluate.estimate_dollars(10, 5, Settings(reasoning="low")) is None
+
+
+def test_뒤에서_도는_호출을_기다리다_넘기면_멈추지_않고_그_차례에_표시한다():
+    class Stuck(CallLog):
+        def wait_idle(self, timeout=60.0):
+            return False
+
+    log = Stuck()
+    [result] = run([Dialogue("D01", "정답형", (turn("D01", "하나"),))], AnswerEngine(
+        CHUNKS, VECTORS, log.wrap("임베딩", Embedder()), log.wrap("답변", Model()), Settings(top_k=3, use_bm25=False)), log=log)
+    assert result.answer == "답1" and result.calls[-1]["종류"] == "기다림 넘김"
+
+
+def test_단계별_시각은_오류로_끝난_호출을_세지_않는다():
+    calls = ({"종류": "분야 고르기", "몇째": 0, "보냄": 0.1, "끝": 5.0, "오류": "TimeoutError()"},
+             {"종류": "임베딩", "몇째": 0, "보냄": 0.5, "끝": 0.9}, {"종류": "예비 답변", "몇째": 0, "보냄": 5.1, "첫 조각": 6.0, "끝": 7.0})
+    result = evaluate.TurnResult(QUESTIONS[0], QUESTIONS[0].turns[0], "답", None, (), (), None, first_piece=6.2, done=7.1, calls=calls)
+    stages = evaluate._stages(result)
+    assert stages["분야 고르기 끝"] is None and stages["임베딩 끝"] == 0.9 and stages["답 모델 첫 조각"] == 6.0

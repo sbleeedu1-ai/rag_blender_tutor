@@ -66,3 +66,9 @@ def test_연습_과정_메뉴_칸은_없음을_건너뛰고_줄_번호와_판정
     (tmp_path / "sword.yaml").write_text("조작:\n  - 메뉴: View > Viewport Shading > Material Preview\n  - 메뉴: 없음\n  - 메뉴: Object > Shade Auto Smooth\n", encoding="utf-8")
     assert facts.course_menus(tmp_path, TREE) == [("sword.yaml", 2, "View > Viewport Shading > Material Preview", "나무에 없음"),
                                                   ("sword.yaml", 4, "Object > Shade Auto Smooth", "있음")]
+
+
+def test_단축키는_앞뒤_가운데_글자_거리로_가장_가까운_이름에_붙이고_Mac_키맵도_본다():
+    assert [item["판정"] for item in facts.shortcuts("[[Mesh > Normals]]에서 한참 설명한 뒤 Ctrl+R로 [[Edge > Loop Cut and Slide]]", TREE, KEYS)] == ["맞음"]
+    assert [item["판정"] for item in facts.shortcuts("[[Edge > Loop Cut and Slide]]는 Cmd+R", TREE, KEYS)] == ["맞음"]  # darwin 표에만 있음
+    assert [item["판정"] for item in facts.shortcuts("[[Alt-C]]로 [[Loop Cut and Slide]]를 쓰세요", TREE, KEYS)] == ["기본 키맵과 다름"]  # 키를 감싼 표시는 이름이 아님

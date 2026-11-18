@@ -138,8 +138,10 @@ def run(
             done = clock() - start
             calls = ()
             if log:
-                log.wait_idle()
+                idle = log.wait_idle()
                 calls = tuple(log.take())
+                if not idle:  # 앞 차례 결과를 버리지 않게 멈추지 않고, 토큰 셈이 다음 차례와 섞였을 수 있음을 남긴다
+                    calls += ({"종류": "기다림 넘김", "오류": "뒤에서 도는 호출이 끝나지 않아 이 차례·다음 차례의 토큰 셈이 섞였을 수 있음"},)
             answer = "".join(pieces)
             mentioned = tuple(course for course in similar if course.name in answer)
             found.append(TurnResult(
@@ -524,11 +526,11 @@ STAGES = ("질문 바꾸기 닫힘", "분야 고르기 끝", "임베딩 끝", "�
 def _stages(result: TurnResult) -> dict[str, float | None]:
     """차례를 물은 때부터 단계마다 걸린 초(그 단계가 없었으면 None). 앞 다섯은 호출 기록의 시계, 뒤 둘은 run의 시계로 잰 값이다
     (두 시계는 같은 순간에 0이 된다). 질문 바꾸기는 가장 먼저 닫힌 검색어(엔진이 쓰는 것), 답 모델은 마지막 답변 호출
-    (분야 고르기가 실패하면 예비 답변). "답 모델 첫 조각"과 "화면 첫 조각"의 차이가 화면 글자로 바꾸려고 글을 붙잡은 시간이다."""
+    (분야 고르기가 실패하면 예비 답변). 오류로 끝난 질문 바꾸기·분야 고르기·임베딩 호출은 세지 않는다. "답 모델 첫 조각"과 "화면 첫 조각"의 차이가 화면 글자로 바꾸려고 글을 붙잡은 시간이다."""
     calls = result.calls
 
     def earliest(kind: str, key: str) -> float | None:
-        return min((call[key] for call in calls if call["종류"] == kind and key in call), default=None)
+        return min((call[key] for call in calls if call["종류"] == kind and key in call and "오류" not in call), default=None)
 
     answer = next((call for call in reversed(calls) if call["종류"] in SENT_KINDS), {})
     found = [earliest("질문 바꾸기", "검색어 닫힘"), earliest("분야 고르기", "끝"), earliest("임베딩", "끝"),
