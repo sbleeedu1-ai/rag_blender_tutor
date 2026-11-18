@@ -3813,3 +3813,7 @@
 - 사용자 결정 [447]: "ㅇㅇ 애초에 뜨면 막아". `.claude/hooks/ask_file_delete.py`가 rm·rmdir·Remove-Item·git reset --hard·git clean에 확인 창(ask) 대신 막음(deny)을 돌려주고, 이유 첫 줄에 "trash/<날짜>/<시각>_<원래 이름>으로 mv, trash/기록.txt 한 줄, 정말 지워야 하면 사용자가 직접 실행"을 적는다. 그 아래는 전처럼 무엇이 사라질 뻔했는지.
 - 확인: `tests/test_file_delete_hook.py` 8개 통과([437]의 `rm -rf answer_diff_코드2 …` 명령에서 막힘). 옛 묻기 코드로 돌리면 7개 실패. 실제로 스크래치패드의 시험 파일에 `rm`을 부르자 훅이 막고 위 안내를 보임(같은 줄의 `touch`도 함께 안 돌아감).
 - 달라진 것: Claude는 사용자가 대화에서 지우라고 해도 직접 지울 수 없다. git reset --hard·git clean도 막힌다. AGENTS.md의 지우기 줄과 rules-enforced.md 17줄을 고침.
+
+### [450] 2026-11-18 · 밤사이 정한 노드 계산 이름 괄호 꼴([436])을 사용자가 받아들인다
+- 사용자: "노드 계산 이름을 지우지 않고 남김 <- 이젠 제대로 나온다는 소리네 ㅇㅇ". "수학(Math) 곱하기(Multiply) 노드" 꼴을 그대로 둔다.
+- 같은 때 사전에 더한 이름 30개(철자 표 26·통과 제목 4)는 Blender 소스·번역 함수로만 확인했고 화면으로는 Copy to Selected 하나만 봤다고 다시 알림(남은 일 "철자 표 33줄 화면 확인"과 같은 거리).
