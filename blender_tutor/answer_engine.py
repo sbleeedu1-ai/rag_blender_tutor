@@ -218,9 +218,9 @@ class Source:
 
     path: str  # 쪽 제목 > 소제목 경로(예: Bevel Modifier > Options)
     url: str  # /en/5.2/<경로>.html#<앵커>
-    has_image: bool  # 그림 있음
-    has_video: bool  # 영상 있음
-    videos: tuple[str, ...]  # 영상 링크
+    has_image: bool
+    has_video: bool
+    videos: tuple[str, ...]
 
 
 @dataclass(frozen=True)

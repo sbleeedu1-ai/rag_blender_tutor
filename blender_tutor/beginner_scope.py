@@ -35,7 +35,7 @@ class Page:
 
     path: str  # 쪽 경로(.html 뺀 것, 예: modeling/modifiers/generate/bevel)
     field: str  # 분야(경로 첫 폴더)
-    title: str  # 쪽 제목
+    title: str
     headings: tuple[str, ...]  # 첫 겹 소제목 이름, 나온 차례로 한 번씩
     intro: str  # 쪽 글 첫머리 INTRO_WORDS 낱말
 

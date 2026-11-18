@@ -29,7 +29,7 @@ SHORTEST = 0.3  # 번역 글자 수 ÷ 원문 글자 수가 이보다 작으면 
 class Problem:
     """검사에 걸린 곳 하나."""
 
-    key: str  # 청크 열쇠
+    key: str
     kind: str  # 글자 없음 · 영어로 둘 이름을 옮김 · 키 사라짐 · 잘림 · 번역 안 됨
     detail: str  # 기대한 모양이나 사라진 것
 

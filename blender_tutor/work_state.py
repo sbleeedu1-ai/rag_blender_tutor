@@ -16,9 +16,9 @@ class ActiveObject:
     name: str  # 한국어 화면에서 만든 물체는 "실린더"처럼 한국어일 수 있다
     type: str  # Blender 물체 종류(예: MESH)
     modifiers: tuple[str, ...]  # 모디파이어 종류(예: BEVEL), 위에서 아래 차례
-    scale: tuple[float, float, float]  # 배율
-    dimensions: tuple[float, float, float]  # 크기
-    material_slot_count: int  # 재질 슬롯 수
+    scale: tuple[float, float, float]
+    dimensions: tuple[float, float, float]
+    material_slot_count: int
     location: tuple[float, float, float] = (0.0, 0.0, 0.0)  # 위치. 테스트에서 줄여 쓰도록 기본값을 둔다
 
 
@@ -42,9 +42,9 @@ class WorkState:
     active_object: ActiveObject | None  # 활성 물체가 없으면 None
     selected_objects: tuple[str, ...]  # 고른 물체 이름(수는 길이)
     language: str  # 화면 언어(예: ko_KR). 설정이 '자동'이어도 실제로 쓰는 언어
-    translate_interface: bool  # 인터페이스 번역 켜짐
+    translate_interface: bool
     file_path: str  # 열린 파일 경로. 저장 전이면 ""
-    scene_object_count: int  # 장면 물체 수
+    scene_object_count: int
     blender_version: str  # 예: 5.2.2
     edit_selected: dict[str, int]  # 편집 모드 선택 방식(VERT·EDGE·FACE) → 고른 개수. 메시 편집 모드가 아니면 비움
     recent_operators: tuple[str, ...]  # 방금 실행한 조작(오래된 차례, 최대 3개), 'mesh.merge' 꼴

@@ -119,7 +119,7 @@ class MenuName:
     translations: tuple[Translation, ...]  # 서로 다른 한국어만, 사전에 나온 차례로
     chunks: int  # 이 이름이 나온 청크 수
     example: str  # 처음 나온 청크 링크(검수 때 실제 쪽을 열어 본다)
-    sources: tuple[Source, ...] = ()  # 어디서 뽑았나
+    sources: tuple[Source, ...] = ()
 
     @property
     def status(self) -> Status:
