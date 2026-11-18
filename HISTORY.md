@@ -3808,3 +3808,8 @@
 - 새로 찾은 것(사용자에게 물음): 2D Animation처럼 사전 번역이 WorkSpace 문맥뿐인 이름이 넷 더 있다. UV Editing "UV 편집함", Rendering "렌더링함", Video Editing "비디오 편집함", 2D Full Canvas "2D 풀 캔버스로". 작업 공간 탭과 추가 메뉴(일반)에서 UV Editing·Rendering은 영어로 봄, 2D Full Canvas는 추가 메뉴(2D 애니메이션)에서 영어로 봄, Video Editing은 안 봄. 지난 시험 답(results/ 아래 모든 jsonl, 같은 답 되풀이 포함)에서 grep으로 "UV 편집함(UV Editing)"이 17번, "렌더링함(Rendering)"이 2번 걸렸다.
 - 안 바꾼 것: 번역 쪽(`translate.screen_words`)은 같은 꼴 검사를 쓰지만 이번 결정은 답 바꾸기라 그대로 둠. 괄호 든 30·번역이 어색해 보인 14는 계속 미룸.
 - 다른 PC: `screen_extra.json`(Git 밖)을 다시 만들어야 70개가 들어온다(`.venv\Scripts\python -m blender_tutor.menu_names extra data/ui_ko_5.2/ko.po data/ui_ko_5.2/fr.po data/menu_names`). 안 만들어도 도우미는 켜진다(옛 목록으로 돎).
+
+### [449] 2026-11-18 · 사용자가 없는 밤에 확인 창으로 멈추지 않도록, 지우기 훅이 묻지 않고 막게 바꾼다
+- 사용자 결정 [447]: "ㅇㅇ 애초에 뜨면 막아". `.claude/hooks/ask_file_delete.py`가 rm·rmdir·Remove-Item·git reset --hard·git clean에 확인 창(ask) 대신 막음(deny)을 돌려주고, 이유 첫 줄에 "trash/<날짜>/<시각>_<원래 이름>으로 mv, trash/기록.txt 한 줄, 정말 지워야 하면 사용자가 직접 실행"을 적는다. 그 아래는 전처럼 무엇이 사라질 뻔했는지.
+- 확인: `tests/test_file_delete_hook.py` 8개 통과([437]의 `rm -rf answer_diff_코드2 …` 명령에서 막힘). 옛 묻기 코드로 돌리면 7개 실패. 실제로 스크래치패드의 시험 파일에 `rm`을 부르자 훅이 막고 위 안내를 보임(같은 줄의 `touch`도 함께 안 돌아감).
+- 달라진 것: Claude는 사용자가 대화에서 지우라고 해도 직접 지울 수 없다. git reset --hard·git clean도 막힌다. AGENTS.md의 지우기 줄과 rules-enforced.md 17줄을 고침.

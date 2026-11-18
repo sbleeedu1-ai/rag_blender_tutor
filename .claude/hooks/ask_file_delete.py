@@ -1,10 +1,11 @@
-"""되살리기 어려운 지우기 명령을 실행하기 전에, 무엇이 사라지고 되살릴 수 있는지 쉬운 말로 묻는 훅
-(PreToolUse, Bash·PowerShell). HISTORY [144]·[145].
+"""되살리기 어려운 지우기 명령을 막고, 무엇이 사라질 뻔했는지와 대신 할 일(trash로 옮기기)을 알려 주는 훅
+(PreToolUse, Bash·PowerShell). HISTORY [144]·[145]·[447]·[449].
 
 - rm·rmdir·Remove-Item: 지울 대상마다 파일·폴더인지, git으로 되살릴 수 있는지, 어디에 있는지.
 - git reset --hard: 버려지는 고친 내용(파일 목록).
 - git clean: 지워지는 git 밖 파일(git clean -n으로 미리 본 목록).
-설정의 "ask" 규칙 없이 이 훅만으로 확인 창을 띄운다. 거부는 하지 않는다.
+처음에는 확인 창으로 물었는데(ask), 사용자가 없는 밤에 창이 떠 작업이 아침까지 멈췄다([437]). 사용자 "ㅇㅇ 애초에 뜨면 막아"([447]·[449])로
+묻지 않고 막는다(deny). 정말 지워야 하면 사용자에게 말해 사용자가 직접 실행한다.
 해당 명령이 없으면 아무것도 하지 않는다(출력 없음 = 평소 권한 규칙대로).
 """
 
@@ -23,6 +24,9 @@ DELETE_COMMANDS = {"rm", "rmdir", "remove-item"}
 _VALUE_OPTIONS = {"-filter", "-include", "-exclude", "-credential", "-stream"}
 SHOWN_AT_MOST = 10
 CANNOT = "되살릴 수 없음 (git 기록 없음)"
+BLOCKED = ("[막음] 지우기 명령은 실행하지 않습니다(HISTORY [447]·[449], 사용자 \"애초에 뜨면 막아\"). 지울 파일은 저장소 바로 위 trash/<날짜>/<시각>_<원래 이름>으로 "
+           "mv하고 trash/기록.txt에 언제·어느 프로젝트의 무엇을·무슨 작업 중에·왜를 한 줄 남깁니다(AGENTS.md). "
+           "정말 지워야 하면 사용자에게 알리고 사용자가 직접 실행합니다.")
 
 
 def targets(words: list[str]) -> list[str] | None:
@@ -158,7 +162,8 @@ def decide(command: str, cwd: str) -> dict | None:
     others = len(parts) - len(sections)
     if others:
         sections.append(f"(이 줄에는 다른 명령 {others}개도 함께 있습니다.)")
-    return {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": "\n".join(sections)}
+    return {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+            "permissionDecisionReason": "\n".join([BLOCKED, *sections])}
 
 
 def main() -> None:

@@ -1,4 +1,4 @@
-"""파일 지우기 확인 훅(.claude/hooks/ask_file_delete.py, HISTORY [144]·[145]): 임시 git 저장소로 본다."""
+"""파일 지우기 막는 훅(.claude/hooks/ask_file_delete.py, HISTORY [144]·[145]·[447]·[449]): 임시 git 저장소로 본다."""
 
 import importlib.util
 import subprocess
@@ -33,8 +33,10 @@ def repo(tmp_path):
 
 def reason(command, cwd):
     answer = hook.decide(command, cwd)
-    assert answer["permissionDecision"] == "ask", command
-    return answer["permissionDecisionReason"]
+    assert answer["permissionDecision"] == "deny", command
+    text = answer["permissionDecisionReason"]
+    assert text.startswith("[막음] ") and "trash/" in text
+    return text.split("\n", 1)[1]
 
 
 def test_대상마다_되살릴_수_있는지_알려_준다(repo):
@@ -85,3 +87,11 @@ def test_지우지_않는_명령에는_관여하지_않는다(repo):
     for command in ("git rm --cached x", "ls -rm", 'echo "rm new.txt"', "git status", "python -m pytest",
                     "git reset HEAD x", "git clean -n", "git clean --dry-run -d"):
         assert hook.decide(command, repo) is None, command
+
+
+def test_밤새_멈췄던_지우기_명령도_묻지_않고_막는다(tmp_path):
+    # [437]: 01시쯤 대조 결과 폴더를 다시 만들기 전 rm -rf로 지우려다 확인 창이 떠 08시까지 멈춤. 사용자 "ㅇㅇ 애초에 뜨면 막아"([447]·[449])
+    (tmp_path / "answer_diff_코드2").mkdir()
+    answer = hook.decide("rm -rf answer_diff_코드2 && .venv/bin/python .claude/tools/answer_diff.py --출력 answer_diff_코드2", str(tmp_path))
+    assert answer["permissionDecision"] == "deny"
+    assert "mv" in answer["permissionDecisionReason"] and "기록.txt" in answer["permissionDecisionReason"]
