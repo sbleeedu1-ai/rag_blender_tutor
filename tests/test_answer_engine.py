@@ -1182,6 +1182,8 @@ def test_괄호까지가_이름인_것은_괄호를_지우지_않는다():
         # 조각으로 끊겨 와도 같다(통째·조각 대조)
         (("[[Math]](Mul", "tiply)를 고릅니다."), "수학(Math) 곱하기(Multiply)를 고릅니다."),
         (("Math(Mul", "tiply)", "를 고릅니다."), "수학(Math) 곱하기(Multiply)를 고릅니다."),
+        # 사전에 없는 계산 이름도 노드 머리 문맥 번역이 있으면 한국어로([438], 저장된 사전에 "Divide"가 없었다)
+        ("Math(Divide) 노드", "수학(Math) 나누기(Divide) 노드"),
     ],
 )
 def test_머리_제목이_계산_이름인_노드_뒤_괄호의_계산_이름은_남긴다(answer, expected):
@@ -1189,7 +1191,7 @@ def test_머리_제목이_계산_이름인_노드_뒤_괄호의_계산_이름은
     # (사용자 "그냥 물어본대로 Multiply 던지 곱하기 라고 답변하면됐엇는데", [429]). 머리 제목이 목록 칸 값인 노드는 Blender 소스 labelfunc로 찾은 표
     names = MenuNames([*SCREEN_NAMES, _name("Math", "수학"), _many("Multiply", ("곱하기", "*"), ("곱하기", "NodeTree")),
                        _many("Power", ("파워", "*"), ("전원", "NodeTree")), _many("Round", ("둥근", "*"), ("라운드", "NodeTree"))],
-                      choices={"Round": "*"}, extra=SCREEN_EXTRA)  # fmt: skip  Round 짝을 기본 문맥으로 둬야 맨 글 바꾸기가 "둥근"으로 바꾼다
+                      choices={"Round": "*"}, extra=SCREEN_EXTRA, node_glyphs={"NodeTree": {"Multiply": "곱하기", "Power": "전원", "Round": "라운드", "Divide": "나누기"}})  # fmt: skip  Round 짝을 기본 문맥으로 둬야 맨 글 바꾸기가 "둥근"으로 바꾼다
     pieces = answer if isinstance(answer, tuple) else (answer,)
     engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
     assert "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece)) == expected

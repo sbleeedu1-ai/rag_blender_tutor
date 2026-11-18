@@ -90,5 +90,12 @@
  "Cursor To Selected": "Cursor to Selected",
  "Join in new Frame": "Join in New Frame",
  "Mask From Mesh Boundary": "Mask from Mesh Boundary",
- "Mask From Face Sets Boundary": "Mask from Face Sets Boundary"
+ "Mask From Face Sets Boundary": "Mask from Face Sets Boundary",
+ "Auto Detect": "Auto-Detect",
+ "Bi-scale Grab": "Bi-Scale Grab",
+ "Tri-scale Grab": "Tri-Scale Grab",
+ "Key Binding": "Key-Binding",
+ "No Display": "No display",
+ "No Export": "No export",
+ "Ping-pong": "Ping-Pong"
 }

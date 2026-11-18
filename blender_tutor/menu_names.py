@@ -12,8 +12,10 @@ from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+from bs4 import BeautifulSoup
+
 from blender_tutor.korean_particles import PARTICLE, fit_particle
-from blender_tutor.manual_chunks import Chunk, chunk_manual
+from blender_tutor.manual_chunks import BASE_URL, Chunk, chunk_manual
 from blender_tutor.paths import MENU_ALIASES, MENU_CHOICES, MENU_COMMON, MENU_TITLES, NODE_TITLE_ITEMS
 
 DEFAULT_CONTEXT = "*"  # 문맥 없는 일반 문구. Blender Python도 이렇게 적는다(bpy.app.translations.contexts.default)
@@ -73,6 +75,17 @@ class Source(StrEnum):
     UI = "화면 표시"  # 메뉴 경로(Add ‣ Mesh)·버튼 이름 표시
     OPTION = "옵션"  # 옵션 이름
     TITLE = "제목"  # 쪽 제목·소제목(ko.po에 있는 것만). 블렌더 표기가 아닌 흔한 낱말도 섞여 따로 검수한다
+    VALUE = "값"  # 값 목록 이름("Divide: 두 값을 나눔"의 Divide). 청크는 옵션 목록만 이름으로 뽑아 따로 모은다([438])
+
+
+def needs_title_check(sources: Iterable[Source]) -> bool:
+    """제목 검수를 통과해야 쓰는 이름인가: 쪽 제목·소제목에서 나왔고, 그 밖에는 값 목록에서만 나온 이름.
+
+    값 목록 이름([438])은 메뉴 경로·옵션처럼 화면 이름이라는 따로 된 근거가 아니다. 제목 검수에서 일상 낱말이라 떨어진 이름
+    (Windows·Standard·Note 등 39개)이 값 목록에도 있어, 값 출처로 검수를 건너뛰면 [418]에서 뺀 것이 되살아났다.
+    """
+    sources = set(sources)
+    return Source.TITLE in sources and sources <= {Source.TITLE, Source.VALUE}
 
 
 class Status(StrEnum):
@@ -113,7 +126,7 @@ class MenuNames:
 
     def __init__(
         self, names: Iterable[MenuName], choices: Mapping[str, str] = {}, titles: Iterable[str] = (), extra: Mapping[str, str] = {},
-        common: Mapping[str, Iterable[str]] = {},
+        common: Mapping[str, Iterable[str]] = {}, node_glyphs: Mapping[str, Mapping[str, str]] = {},
     ):
         """choices는 번역이 여러 개인 이름에 고정한 짝: 영어 이름 → 화면이 쓰는 문맥(사용자 검수, 티켓 23).
 
@@ -149,11 +162,12 @@ class MenuNames:
         passed = {_english_key(english) for english in titles}
         for english in titles:  # 고정 짝처럼 틀린 이름은 바로 멈춘다(오타·사전 다시 만든 뒤 어긋남)
             name = self.get(english)
-            if name is None or name.sources != (Source.TITLE,):
+            if name is None or not needs_title_check(name.sources):
                 raise ValueError(f"통과 제목 {english!r}: 사전에 제목에서만 뽑은 이름으로 없음")
         self._in_questions = _question_index(self._by_english.values(), passed)  # english_in이 쓰는 표
         self._passed = passed
         self._extra = {_english_key(english): korean for english, korean in extra.items()}
+        self._node_glyphs = node_glyphs  # 노드 머리 칸 문맥 → 계산 이름 → 한국어(node_glyphs, 사전 만들 때 ko.po에서, [438])
         # 화면 글자에 쓰인 낱말 모음: 앞말 끝 낱말이 여기 있으면 '-어'로 끝나도 이어 주는 꼴로 보지 않는다("모디파이어", [393])
         self.glyph_words = frozenset(w for name in self._by_english.values() for t in name.translations for w in t.korean.split())
         kinds = {_squash(tail) for tail in COMMON_TAILS}
@@ -198,6 +212,8 @@ class MenuNames:
         item = next((i for i in entry["items"] if i.casefold() == wanted), None) if entry else None
         if item is None or item.casefold() == node.strip().casefold():  # "Warning(Warning)"은 같은 이름 되풀이라 지운다
             return None
+        if self._node_glyphs:  # 사전 만들 때 뽑은 그 문맥 번역이 있으면 그것만 본다(없으면 화면도 영어)
+            return item, self._node_glyphs.get(entry["context"], {}).get(item)
         name = self.get(item)
         korean = (next((t.korean for t in name.translations if entry["context"] in t.contexts), None) if name
                   else self._extra.get(_english_key(item)))
@@ -249,7 +265,7 @@ class MenuNames:
           월드 배경·노멀 맵 노드·태양 조명 칸 글자이고, 조각 브러시·훅 모디파이어 칸은 기본 문맥 '강도', HISTORY [425])
         """
         name = self.get(english) or self.get(english + "...")
-        if name is not None and name.sources == (Source.TITLE,) and _english_key(name.english) not in self._passed:
+        if name is not None and needs_title_check(name.sources) and _english_key(name.english) not in self._passed:
             return False, None
         if name is not None and (name.english in PLACE_DEPENDENT or any(parent and key == _english_key(name.english) for parent, key in self._choices)):
             return True, None  # 메뉴마다 글자가 다른 이름(Bisect·Normal 등 경로 열쇠가 있는 것)은 어느 메뉴인지 알 때만
@@ -309,7 +325,7 @@ class MenuNames:
 
     def title_only(self) -> list[MenuName]:
         """제목에서만 뽑은 이름을 많이 나온 차례로. 블렌더 표기가 아닌 흔한 낱말이 섞였는지 검수한다."""
-        return _by_count(name for name in self if name.sources == (Source.TITLE,))
+        return _by_count(name for name in self if needs_title_check(name.sources))
 
     def save(self, path: Path) -> None:
         rows = [asdict(name) for name in self._by_english.values()]
@@ -332,7 +348,7 @@ class MenuNames:
 
     @classmethod
     def load(cls, path: Path, choices: Mapping[str, str] = {}, titles: Iterable[str] = (), extra: Mapping[str, str] = {},
-             common: Mapping[str, Iterable[str]] = {}) -> "MenuNames":
+             common: Mapping[str, Iterable[str]] = {}, node_glyphs: Mapping[str, Mapping[str, str]] = {}) -> "MenuNames":
         rows = json.loads(path.read_text(encoding="utf-8"))
         names = [
             MenuName(
@@ -344,7 +360,7 @@ class MenuNames:
             )
             for row in rows
         ]
-        return cls(names, choices, titles, extra, common)
+        return cls(names, choices, titles, extra, common, node_glyphs)
 
 
 def _question_index(names: Iterable[MenuName], passed: set[str]) -> dict[str, tuple[str, ...]]:
@@ -354,7 +370,7 @@ def _question_index(names: Iterable[MenuName], passed: set[str]) -> dict[str, tu
     """
     index: dict[str, dict[str, None]] = {}
     for name in names:
-        if name.sources == (Source.TITLE,) and _english_key(name.english) not in passed:
+        if needs_title_check(name.sources) and _english_key(name.english) not in passed:
             continue
         for translation in name.translations:
             index.setdefault(_korean_key(translation.korean), {})[name.english] = None
@@ -793,6 +809,7 @@ def screen_marks(text: str, names: "MenuNames | None") -> str:
     return _MARK.sub(lambda match: screen_path(match.group(1), names), text)
 
 
+NODE_GLYPHS_FILE = "node_title_glyphs.json"  # 노드 머리 칸 문맥 번역(node_glyphs). data/에 두고 커밋하지 않는다(번역 글자, [438])
 EXTRA_FILE = "screen_extra.json"  # 넓힌 목록(extra_names). data/에 두고 커밋하지 않는다(번역 글자가 들어 있음)
 
 
@@ -813,17 +830,68 @@ def load_menu_names(
     if not isinstance(common, dict) or not all(isinstance(k, str) and isinstance(v, list) and all(isinstance(x, str) for x in v)
                                                for k, v in common.items()):
         raise ValueError(f"흔히 옮기는 말 목록 {common_path}: {{'lists': {{'영어 이름': ['한국어 말', …]}}}} 모양이어야 함")
-    return MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles), extra, common)
+    glyphs_path = data_dir / "menu_names" / NODE_GLYPHS_FILE
+    node_glyphs = json.loads(glyphs_path.read_text(encoding="utf-8")) if glyphs_path.exists() else {}
+    return MenuNames.load(names_path, MenuNames.load_choices(menu_choices), MenuNames.load_titles(menu_titles), extra, common,
+                          node_glyphs)
+
+
+def _looks_like_value(english: str) -> bool:
+    """값 이름 같은 것: 화면 이름 꼴(looks_like_name)에 더해 숫자·부호로 시작하는 값("2D Vector", "+X to -X")과
+    낱말 안 마침표("Linear Rec.709")도 받는다. 소문자로 시작하는 명령줄 값(name·remove)과 숫자뿐인 값("1024")은 뺀다([438])."""
+    words = english.split()
+    return (0 < len(words) <= 5 and re.search(r"[A-Za-z]", english) is not None and (english[0].isupper() or english[0].isdigit() or english[0] in "+-")
+            and words[0] not in ARTICLES and not re.search(r'[%{}:;!?"\\]|\.$|\.\s', english))
+
+
+def node_glyphs(po_text: str, nodes: Mapping[str, Mapping] = NODE_TITLES) -> dict[str, dict[str, str]]:
+    """노드 머리 제목이 되는 계산 이름(menu_tables/node_title_items.json)의 그 문맥 번역: 문맥 → 영어 → 한국어.
+
+    사전·넓힌 목록은 맨 글 규칙(번역이 여럿이거나 어느 자리에서 화면이 영어면 뺌)을 따라 Divide·Greater Than 등이 빠진다.
+    노드 머리 칸은 번역 문맥이 정해져 있어(수학 NodeTree, 믹스 Color) 그 문맥의 ko.po 번역이 곧 화면 글자다([438]).
+    번역이 영어 그대로이거나 그 문맥에 번역이 없으면 담지 않는다(화면도 영어).
+    """
+    wanted = {(entry["context"], item) for entry in nodes.values() for item in entry["items"]}
+    found: dict[str, dict[str, str]] = {}
+    for context, english, korean in read_po(po_text):
+        if (context, english) in wanted and korean != english:
+            found.setdefault(context, {})[english] = korean
+    return found
+
+
+def value_names(root: Path) -> dict[str, list[str]]:
+    """설명서 HTML 폴더의 값 목록(정의 목록 가운데 field-list, "Divide: 두 값을 나눔") 이름 → 나온 쪽(폴더 기준 경로) 목록.
+
+    청크는 옵션 목록(field-list가 아닌 정의 목록)의 이름만 옵션으로 뽑아(manual_chunks._is_option_list), 계산·방식 같은 값 이름은
+    사전에 들어가지 않았다(2026-11-18 [438]: 값 목록 이름 1,544 중 번역이 있는데 빠진 것 56, Divide·Greater Than 등).
+    """
+    found: dict[str, list[str]] = {}
+    for page in sorted(root.rglob("*.html")):
+        soup = BeautifulSoup(page.read_text(encoding="utf-8", errors="ignore"), "html.parser")
+        for dl in soup.find_all("dl", class_="field-list"):
+            if dl.find_parent(class_="refbox"):
+                continue  # 참조 상자의 Mode·Menu·Shortcut 같은 머리말은 값 이름이 아니다(이것만 나오는 23개, advisor 11-18)
+            for dt in dl.find_all("dt", recursive=False):
+                for key in dt.find_all("kbd"):
+                    key.decompose()
+                name = " ".join(dt.get_text(" ").split()).removesuffix(":").strip()
+                where = page.relative_to(root).as_posix()  # 링크로 쓰니 Windows에서도 / (CI는 Windows)
+                if name and where not in found.setdefault(name, []):
+                    found[name].append(where)
+    return found
 
 
 def build_menu_names(
-    chunks: Iterable[Chunk], po_text: str, full_po_text: str = "", aliases: Mapping[str, str] = {}
+    chunks: Iterable[Chunk], po_text: str, full_po_text: str = "", aliases: Mapping[str, str] = {},
+    values: Mapping[str, list[str]] = {},
 ) -> MenuNames:
     """청크들의 블렌더 표기를 ko.po 글과 짝지어 사전을 만든다.
 
     full_po_text는 번역률 100%인 다른 언어 사전(fr.po) 글이다. Blender가 쓰는 (문맥, 영어) 전체 목록으로 써서,
     한국어 번역이 빠진 문맥은 '영어 그대로'를 후보로 더한다. At Center는 Operator 문맥에만 "센터에서"가 있고
     병합 메뉴가 쓰는 Mesh 문맥에는 번역이 없어 화면에 영어로 보이기 때문이다(티켓 12·20).
+
+    values는 값 목록 이름 → 나온 쪽(value_names). 화면 이름 꼴(looks_like_name)만 담고 나온 쪽 수를 청크 수로 센다([438]).
 
     aliases는 설명서 철자 → 화면 철자 표다(menu_aliases.json). 설명서는 "Icosphere", 화면 추가 메뉴는 "Ico Sphere"처럼
     철자가 달라 ko.po의 다른 줄과 짝지어지는 이름만 적는다. 이름은 설명서 철자로 두고 번역은 화면 철자로 찾는다(티켓 31).
@@ -847,6 +915,12 @@ def build_menu_names(
         for key, sources in in_chunk.items():
             seen[key].chunks += 1
             seen[key].sources |= sources
+    for english, pages in values.items():
+        if english in KEY_NAMES or not _looks_like_value(english):
+            continue
+        item = seen.setdefault(_english_key(english), _Seen(english, f"{BASE_URL}{pages[0]}"))
+        item.chunks += len(pages)
+        item.sources.add(Source.VALUE)
     return MenuNames(
         MenuName(
             english=item.english,
@@ -991,10 +1065,12 @@ def main(argv: list[str]) -> int:
     root, po, full_po, out = Path(argv[0]), Path(argv[1]), Path(argv[2]), Path(argv[3])
     aliases = MenuNames.load_aliases(MENU_ALIASES)
     names = build_menu_names(
-        chunk_manual(root), po.read_text(encoding="utf-8"), full_po.read_text(encoding="utf-8"), aliases
+        chunk_manual(root), po.read_text(encoding="utf-8"), full_po.read_text(encoding="utf-8"), aliases, value_names(root)
     )
     out.mkdir(parents=True, exist_ok=True)
     names.save(out / "menu_names.json")
+    (out / NODE_GLYPHS_FILE).write_text(json.dumps(node_glyphs(po.read_text(encoding="utf-8")), ensure_ascii=False, indent=1),
+                                        encoding="utf-8")
     review = names.to_review()
     title_only = names.title_only()
     (out / "review.md").write_text(_review_markdown(review, title_only), encoding="utf-8")

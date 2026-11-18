@@ -18,6 +18,9 @@ from blender_tutor.menu_names import (
     Translation,
     build_menu_names,
     extra_names,
+    value_names,
+    _looks_like_value,
+    node_glyphs,
     load_menu_names,
     read_po,
     prose_cut, screen_marks, screen_path,
@@ -495,3 +498,55 @@ def test_흐르는_답을_붙잡는_영어_덩이에는_한도가_있다():
     # 닫히지 않은 괄호 뒤 긴 영어면 0을 돌려줘 글 전체를 붙잡는다
     text = "설명 (" + "the quick brown fox jumps over " * 80
     assert 0 < prose_cut(text) < len(text)
+
+
+def test_값_목록_이름도_사전에_넣는다(tmp_path):
+    # 2026-11-18 [438]: 설명서가 "Divide: 두 값을 나눔"처럼 값 목록(field-list)으로 적은 이름은 사전에 들어가지 않아
+    # 번역이 있어도 답에서 영어로 남았다(값 목록 이름 1,544 중 번역 있는데 빠진 것 56, [357]에서 "-Z Forward"로 처음 봄)
+    page = tmp_path / "nodes" / "math.html"
+    page.parent.mkdir()
+    page.write_text('<dl class="field-list"><dt class="field-odd">Translate<span class="colon">:</span></dt><dd>옮김</dd>'
+                    '<dt class="field-even">now<span class="colon">:</span></dt><dd>CLI 값</dd>'
+                    '<dt class="field-odd"><kbd>Ctrl</kbd> Array (Legacy)</dt><dd>-</dd></dl>'
+                    '<dl class="simple"><dt>Mesh</dt><dd>옵션 목록은 청크가 맡는다</dd></dl>'
+                    '<div class="refbox"><dl class="field-list"><dt>Mode<span class="colon">:</span></dt><dd>Edit Mode</dd></dl></div>',
+                    encoding="utf-8")  # 참조 상자 머리말(Mode)은 값 이름이 아니다
+    values = value_names(tmp_path)
+    assert values == {"Translate": ["nodes/math.html"], "now": ["nodes/math.html"], "Array (Legacy)": ["nodes/math.html"]}
+
+    names = build_menu_names([chunk("first", ("Mesh",))], PO, values=values)
+
+    translate = names.get("Translate")
+    assert (translate.sources, translate.translations, translate.chunks) == ((Source.VALUE,), (Translation("옮기기", ("*",)),), 1)
+    assert names.get("now") is None  # 소문자로 시작하는 값(명령줄 값 등)은 화면 이름이 아니라 뺀다
+    assert names.get("Mesh").sources == (Source.UI,)
+
+
+def test_노드_머리_계산_이름은_그_문맥_번역을_따로_뽑는다():
+    # 2026-11-18 [438]: Divide는 ko.po NodeTree 문맥에 "나누기"가 있는데, 사전에 없고(값 목록) 넓힌 목록은 믹스 노드 Color 문맥이
+    # 영어라 빼서 "수학(Math) Divide"로 남았다. 노드 머리 칸은 문맥이 정해져 있어 그 문맥 번역만 보면 된다
+    po = PO + 'msgctxt "NodeTree"\nmsgid "Divide"\nmsgstr "나누기"\n\nmsgid "Divide"\nmsgstr "나누기"\n\nmsgctxt "NodeTree"\nmsgid "Snap"\nmsgstr "Snap"\n'
+    glyphs = node_glyphs(po, {"Math": {"context": "NodeTree", "items": ["Divide", "Snap", "Power"]},
+                              "Mix": {"context": "Color", "items": ["Divide"]}})
+    assert glyphs == {"NodeTree": {"Divide": "나누기"}}  # 번역이 영어 그대로이거나 그 문맥에 없으면 빼서 영어로 둔다(믹스 Divide는 화면도 영어)
+
+
+def test_제목과_값_목록에만_나온_이름은_제목_검수를_통과해야_바꾼다():
+    # 2026-11-18 [438]: 값 목록 이름을 넣자 제목 검수에서 떨어진 일상 낱말(Standard·Windows 등 39개)이 값 출처로 되살아났다.
+    # [418] Standard는 "Unity에서 Standard 셰이더"가 "표준"으로 바뀌어 뺀 것이다
+    def name(english, *sources):
+        return MenuName(english, (Translation("표준", ("*",)),), 1, URL, sources)
+
+    names = MenuNames([name("Standard", Source.TITLE, Source.VALUE), name("Cone", Source.TITLE, Source.VALUE),
+                       name("Strand", Source.VALUE), name("Array", Source.TITLE, Source.OPTION)], titles=["Cone"])
+    assert names.in_prose("Standard") == (False, None)  # 떨어진 제목은 값 목록에 있어도 안 바꾼다
+    assert names.in_prose("Cone") == (True, "표준")  # 통과 제목은 값 출처가 붙어도 통과 제목으로 받는다
+    assert names.in_prose("Strand") == (True, "표준")  # 값 목록에서만 나온 이름은 옵션처럼 바꾼다
+    assert names.in_prose("Array") == (True, "표준")  # 옵션 출처는 따로 된 근거라 검수 없이
+
+
+@pytest.mark.parametrize("english, kept", [("2D Vector", True), ("+X to -X", True), ("Linear Rec.709", True), ("Divide", True),
+                                           ("1024", False), ("name", False), ("Use the value.", False), ("Mode:", False)])
+def test_값_이름_꼴(english, kept):
+    # [438]: 값 목록에는 "2D Vector"·"+X to -X" 같은 화면 이름과 숫자·명령줄 값·문장이 섞여 있다
+    assert _looks_like_value(english) is kept
