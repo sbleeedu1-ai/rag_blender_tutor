@@ -262,6 +262,18 @@ def test_묶음_전체를_돌리되_기여자용_contribute_쪽과_색인_쪽은
     assert [(c.page_path, c.page_title) for c in chunks] == [("modeling/wands/wand_tool", "Wand Tool")]
 
 
+def test_다른_키맵의_단축키_표_쪽은_빼고_기본_키맵_쪽은_남긴다(tmp_path):
+    pages = [("interface/keymap/blender_default.html", "Default Keymap"), ("interface/keymap/industry_compatible.html", "Industry Compatible Keymap")]
+    for path, title in pages:
+        file = tmp_path / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(page(headed("top", 1, title, "<p>Alt-C Loop Cut.</p>")), encoding="utf-8")
+
+    chunks = chunk_manual(tmp_path)
+
+    assert [(c.page_path, c.page_title) for c in chunks] == [("interface/keymap/blender_default", "Default Keymap")]
+
+
 def test_옵션_하나가_400단어를_넘으면_그_옵션_안의_문단_끝에서_나누고_뒤_조각에_옵션_이름을_붙인다():
     big = "<dl><dt>Operation</dt><dd>" + "".join(f"<p>{words(180, w)}</p>" for w in "abc") + "</dd></dl>"
     html = page(headed("wand-tool", 1, "Wand Tool", big))

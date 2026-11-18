@@ -33,7 +33,8 @@ _UI_MARK = re.compile(_UI_OPEN + "([^" + _UI_CLOSE + "]*)" + _UI_CLOSE)
 _UI_CLASSES = {"menuselection", "guilabel"}  # 설명서가 메뉴 경로(Add ‣ Mesh)와 버튼 이름에 붙이는 표시
 # 검색에서 빼는 폴더: 기여자용 쪽(티켓 06), Sphinx가 만든 원문·그림·꾸밈 파일
 _SKIP_FOLDERS = {"contribute", "_sources", "_images", "_static"}
-_SKIP_PAGES = {"genindex", "search", "404"}  # 색인·검색·없는 쪽 안내(설명 글이 아님)
+# 색인·검색·없는 쪽 안내(설명 글이 아님)와 다른 키맵의 단축키 표(기본 키맵을 전제한 답에 Alt-C 같은 다른 키가 섞임, HISTORY [471])
+_SKIP_PAGES = {"genindex", "search", "404", "interface/keymap/industry_compatible"}
 
 
 class MediaKind(StrEnum):
@@ -114,7 +115,7 @@ class Chunk:
 
 
 def chunk_manual(root: Path) -> list[Chunk]:
-    """설명서 HTML 묶음 폴더 전체를 청크로 자른다. 기여자용 쪽, 색인·검색 쪽, Sphinx가 만든 보조 폴더는 뺀다."""
+    """설명서 HTML 묶음 폴더 전체를 청크로 자른다. 기여자용 쪽, 색인·검색 쪽, 다른 키맵의 단축키 표 쪽, Sphinx가 만든 보조 폴더는 뺀다."""
     chunks: list[Chunk] = []
     for file in sorted(root.rglob("*.html")):
         relative = file.relative_to(root)

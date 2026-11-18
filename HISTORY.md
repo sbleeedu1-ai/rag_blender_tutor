@@ -4042,3 +4042,14 @@
 - 사용자: "넷 다 고쳐"([469]에서 화면으로 확인한 넷).
 - 고친 것: `courses/sword.yaml:365`·`courses/shield.yaml:314`(View > Viewport Shading > Material Preview, 없는 길), `courses/_common.yaml:22`(View > Navigation > Orbit)·`:40`(View > Navigation > Pan)을 모두 `메뉴: 없음`으로. Claude 판단(사용자가 볼 것): Orbit·Pan은 메뉴에 "Orbit Left"·"Pan Left"처럼 한 방향씩 조금 움직이는 항목만 있고, 이 조작은 마우스로 끌어 마음대로 돌리고 옮기는 것이라 같은 메뉴가 없다고 봤다. 같은 단계의 단축키(Z, 가운데 버튼 끌기, Shift + 가운데 버튼)와 안내 글은 그대로다.
 - 확인: `.venv/bin/python -m blender_tutor.course_check courses` 문제 0개, pytest 1073 통과, 기계 지표 도구로 메뉴 칸을 다시 대조하니 칸 62개 중 나무와 다름 4(Zoom In·Zoom Out·Sidebar·Merge > At Center, 모두 [469]에서 화면에 있다고 확인한 것, 나무 자료 빈자리).
+
+### [471] 2026-11-18 · 기본 키맵과 다른 단축키가 답에 섞이지 않도록, 다른 키맵 쪽 조각 9개를 검색 자료에서 뺀다 (docs/plan/02)
+- 누가: 이전 결론(`results/20261118/153213_검색답_다시설계/4_최종판정.md` 2-1절, 5-1절 5번)의 "지금 할 것", 승인 필요 없음([459]). 사용자: "AGENTS.md와 HANDOFF.md를 읽고, docs/plan/02-키맵-조각-빼기.md를 끝까지 읽은 뒤 그 문서대로 시작해."
+- 뺀 쪽: `interface/keymap/industry_compatible`(다른 3D 프로그램용 키맵의 단축키 표, 앵커 9개). 기본 키맵 `interface/keymap/blender_default`(12줄)와 `interface/keymap/index`(4줄)는 그대로다.
+- 빼도 되는지(고치기 전에 셈): 필요 조각 목록 `data/eval/dev50/needed_20261118.json`에 그 쪽 주소 0개(keymap이 든 주소는 `editors/preferences/keymap.html#editor` 하나뿐, 다른 쪽). 162답(`원자료_54x3_설정줄포함.jsonl`)의 검색 결과에 든 자리는 02 문서의 표와 같다: Q17 1·3회 1위(edit-mode-tools, 둘 다 틀림), Q02 1회 5위·2회 7위(edit-mode-tools, 둘 다 맞음), Q21 1·2회 4위(viewport, 맞음·부분). Q02·Q21 네 답을 읽으니 그 조각에만 있는 키(Ctrl-E·Ctrl-B·Alt-C, F·A·F1-F4·Alt-마우스)는 하나도 쓰지 않았다(답이 쓴 I, 숫자 패드 1·3·5·7, Home, 숫자 패드 점은 기본 키맵 `work/keymap.json` linux 표에서 mesh.inset·view3d.view_axis·view_persportho·view_all·view_selected의 키로 찾음, 스크립트로 확인).
+- 고친 것: `blender_tutor/manual_chunks.py`의 `_SKIP_PAGES`에 그 쪽을 더함. 시험 `test_다른_키맵의_단축키_표_쪽은_빼고_기본_키맵_쪽은_남긴다`가 고치기 전에 실패(쪽 하나가 더 남음), 고친 뒤 통과.
+- 청크 파일: 다시 만든 `data/chunks/manual_chunks.jsonl` 8,988줄(쪽 2,084개). 옛 파일 8,997줄에서 0부터 센 3603-3611줄을 뺀 것과 글자까지 같음(True).
+- 벡터 파일: 다시 임베딩하지 않고 옛 `.npz`에서 같은 9줄(열쇠 `interface/keymap/industry_compatible.html#…/1`)을 뺌. `manual_vectors.load` 통과(8988, 3072), 남은 줄 벡터가 옛 파일의 같은 열쇠 벡터와 무작위 20/20, 전체 8,988/8,988 같음. `.json` 기록에 청크 수 8988과 "고친 기록" 칸을 더함. 쓴 스크립트는 세션 스크래치패드의 일회용(`02/drop_vectors.py`).
+- 옛 파일: `data/archive/20261118_키맵빼기전/`에 3개(`manual_chunks.jsonl` 13,979,164바이트, `manual_text-embedding-3-large.npz` 115,090,378바이트, `.json` 192바이트). 지우지 않음.
+- 도우미 확인: pytest 1074 통과(전 1073 + 새 시험 1). `build_engine`을 바깥 호출을 막은 채 연습 과정까지 넣어 만들어 봄 → 벡터 (8988, 3072), 청크 8988. 연습 과정 벡터는 지금 글 지문이 모두 저장돼 있어(없는 지문 0) 새로 부르지 않음을 먼저 확인했다. 돈 0.
+- 재지 않은 것: 빼면 그 자리에 무엇이 올라오나(검색어를 다시 임베딩해야 해 돈이 듦). 04가 이 청크 파일로 함께 잰다. Q17은 다른 원인도 있어 이것만으로 맞음이 되지는 않는다(이전 결론).
