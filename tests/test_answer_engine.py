@@ -990,7 +990,7 @@ def test_영어_이름과_괄호가_조각_사이에_갈려_와도_바꾼다():
         (("[[Face]] (Alt-F)를 누르세요.",), "페이스(Face)를 누르세요. 단축키는 Alt-F입니다."),
         (("[[Face]](또는 면 채우기)를 누르세요.",), "페이스(Face)를 누르세요."),  # 단축키가 아닌 풀이는 지우기만
         # 괄호 속에 표시가 든 것은 풀이가 아니라 내용이라 둔다
-        (("[[Face]](또는 [[Add]])를 누르세요.",), "페이스(Face)(또는 추가(Add))를 누르세요."),
+        (("[[Face]](또는 [[Add]])를 누르세요.",), "페이스(또는 추가)를 누르세요."),  # 괄호가 남아 겹치는 자리는 화면 글자만([458], 옛 기대 "페이스(Face)(또는 추가(Add))")
         # 조각 사이에 갈려 와도 같다
         (("[[Fa", "ce]]", "(단축", "키 Alt-F)", "를 누르세요."), "페이스(Face)를 누르세요. 단축키는 Alt-F입니다."),
     ],
@@ -1159,7 +1159,7 @@ def test_괄호까지가_이름인_것은_괄호를_지우지_않는다():
     for answer in ("Bevel (Legacy) 노드를 씁니다.", "Bevel(Legacy) 노드를 씁니다."):  # 모델은 빈칸 없이도 쓴다("Intersect(Boolean)", [422])
         engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel((answer,)), menu_names=names)
         text = "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece))
-        assert "(Legacy)" in text, answer
+        assert "베벨 (레거시) 노드를" in text, answer  # 괄호까지 통째로 화면 글자만([458], 옛 기대는 "(Legacy)"가 남음: "베벨(Bevel) (Legacy)")
 
 
 @pytest.mark.parametrize(
@@ -1217,7 +1217,7 @@ def test_머리_제목이_계산_이름인_노드_뒤_괄호의_계산_이름은
         (("| [[Face]](Alt-F) | 채움 |\n다음",), "| 페이스(Face) | 채움 |\n다음"),  # 표 줄에는 넣지 않는다
         # 마침표 뒤에 닫는 기호가 붙은 문장 끝은 다음 문장에 붙지 않게 지우기만(advisor 지적, 2026-11-17)
         (("**[[Face]](Alt-F)를 누릅니다.** 그러면 면이 생깁니다.",), "**페이스(Face)를 누릅니다.** 그러면 면이 생깁니다."),
-        (("면을 채웁니다(먼저 [[Face]](Alt-F)를 누르세요.) 그러면 됩니다.",), "면을 채웁니다(먼저 페이스(Face)를 누르세요.) 그러면 됩니다."),
+        (("면을 채웁니다(먼저 [[Face]](Alt-F)를 누르세요.) 그러면 됩니다.",), "면을 채웁니다(먼저 페이스를 누르세요.) 그러면 됩니다."),  # 괄호 안은 화면 글자만([458])
         (("\"[[Face]](Alt-F)를 누릅니다.\" 그다음",), "\"페이스(Face)를 누릅니다.\" 그다음"),
         (("Bevel(Ctrl-B)", "로 깎", "습니다.", " 끝"), "베벨(Bevel)로 깎습니다. 단축키는 Ctrl-B입니다. 끝"),  # 맨 영어 쪽도 같은 곳에서 넣는다
     ],
@@ -1249,3 +1249,77 @@ def test_답이_오류로_끊기면_단축키_문장을_넣지_않는다():
     marks = _MenuMarks(MenuNames(SCREEN_NAMES, extra=SCREEN_EXTRA))
     text = marks.feed("[[Face]](Alt-F)를 누르") + marks.finish(cut=True)
     assert text == "페이스(Face)를 누르"
+
+
+# 괄호 겹침(HANDOFF 2번, HISTORY [458]). 지금 코드가 모델 원문 796글에 새로 만든 겹침 121자리의 실제 꼴을 이 사전 이름으로 옮겼다
+# (`results/20261118/143729_괄호겹침/갈래.md`). 사용자 결정: 이름·화면 글자에 괄호가 든 이름은 화면 글자만("어 권하는대로 해
+# 예외여도 바꾼게 훨씬 낫네"), 덧말 괄호 안 이름도 화면 글자만이고 영어는 괄호 밖에 처음 나올 때("아 ㅇㅋ 화면글자만 ㅇㅇ")
+PAREN_EXTRA = {**SCREEN_EXTRA, "glTF Binary (.glb)": "glTF 바이너리(.glb)", "Metric": "메트릭(미터법)", "Frame All": "모든 프레임",
+               "Frame Selected": "선택한 프레임", "Edge": "엣지", "Loop Cut and Slide": "루프를 잘라내고 슬라이드", "Increment": "증가",
+               "Merge Distance": "병합 거리", "Intersect": "교차", "Intersect (Boolean)": "교차 (불리언)", "Max": "최대",
+               "Vertices": "버텍스", "Front": "앞쪽", "Right": "오른쪽", "Pin": "고정", "Pole": "폴", "Rotation": "회전",
+               "Rotation & Scale": "회전 & 스케일", "Origin": "오리진"}
+
+
+def shown_paren(pieces) -> str:
+    names = MenuNames(SCREEN_NAMES, extra=PAREN_EXTRA)
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
+    return "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece))
+
+
+@pytest.mark.parametrize(
+    "answer, expected",
+    [
+        # 이름에 괄호가 든 이름: 화면 글자만(전: "glTF 바이너리(.glb)(glTF Binary (.glb))", Q35 21자리)
+        ("형식은 [[glTF Binary (.glb)]]로 둡니다.", "형식은 glTF 바이너리(.glb)로 둡니다."),
+        ("단위가 Metric인지 확인합니다.", "단위가 메트릭(미터법)인지 확인합니다."),  # 화면 글자에만 괄호(전: "메트릭(미터법)(Metric)", Q36)
+        ("편집 모드에서 Intersect (Boolean) 기능을 씁니다.", "편집 모드에서 교차 (불리언) 기능을 씁니다."),  # 전: "교차(Intersect) (Boolean)"(Q47)
+        ("[[Face > Intersect (Boolean)]] 메뉴를 씁니다.", "페이스(Face) > 교차 (불리언) 메뉴를 씁니다."),
+        # 덧말·메뉴 길 괄호 안: 화면 글자만(전: "Ctrl + R(또는 엣지(Edge) > 루프를 잘라내고 슬라이드(Loop Cut and Slide))로", Q05)
+        ("Ctrl + R(또는 [[Edge > Loop Cut and Slide]])로 고리를 정합니다.", "Ctrl + R(또는 엣지 > 루프를 잘라내고 슬라이드)로 고리를 정합니다."),
+        ("모서리 둥글림([[Bevel]] 모디파이어)은 남아 있습니다.", "모서리 둥글림(베벨 모디파이어)은 남아 있습니다."),  # Q36
+        ("Home 키(또는 Frame All)를 누르세요.", "Home 키(또는 모든 프레임)를 누르세요."),  # 맨 영어도 같게
+        ("측면(Front, Right) 보기에서 봅니다.", "측면(앞쪽, 오른쪽) 보기에서 봅니다."),  # 괄호 속 영어 목록(전: "측면(Front, 오른쪽(Right))", Q04-1)
+        # 괄호 안에서 바로 앞 한국어가 이미 화면 글자면 영어는 그 풀이라 둔다(이 규칙 첫 판이 "고정(고정, 단축키 P)"·"(폴, 폴이라고"를 만듦, Q28·Q05)
+        ("UV 조각을 고정(Pin, 단축키 P)해 둡니다.", "UV 조각을 고정(Pin, 단축키 P)해 둡니다."),
+        ("적용 > 회전 & 스케일(Rotation & Scale) 메뉴를 씁니다.", "적용 > 회전 & 스케일(Rotation & Scale) 메뉴를 씁니다."),  # 저장된 답 Q35-1
+        ("교차 (불리언)(Intersect (Boolean))을 씁니다.", "교차 (불리언)(Intersect (Boolean))을 씁니다."),  # 이 규칙 첫 판이 "교차 (불리언)(교차 (불리언))"을 만듦(저장된 답 Q47)
+        # 괄호 첫머리 영어 뒤에 한국어 풀이가 이어지면 앞말의 영어 풀이라 둔다(첫 판이 "원점(오리진, 물체의 기준점)"으로 영어를 지움, 저장된 답 Q08)
+        ("원점(Origin, 물체의 기준점)만 옮겨졌어요.", "원점(Origin, 물체의 기준점)만 옮겨졌어요."),
+        ("고리가 끊어지는 곳(폴, Pole이라고 부르는 점)에서 멈춥니다.", "고리가 끊어지는 곳(폴, Pole이라고 부르는 점)에서 멈춥니다."),
+        # 괄호 안에서 화면 글자만 보인 이름은 괄호 밖에 처음 나올 때 영어를 붙인다
+        ("A(또는 [[Frame All]])를 누르고, 다시 [[Frame All]]을 누릅니다.", "A(또는 모든 프레임)를 누르고, 다시 모든 프레임(Frame All)을 누릅니다."),
+        # 한국어 낱말 뒤 괄호에 표시 하나면 표시 없는 같은 꼴과 같게([393], 전: "격자 간격(증가(Increment))", Q06)
+        ("격자 간격([[Increment]])으로 맞춰집니다.", "격자 간격 '증가'(Increment)로 맞춰집니다."),
+        ("병합 거리([[Merge Distance]])는 0.001입니다.", "병합 거리(Merge Distance)는 0.001입니다."),  # 전: "병합 거리(병합 거리(Merge Distance))"(Q12-1)
+        # 문장 끝 말 뒤는 덧말 괄호(첫 판이 "눌러요 '선택한 프레임'(Frame Selected)"를 만듦, Q21)
+        ("물체를 고르고 F를 눌러요([[Frame Selected]]).", "물체를 고르고 F를 눌러요(선택한 프레임)."),
+        # 뒤에 지우지 않는 괄호가 붙으면 화면 글자만(전: "선택한 프레임(Frame Selected)(단축키 Numpad. 또는 F)", Q21)
+        ("[[Frame Selected]](단축키 [[Numpad.]] 또는 F)를 누르세요.", "선택한 프레임(단축키 Numpad. 또는 F)를 누르세요."),
+        # 괄호와 상관없이 더 긴 영어 이름의 끝 낱말만 바꾸지 않는다(전: "3ds 최대(Max)", "from 버텍스(Vertices)")
+        ("원본이 3ds Max 같은 프로그램이면", "원본이 3ds Max 같은 프로그램이면"),
+        ("F(New Edge/Face from Vertices)는 면을 만듭니다.", "F(New Edge/Face from Vertices)는 면을 만듭니다."),
+    ],
+)
+def test_괄호가_겹치지_않게_바꾼다(answer, expected):
+    assert shown_paren((answer,)) == expected
+    assert shown_paren(tuple(answer)) == expected  # 한 글자씩 흘려 넣어도 같다
+
+
+def test_맨_글에서_영어로_남는_이름의_표시는_떼지_않고_괄호_안_화면_글자만():
+    # 고정 짝이 기본 문맥 글자와 다른 이름(실제 사전 Strength·Normal·Edge 등)은 맨 글 규칙이 영어로 남긴다([425]). 한국어 뒤 "([[X]])"의
+    # 표시를 떼면 "모드(Edit Mode)"처럼 화면 글자를 잃는다(advisor 지적, 지어낸 문장으로 확인: "법선(Normal)", "세기(Strength)")
+    names = MenuNames(SCREEN_NAMES, {"Edit Mode": "Operator"}, extra=PAREN_EXTRA)
+    for pieces in (("모드([[Edit Mode]])로 들어갑니다.",), tuple("모드([[Edit Mode]])로 들어갑니다.")):
+        engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
+        text = "".join(event.text for event in engine.answer("메시 추가", KOREAN_SCREEN, []) if isinstance(event, Piece))
+        assert text == "모드(편집 모드)로 들어갑니다."
+
+
+def test_질문에_영어로_쓴_이름은_괄호_안에서_사용자가_쓴_영어로():
+    # [311] "Add(추가)" 꼴은 괄호 안에서 겹치므로 사용자가 쓴 영어 하나만, 괄호 밖에 처음 나올 때 영어(한국어)([458], 원문 796글 중 2자리)
+    names = MenuNames(SCREEN_NAMES, extra=PAREN_EXTRA)
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(("A(또는 [[Frame All]])를 누르고, 다시 [[Frame All]]을 누릅니다.",)), menu_names=names)
+    text = "".join(event.text for event in engine.answer("Frame All 어디 있어요?", KOREAN_SCREEN, []) if isinstance(event, Piece))
+    assert text == "A(또는 Frame All)를 누르고, 다시 Frame All(모든 프레임)을 누릅니다."
+

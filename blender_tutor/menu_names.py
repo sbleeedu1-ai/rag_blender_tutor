@@ -394,7 +394,7 @@ def _by_count(names: Iterable[MenuName]) -> list[MenuName]:
 _Catalog = dict[str, dict[str, list[str]]]  # ko.po: 영어 → 한국어 → 문맥들
 
 
-def screen_path(path: str, names: "MenuNames | None", asked: str = "", seen: set | None = None, tab: bool = False) -> str:
+def screen_path(path: str, names: "MenuNames | None", asked: str = "", seen: set | None = None, tab: bool = False, bare: bool = False) -> str:
     """메뉴 이름 표시 하나의 속(Add > Mesh)을 화면 글로 바꾼다.
 
     names가 있으면(한국어 화면에 번역 켜짐) 단마다 "추가(Add)"처럼 한국어(영어)로, 영어로 보이는 단과 화면 글자가 영어와
@@ -403,19 +403,44 @@ def screen_path(path: str, names: "MenuNames | None", asked: str = "", seen: set
     한다(HISTORY [311]). 대소문자는 가리지 않고, 더 긴 영어 낱말 속 글자(Addon의 Add)는 물은 것으로 치지 않는다.
     seen을 주면(답 하나 동안 이미 보인 (영어, 화면 글자) 짝) 되풀이되는 단은 괄호 없이 하나만 보인다(티켓 50, 처음 한 번만).
     tab이면(표시 바로 뒤가 "탭") 한 단짜리 속성 창 탭 이름은 탭 글자로(tab_place).
+    bare면(괄호 안이거나 바로 뒤에 괄호가 남는 자리) 괄호 영어 없이 화면 글자만(_shown_part).
     """
     parts = [part.strip() for part in re.split(r"[>‣]", path)]
     if names:
         parents = ["", *parts[:-1]]  # 단마다 바로 앞 단(같은 이름도 메뉴마다 글자가 달라서, 티켓 31)
         tab_glyph = names.tab_glyph(parts[0]) if tab and len(parts) == 1 else None
-        parts = [_shown_part(part, tab_glyph or names.screen(part, parent)[1], asked, seen) for part, parent in zip(parts, parents)]
+        parts = [_shown_part(part, tab_glyph or names.screen(part, parent)[1], asked, seen, bare) for part, parent in zip(parts, parents)]
     return " > ".join(parts)
 
 
-def _shown_part(part: str, korean: str | None, asked: str, seen: set | None = None) -> str:
+def paren_depth(text: str, depth: int = 0) -> int:
+    """depth에서 시작해 text를 지난 뒤 열린 괄호 수. 줄이 바뀌면 0부터(괄호가 줄을 넘는 일은 드물고, 짝 없는 괄호가 뒤 줄까지 번지지 않게)."""
+    for ch in text:
+        if ch == "\n":
+            depth = 0
+        elif ch == "(":
+            depth += 1
+        elif ch == ")" and depth:
+            depth -= 1
+    return depth
+
+
+def _shown_part(part: str, korean: str | None, asked: str, seen: set | None = None, bare: bool = False) -> str:
+    """이름 한 단의 화면 꼴. 보통은 "화면 글자(영어)", 되풀이면 화면 글자만.
+
+    괄호가 겹치는 자리는 괄호 영어 없이 화면 글자만 낸다(HISTORY [458], answer-forms "겹친 괄호 없음"의 [353] 예외).
+    - 영어나 화면 글자에 괄호가 든 이름: "glTF 바이너리(.glb)(glTF Binary (.glb))" 대신 "glTF 바이너리(.glb)"
+      (사용자 "어 권하는대로 해 예외여도 바꾼게 훨씬 낫네")
+    - bare(괄호 안이거나 바로 뒤에 괄호가 남는 자리): "(또는 모든 프레임(Frame All))" 대신 "(또는 모든 프레임)"
+      (사용자 "아 ㅇㅋ 화면글자만 ㅇㅇ"). 영어를 안 보였으니 '보인 짝'에 넣지 않는다(괄호 밖에 처음 나올 때 영어를 붙인다)
+    - 다만 질문에 영어로 쓴 이름은 그 자리에서 사용자가 쓴 영어 하나만 낸다([311]은 사용자가 부른 이름을 앞에 두어 같은 것임을
+      알게 하려는 꼴이라. 다음에 괄호 밖에 나오면 "Displacement(변위)"). 796글 중 2자리(Displacement, Claude가 advisor와 정함)
+    """
     if not korean or korean == part:
         return part
     first = re.search(rf"(?<![A-Za-z]){re.escape(part)}(?![A-Za-z])", asked, re.IGNORECASE)  # 사용자가 부른 이름을 앞에
+    if bare or "(" in part or "(" in korean:
+        return part if first else korean
     if seen is not None:
         if (part, korean) in seen:
             return part if first else korean
@@ -512,6 +537,9 @@ _HANGUL = re.compile(r"[가-힣]")
 # 영어 덩이: 대문자로 시작하는 낱말을 빈칸 하나로 이은 것. 앞이 영어·숫자·코드 글자면 다른 낱말의 일부라 보지 않는다
 _RUN = re.compile(r"(?<![A-Za-z0-9_.`/\\-])[A-Z][A-Za-z0-9'\-]*(?:\.\.\.|…)?(?: [A-Za-z0-9][A-Za-z0-9'\-]*(?:\.\.\.|…)?)*")
 _QUOTE_BEFORE = re.compile(r"설명서(?:의|에서|에는|에)\s*[\"“'‘]?\s*$")
+# 바로 앞이 소문자로 시작하는 영어 낱말이나 숫자+소문자 낱말("from ", "3ds ")이면 사전에 없는 더 긴 영어 이름의 끝이라 바꾸지 않는다
+# ("New Edge/Face from Vertices"의 Vertices, "3ds Max"의 Max, [458]). "3D Cursor"처럼 대문자로 끝나는 앞 낱말은 그대로 본다
+_LONGER_ENGLISH = re.compile(r"(?<![A-Za-z0-9])(?:[a-z][A-Za-z]*|[0-9]+[a-z][A-Za-z]*) $")
 _MAX_WORDS = 6
 PAREN_LIMIT = 60  # 이름 뒤 덧붙인 괄호로 볼 길이 한도(넘으면 내용으로 보고 둔다). 표시 뒤(_MenuMarks)·맨 영어 뒤(screen_prose)가 같이 쓴다(티켓 50, [422])
 _HOLD_COMMON_WORDS = 6  # 흔히 옮기는 말(+꼬리) 앞부분으로 더 붙잡는 낱말 수 한도(목록 말은 대부분 4낱말 이하)
@@ -565,9 +593,15 @@ def _run_parts(words: list[str], names: "MenuNames", keep: set[str], in_path: bo
     return parts
 
 
+def prose_shows(names: "MenuNames", english: str) -> bool:
+    """감싸지 않은 글에 쓴 english를 screen_prose가 통째로 화면 글자로 바꾸는가. 번역이 여럿인 이름·자리마다 다른 이름·
+    '/'가 든 이름처럼 맨 글에서 영어로 남는 이름이면 False(_MenuMarks가 표시를 떼어 맨 글로 보낼지 정할 때 씀, [458])."""
+    return bool(_RUN.fullmatch(english)) and names.in_prose(english)[1] is not None
+
+
 def screen_prose(
     text: str, names: "MenuNames", asked: str = "", keep: Iterable[str] = (), start: int = 0, changed: list | None = None,
-    seen: set | None = None, keys: bool = False,
+    seen: set | None = None, keys: bool = False, depth: int = 0,
 ) -> str:
     """[[ ]]로 감싸지 않은 답 글 속 블렌더 이름을 화면 글로 바꾼다(한국어 화면일 때만 부른다, 티켓 49).
 
@@ -580,19 +614,34 @@ def screen_prose(
     changed를 주면 바꾼 자리마다 (원래 글, 바뀐 글)을 덧붙인다(저장된 답으로 검증할 때 쓴다).
     seen은 screen_path와 같다(답 하나 동안 이미 보인 짝은 괄호 없이, 괄호 꼴로 보인 짝은 여기에 더함).
     keys면 지운 덧붙인 괄호가 단축키 하나일 때 그 자리에 표(SHORTCUT_OPEN 단축키 SHORTCUT_CLOSE)를 남긴다(_MenuMarks가 문장 끝으로 옮김, [423]).
+    depth는 start 자리에 이미 열려 있는 괄호 수(내보낸 글의 지금 줄). 괄호 안의 이름은 괄호 영어 없이 화면 글자만 낸다([458]):
+    "(또는 Frame All)" → "(또는 모든 프레임)", 괄호 속 영어 목록 "(Intersect, Union, Difference 중 하나)" → "(교차, 결합, 차이 중 하나)".
+    괄호까지가 화면 이름인 맨 영어("Intersect (Boolean)")는 통째로 화면 글자만("교차 (불리언)").
     """
     keep = set(keep)
     edits: list[tuple[int, int, str]] = []
+    skip = 0  # 이 자리 앞까지는 그대로 둔다(앞말의 풀이인 괄호 속)
     for match in _RUN.finditer(text):
         s, e = match.span()
-        if s < max(start, edits[-1][1] if edits else 0):
+        if s < max(start, edits[-1][1] if edits else 0, skip):
             continue  # 이미 내보낸 글이거나, 앞에서 고친 범위 안("Edge Weight(또는 Vertex Group)"의 Vertex Group)
         before, after = text[:s], text[e:]
         words = match.group().split(" ")
         if (before.count("`") % 2 or _QUOTE_BEFORE.search(before) or re.match(r"\s*키", after)
                 or re.search(r"\+\s*$", before) or re.match(r"\s*\+", after) or re.match(r"[_.][A-Za-z0-9]", after)
                 or re.search(r"[A-Za-z]/$", before) or re.match(r"/[A-Za-z]", after)
-                or MODIFIER_KEYS & set(words)):
+                or MODIFIER_KEYS & set(words) or _LONGER_ENGLISH.search(before)):
+            continue
+        bare = paren_depth(text[start:s], depth) > 0  # 괄호 안: 괄호 영어 없이 화면 글자만([458])
+        inner = re.match(r"[^()\n]*?(?=\))", text[s:]) if before.rstrip().endswith("(") else None
+        inner = inner if inner and inner.end() > e - s else None  # 이 덩이 하나뿐인 괄호는 아래 한국어(영어) 꼴이 맡는다
+        front = re.search(r"([가-힣][가-힣 &]*?)\s*\($", before) if inner else None
+        if front and (glyph := names.screen(inner.group())[1]) and _squash(front.group(1)).endswith(_squash(glyph)):
+            # 괄호 속 전체가 앞말의 영어 이름이면 둔다("회전 & 스케일(Rotation & Scale)"). 낱말마다 바꾸면
+            # "회전 & 스케일(회전 & 스케일)"이 된다(영어 덩이는 &를 잇지 않아서, [458])
+            skip = s + inner.end()
+            if seen is not None:
+                seen.add((inner.group(), glyph))
             continue
         parts = _run_parts(words, names, keep, bool(re.search(r"[>‣▸]\s*$", before)))
         if parts is None:
@@ -602,7 +651,9 @@ def screen_prose(
             parts, others = [(parts[0][0], tab)], names.glyphs(parts[0][0])
         whole = len(parts) == 1 and parts[0][1] not in (None, parts[0][0]) and parts[0][0] not in keep
         glossed = re.search(r"([가-힣]+)\s*\($", before)
-        if before.rstrip().endswith("("):
+        if before.rstrip().endswith("(") and re.match(r"\s*,\s*[가-힣]", after):
+            continue  # "원점(Origin, 물체의 기준점)": 괄호 첫머리 영어 뒤에 한국어 풀이가 이어지면 앞말의 영어 풀이라 둔다(겹침이 없던 자리, [458])
+        if before.rstrip().endswith("(") and after.startswith(")"):
             # 모델이 스스로 옮긴 말이 흔히 옮기는 말이면 앞말을 통째로 화면 글자로(티켓 50 가). 괄호 뒤가 '하다' 꼴이면
             # 앞말은 동사의 일부라("화면이 회전(Orbit)합니다") 바꾸지 않는다
             head = before.rstrip()[:-1]
@@ -645,6 +696,23 @@ def screen_prose(
                 if seen is not None:
                     seen.add(parts[0])  # 모델이 직접 쓴 "에디트 모드(Edit Mode)"도 보인 것으로
             continue
+        appended = re.match(r" ?\(([^()\n]*)\)", after)
+        if appended and whole:
+            # 괄호까지가 화면 이름("Intersect (Boolean)", 모델은 빈칸 없이도 씀)이면 통째로 화면 글자만. 앞 낱말만 바꾸면
+            # "교차(Intersect) (Boolean)"이 된다([422]에 적은 한계, [458])
+            full = next((k for gap in ("", " ") for f, k in [names.screen(match.group() + gap + f"({appended.group(1)})")] if f), False)
+            if full is not False:
+                if full and not _squash(before.rstrip()[:-1]).endswith(_squash(full)):  # 앞말이 이미 그 화면 글자면 둔다("교차 (불리언)(Intersect (Boolean))")
+                    taken, tail = _after_name(after[appended.end() :], last_korean(full), full)
+                    edits.append((s, e + appended.end() + taken, tail))
+                continue
+        front = re.search(r"([가-힣][가-힣 ]*?)\s*[(,]\s*$", before) if bare and whole else None
+        if front and _squash(front.group(1)).endswith(_squash(parts[0][1])):
+            # 괄호 안에서 바로 앞 한국어 낱말이 이미 그 화면 글자면 모델이 쓴 영어는 그 낱말의 풀이다("고정(Pin, 단축키 P)",
+            # "(폴, Pole이라고 …)"). 화면 글자로 바꾸면 "고정(고정, 단축키 P)"처럼 같은 말이 되풀이된다([458])
+            if seen is not None:
+                seen.add(parts[0])
+            continue
         explained = re.match(r"\s*\(\s*([^()\n]*)\)", after)
         if explained and _HANGUL.match(explained.group(1)):
             # 영어(한국어) 꼴: 모델이 이름 뒤에 붙인 풀이 괄호는 지우고 보통 꼴로 낸다("Union(합집합)" → "결합(Union)").
@@ -659,20 +727,19 @@ def screen_prose(
                     if seen is not None:
                         seen.add(parts[0])
                     continue
-                new = _shown_part(parts[0][0], parts[0][1], asked, seen)
+                new = _shown_part(parts[0][0], parts[0][1], asked, seen, bare)
                 taken, tail = _after_name(after[explained.end() :], last_korean(new), new)
                 edits.append((s, e + explained.end() + taken, tail))
             continue
-        appended = re.match(r" ?\(([^()\n]*)\)", after)
         if (whole and appended and len(appended.group(1)) <= PAREN_LIMIT
                 and not any(names.screen(match.group() + gap + f"({appended.group(1)})")[0] for gap in ("", " "))):
             # 맨 영어 이름 뒤 덧붙인 단축키·값·영어 괄호("Join(Ctrl-J)")는 표시 뒤 괄호처럼 지운다([353]·[397]을 넓힘, [422]).
             # 앞만 바꾸면 "합치기(Join)(Ctrl-J)"로 괄호가 겹친다. 괄호까지가 화면 이름("Intersect (Boolean)")이면 빈칸 없이 써도 지우지 않는다
-            new = _shown_part(parts[0][0], parts[0][1], asked, seen)
+            new = _shown_part(parts[0][0], parts[0][1], asked, seen, bare)
             if item := names.node_item(match.group(), appended.group(1)):
                 # 머리 제목이 계산 이름인 노드("Math(Multiply)")는 지우면 화면 머리 글자가 사라져 이름으로 남긴다([436]).
                 # 조사·'항목'은 뒤 이름(계산 이름)에만 맞춘다
-                shown_item = _shown_part(*item, asked, seen)
+                shown_item = _shown_part(*item, asked, seen, bare)
                 taken, tail = _after_name(after[appended.end() :], last_korean(shown_item), shown_item)
                 tail = f"{new} {tail}"
             else:
@@ -681,7 +748,8 @@ def screen_prose(
                 tail += SHORTCUT_OPEN + key + SHORTCUT_CLOSE
             edits.append((s, e + appended.end() + taken, tail))
             continue
-        shown = " ".join(english if english in keep else _shown_part(english, korean, asked, seen) for english, korean in parts)
+        bare = bare or bool(re.match(r" ?\(", after))  # 뒤에 지우지 않은 괄호가 붙으면 "글자(영어)(…)"로 겹친다
+        shown = " ".join(english if english in keep else _shown_part(english, korean, asked, seen, bare) for english, korean in parts)
         if shown != match.group():
             particle = PARTICLE.match(after)  # 모델이 영어 이름에 맞춰 쓴 조사를 화면 글자에 맞춘다(티켓 50)
             if particle:

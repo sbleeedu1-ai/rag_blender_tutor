@@ -22,7 +22,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
-from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, PAREN_LIMIT, SHORTCUT_CLOSE, SHORTCUT_OPEN, MenuNames, _shown_part, prose_cut, screen_path, screen_prose, shortcut_in, tab_place, with_particle
+from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, PAREN_LIMIT, SHORTCUT_CLOSE, SHORTCUT_OPEN, MenuNames, _shown_part, paren_depth, prose_cut, prose_shows, screen_path, screen_prose, shortcut_in, tab_place, with_particle
 from blender_tutor.progress import Course, Step
 from blender_tutor.setting_fields import FieldModel, SettingLines, choose_fields, lines_for
 from blender_tutor.work_state import WorkState
@@ -574,15 +574,31 @@ class _MenuMarks:
             elif end < 0:
                 break  # 닫힐 때까지 모은다
             else:
-                rest = self._after_mark(held[end + len(MARK_CLOSE) :], done, held[inner:end])
+                after = held[end + len(MARK_CLOSE) :]
+                front = self._prose + held[:start]
+                # 앞말이 문장 끝 말("눌러요(", "합니다(")이면 이름의 풀이가 아니라 덧말 괄호라 표시로 둔다(괄호 안 화면 글자만)
+                if (self._names and not re.search(r"[>‣]", held[inner:end]) and re.search(r"[가-힣]\s?\($", front)
+                        and not re.search(r"[요다]\s?\($", front)
+                        and (held[inner:end] in self._keep or prose_shows(self._names, held[inner:end]))):
+                    # 맨 글 규칙이 영어로 남기는 이름(Normal·Edge·Strength 등)은 떼면 "법선(Normal)"처럼 화면 글자를 잃어 표시로 둔다
+                    # 한국어 낱말 뒤 괄호 속이 표시 하나뿐이면("격자 간격([[Increment]])") 표시 없는 같은 꼴과 같게 맨 글로 바꾼다
+                    # ([393] Fable 꼴 "격자 간격 '증가'(Increment)"). 표시로 바꾸면 "격자 간격(증가(Increment))"로 괄호가 겹친다([458])
+                    if after.startswith(")"):
+                        held = held[:start] + held[inner:end] + after
+                        continue
+                    if not after and not done:
+                        break  # 닫는 괄호가 오는지 본다
+                rest = self._after_mark(after, done, held[inner:end])
                 if rest is None:
                     break  # 표시 뒤 괄호·조사를 볼 때까지 모은다
                 # 앞 글을 먼저 다 내보낸 뒤 표시를 바꾼다(되풀이 이름을 나온 차례대로 기억해야 흘려 넣어도 같다)
                 before = self._plain(held[:start]) + self._plain("", done=True)
                 tab = self._names is not None and tab_place(self._shown, rest)  # 속성 창 탭이면 탭 글자로
-                shown = screen_path(held[inner:end], self._names, self._question, self._seen if self._names else None, tab)
+                # 괄호 안이거나 뒤에 지우지 않은 괄호가 남으면 괄호 영어 없이 화면 글자만([458])
+                bare = self._names is not None and (paren_depth(self._line) > 0 or bool(re.match(r" ?\(", rest)))
+                shown = screen_path(held[inner:end], self._names, self._question, self._seen if self._names else None, tab, bare)
                 if self._mark_item:  # 머리 제목이 계산 이름인 노드 뒤 계산 이름([436]). 맨 글 바꾸기를 다시 지나지 않게 이름과 함께 내고,
-                    item, rest = with_particle(_shown_part(*self._mark_item, self._question, self._seen), rest)  # 조사·'항목'은 계산 이름에
+                    item, rest = with_particle(_shown_part(*self._mark_item, self._question, self._seen, bare), rest)  # 조사·'항목'은 계산 이름에
                     shown += " " + item
                 elif self._names:
                     shown, rest = with_particle(shown, rest)
@@ -643,7 +659,8 @@ class _MenuMarks:
         text, self._prose = text[:cut], text[cut:]
         # 끝부분 앞에서 코드가 열려 있었으면 백틱 하나를 앞에 붙여 짝을 맞춘다
         before = ("`" if (self._ticks - self._shown.count("`")) % 2 else "") + self._shown
-        return self._send(screen_prose(before + text, self._names, self._question, self._keep, len(before), seen=self._seen, keys=True)[len(before) :])
+        return self._send(screen_prose(before + text, self._names, self._question, self._keep, len(before), seen=self._seen, keys=True,
+                                       depth=paren_depth(self._line))[len(before) :])
 
     def _fixed(self, text: str) -> str:
         """표시를 바꾼 글: 붙잡은 표시 밖 글을 먼저 다 내고, 이 글은 그대로 낸다."""
