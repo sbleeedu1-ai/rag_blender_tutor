@@ -462,8 +462,12 @@ def tab_place(before: str, after: str) -> bool:
 
 
 def last_korean(shown: str) -> str:
-    """바꾼 이름에서 조사가 붙는 한국어: 마지막 단의 괄호 앞 글("추가(Add)" → "추가"). 한글로 끝나지 않으면 빈 글(조사 안 고침)."""
-    head = re.split(r"[>‣]", shown)[-1].split("(")[0].strip()
+    """바꾼 이름에서 조사가 붙는 한국어: 마지막 단의 괄호 앞 글("추가(Add)" → "추가"). 화면 글자가 통째로 괄호면 괄호 속
+    ("(할당되지 않음)" → "할당되지 않음", [458]). 한글로 끝나지 않으면 빈 글(조사 안 고침)."""
+    last = re.split(r"[>‣]", shown)[-1].strip()
+    head = last.split("(")[0].strip()
+    if not head and (inside := re.fullmatch(r"\(([^()]+)\)", last)):
+        head = inside.group(1).strip()
     return head if re.search(r"[가-힣]$", head) else ""
 
 
@@ -670,13 +674,13 @@ def screen_prose(
         if len(parts) == 1 and tab_place(before, after) and (tab := names.tab_glyph(parts[0][0])):
             parts, others = [(parts[0][0], tab)], names.glyphs(parts[0][0])
         whole = len(parts) == 1 and parts[0][1] not in (None, parts[0][0]) and parts[0][0] not in keep
-        glossed = re.search(r"([가-힣]+)\s*\($", before)
+        glossed = re.search(r"([가-힣]+) *\($", before)
         if before.rstrip().endswith("(") and re.match(r"\s*,\s*[가-힣]", after):
             continue  # "원점(Origin, 물체의 기준점)": 괄호 첫머리 영어 뒤에 한국어 풀이가 이어지면 앞말의 영어 풀이라 둔다(겹침이 없던 자리, [458])
         # 괄호 앞이 한국어가 아니면("F(New Edge/Face from Vertices)") 앞말의 풀이가 아니라 덧말 괄호라 아래에서 화면 글자만 낸다([458]).
         # 앞말 끝의 굵은 글씨·따옴표는 건너 본다("**거리로 병합**(By Distance)"), 앞말이 이미 화면 글자로 끝나도 풀이로 본다
         # ("마지막 작업 조정...(Adjust Last Operation...)"). 둘 다 첫 판이 "(거리에 의해)"·"(마지막 작업 조정...)"을 만들었다
-        korean_front = re.search(r"[가-힣][*'\"’”]*\s*\($", before) or (
+        korean_front = re.search(r"[가-힣][*'\"’”]* *\($", before) or (
             whole and _squash(before.rstrip()[:-1].rstrip("*'\"’”")).endswith(_squash(parts[0][1])))
         # 괄호 앞 영어 낱말과 괄호 속이 합쳐 괄호가 든 이름이면("Intersect(Boolean)") 이름의 일부라 둔다. 낱말만 보면
         # 여러 글자 키("Tab(Edit Mode)", "Esc(Cancel)")의 덧말 괄호까지 영어로 남는다([458])
@@ -830,7 +834,8 @@ def _fable_form(before: str, after: str, english: str, korean: str, names: "Menu
     if _HADA_AFTER.match(after):
         return None
     head = before.rstrip()[:-1]  # 괄호 앞 글
-    words = head.split(" ")
+    gap = len(head) - len(head.rstrip(" "))  # 앞말과 괄호 사이 빈칸("형식은 (Increment)"). 줄바꿈은 세지 않는다(줄이 붙음)
+    words = head[: len(head) - gap].split(" ")  # 빈칸을 빼고 낱말을 본다(빼지 않으면 끝 낱말이 빈 글이라 아래 거르기를 건넘)
     last = words[-1].strip("*'\"“‘")
     if _CONNECT.search(last) and last not in names.glyph_words:
         return None
@@ -863,8 +868,10 @@ def _fable_form(before: str, after: str, english: str, korean: str, names: "Menu
             return opener.start(1), 2 + taken, new
         taken, new = _after_name(rest[1:], korean, quote.group() + " " + named, awkward=True)
         return paren, 2 + taken, new
+    # 앞말과 괄호 사이 빈칸은 새 글의 빈칸 하나로 갈음한다(남기면 "형식은  '증가'(Increment)"처럼 빈칸이 둘, [458])
+    start = paren - gap if paren - gap >= floor else paren
     taken, new = _after_name(rest, korean, " " + named, awkward=True)
-    return paren, 1 + taken, new
+    return start, 1 + taken, new
 
 
 def prose_cut(text: str, hold: set[str] | frozenset = frozenset(), tabs: bool = False) -> int:

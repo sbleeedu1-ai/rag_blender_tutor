@@ -1259,7 +1259,7 @@ PAREN_EXTRA = {**SCREEN_EXTRA, "glTF Binary (.glb)": "glTF 바이너리(.glb)", 
                "Merge Distance": "병합 거리", "Intersect": "교차", "Intersect (Boolean)": "교차 (불리언)", "Max": "최대",
                "Vertices": "버텍스", "Front": "앞쪽", "Right": "오른쪽", "Pin": "고정", "Pole": "폴", "Rotation": "회전",
                "Rotation & Scale": "회전 & 스케일", "Origin": "오리진", "New Edge/Face from Vertices": "버텍스에서 새로운 에지/페이스",
-               "UVMap": "UV 맵", "Boolean": "불리언"}
+               "UVMap": "UV 맵", "Boolean": "불리언", "(Unassigned)": "(할당되지 않음)"}
 
 
 def shown_paren(pieces) -> str:
@@ -1309,7 +1309,12 @@ def shown_paren(pieces) -> str:
         ("G(Increment)로 옮깁니다.", "G(증가)로 옮깁니다."),  # 앞이 한국어가 아니면 덧말 괄호
         # 앞 낱말과 괄호 속이 합쳐 괄호가 든 이름이면 이름의 일부라 둔다(첫 판 "Intersect(불리언)", 저장된 답 Q47)
         ("설명서의 Intersect(Boolean) 기능입니다.", "설명서의 Intersect(Boolean) 기능입니다."),
-        ("Tab(Increment)로 옮깁니다.", "Tab(증가)로 옮깁니다."),  # 여러 글자 키 뒤는 덧말 괄호(영어 낱말이면 늘 두는 판은 "Tab(Increment)")
+        ("Tab(Increment)로 옮깁니다.", "Tab(증가)로 옮깁니다."),
+        # 화면 글자가 통째로 괄호면 괄호 속 한국어 받침에 조사를 맞춘다(전: "(할당되지 않음)를", 11-18 괄호 든 이름 넣어 보기)
+        ("[[(Unassigned)]]를 고릅니다.", "(할당되지 않음)을 고릅니다."),
+        # 한국어 낱말과 괄호 사이 빈칸은 Fable 꼴에서 하나만(전: "형식은  '증가'(Increment)로", 빈칸 둘)
+        ("형식은 (Increment)로 둡니다.", "형식은 '증가'(Increment)로 둡니다."),
+        ("제목\n(Increment)로 둡니다.", "제목\n(증가)로 둡니다."),  # 줄바꿈 뒤 괄호는 앞말 풀이가 아니라 덧말(첫 판은 "제목 '증가'(Increment)"로 줄을 붙임)  # 여러 글자 키 뒤는 덧말 괄호(영어 낱말이면 늘 두는 판은 "Tab(Increment)")
     ],
 )
 def test_괄호가_겹치지_않게_바꾼다(answer, expected):
