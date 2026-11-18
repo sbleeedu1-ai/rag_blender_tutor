@@ -104,6 +104,34 @@ def test_제안이_없으면_기록_검사를_안_한다(tmp_path):
     assert check_reply.turn_problems(_turn(tmp_path, "시험이 끝났습니다. 결과는 13.0입니다.")) == []
 
 
+# 2026-11-19 실제 실수 둘([482]). advisor를 부르지 않은 차례의 답 줄을 그대로 옮겼다.
+NO_ADVISOR_1 = "**결론: 03 결과만으로는 C를 새 판에 넣을지 정하지 못했습니다. 그래서 이것부터 정하고, 04는 그다음에 돌립니다.**"  # 01:06 차례
+NO_ADVISOR_2 = "그래서 순서는 이렇게 되어야 합니다."  # 01:05 차례
+ADVISOR_RESULT = {"type": "assistant", "message": {"content": [{"type": "advisor_tool_result", "content": "..."}]}}
+
+
+def test_advisor_없이_결론을_내면_막힌다(tmp_path):
+    for reply in (NO_ADVISOR_1, NO_ADVISOR_2):
+        hits = check_reply.turn_problems(_turn(tmp_path, reply))
+        assert any("advisor" in h and "[482]" in h for h in hits), reply
+
+
+def test_그_차례에_advisor를_불렀으면_결론도_통과(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    text = {"type": "assistant", "message": {"content": [{"type": "text", "text": NO_ADVISOR_1}]}}
+    assert not any("advisor" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, ADVISOR_RESULT, text])))
+
+
+def test_advisor_결과가_앞_차례에만_있으면_막힌다(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    text = {"type": "assistant", "message": {"content": [{"type": "text", "text": NO_ADVISOR_1}]}}
+    assert any("advisor" in h for h in check_reply.turn_problems(_transcript(tmp_path, [ADVISOR_RESULT, human, text])))
+
+
+def test_결론_없는_진행_말은_advisor를_안_본다(tmp_path):
+    assert check_reply.turn_problems(_turn(tmp_path, "지금은 근거 자료를 모으는 중입니다.")) == []
+
+
 def test_따옴표_속_세로막대가_있는_grep도_기록_찾기로_본다():
     # 2026-11-17 오후 6시 차례에서 그대로 옮긴 명령. 따옴표 속 |에서 쪼개져 grep과 HANDOFF.md가 갈려 헛막음이 났다([434])
     command = 'cd /Volumes/mac_ssd/proj/rag_blender_tutor && grep -n -E "③ Q38|④ 보고서|빠졌던 것" HANDOFF.md | head -3 | cut -c1-200'
