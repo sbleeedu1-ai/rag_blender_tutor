@@ -1,6 +1,6 @@
 # 인수인계
 
-마지막 갱신: 2026-11-18 저녁 · Claude Code(Opus 5.5, advisor) · 집 Mac(`/Volumes/mac_ssd/proj/rag_blender_tutor`) · 브랜치 `docs/redesign-handoff`의 PR 병합 전에 씀(PR #43은 병합됨, main 664e3b2). 오늘 기록은 HISTORY [436]-[459].
+마지막 갱신: 2026-11-18 저녁 · Claude Code(Opus 5.5, advisor) · 집 Mac(`/Volumes/mac_ssd/proj/rag_blender_tutor`) · PR #47 병합 전에 씀(PR #43은 병합됨, main 664e3b2). 오늘 기록은 HISTORY [436]-[459].
 
 ## 다음 할 일 (11-18 저녁, 사용자가 정함, [459])
 
@@ -36,7 +36,7 @@
 
 ## 지금 상태 (11-18 저녁)
 
-- [PR #43](https://github.com/sbleeedu1-ai/rag_blender_tutor/pull/43)은 main에 병합됨(664e3b2). 이 인계는 브랜치 `docs/redesign-handoff`(기록만: HISTORY [459], 이 HANDOFF, `docs/research/20261118_검색답_다시설계.md`)에 있고 PR로 올림. 제품 코드는 바꾸지 않음.
+- [PR #43](https://github.com/sbleeedu1-ai/rag_blender_tutor/pull/43)은 main에 병합됨(664e3b2). 이 인계는 브랜치 `docs/redesign-handoff`(기록만: HISTORY [459], 이 HANDOFF, `docs/research/20261118_검색답_다시설계.md`)에 있고 [PR #47](https://github.com/sbleeedu1-ai/rag_blender_tutor/pull/47)로 올림(병합 전, 사용자 확인 뒤 병합). 제품 코드는 바꾸지 않음.
 - 검증(이 인계): 기록 문서만 바꿔 테스트는 돌리지 않음. main 664e3b2의 GitHub 검사(Windows 테스트)는 성공(`gh run list --branch main`, 11-18). 마지막 Mac pytest는 [458]의 1049 통과.
 - (아래는 11-18 오후 1시 기준 옛 줄, 숫자는 그때 값) 브랜치 `exp/35-dev-bundle` = 원격(올리지 않은 커밋 0). PR #43 열림·미병합. 제품 코드 마지막 커밋은 [458] 괄호 겹침 고침(3836669, 8b1b767, 그 뒤 "/" 이름·UVMap 고침 커밋). 그 GitHub 검사 결과는 푸시 뒤 PR #43에서 본다(332c327까지는 통과·CLEAN).
 - 오늘 끝난 것: 노드 계산 이름 괄호 꼴(사용자 받아들임 [450]), 값 목록 이름 사전 넣기([438]), 넓힌 목록 예외 표 70개([448]), 번역이 WorkSpace 문맥뿐인 작업 공간 이름 5개는 영어([451]), 지우기 훅은 묻지 않고 막음([449]), 화면 확인 표 검사 도구([445]).
