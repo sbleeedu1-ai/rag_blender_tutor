@@ -33,7 +33,8 @@ PROGRAM_NAMES = {"Blender"}  # 화면 메뉴 이름이 아니라 프로그램 �
 # Blender가 새 물체에 붙이는 기본 이름. 답 글에서는 고르지 않은 물체 이름(불리언 대상 Cube 등)일 수 있어, 메뉴 경로(> 뒤)가 아니면
 # 바꾸지 않는다(2026-11-16 저장된 답 Q11 "대상은 Cube"로 확인)
 OBJECT_DEFAULTS = {"Cube", "Plane", "Circle", "Cylinder", "Cone", "Torus", "Grid", "Sphere", "UV Sphere", "Ico Sphere",
-                   "Icosphere", "Suzanne", "Monkey", "Camera", "Light", "Empty", "Armature", "Text", "Curve"}
+                   "Icosphere", "Suzanne", "Monkey", "Camera", "Light", "Empty", "Armature", "Text", "Curve",
+                   "UVMap"}  # UV 맵 기본 이름도 자료 이름이다: 처음 파일 Cube는 "UVMap", 한국어 화면에서 새로 만든 물체는 "UV 맵"(11-18 실행으로 확인, [458])
 # 자리마다 화면 글자가 다른 것을 확인한 이름: 버튼은 엣지, 메뉴·글은 에지(HISTORY [80]). 메뉴마다 짝을 따로 둔 이름도 같이 본다
 PLACE_DEPENDENT = {"Edge"}
 # 작업 공간 이름 번역 문맥. 번역이 이 문맥 하나뿐인 이름(2D Animation '2차원 애니메이션함', UV Editing 'UV 편집함', Rendering '렌더링함',
@@ -173,6 +174,10 @@ class MenuNames:
         self._in_questions = _question_index(self._by_english.values(), passed)  # english_in이 쓰는 표
         self._passed = passed
         self._extra = {_english_key(english): korean for english, korean in extra.items()}
+        # '/'가 든 이름("New Edge/Face from Vertices"): 맨 글 영어 덩이(_RUN)가 '/'에서 끊어 끝 낱말만 바꾸던 것을 통째로 먼저 찾는다([458]).
+        # 맨 글에서 화면 글자로 바뀌는 이름만, 긴 이름부터
+        slashed = sorted({e for e in (*(n.english for n in self._by_english.values()), *self._extra) if "/" in e}, key=len, reverse=True)
+        self.slash_names = re.compile("(?<![A-Za-z0-9_/])(?:" + "|".join(re.escape(e) for e in slashed) + ")(?![A-Za-z0-9_/])") if slashed else None
         self._node_glyphs = node_glyphs  # 노드 머리 칸 문맥 → 계산 이름 → 한국어(node_glyphs, 사전 만들 때 ko.po에서, [438])
         # 화면 글자에 쓰인 낱말 모음: 앞말 끝 낱말이 여기 있으면 '-어'로 끝나도 이어 주는 꼴로 보지 않는다("모디파이어", [393])
         self.glyph_words = frozenset(w for name in self._by_english.values() for t in name.translations for w in t.korean.split())
@@ -593,6 +598,13 @@ def _run_parts(words: list[str], names: "MenuNames", keep: set[str], in_path: bo
     return parts
 
 
+def _runs(text: str, names: "MenuNames") -> list[re.Match]:
+    """맨 글의 영어 덩이(_RUN)들. 사전의 '/'가 든 이름이 있으면 그 자리는 이름 통째로 하나의 덩이로 본다(겹치는 _RUN 덩이는 뺀다)."""
+    slashed = [m for m in names.slash_names.finditer(text) if names.in_prose(m.group())[1]] if names.slash_names else []
+    runs = [m for m in _RUN.finditer(text) if not any(m.start() < x.end() and x.start() < m.end() for x in slashed)]
+    return sorted(slashed + runs, key=lambda m: m.start())
+
+
 def prose_shows(names: "MenuNames", english: str, asked: str = "") -> bool:
     """한국어 낱말 뒤 괄호에 감싸지 않고 쓴 english("가나(Cube)")를 screen_prose가 바꾸는가. 실제로 돌려 본다: 맨 글 규칙은
     번역이 여럿인 이름·자리마다 다른 이름·'/'가 든 이름·기본 물체 이름·키 이름·대문자 값 등을 영어로 남겨서 조건을 따로 베끼면
@@ -623,19 +635,18 @@ def screen_prose(
     keep = set(keep)
     edits: list[tuple[int, int, str]] = []
     skip = 0  # 이 자리 앞까지는 그대로 둔다(앞말의 풀이인 괄호 속)
-    for match in _RUN.finditer(text):
+    for match in _runs(text, names):
         s, e = match.span()
         if s < max(start, edits[-1][1] if edits else 0, skip):
             continue  # 이미 내보낸 글이거나, 앞에서 고친 범위 안("Edge Weight(또는 Vertex Group)"의 Vertex Group)
         before, after = text[:s], text[e:]
         words = match.group().split(" ")
-        if (before.count("`") % 2 or _QUOTE_BEFORE.search(before) or re.match(r"\s*키", after)
-                or re.search(r"\+\s*$", before) or re.match(r"\s*\+", after) or re.match(r"[_.][A-Za-z0-9]", after)
-                or re.search(r"[A-Za-z]/$", before) or re.match(r"/[A-Za-z]", after)
-                or MODIFIER_KEYS & set(words) or _LONGER_ENGLISH.search(before)):
-            continue
+        blocked = bool(before.count("`") % 2 or _QUOTE_BEFORE.search(before) or re.match(r"\s*키", after)
+                       or re.search(r"\+\s*$", before) or re.match(r"\s*\+", after) or re.match(r"[_.][A-Za-z0-9]", after)
+                       or re.search(r"[A-Za-z]/$", before) or re.match(r"/[A-Za-z]", after)
+                       or MODIFIER_KEYS & set(words) or _LONGER_ENGLISH.search(before))
         bare = paren_depth(text[start:s], depth) > 0  # 괄호 안: 괄호 영어 없이 화면 글자만([458])
-        inner = re.match(r"[^()\n]*?(?=\))", text[s:]) if before.rstrip().endswith("(") else None
+        inner = re.match(r"[^()\n]*?(?=\))", text[s:]) if before.rstrip().endswith("(") and not blocked else None
         inner = inner if inner and inner.end() > e - s else None  # 이 덩이 하나뿐인 괄호는 아래 한국어(영어) 꼴이 맡는다
         front = re.search(r"([가-힣][가-힣 &]*?)\s*\($", before) if inner else None
         if front and (glyph := names.screen(inner.group())[1]) and _squash(front.group(1)).endswith(_squash(glyph)):
@@ -645,22 +656,33 @@ def screen_prose(
             if seen is not None:
                 seen.add((inner.group(), glyph))
             continue
-        parts = _run_parts(words, names, keep, bool(re.search(r"[>‣▸]\s*$", before)))
+        parts = None if blocked else _run_parts(words, names, keep, bool(re.search(r"[>‣▸]\s*$", before)))
+        first_english = parts is None or not (len(parts) == 1 and parts[0][1] not in (None, parts[0][0]) and parts[0][0] not in keep
+                                              and _HANGUL.search(parts[0][1]))
+        if before.rstrip().endswith("(") and first_english and re.match(r"\s*,", after) and (close := after.find(")")) >= 0:
+            # 괄호 첫 이름이 영어로 남는 목록("측면(Front, Right)", 사전에 없는 첫 이름도)은 뒤 이름도 영어로 둔다. 뒤만 바꾸면
+            # "측면(Front, 오른쪽)"처럼 섞여 거부한 꼴(한국어(영어, 한국어), [349])이 된다([458])
+            skip = e + close + 1
+            continue
         if parts is None:
             continue
         others: tuple[str, ...] = ()  # 탭 자리면 같은 이름의 다른 글자("렌더(Render) 탭"의 렌더)도 앞말로 통째로 바꾼다
         if len(parts) == 1 and tab_place(before, after) and (tab := names.tab_glyph(parts[0][0])):
             parts, others = [(parts[0][0], tab)], names.glyphs(parts[0][0])
         whole = len(parts) == 1 and parts[0][1] not in (None, parts[0][0]) and parts[0][0] not in keep
-        if before.rstrip().endswith("(") and not whole and re.match(r"\s*,", after) and (close := after.find(")")) >= 0:
-            # 괄호 첫 이름이 영어로 남는 목록("측면(Front, Right)")은 뒤 이름도 영어로 둔다. 뒤만 바꾸면 "측면(Front, 오른쪽)"처럼
-            # 섞여 거부한 꼴(한국어(영어, 한국어), [349])이 된다([458])
-            skip = e + close + 1
-            continue
         glossed = re.search(r"([가-힣]+)\s*\($", before)
         if before.rstrip().endswith("(") and re.match(r"\s*,\s*[가-힣]", after):
             continue  # "원점(Origin, 물체의 기준점)": 괄호 첫머리 영어 뒤에 한국어 풀이가 이어지면 앞말의 영어 풀이라 둔다(겹침이 없던 자리, [458])
-        if before.rstrip().endswith("(") and after.startswith(")"):
+        # 괄호 앞이 한국어가 아니면("F(New Edge/Face from Vertices)") 앞말의 풀이가 아니라 덧말 괄호라 아래에서 화면 글자만 낸다([458]).
+        # 앞말 끝의 굵은 글씨·따옴표는 건너 본다("**거리로 병합**(By Distance)"), 앞말이 이미 화면 글자로 끝나도 풀이로 본다
+        # ("마지막 작업 조정...(Adjust Last Operation...)"). 둘 다 첫 판이 "(거리에 의해)"·"(마지막 작업 조정...)"을 만들었다
+        korean_front = re.search(r"[가-힣][*'\"’”]*\s*\($", before) or (
+            whole and _squash(before.rstrip()[:-1].rstrip("*'\"’”")).endswith(_squash(parts[0][1])))
+        # 괄호 앞 영어 낱말과 괄호 속이 합쳐 괄호가 든 이름이면("Intersect(Boolean)") 이름의 일부라 둔다. 낱말만 보면
+        # 여러 글자 키("Tab(Edit Mode)", "Esc(Cancel)")의 덧말 괄호까지 영어로 남는다([458])
+        word = re.search(r"(?<![A-Za-z])([A-Za-z]{2,})\s?\($", before)
+        english_front = word and any(names.screen(f"{word.group(1)}{gap}({match.group()})")[1] for gap in (" ", ""))
+        if before.rstrip().endswith("(") and after.startswith(")") and (korean_front or english_front or not whole):
             # 모델이 스스로 옮긴 말이 흔히 옮기는 말이면 앞말을 통째로 화면 글자로(티켓 50 가). 괄호 뒤가 '하다' 꼴이면
             # 앞말은 동사의 일부라("화면이 회전(Orbit)합니다") 바꾸지 않는다
             head = before.rstrip()[:-1]

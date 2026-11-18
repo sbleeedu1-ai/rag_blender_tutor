@@ -1258,7 +1258,8 @@ PAREN_EXTRA = {**SCREEN_EXTRA, "glTF Binary (.glb)": "glTF 바이너리(.glb)", 
                "Frame Selected": "선택한 프레임", "Edge": "엣지", "Loop Cut and Slide": "루프를 잘라내고 슬라이드", "Increment": "증가",
                "Merge Distance": "병합 거리", "Intersect": "교차", "Intersect (Boolean)": "교차 (불리언)", "Max": "최대",
                "Vertices": "버텍스", "Front": "앞쪽", "Right": "오른쪽", "Pin": "고정", "Pole": "폴", "Rotation": "회전",
-               "Rotation & Scale": "회전 & 스케일", "Origin": "오리진"}
+               "Rotation & Scale": "회전 & 스케일", "Origin": "오리진", "New Edge/Face from Vertices": "버텍스에서 새로운 에지/페이스",
+               "UVMap": "UV 맵", "Boolean": "불리언"}
 
 
 def shown_paren(pieces) -> str:
@@ -1281,6 +1282,7 @@ def shown_paren(pieces) -> str:
         ("Home 키(또는 Frame All)를 누르세요.", "Home 키(또는 모든 프레임)를 누르세요."),  # 맨 영어도 같게
         ("측면(Front, Right) 보기에서 봅니다.", "측면(앞쪽, 오른쪽) 보기에서 봅니다."),  # 괄호 속 영어 목록(전: "측면(Front, 오른쪽(Right))", Q04-1)
         ("측면(Union, Right) 보기에서 봅니다.", "측면(Union, Right) 보기에서 봅니다."),  # 첫 이름이 맨 글에서 영어로 남으면 목록을 둔다(뒤만 바뀐 "측면(Union, 오른쪽)"은 거부한 꼴)
+        ("방식(Shift Snap, Right 중 하나)", "방식(Shift Snap, Right 중 하나)"),  # 첫 이름이 키 이름 덩이라 건너뛰어도 같게(사전 전체 문장에서 19곳)
         # 괄호 안에서 바로 앞 한국어가 이미 화면 글자면 영어는 그 풀이라 둔다(이 규칙 첫 판이 "고정(고정, 단축키 P)"·"(폴, 폴이라고"를 만듦, Q28·Q05)
         ("UV 조각을 고정(Pin, 단축키 P)해 둡니다.", "UV 조각을 고정(Pin, 단축키 P)해 둡니다."),
         ("적용 > 회전 & 스케일(Rotation & Scale) 메뉴를 씁니다.", "적용 > 회전 & 스케일(Rotation & Scale) 메뉴를 씁니다."),  # 저장된 답 Q35-1
@@ -1299,7 +1301,15 @@ def shown_paren(pieces) -> str:
         ("[[Frame Selected]](단축키 [[Numpad.]] 또는 F)를 누르세요.", "선택한 프레임(단축키 Numpad. 또는 F)를 누르세요."),
         # 괄호와 상관없이 더 긴 영어 이름의 끝 낱말만 바꾸지 않는다(전: "3ds 최대(Max)", "from 버텍스(Vertices)")
         ("원본이 3ds Max 같은 프로그램이면", "원본이 3ds Max 같은 프로그램이면"),
-        ("F(New Edge/Face from Vertices)는 면을 만듭니다.", "F(New Edge/Face from Vertices)는 면을 만듭니다."),
+        # '/'가 든 이름은 통째로(전: "F(New Edge/Face from 버텍스(Vertices))", 이 규칙 첫 판은 영어로 둠, 사용자 "ㅇㅇ 그럼 고치긴 하는데")
+        ("F(New Edge/Face from Vertices)는 면을 만듭니다.", "F(버텍스에서 새로운 에지/페이스)는 면을 만듭니다."),
+        ("F 키는 New Edge/Face from Vertices 기능입니다.", "F 키는 버텍스에서 새로운 에지/페이스(New Edge/Face from Vertices) 기능입니다."),
+        ('좌표는 기본 이름 "UVMap"을 씁니다.', '좌표는 기본 이름 "UVMap"을 씁니다.'),  # UV 맵 기본 이름은 자료 이름이라 둔다(사용자 "ㅇㅇ 그럼 바꾸지 말고")
+        ("메뉴의 **거리로 병합**(Merge by Distance)도 같습니다.", "메뉴의 **거리로 병합**(Merge by Distance)도 같습니다."),  # 굵은 글씨 앞말의 풀이는 둔다(첫 판 "(거리로 병합)")
+        ("G(Increment)로 옮깁니다.", "G(증가)로 옮깁니다."),  # 앞이 한국어가 아니면 덧말 괄호
+        # 앞 낱말과 괄호 속이 합쳐 괄호가 든 이름이면 이름의 일부라 둔다(첫 판 "Intersect(불리언)", 저장된 답 Q47)
+        ("설명서의 Intersect(Boolean) 기능입니다.", "설명서의 Intersect(Boolean) 기능입니다."),
+        ("Tab(Increment)로 옮깁니다.", "Tab(증가)로 옮깁니다."),  # 여러 글자 키 뒤는 덧말 괄호(영어 낱말이면 늘 두는 판은 "Tab(Increment)")
     ],
 )
 def test_괄호가_겹치지_않게_바꾼다(answer, expected):
