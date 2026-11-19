@@ -4364,3 +4364,9 @@
 ### [521] 2026-11-19 · 기록 실행 취소 길도 메뉴로 확인: [520] 숫자 확정
 - 사용자 화면(메뉴만): 원기둥 추가 → 편집 > 마지막 작업 조정에서 '실린더를 추가' 창이 뜸(대조군 확인, 스크린샷) → 이동 → 편집 > 기록 실행 취소에서 원기둥 줄 → 편집 메뉴의 '마지막 작업 조정...' 회색(스크린샷). 실행 취소·기록 실행 취소 두 길 모두 되돌린 뒤에는 못 엶. [520]의 11답 바로잡음과 숫자(none 21·medium 30·조각만 18·지금 14, 가장 잘한 판 33, 짝 비교 그대로)를 확정.
 - 사용자 말 그대로: "진짜 지가 할생각 안하고 뒤지게 시키네". 소스 코드 읽기로 Claude가 먼저 확인할 수 있었던 것을 사용자에게 세 번 시킴.
+
+### [522] 2026-11-19 · 결정 5에 든 세 예를 설명서 쪽 화면과 Blender 5.2.4로 다시 확인
+- 사용자 말 그대로: "FBX 스케일 기본값 <- 이거 브라우저로 같은 위치 열고 캡쳐따서 확인했? Q28 Q30 도 다시 봐봐"
+- Q36: 설명서 `files/import_export/fbx_legacy.html` Transform > Scale "10 is the default"(브라우저 화면 확인). 5.2.4 실제 기본 1.0(공식 문서 `bpy.ops.export_scene.fbx` global_scale=1.0, 실행으로 확인). 설명서가 화면과 다름.
+- Q28: 설명서 `modeling/meshes/uv/editing.html#proportional-editing` 참고 상자 Menu "UV ‣ Proportional Editing"(브라우저 화면 확인). 5.2.4 UV 메뉴에 없음(소스 코드 `space_image.py` IMAGE_MT_uvs, 헤더에만). 설명서가 화면과 다름.
+- Q30: 설명서 `render/lights/light_object.html#power-of-lights` "adjust the Exposure in Render ‣ Film"(브라우저 화면 확인). 장면 엔진은 EEVEE(실행으로 확인). Film > Exposure는 Cycles에만 있고(소스 코드 cycles `ui.py` 781줄 film_exposure) EEVEE Film 패널에는 없음(`properties_render.py` 757줄 RENDER_PT_eevee_film: Filter Size·Transparent·Overscan). 설명서가 낡은 것이 아니라 엔진을 가리지 않고 쓴 줄. EEVEE에서는 색 관리의 Exposure가 대신함. 결정 5의 예로는 약함(바로잡음).
