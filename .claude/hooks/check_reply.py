@@ -15,11 +15,12 @@
   전역 지침 "제안하기 전에는 HISTORY.md와 git 이력에서 그 주제를 찾아" 를 11-16에 두 번 어김("왜 확인안하지?", temperature 제안).
   읽기(grep·sed -n·Read 등)만 찾기로 치고 쓰기(>>·git add)는 안 친다. 지난 일을 말하는 줄(실수·했습니다 등)의 '제안'은 권유로 안 본다.
   한계: 그 차례에 기록을 다른 주제로 읽었으면 통과한다(temperature 제안 차례는 [342]를 읽어서 이 규칙으로도 못 막는다).
-- 규칙 4([482]): 답이 결론·순서·다음 할 일을 말하거나 무엇을 권하는데 그 차례에 advisor 결과(advisor_tool_result)가 없으면 막는다.
-  사용자 "앞으로 결론 내기전에 무조건 어드바이저 지금 페이블이잖아 상의하고 결로내"(11-19). 11-19 세션(압축 앞뒤 합침) 답이 있는 89차례에 돌리면 31번 걸림.
-  한계: 결론 낱말 없이 결론을 말한 답(예: "04에서 어차피 나오는 답 일부를 … 세자는 뜻입니다")은 못 본다.
-  막는 때는 차례 끝이라 상의 없이 쓴 결론이 이미 화면에 나간 뒤다. 그 차례의 advisor 결과가 하나라도 있으면 통과한다
-  (새 근거가 오기 전에 부른 advisor여도 통과, 11-19 Fable 판단이 온 차례가 그랬다).
+- 규칙 4([482], [485]에서 좁힘): 답이 실험 결과를 말하는데(결과 수 "8/18"·"29 / 30", 판정 낱말 채택·기각·'사이'·가를 수 없음·판단 안 함)
+  그 차례에 advisor 결과(advisor_tool_result)가 없으면 막는다.
+  처음엔 결론·순서·권유 낱말 모두에 걸어 11-19 세션 89차례 중 31번 걸렸고, 사용자 "나한테 말하기전에만 하라는 소리였는데 왜 31번이나 함?",
+  "어떤 식으로든 실험 결과를 이야기할때만 상의하도록"으로 좁힘. 좁힌 뒤 같은 세션 93차례 중 23번 걸림(모두 결과 수·판정 낱말을 말한 답).
+  한계: "8/18" 꼴과 판정 낱말 밖으로 말한 결과("47 대 47", "5회 중 3회", "1.7초")는 못 본다(04 결과가 이 꼴). 막는 때가 차례 끝이라 상의 없는 말은 이미 화면에 나간 뒤다.
+  그 차례의 advisor 결과가 하나라도 있으면 통과한다(새 근거가 오기 전에 부른 advisor여도 통과).
 - 못 보는 것: 거부한 꼴을 다른 모양으로 바꿔 쓴 것, 정해 둔 차례를 어긴 권유, 말이 길고 어려운 것, 찾긴 했으나 다른 낱말로 찾아 놓친 것.
   화면을 안 보고 화면 글자를 단정한 것(11-17 잰 결과 헛막음이 많아 안 넣음, rules-enforced.md·[434]).
 """
@@ -38,7 +39,7 @@ RECORDS = re.compile(r"HISTORY\.md|experiment\.md|HANDOFF\.md|answer-forms\.md|r
 READS = re.compile(r"\bgrep\b|\brg\b|sed -n|\bawk\b|\bhead\b|\btail\b|\bcat\b(?!\s*>)|git log -S|git log --grep|session-search")
 WRITES = re.compile(r">>|>\s*\S|git add|git commit|write_text")
 PAST = re.compile(r"실수|잘못|했습니다|였습니다|했던|한 것|한 게|어긴|거부된")
-CONCLUDES = re.compile(r"결론|다음은|다음 할 일|순서는")
+RESULTS = re.compile(r"(?<![\dA-Za-z_/.])\d{1,3}\s*/\s*\d{1,3}(?![\dA-Za-z_/.])|채택|기각|'사이'|사이로|가를 수 없음|판단 안 함")  # 결과 수(경로·날짜 속 숫자는 뺌, 뒤에 붙는 한글 조사는 둠)와 판정 낱말
 EXPLAINS = re.compile(r"거부|지금 제품|지금 꼴|지금:|전:|예전|않|말고")
 
 
@@ -114,10 +115,9 @@ def turn_problems(transcript: Path) -> list[str]:
         found.append("권하기 전에 기록을 찾지 않았다(이 차례에 HISTORY.md·docs/experiment.md·HANDOFF.md·answer-forms.md·티켓을 찾은 호출이 없음). "
                      "그 주제를 기록에서 찾아 관련 결정 원문을 함께 들고, 못 찾으면 어디서 어떤 낱말로 찾았는지 쓴다. "
                      "까닭(사용자 원문): \"그러니까 왜 확인안하지?\", \"이런거 좀 찾아보라니까\" [392]")
-    concludes = recommends or any(CONCLUDES.search(line) for line in text.splitlines())
-    if concludes and not any(b.get("type") == "advisor_tool_result" for b in blocks):
-        found.append("결론·순서·권유를 말하기 전에 advisor와 상의하지 않았다(이 차례에 advisor 결과 없음). advisor를 부르고 그 상의로 답을 고친다. advisor를 부를 수 없으면(도구 없음 등) 결론을 빼고 그 사실을 사용자에게 알린다. "
-                     "까닭(사용자 원문): \"앞으로 결론 내기전에 무조건 어드바이저 지금 페이블이잖아 상의하고 결로내\" [482]")
+    if RESULTS.search(text) and not any(b.get("type") == "advisor_tool_result" for b in blocks):
+        found.append("실험 결과를 말하기 전에 advisor와 상의하지 않았다(이 차례에 advisor 결과 없음). advisor를 부르고 그 상의로 답을 고친다. advisor를 부를 수 없으면(도구 없음 등) 결론을 빼고 그 사실을 사용자에게 알린다. "
+                     "까닭(사용자 원문): \"앞으로 결론 내기전에 무조건 어드바이저 지금 페이블이잖아 상의하고 결로내\" [482], \"어떤 식으로든 실험 결과를 이야기할때만 상의하도록\" [485]")
     return found
 
 

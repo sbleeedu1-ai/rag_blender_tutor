@@ -105,8 +105,9 @@ def test_제안이_없으면_기록_검사를_안_한다(tmp_path):
 
 
 # 2026-11-19 실제 실수 둘([482]). advisor를 부르지 않은 차례의 답 줄을 그대로 옮겼다.
-NO_ADVISOR_1 = "**결론: 03 결과만으로는 C를 새 판에 넣을지 정하지 못했습니다. 그래서 이것부터 정하고, 04는 그다음에 돌립니다.**"  # 01:06 차례
-NO_ADVISOR_2 = "그래서 순서는 이렇게 되어야 합니다."  # 01:05 차례
+NO_ADVISOR_1 = "- **겨냥한 3문항(Q19·Q23·Q28):** 원인을 짚은 답이 C에서 8/18개였습니다. 지금 판(A)은 1/18이었습니다. 효과는 있지만 미리 정한 채택 기준인 12 이상에는 못 미쳐 판정은 \"사이\"입니다."  # 01:06 차례
+NO_ADVISOR_2 = "- **도움**: 겨눈 3문항에서 원인을 짚은 답이 1/18에서 8/18로 늘었습니다. 엄격하게 세도 6/18입니다."  # 01:03 차례
+NOT_RESULT = "그래서 순서는 이렇게 되어야 합니다."  # 01:05 차례. 실험 결과가 아니라 순서 이야기라 [485]부터 안 막음
 ADVISOR_RESULT = {"type": "assistant", "message": {"content": [{"type": "advisor_tool_result", "content": "..."}]}}
 
 
@@ -128,8 +129,10 @@ def test_advisor_결과가_앞_차례에만_있으면_막힌다(tmp_path):
     assert any("advisor" in h for h in check_reply.turn_problems(_transcript(tmp_path, [ADVISOR_RESULT, human, text])))
 
 
-def test_결론_없는_진행_말은_advisor를_안_본다(tmp_path):
-    assert check_reply.turn_problems(_turn(tmp_path, "지금은 근거 자료를 모으는 중입니다.")) == []
+def test_실험_결과가_아닌_말은_advisor를_안_본다(tmp_path):
+    path = "캡처 3장은 `results/20261118/201022_기계지표/화면확인/`에 두었습니다."  # 11-18 실제 답, 경로 숫자에 잘못 걸렸던 꼴
+    for reply in ("지금은 근거 자료를 모으는 중입니다.", NOT_RESULT, "다음은 04 실행 전 목록입니다.", path):
+        assert check_reply.turn_problems(_turn(tmp_path, reply)) == [], reply
 
 
 def test_따옴표_속_세로막대가_있는_grep도_기록_찾기로_본다():
