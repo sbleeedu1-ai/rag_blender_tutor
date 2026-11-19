@@ -4370,3 +4370,8 @@
 - Q36: 설명서 `files/import_export/fbx_legacy.html` Transform > Scale "10 is the default"(브라우저 화면 확인). 5.2.4 실제 기본 1.0(공식 문서 `bpy.ops.export_scene.fbx` global_scale=1.0, 실행으로 확인). 설명서가 화면과 다름.
 - Q28: 설명서 `modeling/meshes/uv/editing.html#proportional-editing` 참고 상자 Menu "UV ‣ Proportional Editing"(브라우저 화면 확인). 5.2.4 UV 메뉴에 없음(소스 코드 `space_image.py` IMAGE_MT_uvs, 헤더에만). 설명서가 화면과 다름.
 - Q30: 설명서 `render/lights/light_object.html#power-of-lights` "adjust the Exposure in Render ‣ Film"(브라우저 화면 확인). 장면 엔진은 EEVEE(실행으로 확인). Film > Exposure는 Cycles에만 있고(소스 코드 cycles `ui.py` 781줄 film_exposure) EEVEE Film 패널에는 없음(`properties_render.py` 757줄 RENDER_PT_eevee_film: Filter Size·Transparent·Overscan). 설명서가 낡은 것이 아니라 엔진을 가리지 않고 쓴 줄. EEVEE에서는 색 관리의 Exposure가 대신함. 결정 5의 예로는 약함(바로잡음).
+
+### [523] 2026-11-19 · 사용자가 결정 5의 세 예를 설명서 쪽과 Blender 화면으로 직접 봄
+- Q36(카드 장면에서 FBX 내보내기 창 Scale 1.00 확인, 설명서 쪽 브라우저로 봄) 사용자 말 그대로: "맞네", "어 확인 이거 설명서가 중간에 . 을 안 찍은 문제같네 아무튼 잘못된게 맞고 그 다음볼게"
+- Q28: 앞서 본 것([517]).
+- Q30(검 장면, 설명서 Light Objects 쪽 "Render ‣ Film" 문장과 EEVEE 필름 칸 대조) 사용자 말 그대로: "어 맞네 ㅇㅈ 틀린게 맞아". [522]는 Q30을 "엔진을 가리지 않고 쓴 줄"이라 약한 예로 봤으나, 사용자는 이 장면(EEVEE)에서 설명서가 틀린 안내라고 판단.
