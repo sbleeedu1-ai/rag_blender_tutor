@@ -4,10 +4,15 @@
 
 지표(답 하나마다):
 1. 메뉴 길: 원문의 [[ ]] 가운데 '>'(또는 '‣')로 단이 나뉜 것을 메뉴 나무와 맞댄다.
-   있음 / 있음(앞 생략: 나무의 어느 길 끝부분과 같음) / 나무와 다름(첫 단 글자가 나무의 어느 단으로든 나오는데 이 길은 없음) / 나무에 없음(첫 단이 나무에 없음.
+   있음 / 있음(앞 생략: 나무의 어느 길 끝부분과 같음) / 가를 수 없음(덜 그려진 메뉴: 그리다 멈춘 메뉴 아래 길) /
+   나무와 다름(첫 단이 나무의 뿌리 메뉴 이름인데 이 길은 없음) / 나무에 없음(첫 단이 뿌리 메뉴가 아님.
    메뉴 나무는 3D 뷰 머리 메뉴의 물체·메시 편집 두 모드뿐이라 다른 편집기·속성 창 길은 여기로 간다. 틀린 길이라고 단정하지 않는다).
-2. 단축키: 원문의 보조 키 조합(Ctrl·Shift·Alt·Cmd + 키)을, 같은 문장에서 가장 가까운 [[ ]] 이름이 가리키는 조작의 기본 키맵과 맞댄다.
-   맞음 / 기본 키맵과 다름 / 가를 수 없음(이름이 없거나 메뉴 나무에서 조작을 못 찾음, 마우스 등 키 이름을 모름).
+   옛 나무(paths.json, 모드 → 줄)는 뿌리를 따로 적지 않아 나무의 모든 단 글자를 뿌리로 본다.
+2. 단축키: 원문의 보조 키 조합(Ctrl·Shift·Alt·Cmd + 키)을, 괄호로 바로 붙은 [[ ]] 이름이 가리키는 조작의 기본 키맵과 맞댄다.
+   붙은 꼴은 둘이다: "[[이름]](키)"·"[[이름]] 메뉴(단축키는 키)"·"[[이름]](또는 키)"처럼 이름 뒤 괄호의 첫 키, "키([[이름]])"·"키(또는 [[이름]]"처럼 키 뒤 괄호의 첫 이름.
+   (2026-11-19 좁힘, HISTORY [486]: 같은 문장의 가장 가까운 이름에 붙이던 첫 판은 162답에서 "다름" 7건 중 6건이 짝짓기 틀림이었다.
+   이 규칙은 그 162답을 보고 만든 것이다.)
+   맞음 / 기본 키맵과 다름 / 가를 수 없음(괄호로 붙은 이름이 없거나 메뉴 나무에서 조작을 못 찾음, 마우스 등 키 이름을 모름).
    이름 → 조작은 메뉴 나무의 끝 단 글자로만 찾는다(메뉴면 그 메뉴를 여는 wm.call_menu 항목). linux·darwin 두 표 가운데 하나에 있으면 맞음.
 4. 코드 이름(snake_case 낱말, bpy.)과 마크다운 기호(**, 줄 머리 #, 백틱)가 화면 답에 드러난 수.
 5. 설정 이름 말하기(좁은 정의): 화면 답에서 상태를 말하는 문장(지금·현재·켜져·꺼져·되어 있·상태)에 든 코드 이름 가운데,
@@ -18,7 +23,8 @@
 연습 과정 파일의 `메뉴:` 칸도 같은 나무로 맞댄다(docs/plan/01 D, '메뉴: 없음'은 건너뜀): 
   .venv/bin/python -I .claude/tools/answer_facts.py courses <출력 파일 .md> <paths.json> <courses 폴더>
 
-실행: .venv/bin/python -I .claude/tools/answer_facts.py <출력 폴더> <paths.json> <keymap.json> <답 묶음 JSONL>
+실행: .venv/bin/python -I .claude/tools/answer_facts.py <출력 폴더> <메뉴 나무 .json> <keymap.json> <답 묶음 JSONL>
+메뉴 나무는 .claude/tools/menu_tree.py가 만든 것(또는 옛 paths.json).
 답 묶음 한 줄: {"열쇠", "원문"([[ ]]가 든 모델 원문), "답"(화면 답), "판정", "채점 이유", "보낸 설정 줄"(목록, 없으면 빈 목록)}.
 쓰는 것: <출력 폴더>/답별.jsonl, 표.md. 출력 폴더가 이미 있으면 멈춘다.
 """
@@ -51,12 +57,15 @@ def _segments(path: str) -> tuple[str, ...]:
 
 
 class Tree:
-    """메뉴 나무(paths.json: 모드 → [경로 글, "op"|"menu", 조작 이름|메뉴 클래스])."""
+    """메뉴 나무. menu_tree.py 꼴({"모드": 모드 → 줄, "덜 그려진 길", "뿌리"}) 또는 옛 paths.json 꼴(모드 → 줄).
+    줄은 [경로 글, "op"|"menu"|"prop", 조작 이름|메뉴 클래스|칸 이름]."""
 
-    def __init__(self, paths: dict):
-        rows = [row for mode in paths.values() for row in mode]
+    def __init__(self, tree: dict):
+        modes = tree["모드"] if "모드" in tree else tree
+        rows = [row for mode in modes.values() for row in mode]
         self.paths = {_segments(path) for path, _, _ in rows}
-        self.words = {segment for path in self.paths for segment in path}
+        self.partial = {_segments(path) for mode in tree.get("덜 그려진 길", {}).values() for path in mode}
+        self.roots = {_plain(root) for root in tree["뿌리"]} if "뿌리" in tree else {segment for path in self.paths for segment in path}
         self.targets: dict[str, set[tuple[str, str]]] = {}  # 끝 단 글자 → {(종류, 이름)}
         for path, kind, name in rows:
             self.targets.setdefault(_segments(path)[-1], set()).add((kind, name))
@@ -67,7 +76,9 @@ class Tree:
             return "있음"
         if any(len(known) > len(path) and known[-len(path):] == path for known in self.paths):
             return "있음(앞 생략)"
-        return "나무와 다름" if path[0] in self.words else "나무에 없음"
+        if any(path[: len(stop)] == stop for stop in self.partial):
+            return "가를 수 없음(덜 그려진 메뉴)"
+        return "나무와 다름" if path[0] in self.roots else "나무에 없음"
 
 
 def _key(text: str) -> tuple[frozenset[str], str] | None:
@@ -112,25 +123,27 @@ def menu_paths(raw: str, tree: Tree) -> list[dict]:
     return [{"길": mark, "판정": tree.judge(mark)} for mark in MARK.findall(raw) if re.search(r"[>‣]", mark)]
 
 
+# 키와 이름이 괄호로 바로 붙은 꼴(docstring 2). 이름 뒤 괄호: "[[이름]](키", "[[이름]] 메뉴(단축키는 키", 키 뒤 괄호: "키([[이름]]", "키(또는 [[이름]]"
+NAME_BEFORE = re.compile(r"\[\[([^\[\]]+)\]\]\s*(?:메뉴\s*)?\(\s*(?:(?:단축키|키)(?:는|:)?\s*|또는\s*)?$")
+NAME_AFTER = re.compile(r"\s*\(\s*(?:또는\s*)?\[\[([^\[\]]+)\]\]")
+
+
 def shortcuts(raw: str, tree: Tree, keymap: Keymap) -> list[dict]:
     found = []
-    for sentence in SENTENCE.split(raw):
-        marks = [(m.start(), m.end(), m.group(1)) for m in MARK.finditer(sentence)]
-        for combo in COMBO.finditer(sentence):
-            parsed = _key(combo.group())
-            # 키 앞뒤로 글자 거리가 가장 가까운 표시(같으면 앞)
-            gap = lambda mark: combo.start() - mark[1] if mark[1] <= combo.start() else max(0, mark[0] - combo.end())
-            names = [mark for mark in marks if mark[1] <= combo.start() or mark[0] >= combo.end()]  # 키를 감싼 표시([[Alt-C]])는 이름이 아니다
-            near = min(names, key=lambda mark: (gap(mark), mark[0] > combo.start()), default=None)
-            name = near[2] if near else None
-            targets = tree.targets.get(_segments(name)[-1], set()) if name else set()
-            if parsed is None:
-                verdict = "가를 수 없음(키 이름 모름)"
-            elif not targets:
-                verdict = "가를 수 없음(조작 못 찾음)"
-            else:
-                verdict = "맞음" if keymap.matches(targets, *parsed) else "기본 키맵과 다름"
-            found.append({"키": combo.group(), "이름": name, "판정": verdict})
+    for combo in COMBO.finditer(raw):
+        parsed = _key(combo.group())
+        before, after = NAME_BEFORE.search(raw[: combo.start()]), NAME_AFTER.match(raw, combo.end())
+        name = before.group(1) if before else after.group(1) if after else None
+        targets = tree.targets.get(_segments(name)[-1], set()) if name else set()
+        if parsed is None:
+            verdict = "가를 수 없음(키 이름 모름)"
+        elif name is None:
+            verdict = "가를 수 없음(괄호로 붙은 이름 없음)"
+        elif not targets:
+            verdict = "가를 수 없음(조작 못 찾음)"
+        else:
+            verdict = "맞음" if keymap.matches(targets, *parsed) else "기본 키맵과 다름"
+        found.append({"키": combo.group(), "이름": name, "판정": verdict})
     return found
 
 

@@ -33,12 +33,13 @@ def test_메뉴_길은_나무에_있는_길과_없는_길을_가른다():
     ]  # 단이 하나인 [[Bevel]]은 길이 아니라 세지 않는다
 
 
-def test_단축키는_가까운_이름의_조작의_기본_키맵과_맞댄다():
-    raw = ("[[Loop Cut and Slide]](Alt-C)로 자릅니다. [[Edge > Loop Cut and Slide]]는 Ctrl+R이에요. Mac은 Cmd + R.\n"
-           "[[Recalculate Outside]](Alt-N)을 고르세요. Alt+N으로 [[Normals]] 메뉴를 열어요. Ctrl+Z로 되돌려요. Ctrl+Click으로 [[Bevel]]")
+def test_단축키는_괄호로_바로_붙은_이름의_조작의_기본_키맵과_맞댄다():
+    raw = ("[[Loop Cut and Slide]](Alt-C)로 자릅니다. [[Edge > Loop Cut and Slide]]는 Ctrl+R이에요. Ctrl + R([[Edge > Loop Cut and Slide]])도 같아요.\n"
+           "Cmd+R(또는 [[Loop Cut and Slide]]). [[Normals]] 메뉴(단축키는 Alt+N)를 여세요. [[Recalculate Outside]](Alt-N). Ctrl+Z로 되돌려요. Ctrl+Click으로 [[Bevel]]")
     assert [(item["키"], item["판정"]) for item in facts.shortcuts(raw, TREE, KEYS)] == [
-        ("Alt-C", "기본 키맵과 다름"), ("Ctrl+R", "맞음"), ("Cmd + R", "가를 수 없음(조작 못 찾음)"),
-        ("Alt-N", "기본 키맵과 다름"), ("Alt+N", "맞음"), ("Ctrl+Z", "가를 수 없음(조작 못 찾음)"), ("Ctrl+Click", "가를 수 없음(키 이름 모름)"),
+        ("Alt-C", "기본 키맵과 다름"), ("Ctrl+R", "가를 수 없음(괄호로 붙은 이름 없음)"), ("Ctrl + R", "맞음"),
+        ("Cmd+R", "맞음"), ("Alt+N", "맞음"), ("Alt-N", "기본 키맵과 다름"),
+        ("Ctrl+Z", "가를 수 없음(괄호로 붙은 이름 없음)"), ("Ctrl+Click", "가를 수 없음(키 이름 모름)"),
     ]
 
 
@@ -68,7 +69,14 @@ def test_연습_과정_메뉴_칸은_없음을_건너뛰고_줄_번호와_판정
                                                   ("sword.yaml", 4, "Object > Shade Auto Smooth", "있음")]
 
 
-def test_단축키는_앞뒤_가운데_글자_거리로_가장_가까운_이름에_붙이고_Mac_키맵도_본다():
-    assert [item["판정"] for item in facts.shortcuts("[[Mesh > Normals]]에서 한참 설명한 뒤 Ctrl+R로 [[Edge > Loop Cut and Slide]]", TREE, KEYS)] == ["맞음"]
-    assert [item["판정"] for item in facts.shortcuts("[[Edge > Loop Cut and Slide]]는 Cmd+R", TREE, KEYS)] == ["맞음"]  # darwin 표에만 있음
-    assert [item["판정"] for item in facts.shortcuts("[[Alt-C]]로 [[Loop Cut and Slide]]를 쓰세요", TREE, KEYS)] == ["기본 키맵과 다름"]  # 키를 감싼 표시는 이름이 아님
+def test_단축키는_괄호_밖의_가까운_이름에_붙이지_않는다():
+    # 첫 판은 같은 문장의 가장 가까운 이름에 붙여 "Shift + A로 [[Cylinder]]"·"Alt-G로 [[Object]] 메뉴"를 다름으로 잡았다(HISTORY [486])
+    assert [item["판정"] for item in facts.shortcuts("Ctrl+R로 [[Edge > Loop Cut and Slide]]", TREE, KEYS)] == ["가를 수 없음(괄호로 붙은 이름 없음)"]
+    assert [item["판정"] for item in facts.shortcuts("[[Alt-C]]로 [[Loop Cut and Slide]]를 쓰세요", TREE, KEYS)] == ["가를 수 없음(괄호로 붙은 이름 없음)"]
+
+
+def test_새_나무는_뿌리_메뉴로만_다름을_가르고_덜_그려진_메뉴_아래는_가를_수_없다():
+    tree = facts.Tree({"모드": PATHS, "뿌리": ["Object", "Edge", "Mesh"], "덜 그려진 길": {"OBJECT": ["Object > Snap"]}})
+    assert [tree.judge(mark) for mark in ("Object > Snap > Cursor to Selected", "Object > Shading > Shade Auto Smooth",
+                                          "Snap > Image", "Mesh > Normals > Recalculate Outside")] == [
+        "가를 수 없음(덜 그려진 메뉴)", "나무와 다름", "나무에 없음", "있음"]  # Snap은 나무의 단 글자지만 뿌리가 아님
