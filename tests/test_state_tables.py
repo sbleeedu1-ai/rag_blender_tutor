@@ -51,6 +51,16 @@ def test_저장소의_표는_읽히고_묶음_칸은_갈래_표에_있다():
     assert not missing, sorted(missing)[:10]
 
 
+def test_입자_편집_물체_칸은_보내지_않는다():
+    """공장 장면의 물체 이름('Cube')과 견주던 칸이라 활성 물체가 다르면 늘 '다름'으로 실려 갔다(HISTORY [554], 검색 관문 ④ 잡음 줄).
+    갈래를 '뺌'으로 두어야 안 보낸다(공장값 표에서 열쇠만 지우면 '공장값 모름'으로 더 자주 간다). 표를 다시 만들 때 사라지지 않게 지킨다."""
+    rules = json.loads((PROJECT / "state_tables" / "rules.json").read_text(encoding="utf-8"))
+    factory = json.loads((PROJECT / "state_tables" / "factory.json").read_text(encoding="utf-8"))
+    assert rules["ParticleEdit.object"] == "뺌"
+    key = "Scene.tool_settings.particle_edit|ParticleEdit.object"
+    assert key not in factory["exact"] and key not in factory["loose"]
+
+
 # ---- 애드온 읽기의 순수한 부분(bpy를 가짜로 끼워 불러온다) ----
 
 
