@@ -25,7 +25,9 @@ EMBEDDINGS = (manual_vectors.MODEL,)  # 고를 수 있는 임베딩(bge-m3는 �
 PROVIDERS = ("claude", "openai")  # 질문 바꾸기·분야 고르기·답변 모델을 어디서 부르나
 REWRITE_EFFORT, REWRITE_COUNT = "none", 3  # 질문 바꾸기(HISTORY [127], 5개는 이득이 작아 되돌림, [135])
 REWRITE_MODELS = {"claude": claude_model.MODEL, "openai": "gpt-6-luna"}
-ANSWER_MAX_TOKENS = 4096  # 답 길이 한도(Claude). 도우미 답은 짧게 쓰라고 지시하므로 넉넉한 값
+# 답 길이 한도(Claude). 생각 토큰도 이 안에 든다. 4096은 생각 medium에서 출력 최대 3751로 빠듯해([560]) 05 조건 16000으로(HISTORY [563]).
+# 보이는 답의 길이는 지시문이 정하고, 오래 생각하면 첫 글자 20초 한도가 먼저 끊는다
+ANSWER_MAX_TOKENS = 16000
 REWRITE_MAX_TOKENS = 600  # 질문 바꾸기 한도. 가설 16의 300은 한 번 잘렸다(M044, 검색어는 먼저 닫혀 영향 없었음)
 FIELD_MAX_TOKENS = 200  # 분야 고르기 한도(가설 16과 같음)
 # 질문 바꾸기 답 모양. 칸 차례대로 쓰므로 검색어(query)가 먼저 닫힌다(엔진은 이 칸이 닫히는 즉시 찾는다)
@@ -34,6 +36,13 @@ REWRITE_SCHEMA = {
     "properties": {"query": {"type": "string"}, "areas": {"type": "array", "items": {"type": "string"}},
                    "exclude": {"type": "array", "items": {"type": "string"}}},
 }
+
+
+def fallback_level(settings: Settings) -> Reasoning:
+    """분야 고르기가 실패해 묶음 없이 답할 때의 생각 수준: 예비 설정과 본 수준 가운데 높은 쪽.
+    사용자 "묶음이 실패해서 빠질 경우엔 생각을 키도록"([270]). 본 수준이 medium인데 예비가 low면 오히려 낮추므로 막는다(HISTORY [563])."""
+    order = list(Reasoning)  # none → low → medium(글자 순서가 아니라 정한 차례)
+    return max(settings.reasoning, settings.fallback_reasoning, key=order.index)
 
 
 def answer_model_for(settings: Settings, provider: str = "claude", reasoning: Reasoning | None = None) -> AnswerModel:
@@ -92,7 +101,7 @@ def build_engine(
     if provider == "claude":
         field_model = ClaudeModel(claude_model.MODEL, anthropic_key(), "none", FIELD_MAX_TOKENS, settings.field_timeout)
         fields = load_fields()
-        fallback = answer_model_for(settings, provider, settings.fallback_reasoning)
+        fallback = answer_model_for(settings, provider, fallback_level(settings))
     names = load_menu_names(data_dir, menu_choices, menu_titles)
     texts = [course.search_text for course in courses]
     course_vectors = manual_vectors.cached(texts, embedder, manual_vectors.courses_path_for(embedding, data_dir), settings.timeout)

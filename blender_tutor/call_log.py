@@ -105,14 +105,14 @@ class _Timed:
 
 
 class _TimedModel(_Timed):
-    """질문 바꾸기(stream(messages))·답변(stream(messages, timeout))·분야 고르기(ask_json) 겉."""
+    """질문 바꾸기(stream(messages))·답변(stream(messages, timeout, first_timeout=…))·분야 고르기(ask_json) 겉."""
 
-    def stream(self, messages: list[dict[str, str]], *args) -> Iterator[str]:
+    def stream(self, messages: list[dict[str, str]], *args, **kwargs) -> Iterator[str]:
         record, before, text, finished = self._log._begin(self._kind, self._slot), _tokens(self.inner), "", False
         if self._kind in SENT_KINDS:
             record["보낸 글"] = messages
         try:
-            for piece in self.inner.stream(messages, *args):
+            for piece in self.inner.stream(messages, *args, **kwargs):
                 if "첫 조각" not in record:
                     record["첫 조각"] = self._log.now()
                 text += piece

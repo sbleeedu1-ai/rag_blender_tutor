@@ -128,10 +128,10 @@ class TimedAnswer:
     def __init__(self, inner: OpenAIAnswerModel, calls: Calls, slot: int):
         self.inner, self.calls, self.slot, self.model = inner, calls, slot, inner.model
 
-    def stream(self, messages: list[dict[str, str]], timeout: float) -> Iterator[str]:
+    def stream(self, messages: list[dict[str, str]], timeout: float, first_timeout: float | None = None) -> Iterator[str]:
         record, before, text = self.calls.begin("답변", self.slot), _tokens(self.inner), ""
         try:
-            for piece in self.inner.stream(messages, timeout):
+            for piece in self.inner.stream(messages, timeout, first_timeout):
                 record.setdefault("첫 조각", self.calls.now())
                 text += piece
                 yield piece

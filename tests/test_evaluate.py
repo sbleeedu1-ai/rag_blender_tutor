@@ -127,7 +127,7 @@ class Model:
         self.fail_on = fail_on
         self.text = text
 
-    def stream(self, messages, timeout):
+    def stream(self, messages, timeout, first_timeout=None):
         self.calls.append(messages)
         yield f"{self.text}{len(self.calls)}"
         if len(self.calls) == self.fail_on:
@@ -298,10 +298,10 @@ class PricedModel(Model):
 
     reasoning_tokens = 37
 
-    def stream(self, messages, timeout):
+    def stream(self, messages, timeout, first_timeout=None):
         self.input_tokens += 100
         self.output_tokens += 10
-        yield from super().stream(messages, timeout)
+        yield from super().stream(messages, timeout, first_timeout)
 
     def dollars(self):
         return 0.0012
@@ -353,7 +353,7 @@ def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약
     assert made_models[-1].effort == "low"  # 생각 수준을 답변 모델에 넘긴다
     # 어느 코드로 잰 결과인지(홀드아웃은 동결한 커밋 번호를 적는다). 커밋 안 한 변경이 있으면 뒤에 표시가 붙는다
     assert re.fullmatch(r"[0-9a-f]{40}( \(커밋 안 한 변경 있음\))?", settings["커밋"])
-    assert settings["settings"] == {"top_k": 8, "timeout": 10.0, "rewrite_timeout": 5.0, "field_timeout": 5.0, "use_bm25": False, "reasoning": "low", "fallback_reasoning": "low", "situation_lines": True, "computed_lines": True, "field_lines": True, "recent_pairs": 5}
+    assert settings["settings"] == {"top_k": 8, "timeout": 10.0, "answer_first_timeout": 20.0, "answer_timeout": 5.0, "rewrite_timeout": 5.0, "field_timeout": 5.0, "use_bm25": False, "reasoning": "low", "fallback_reasoning": "low", "situation_lines": True, "computed_lines": True, "field_lines": True, "recent_pairs": 5}
     rows = [json.loads(text) for text in (folder / "답.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [(row["번호"], row["적중 순위"]) for row in rows] == [("D01", 1), ("D02", None)]
     assert rows[0]["검색 결과"][0]["주소"] == "files/blend/save.html#save"
@@ -478,7 +478,7 @@ def test_답마다_엔진만_잰_첫_글자와_답_끝_시간을_붙인다():
     ticks = iter([10.0, 11.5, 14.0, 20.0, 26.0])  # 묻기 전, 첫 조각, 끝 / 둘째 차례는 조각 없이 실패
 
     class Silent(Model):  # 둘째 부름은 조각 없이 바로 오류
-        def stream(self, messages, timeout):
+        def stream(self, messages, timeout, first_timeout=None):
             self.calls.append(messages)
             if len(self.calls) == 2:
                 raise TimeoutError

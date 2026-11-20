@@ -75,7 +75,7 @@ def test_분야_고르기와_임베딩도_시각과_토큰을_남긴다():
 
 def test_실패한_호출은_오류를_적고_오류를_그대로_올린다():
     class Broken:
-        def stream(self, messages, timeout):
+        def stream(self, messages, timeout, first_timeout=None):
             yield "반"
             raise TimeoutError("늦음")
 

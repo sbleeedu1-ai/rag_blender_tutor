@@ -155,6 +155,9 @@ class _SilentThinking(http.server.BaseHTTPRequestHandler):
             stop = "end_turn"
             self._send("content_block_start", {"type": "content_block_start", "index": 1, "content_block": {"type": "text", "text": ""}})
             self._send("content_block_delta", {"type": "content_block_delta", "index": 1, "delta": {"type": "text_delta", "text": self.server.text}})
+            if self.server.stall:  # 글이 나오기 시작한 뒤 멈춤(생각 끝 → 글 조금 → 조용)
+                time.sleep(self.server.stall)
+                self._send("content_block_delta", {"type": "content_block_delta", "index": 1, "delta": {"type": "text_delta", "text": " 끝"}})
             self._send("content_block_stop", {"type": "content_block_stop", "index": 1})
         self._send("message_delta", {"type": "message_delta", "delta": {"stop_reason": stop, "stop_sequence": None}, "usage": {"output_tokens": 4096}})
         self._send("message_stop", {"type": "message_stop"})
@@ -173,9 +176,9 @@ class _QuietServer(http.server.ThreadingHTTPServer):
 def silent_server():
     servers = []
 
-    def start(pause, text=""):
+    def start(pause, text="", stall=0.0):
         server = _QuietServer(("127.0.0.1", 0), _SilentThinking)
-        server.pause, server.text = pause, text
+        server.pause, server.text, server.stall = pause, text, stall
         threading.Thread(target=server.serve_forever, daemon=True).start()
         servers.append(server)
         client = anthropic.Anthropic(api_key="x", base_url=f"http://127.0.0.1:{server.server_port}", max_retries=0)
@@ -199,3 +202,30 @@ def test_진짜_라이브러리로_생각만_하고_글_없이_한도에서_끝�
 
 def test_진짜_라이브러리로_한도_안에_글이_오면_그대로_받는다(silent_server):
     assert "".join(silent_server(pause=0.1, text="베벨").stream(MESSAGES, 2.0)) == "베벨"
+
+
+# 답 모델 한도 둘(사용자 결정 [561] "20초는 첫 질문 나오기까지 기다림 5초는 질문이 나오다 끊겼을때"):
+# 부른 때부터 첫 글자까지는 first_timeout, 첫 글자 뒤 조각 사이는 timeout. 생각하는 동안은 서버가 아무것도 안 보낸다([560]).
+def test_진짜_라이브러리로_글_뒤_한도보다_오래_생각해도_첫_글자_한도_안이면_답을_받는다(silent_server):
+    assert "".join(silent_server(pause=0.8, text="베벨").stream(MESSAGES, 0.3, first_timeout=3.0)) == "베벨"
+
+
+def test_진짜_라이브러리로_첫_글자가_한도_안에_안_오면_그_한도에서_TimeoutError(silent_server):
+    started = time.monotonic()
+    with pytest.raises(TimeoutError):
+        list(silent_server(pause=3.0, text="베벨").stream(MESSAGES, 5.0, first_timeout=0.6))
+    assert time.monotonic() - started < 2.0  # 글 뒤 한도(5초)나 생각 끝(3초)까지 기다리지 않는다
+
+
+def test_진짜_라이브러리로_글이_나오다_멈추면_글_뒤_한도에서_TimeoutError(silent_server):
+    pieces, started = [], time.monotonic()
+    with pytest.raises(TimeoutError):
+        for piece in silent_server(pause=0.0, text="베벨", stall=4.0).stream(MESSAGES, 0.5, first_timeout=3.0):
+            pieces.append(piece)
+    assert pieces == ["베벨"] and time.monotonic() - started < 2.5  # 첫 글자 한도(3초)보다 먼저 끊는다
+
+
+def test_첫_글자_한도를_안_주면_조각_사이_한도_하나로_잰다(silent_server):
+    with pytest.raises(TimeoutError):
+        list(silent_server(pause=0.8, text="베벨").stream(MESSAGES, 0.3))
+

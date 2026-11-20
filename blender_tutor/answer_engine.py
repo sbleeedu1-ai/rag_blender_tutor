@@ -164,10 +164,11 @@ class Rewriter(Protocol):
 class AnswerModel(Protocol):
     """대화 글(역할 system·user·assistant)을 받아 답 글 조각을 나오는 대로 돌려준다.
 
-    timeout초 동안 다음 조각이 오지 않으면 TimeoutError를 낸다(답 전체 시간 한도가 아님).
+    부른 때부터 first_timeout초 안에 첫 글자가 안 오거나(없으면 timeout과 같음), 첫 글자 뒤 timeout초 동안 다음 조각이 오지 않으면
+    TimeoutError를 낸다(답 전체 시간 한도가 아님. 사용자 결정 [561]).
     """
 
-    def stream(self, messages: list[dict[str, str]], timeout: float) -> Iterable[str]: ...
+    def stream(self, messages: list[dict[str, str]], timeout: float, first_timeout: float | None = None) -> Iterable[str]: ...
 
 
 class Reasoning(StrEnum):
@@ -186,7 +187,10 @@ class Settings:
     """답 엔진 설정. 평가 때 바꿔 같은 문항을 다시 잰다."""
 
     top_k: int = 8  # 답변 모델에 넘길 검색 결과 수(명세 6-8개, [122]에서 8로 정함. 22번의 먼저 볼 소제목이 이 위에 더 붙는다)
-    timeout: float = 10.0  # 모델이 이만큼(초) 아무것도 보내지 않으면 멈춘 것으로 본다(사용자 결정, 2026-10-21)
+    timeout: float = 10.0  # 임베딩이 이만큼(초) 응답하지 않으면 멈춘 것으로 본다(사용자 결정 2026-10-21의 10초. 답 모델은 아래 둘)
+    # 답 모델 한도(사용자 결정 [561] "20초는 첫 질문 나오기까지 기다림 5초는 질문이 나오다 끊겼을때"). 생각하는 동안은 서버가 아무것도 안 보낸다([560])
+    answer_first_timeout: float = 20.0  # 부른 때부터 첫 글자까지
+    answer_timeout: float = 5.0  # 첫 글자 뒤 조각 사이
     rewrite_timeout: float = 5.0  # 질문 바꾸기를 동시에 부른 것 중 하나라도 올 때까지 기다리는 한도(초, [127])
     field_timeout: float = 5.0  # 분야 고르기 한도(초). 넘기면 묶음 없이 답한다(명세 "분야 고르기", Claude가 정한 값)
     use_bm25: bool = False  # 낱말 검색(BM25)을 섞을지. 끄면 뜻 검색만(티켓 40 결과로 끔, HISTORY [102])
@@ -352,7 +356,7 @@ class AnswerEngine:
         messages = _messages(question, state, recent, self._widened(sent, preview), similar, step, lines)
         marks = _MenuMarks(self._menu_names if state.korean_screen else None, question, _object_names(state))
         try:
-            for text in model.stream(messages, self._settings.timeout):
+            for text in model.stream(messages, self._settings.answer_timeout, first_timeout=self._settings.answer_first_timeout):
                 if text := marks.feed(text):
                     yield Piece(text)
         except Exception as error:

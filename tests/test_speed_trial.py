@@ -17,7 +17,7 @@ class Counted:
         self.pieces, self.model, self.wait = pieces, "luna", wait
         self.input_tokens = self.output_tokens = self.reasoning_tokens = 0
 
-    def stream(self, messages, timeout=None):
+    def stream(self, messages, timeout=None, first_timeout=None):
         self.input_tokens, self.output_tokens = self.input_tokens + 10, self.output_tokens + 2
         time.sleep(self.wait)
         yield from self.pieces

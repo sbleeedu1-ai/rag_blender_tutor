@@ -100,9 +100,9 @@ class FakeModel:
         self.calls: list[list[dict[str, str]]] = []
         self.timeouts: list[float] = []
 
-    def stream(self, messages: list[dict[str, str]], timeout: float):
+    def stream(self, messages: list[dict[str, str]], timeout: float, first_timeout: float | None = None):
         self.calls.append(messages)
-        self.timeouts.append(timeout)
+        self.timeouts.append((timeout, first_timeout))
         yield from self.pieces
         if self.error:
             raise self.error
@@ -534,9 +534,10 @@ def test_최근_대화를_차례대로_넘기고_지난_질문은_기억하지_�
 def test_응답_없음_한도를_모델과_임베딩에_넘긴다():
     embedder, model = FakeEmbedder(), FakeModel()
     ask(embedder=embedder, model=model)
-    assert (embedder.timeouts, model.timeouts) == ([10.0], [10.0])  # 기본 10초(사용자 결정, 2026-10-21)
-    ask(embedder=embedder, model=model, settings=Settings(timeout=3.0))
-    assert (embedder.timeouts[-1], model.timeouts[-1]) == (3.0, 3.0)
+    # 임베딩 10초(2026-10-21), 답 모델은 글 뒤 5초·첫 글자까지 20초(사용자 결정 [561])
+    assert (embedder.timeouts, model.timeouts) == ([10.0], [(5.0, 20.0)])
+    ask(embedder=embedder, model=model, settings=Settings(timeout=3.0, answer_timeout=2.0, answer_first_timeout=7.0))
+    assert (embedder.timeouts[-1], model.timeouts[-1]) == (3.0, (2.0, 7.0))
 
 
 # 오류·시간 초과

@@ -23,7 +23,9 @@ class OpenAIAnswerModel:
         self.model, self.key, self.effort = model, key, effort
         self.input_tokens = self.output_tokens = self.reasoning_tokens = self.requests = 0
 
-    def stream(self, messages: list[dict[str, str]], timeout: float) -> Iterator[str]:
+    def stream(self, messages: list[dict[str, str]], timeout: float, first_timeout: float | None = None) -> Iterator[str]:
+        """소켓 한도 하나로만 잰다. 첫 글자 한도를 따로 주면 둘 중 큰 쪽을 조각 사이 한도로 쓴다(이 모델은 지금 제품에서 쓰지 않아 나누지 않음)."""
+        timeout = max(timeout, first_timeout or timeout)
         body = {
             "model": self.model, "messages": messages, "reasoning_effort": self.effort,
             "stream": True, "stream_options": {"include_usage": True},  # 마지막 조각에 토큰 수가 온다
