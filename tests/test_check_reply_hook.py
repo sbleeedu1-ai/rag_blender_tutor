@@ -104,8 +104,60 @@ def test_제안이_없으면_기록_검사를_안_한다(tmp_path):
     assert check_reply.turn_problems(_turn(tmp_path, "시험이 끝났습니다. 결과는 13.0입니다.")) == []
 
 
+# 2026-11-19 실제 실수 둘([482]). advisor를 부르지 않은 차례의 답 줄을 그대로 옮겼다.
+NO_ADVISOR_1 = "- **겨냥한 3문항(Q19·Q23·Q28):** 원인을 짚은 답이 C에서 8/18개였습니다. 지금 판(A)은 1/18이었습니다. 효과는 있지만 미리 정한 채택 기준인 12 이상에는 못 미쳐 판정은 \"사이\"입니다."  # 01:06 차례
+NO_ADVISOR_2 = "- **도움**: 겨눈 3문항에서 원인을 짚은 답이 1/18에서 8/18로 늘었습니다. 엄격하게 세도 6/18입니다."  # 01:03 차례
+NOT_RESULT = "그래서 순서는 이렇게 되어야 합니다."  # 01:05 차례. 실험 결과가 아니라 순서 이야기라 [485]부터 안 막음
+ADVISOR_RESULT = {"type": "assistant", "message": {"content": [{"type": "advisor_tool_result", "content": "..."}]}}
+
+
+def test_advisor_없이_결론을_내면_막힌다(tmp_path):
+    for reply in (NO_ADVISOR_1, NO_ADVISOR_2):
+        hits = check_reply.turn_problems(_turn(tmp_path, reply))
+        assert any("advisor" in h and "[482]" in h for h in hits), reply
+
+
+def test_그_차례에_advisor를_불렀으면_결론도_통과(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    text = {"type": "assistant", "message": {"content": [{"type": "text", "text": NO_ADVISOR_1}]}}
+    assert not any("advisor" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, ADVISOR_RESULT, text])))
+
+
+def test_advisor_결과가_앞_차례에만_있으면_막힌다(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    text = {"type": "assistant", "message": {"content": [{"type": "text", "text": NO_ADVISOR_1}]}}
+    assert any("advisor" in h for h in check_reply.turn_problems(_transcript(tmp_path, [ADVISOR_RESULT, human, text])))
+
+
+def test_실험_결과가_아닌_말은_advisor를_안_본다(tmp_path):
+    path = "캡처 3장은 `results/20261118/201022_기계지표/화면확인/`에 두었습니다."  # 11-18 실제 답, 경로 숫자에 잘못 걸렸던 꼴
+    for reply in ("지금은 근거 자료를 모으는 중입니다.", NOT_RESULT, "다음은 04 실행 전 목록입니다.", path):
+        assert check_reply.turn_problems(_turn(tmp_path, reply)) == [], reply
+
+
 def test_따옴표_속_세로막대가_있는_grep도_기록_찾기로_본다():
     # 2026-11-17 오후 6시 차례에서 그대로 옮긴 명령. 따옴표 속 |에서 쪼개져 grep과 HANDOFF.md가 갈려 헛막음이 났다([434])
     command = 'cd /Volumes/mac_ssd/proj/rag_blender_tutor && grep -n -E "③ Q38|④ 보고서|빠졌던 것" HANDOFF.md | head -3 | cut -c1-200'
     assert check_reply._reads_records("Bash", {"command": command})
     assert not check_reply._reads_records("Bash", {"command": 'echo "grep|x" >> HANDOFF.md'})
+
+
+# 11-20 밤 답에서 그대로 옮긴 줄(용어 정리로 바꾼 옛 말을 다시 씀)
+OLD_TERM_MISTAKE = "- **새 판:** 11-12에 만든 긴 지시문(\"2b\")에서 예시만 뺐습니다. 2번 질문 바꾸기만 바꾼 시험이라"
+
+
+def test_용어_정리로_바꾼_옛_말을_쓰면_막힌다():
+    hits = check_reply.problems(OLD_TERM_MISTAKE)
+    assert any("'질문 바꾸기' → '쿼리 재작성'" in h for h in hits)
+
+
+def test_옛_말도_따옴표_안의_인용이면_통과():
+    assert check_reply.old_term_problems('사용자 원문 "질문 바꾸기 지시문 고쳐"와 `rewrite_trial_run.py`를 봤습니다.') == []
+
+
+def test_여러_뜻인_말은_막지_않는다():
+    assert check_reply.old_term_problems("조각 모드에서 마스크를 지우고, 패널을 접어 둡니다. 생각 low가 빠릅니다. 채점 지시문을 읽고 none_조각만 폴더를 봤습니다.") == []
+
+
+def test_옛_말과_새_말을_같은_줄에서_견주면_통과():
+    assert check_reply.old_term_problems("| 질문 바꾸기 | 쿼리 재작성 |\n| 다시 줄 세우기 | 리랭킹 |") == []

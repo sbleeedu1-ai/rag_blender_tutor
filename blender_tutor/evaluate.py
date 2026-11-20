@@ -31,6 +31,7 @@ from pathlib import Path
 from blender_tutor import engine_setup
 from blender_tutor.answer_engine import AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source
 from blender_tutor.answer_model import OpenAIAnswerModel
+from blender_tutor.call_log import SENT_KINDS, CallLog
 from blender_tutor.conversation import RECENT_PAIRS, Conversation, settings_record
 from blender_tutor.manual_chunks import BASE_URL, Chunk
 from blender_tutor.paths import COURSES, PROJECT, default_progress_records
@@ -41,10 +42,13 @@ from blender_tutor.work_state import WorkState
 # 지금 고를 수 있는 임베딩 종류·리랭커. 리랭커와 bge-m3 같은 다른 임베딩은 아직 없어서, 켠 척하지 않게 고를 수 없게 막는다.
 # 생기는 티켓(임베딩은 31, 리랭커는 개발 평가에서 켜 보기로 할 때)에서 값을 더하고 엔진에 실제로 넘긴다
 EMBEDDINGS = engine_setup.EMBEDDINGS
-# 차례 하나의 어림 비용(달러, 답변 + 질문 바꾸기 3번 + 임베딩)에 약 10%를 얹었다(적게 보이지 않게). none은 티켓 44 실측
-# 약 $0.00058(HISTORY [135], 질문 바꾸기 3번 $0.00025 + 답변 $0.00033), low는 [131] 실측 $0.00059. medium은 잰 적이 없어 숫자를 두지 않는다.
-# 동시 호출 수를 바꾸면 함께 고친다
-DOLLARS_PER_TURN = {Reasoning.NONE: 0.00064, Reasoning.LOW: 0.00065}
+# 차례 하나의 어림 요금(달러). Haiku 5.5 실측에 약 10%를 얹었다(적게 보이지 않게). 잰 적 없는 조합은 숫자를 두지 않는다(docs/plan/01 E).
+# 답변(생각 수준, 설정 값을 보낸 차례인가): 생각 끔 + 설정 값 있음은 11-17 마지막 확인 54차례 $0.0976·11-14 천장 측정 바탕 $0.0954·
+# [410] 324차례 $0.577 → 약 $0.0018, 생각 끔 + 설정 값 없음은 11-17 설정값off 10차례 × 3번 $0.0080-0.0084 → 약 $0.00082.
+# 생각을 켠 Haiku 답(low·medium)은 evaluate로 잰 기록이 없다. 질문 바꾸기 3번은 [279] 147질문 $0.0882 → 약 $0.0006.
+# 분야 고르기·임베딩은 기록이 없어 넣지 않는다(호출.jsonl의 호출 종류별 요금으로 처음 잰다). 이전 값(none $0.00064)은 luna 때 것이었다
+ANSWER_DOLLARS = {(Reasoning.NONE, True): 0.0020, (Reasoning.NONE, False): 0.0009}
+REWRITE_DOLLARS = 0.00066
 RERANKERS = ("끔",)
 
 # 칸 이름 → 꼭 있어야 하나. 연습 과정 밖 질문이면 연습 과정·단계를 빼거나 null로 둔다
@@ -97,6 +101,7 @@ class TurnResult:
     field_failed: bool = False  # 분야 고르기가 실패해 묶음 없이 답했나
     query: str = ""  # 검색에 쓴 글(바꾼 검색어). 답이 끝까지 안 나왔으면 빈 글
     lines: tuple[str, ...] = ()  # 답변 모델에 실제로 넘긴 설정 줄. 답이 끝까지 안 나왔으면 빈 묶음
+    calls: tuple[dict, ...] = ()  # 바깥 호출 기록(call_log, 보낸 차례). 기록을 주지 않고 돌렸으면 빈 묶음
 
 
 def run(
@@ -104,16 +109,21 @@ def run(
     engine: AnswerEngine,
     recent_pairs: int = RECENT_PAIRS,
     clock: Callable[[], float] = time.monotonic,
+    log: CallLog | None = None,
 ) -> list[TurnResult]:
     """대화마다 새 대화로 시작해 차례를 앞에서부터 엔진에 묻는다. 앞 차례의 답은 엔진이 실제로 낸 것을 최근 대화로 넘기고,
     도우미 창처럼 끝까지 나온 답만 넣는다(conversation.Conversation을 그대로 씀). recent_pairs는 최근 대화 쌍 수(User Story 72).
-    차례마다 첫 조각·끝까지 걸린 시간을 clock으로 잰다."""
+    차례마다 첫 조각·끝까지 걸린 시간을 clock으로 잰다. log(엔진 부품을 감싼 호출 기록)를 주면 차례마다 새로 시작하고,
+    차례가 끝나면 뒤에서 도는 호출(질문 바꾸기의 남은 글)이 끝나기를 기다려 그 차례의 기록을 붙인다(토큰 셈이 다음 차례와 섞이지 않게).
+    기록의 시계는 clock과 따로이고 clock의 시작 바로 앞에서 0이 된다."""
     found = []
     for dialogue in dialogues:
         conversation = Conversation(keep=recent_pairs)
         conversation.engine = engine
         for turn in dialogue.turns:
             pieces, failure, sources, results, similar, first_piece, fields, field_failed, query, lines = [], None, (), (), (), None, (), False, "", ()
+            if log:
+                log.start()
             start = clock()
             for event in conversation.ask(turn.question, turn.state, turn.step, turn.settings):
                 if isinstance(event, Piece):
@@ -126,11 +136,17 @@ def run(
                 elif isinstance(event, Failure):
                     failure, results = event.message, event.results
             done = clock() - start
+            calls = ()
+            if log:
+                idle = log.wait_idle()
+                calls = tuple(log.take())
+                if not idle:  # 앞 차례 결과를 버리지 않게 멈추지 않고, 토큰 셈이 다음 차례와 섞였을 수 있음을 남긴다
+                    calls += ({"종류": "기다림 넘김", "오류": "뒤에서 도는 호출이 끝나지 않아 이 차례·다음 차례의 토큰 셈이 섞였을 수 있음"},)
             answer = "".join(pieces)
             mentioned = tuple(course for course in similar if course.name in answer)
             found.append(TurnResult(
                 dialogue, turn, answer, failure, sources, results, hit(turn.locations, results), similar, mentioned, first_piece, done,
-                fields, field_failed, query, lines,
+                fields, field_failed, query, lines, calls,
             ))
     return found
 
@@ -371,20 +387,15 @@ def main(
     folder = args.results / f"{now:%Y%m%d}" / f"{now:%H%M%S}_{args.name}"  # 날짜 폴더 안에서 이름순이 실행 순서
     # 실패할 수 있는 읽기(엔진 만들기·시간 기록)는 폴더를 만들기 전에 한다. 빈 폴더가 남으면 같은 이름으로 다시 돌릴 수 없어서
     if args.command == "run":
-        turns = sum(len(dialogue.turns) for dialogue in dialogues)
         settings = Settings(top_k=args.top_k, use_bm25=args.bm25, reasoning=args.reasoning,
                             situation_lines=not args.no_situation, computed_lines=not args.no_computed,
                             field_lines=not args.no_fields)
         if not args.yes:
-            per_turn = DOLLARS_PER_TURN.get(settings.reasoning)
-            estimate = (
-                f"차례 {turns}개 × 약 ${per_turn:.5f} = 약 ${turns * per_turn:.5f}(어림)" if per_turn
-                else f"차례 {turns}개. 생각 수준 {settings.reasoning}은 잰 적이 없어 비용을 어림할 수 없음"
-            )
-            print(f"{estimate}. 확인받은 뒤 --yes를 붙여 다시 돌리세요.", file=sys.stderr)
+            print(f"{_estimate(dialogues, settings)}. 확인받은 뒤 --yes를 붙여 다시 돌리세요.", file=sys.stderr)
             return 2
         model = make_model(settings)
-        engine = build(args.data, model, courses=courses, settings=settings, embedding=args.embedding)
+        log = CallLog()  # 바깥 호출 부품을 모두 감싸 차례마다 시각·토큰·보낸 글을 남긴다(호출.jsonl)
+        engine = build(args.data, model, courses=courses, settings=settings, embedding=args.embedding, wrap=log.wrap)
     else:
         timings = args.timings or default_progress_records().parent / "timings.jsonl"
         lines = [json.loads(text) for text in timings.read_text(encoding="utf-8").splitlines() if text.strip()]
@@ -399,15 +410,39 @@ def main(
             "settings": settings_record(settings, args.recent),
             "pc": platform.node(), "시각": datetime.now().isoformat(timespec="seconds"), "커밋": _commit(),
         }
-        rows = run(dialogues, engine, args.recent)
-        about["답변 모델 요금(달러)"] = model.dollars()  # 질문 바꾸기·임베딩은 뺀 값(차례마다 약 $0.00025 더 든다)
+        rows = run(dialogues, engine, args.recent, log=log)
+        about["답변 모델 요금(달러)"] = model.dollars()  # 주 답 모델만(분야 고르기가 실패한 차례의 예비 답변은 아래 종류별에)
+        about["호출 종류별 요금(달러)"] = log.dollars()  # 질문 바꾸기·분야 고르기·임베딩·답변·예비 답변. 셀 수 없는 부품은 None
         about["답변 모델 생각 토큰"] = model.reasoning_tokens  # 생각 수준이 실제로 생각을 쓰는지(출력 토큰에 이미 들어 있어 요금은 같음)
         _write_run(folder, args.name, about, rows)
-        print(f"답변 모델 요금 ${model.dollars()} (질문 바꾸기·임베딩은 따로, 차례마다 약 $0.00025)")
+        print(f"요금(달러): {json.dumps(log.dollars(), ensure_ascii=False)}")
     else:
         _write_times(folder, args.name, timings, args.questions, timing_summary(lines, dialogues))
     print(f"결과: {folder}")
     return 0
+
+
+def estimate_dollars(turns: int, with_settings: int, settings: Settings) -> tuple[float, float] | None:
+    """(답변, 질문 바꾸기) 어림 요금(달러). with_settings는 설정 값을 보내는 차례 수. 생각 수준이 잰 적 없는 것이면 None.
+    분야 묶음을 끈 판(field_lines=False)·상황 줄을 끈 판은 따로 잰 적이 없어 켠 판 값으로 센다(보내는 줄이 적어 넘게 잡힌다)."""
+    prices = [ANSWER_DOLLARS.get((settings.reasoning, has)) for has in (True, False)]
+    counts = [with_settings, turns - with_settings]
+    if any(price is None and count for price, count in zip(prices, counts)):
+        return None
+    answer = sum(price * count for price, count in zip(prices, counts) if count)
+    return answer, turns * REWRITE_DOLLARS
+
+
+def _estimate(dialogues: Sequence[Dialogue], settings: Settings) -> str:
+    """돌리기 전에 보이는 어림 요금 글."""
+    turns = [turn for dialogue in dialogues for turn in dialogue.turns]
+    with_settings = sum(turn.settings is not None for turn in turns)
+    found = estimate_dollars(len(turns), with_settings, settings)
+    if found is None:
+        return f"차례 {len(turns)}개. 생각 수준 {settings.reasoning}은 잰 적이 없어 비용을 어림할 수 없음"
+    answer, rewrite = found
+    return (f"차례 {len(turns)}개(설정 값 있음 {with_settings}개) 어림 약 ${answer + rewrite:.4f} = 답변 ${answer:.4f} + 질문 바꾸기 ${rewrite:.4f}"
+            "(Haiku 실측 + 약 10%). 분야 고르기·임베딩은 잰 적이 없어 뺐음")
 
 
 def _commit() -> str | None:
@@ -434,7 +469,7 @@ def _at_least(smallest: int):
 
 
 def _write_run(folder: Path, name: str, about: dict, found: list[TurnResult]) -> None:
-    """설정.json(about 그대로), 답.jsonl(차례마다 한 줄), 요약.md(검색 적중·시간)를 쓴다.
+    """설정.json(about 그대로), 답.jsonl(차례마다 한 줄), 호출.jsonl(차례마다 한 줄, 기록이 있을 때), 요약.md(검색 적중·시간)를 쓴다.
 
     설정.json의 settings 칸은 시간 기록 줄의 settings와 같은 모양이라 두 결과를 맞대 볼 수 있다(settings_record).
     """
@@ -456,6 +491,10 @@ def _write_run(folder: Path, name: str, about: dict, found: list[TurnResult]) ->
                 "검색어": result.query, "보낸 설정 줄": list(result.lines),
             }
             file.write(json.dumps(row, ensure_ascii=False) + "\n")
+    if any(result.calls for result in found):
+        with (folder / "호출.jsonl").open("w", encoding="utf-8") as file:
+            for result in found:
+                file.write(json.dumps(_call_row(result), ensure_ascii=False) + "\n")
     counted = [result for result in found if result.turn.locations]
     outside = [result for result in found if result.turn.step is None]
     recommended = [result for result in outside if result.mentioned]
@@ -471,12 +510,52 @@ def _write_run(folder: Path, name: str, about: dict, found: list[TurnResult]) ->
         f"({', '.join(result.turn.number for result in recommended) or '없음'}). 단순한 질문에 권했으면 채점 때 틀림",
         f"- 엔진만 잰 시간(창 없음): 첫 글자 {_seconds(first)}, 답 끝 {_seconds(done)}."
         " 잰 것: 프로그램. F10·창이 드는 시간은 times로 잰다",
+        *([_stage_line(found)] if any(result.calls for result in found) else []),
         "", "| 번호 | 분류 | 적중 순위 | 실패 |", "|---|---|---|---|",
     ]
     for result in found:
         rank = "-" if not result.turn.locations else (result.hit or "못 찾음")
         lines.append(f"| {result.turn.number} | {result.dialogue.kind} | {rank} | {result.failure or ''} |")
     (folder / "요약.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+STAGES = ("질문 바꾸기 닫힘", "분야 고르기 끝", "임베딩 끝", "답 모델 보냄", "답 모델 첫 조각", "화면 첫 조각", "답 끝")
+
+
+def _stages(result: TurnResult) -> dict[str, float | None]:
+    """차례를 물은 때부터 단계마다 걸린 초(그 단계가 없었으면 None). 앞 다섯은 호출 기록의 시계, 뒤 둘은 run의 시계로 잰 값이다
+    (두 시계는 같은 순간에 0이 된다). 질문 바꾸기는 가장 먼저 닫힌 검색어(엔진이 쓰는 것), 답 모델은 마지막 답변 호출
+    (분야 고르기가 실패하면 예비 답변). 오류로 끝난 질문 바꾸기·분야 고르기·임베딩 호출은 세지 않는다. "답 모델 첫 조각"과 "화면 첫 조각"의 차이가 화면 글자로 바꾸려고 글을 붙잡은 시간이다."""
+    calls = result.calls
+
+    def earliest(kind: str, key: str) -> float | None:
+        return min((call[key] for call in calls if call["종류"] == kind and key in call and "오류" not in call), default=None)
+
+    answer = next((call for call in reversed(calls) if call["종류"] in SENT_KINDS), {})
+    found = [earliest("질문 바꾸기", "검색어 닫힘"), earliest("분야 고르기", "끝"), earliest("임베딩", "끝"),
+             answer.get("보냄"), answer.get("첫 조각"), result.first_piece, result.done]
+    return dict(zip(STAGES, found))
+
+
+def _call_row(result: TurnResult) -> dict:
+    """호출.jsonl 한 줄: 답 모델에 보낸 글 전문(지시·최근 대화·마지막 글)과 그 모델이 낸 원문([[ ]]를 화면 글자로 바꾸기 전),
+    단계별 시각, 호출마다의 기록(보냄·첫 조각·검색어 닫힘·끝 시각, 입력·출력·생각 토큰, 받은 글, 오류). 보낸 글은 줄 칸에만 둔다."""
+    answer = next((call for call in reversed(result.calls) if call["종류"] in SENT_KINDS), {})
+    return {
+        "대화": result.dialogue.number, "번호": result.turn.number,
+        "보낸 글": answer.get("보낸 글"), "답 모델 원문": answer.get("글"), "시각(초)": _stages(result),
+        "호출": [{key: value for key, value in call.items() if key != "보낸 글"} for call in result.calls],
+    }
+
+
+def _stage_line(found: list[TurnResult]) -> str:
+    """요약.md의 단계별 시각 줄(차례를 물은 때부터 초, 중앙값과 분모)."""
+    stages = [_stages(result) for result in found]
+    parts = []
+    for stage in STAGES:
+        seconds = [values[stage] for values in stages if values[stage] is not None]
+        parts.append(f"{stage} {statistics.median(seconds):.2f}초(분모 {len(seconds)})" if seconds else f"{stage} -")
+    return "- 단계별 시각(물은 때부터, 중앙값): " + ", ".join(parts) + ". 원자료는 호출.jsonl"
 
 
 def _seconds(spread: Spread) -> str:

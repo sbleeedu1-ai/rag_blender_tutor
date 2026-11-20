@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from blender_tutor import local_embeddings as local
+from blender_tutor.tools import local_embeddings as local
 
 
 @pytest.mark.parametrize("name,query,document", [

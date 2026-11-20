@@ -5,13 +5,21 @@
 2) 화면 글자가 꼬리 낱말로 끝나는데 꼬리가 또 붙는 자리("값(Value) 값")
 쓰는 법: .venv/bin/python .claude/tools/list_check.py [코드 폴더(기본: 이 저장소)]. 둘 중 하나라도 0이 아니면 종료 코드 1.
 """
-import sys, json, random, re, collections
+import collections
+import json
+import random
+import re
+import sys
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parents[2]; CODE = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT
 sys.path.insert(0, str(CODE))
-import blender_tutor; assert str(CODE) in blender_tutor.__file__
-from blender_tutor.menu_names import load_menu_names, COMMON_TAILS
+import blender_tutor
 from blender_tutor.answer_engine import _MenuMarks
+from blender_tutor.menu_names import COMMON_TAILS, load_menu_names
+
+assert str(CODE) in blender_tutor.__file__  # 견줄 코드 폴더의 blender_tutor를 읽었는지
+
 names = load_menu_names(ROOT / "data"); off = load_menu_names(ROOT / "data"); off._common = {}; off.common_prefixes = set()
 raw = json.loads((ROOT / "menu_tables/common_ko.json").read_text(encoding="utf-8"))["lists"]
 def run(parts, n=names):

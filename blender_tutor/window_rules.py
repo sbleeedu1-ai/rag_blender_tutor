@@ -21,7 +21,7 @@ class Place(StrEnum):
 class Screen:
     """한 번 읽은 화면 모습."""
 
-    foreground_pid: int  # 앞 프로그램의 프로세스 번호
+    foreground_pid: int
     foreground_is_taskbar: bool  # 앞 창이 작업 표시줄·트레이인가
     blender_pids: frozenset[int]  # 켜진 Blender들(작업 상태를 보낸 것)
     blender_visible: bool  # 최소화되지 않은 Blender 창이 하나라도 있나

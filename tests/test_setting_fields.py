@@ -10,7 +10,13 @@ import pytest
 
 from blender_tutor.answer_engine import AnswerEngine, Done, Settings
 from blender_tutor.setting_fields import (
-    MAX_LINES, SettingLines, choose_fields, field_schema, lines_for, load_bundles, load_fields,
+    MAX_LINES,
+    SettingLines,
+    choose_fields,
+    field_schema,
+    lines_for,
+    load_bundles,
+    load_fields,
 )
 from tests.test_answer_engine import CHUNKS, STATE, VECTORS, FakeEmbedder, FakeModel, FakeRewriter
 

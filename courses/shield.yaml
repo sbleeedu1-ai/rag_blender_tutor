@@ -88,7 +88,7 @@
             감지:
               - 방금 조작: mesh.inset
           - 설명: 안쪽 면을 살짝 아래로 밀기
-            메뉴: Mesh > Extrude > Extrude Faces Along Normals
+            메뉴: Mesh > Extrude > Extrude Faces
             단축키: E
             안내: "안쪽 면이 골라진 채 E를 누르고 마우스를 움직여 안쪽 면을 살짝 아래로 내려 보세요. 가운데가 들어가고 테두리가 도드라져요.\n\n예를 들어 -0.03을 치고 Enter를 누르면 판 두께의 5분의 1쯤 들어가요. 숫자는 참고값이니 원하는 대로 바꿔 봐도 돼요."
             감지:
@@ -96,7 +96,7 @@
         먼저 볼 소제목:
           - modeling/meshes/selecting/introduction.html#selection-modes
           - modeling/meshes/editing/face/inset_faces.html#inset-faces
-          - modeling/meshes/editing/face/extrude_faces_normal.html#extrude-faces-along-normals
+          - modeling/meshes/editing/face/extrude_faces.html#extrude-faces
         자주 막히는 곳:
           - I를 눌렀는데 아무것도 안 바뀐다. 마우스가 3D 화면 밖에 있었거나 면이 아니라 판 전체가 골라져 있었다. 위쪽 면 하나만 눌러 고른 뒤 3D 화면 위에서 I를 누른다.
           - I로 생긴 선이 마우스를 따라 바깥으로 커진다. 마우스를 판 가운데 쪽으로 옮겨야 안쪽으로 들어간다.
@@ -311,7 +311,7 @@
             단축키: 없음
             안내: "첫 칸을 누른 채 [[Base Color]] 칸을 눌러 나무 같은 갈색을, 둘째 칸을 누른 채 쇠 같은 회색을 골라 보세요. 장식에 둘째 칸을 쓰기 전까지는 방패 전체가 첫 칸 색이에요."
           - 설명: 색이 보이는 화면으로 바꾸기
-            메뉴: View > Viewport Shading > Material Preview
+            메뉴: 없음
             단축키: Z
             안내: "지금 화면에서는 색이 보이지 않아요. 3D 화면에 마우스를 두고 Z를 누른 뒤 [[Material Preview]]를 골라 보세요. 방패가 첫 칸 색으로 보여요."
           - 설명: 편집 모드로 들어가기(헤더 왼쪽 모드 칸에서 골라도 됨)

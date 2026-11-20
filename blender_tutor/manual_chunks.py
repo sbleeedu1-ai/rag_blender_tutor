@@ -33,7 +33,8 @@ _UI_MARK = re.compile(_UI_OPEN + "([^" + _UI_CLOSE + "]*)" + _UI_CLOSE)
 _UI_CLASSES = {"menuselection", "guilabel"}  # 설명서가 메뉴 경로(Add ‣ Mesh)와 버튼 이름에 붙이는 표시
 # 검색에서 빼는 폴더: 기여자용 쪽(티켓 06), Sphinx가 만든 원문·그림·꾸밈 파일
 _SKIP_FOLDERS = {"contribute", "_sources", "_images", "_static"}
-_SKIP_PAGES = {"genindex", "search", "404"}  # 색인·검색·없는 쪽 안내(설명 글이 아님)
+# 색인·검색·없는 쪽 안내(설명 글이 아님)와 다른 키맵의 단축키 표(기본 키맵을 전제한 답에 Alt-C 같은 다른 키가 섞임, HISTORY [471])
+_SKIP_PAGES = {"genindex", "search", "404", "interface/keymap/industry_compatible"}
 
 
 class MediaKind(StrEnum):
@@ -48,8 +49,8 @@ class Example:
     """영상만·그림만 있는 소제목. 청크로 만들지 않고 같은 쪽 바로 앞 청크에 붙인다(티켓 07)."""
 
     kind: MediaKind
-    heading: str  # 그 소제목 제목
-    url: str  # 그 소제목 링크
+    heading: str
+    url: str
     media: tuple[str, ...]  # 영상·그림 주소
 
 
@@ -61,13 +62,13 @@ class Chunk:
     anchor: str  # 소제목 앵커. 긴 소제목을 나눈 청크도 같은 앵커
     field: str  # 분야(경로 첫 폴더, 예: modeling)
     group: str  # 묶음(폴더 경로, 예: modeling/modifiers/generate)
-    page_title: str  # 쪽 제목
+    page_title: str
     headings: tuple[str, ...]  # 쪽 제목 아래 소제목 경로. 쪽 첫머리 글이면 빈 묶음
-    body: str  # 본문 글
+    body: str
     option_path: tuple[str, ...] = ()  # 긴 옵션을 나눈 뒤 조각이면 그 옵션·범주 경로(예: Operation > Trigonometric)
     options: tuple[str, ...] = ()  # 이 청크에 든 옵션 이름(정의 목록의 항목 이름, 단축키 글자는 뗌)
-    images: tuple[str, ...] = ()  # 글 속 그림 주소
-    videos: tuple[str, ...] = ()  # 글 속 영상 주소
+    images: tuple[str, ...] = ()
+    videos: tuple[str, ...] = ()
     examples: tuple[Example, ...] = ()  # 뒤따르는 영상만·그림만 있는 소제목
     reference: tuple[tuple[str, str], ...] = ()  # "모드·메뉴·단축키" 상자(예: ("Mode", "Edit Mode")), 여럿이면 차례로
     ui_names: tuple[str, ...] = ()  # 글 속 메뉴 경로(예: Add ‣ Mesh)·버튼 이름, 처음 나온 차례로 한 번씩(티켓 20)
@@ -114,7 +115,7 @@ class Chunk:
 
 
 def chunk_manual(root: Path) -> list[Chunk]:
-    """설명서 HTML 묶음 폴더 전체를 청크로 자른다. 기여자용 쪽, 색인·검색 쪽, Sphinx가 만든 보조 폴더는 뺀다."""
+    """설명서 HTML 묶음 폴더 전체를 청크로 자른다. 기여자용 쪽, 색인·검색 쪽, 다른 키맵의 단축키 표 쪽, Sphinx가 만든 보조 폴더는 뺀다."""
     chunks: list[Chunk] = []
     for file in sorted(root.rglob("*.html")):
         relative = file.relative_to(root)

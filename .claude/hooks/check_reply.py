@@ -15,6 +15,14 @@
   전역 지침 "제안하기 전에는 HISTORY.md와 git 이력에서 그 주제를 찾아" 를 11-16에 두 번 어김("왜 확인안하지?", temperature 제안).
   읽기(grep·sed -n·Read 등)만 찾기로 치고 쓰기(>>·git add)는 안 친다. 지난 일을 말하는 줄(실수·했습니다 등)의 '제안'은 권유로 안 본다.
   한계: 그 차례에 기록을 다른 주제로 읽었으면 통과한다(temperature 제안 차례는 [342]를 읽어서 이 규칙으로도 못 막는다).
+- 규칙 4([482], [485]에서 좁힘): 답이 실험 결과를 말하는데(결과 수 "8/18"·"29 / 30", 판정 낱말 채택·기각·'사이'·가를 수 없음·판단 안 함)
+  그 차례에 advisor 결과(advisor_tool_result)가 없으면 막는다.
+  처음엔 결론·순서·권유 낱말 모두에 걸어 11-19 세션 89차례 중 31번 걸렸고, 사용자 "나한테 말하기전에만 하라는 소리였는데 왜 31번이나 함?",
+  "어떤 식으로든 실험 결과를 이야기할때만 상의하도록"으로 좁힘. 좁힌 뒤 같은 세션 93차례 중 23번 걸림(모두 결과 수·판정 낱말을 말한 답).
+  한계: "8/18" 꼴과 판정 낱말 밖으로 말한 결과("47 대 47", "5회 중 3회", "1.7초")는 못 본다(04 결과가 이 꼴). 막는 때가 차례 끝이라 상의 없는 말은 이미 화면에 나간 뒤다.
+  그 차례의 advisor 결과가 하나라도 있으면 통과한다(새 근거가 오기 전에 부른 advisor여도 통과).
+- 규칙 5([575]): 용어 정리(PR #48)에서 바꾼 옛 말 가운데 뜻이 하나뿐인 것(OLD_TERMS)을 따옴표·백틱 밖에서 쓰면 막는다.
+  한계: 여러 줄에 걸친 인용은 못 뺀다, 짝이 안 맞는 따옴표가 있으면 짝이 밀려 인용을 잘못 뺄 수 있다, 여러 뜻인 말은 안 본다.
 - 못 보는 것: 거부한 꼴을 다른 모양으로 바꿔 쓴 것, 정해 둔 차례를 어긴 권유, 말이 길고 어려운 것, 찾긴 했으나 다른 낱말로 찾아 놓친 것.
   화면을 안 보고 화면 글자를 단정한 것(11-17 잰 결과 헛막음이 많아 안 넣음, rules-enforced.md·[434]).
 """
@@ -33,7 +41,22 @@ RECORDS = re.compile(r"HISTORY\.md|experiment\.md|HANDOFF\.md|answer-forms\.md|r
 READS = re.compile(r"\bgrep\b|\brg\b|sed -n|\bawk\b|\bhead\b|\btail\b|\bcat\b(?!\s*>)|git log -S|git log --grep|session-search")
 WRITES = re.compile(r">>|>\s*\S|git add|git commit|write_text")
 PAST = re.compile(r"실수|잘못|했습니다|였습니다|했던|한 것|한 게|어긴|거부된")
+RESULTS = re.compile(r"(?<![\dA-Za-z_/.])\d{1,3}\s*/\s*\d{1,3}(?![\dA-Za-z_/.])|채택|기각|'사이'|사이로|가를 수 없음|판단 안 함")  # 결과 수(경로·날짜 속 숫자는 뺌, 뒤에 붙는 한글 조사는 둠)와 판정 낱말
 EXPLAINS = re.compile(r"거부|지금 제품|지금 꼴|지금:|전:|예전|않|말고")
+# 규칙 5(11-20): 용어 정리(PR #48, 대응표 `results/20261120/155834_용어정리/대응표.md`)에서 바꾼 옛 말 가운데 뜻이 하나뿐인 것만 둔다.
+# 여러 뜻인 말(조각=조각 모드, 생각, 한도, 칸, 판, 팔, 뼈대=아마추어, 접음=패널 접기)은 헛막음이 많아 뺐다.
+# 지시문(채점자 지시·번역 검수 지시도 뜻함)·관문(일반 낱말)·못 가름(자동으로 못 가름 등)은 정리된 문서에도 다른 뜻으로 남아 있어 뺐다([575]).
+OLD_TERMS = (
+    (r"질문 ?바꾸기", "쿼리 재작성"), (r"분야 ?고르기", "분야 선택"),
+    (r"다시 줄 ?세우기", "리랭킹"), (r"정오표", "설명서 바로잡기 목록"), (r"예비 답변", "fallback 답변"),
+    (r"헛고침|헛잡음", "잘못 고침·오탐"), (r"정답 조각|필요 조각", "정답 청크"),
+    (r"(?<![_A-Za-z])조각만", "정답 청크 직접 넣음"), (r"옛 ?지금", "기준 조건(지금 제품 그대로)"), (r"숨긴 중복", "중복 확인 답"),
+    (r"빈손", "GPT 단독"), (r"선 아래", "우선순위 밖"), (r"윗 상자", "메뉴·단축키 안내 상자"),
+    (r"부호 검정", "우연인지 확인하는 계산(p값)"), (r"실행기", "실행 스크립트"), (r"모델 원문", "모델 raw 출력"),
+    (r"보낸 글|넘긴 글", "모델에 보낸 내용 전체"), (r"천장", "상한"), (r"얼리기|얼린 ", "코드 동결"),
+    (r"문턱|통과선", "기준값"), (r"(?:지금|새) 뼈대", "분야 선택 있음·없음"), (r"첫 글자(?:까지| 시간|가 나오)", "첫 토큰"),
+)
+QUOTES = re.compile(r"\"[^\"\n]*\"|“[^”\n]*”|`[^`\n]*`|'[^'\n]*'")  # 인용·파일 이름·코드 안은 옛 말이어도 그대로 둔다(대응표 "그대로 둘 것")
 
 
 def rejected_patterns() -> list[tuple[str, str, str, re.Pattern]]:
@@ -58,7 +81,24 @@ def problems(text: str) -> list[str]:
                 if m and not EXPLAINS.search(line):
                     found.append(f"\"{m.group()}\"은 사용자가 거부한 꼴({name})이다. 거부한 까닭(사용자 원문): {quote} {history}. "
                                  "권하지 말고 다른 꼴을 낸다. 꼭 써야 하면 같은 줄에 '거부된 꼴'이라고 밝히고 위 까닭을 함께 설명한다")
+    found += old_term_problems(text)
     return found
+
+
+def old_term_problems(text: str) -> list[str]:
+    """규칙 5: 용어 정리로 바꾼 옛 말을 답에 다시 쓰면 막는다(따옴표·백틱 안은 뺀다).
+    같은 줄에 새 말도 있으면 옛 말과 새 말을 견주어 설명하는 줄(대응표 보이기 등)로 보고 넘긴다."""
+    hits = {}
+    for line in QUOTES.sub("", text).splitlines():
+        for pattern, new in OLD_TERMS:
+            m = re.search(pattern, line)
+            if m and new.split("(")[0].split("·")[0] not in line:
+                hits.setdefault(pattern, f"'{m.group().strip()}' → '{new}'")
+    hits = list(hits.values())
+    if not hits:
+        return []
+    return ["용어 정리(11-20, PR #48)에서 바꾼 옛 말을 썼다: " + ", ".join(hits) + ". 새 말로 고친다(인용은 따옴표 안에 둔다). "
+            "까닭(사용자 원문): \"니만 아는 한국어\", \"우리 합의본 단어들? 말고는 전부 고쳐\" [575]"]
 
 
 def _is_human(entry: dict) -> bool:
@@ -68,7 +108,7 @@ def _is_human(entry: dict) -> bool:
 
 def _turn_blocks(transcript: Path) -> list[dict]:
     """마지막 사람 메시지 뒤 Claude 메시지의 내용 조각(글·도구 호출)."""
-    entries = [json.loads(line) for line in transcript.read_text(encoding="utf-8").splitlines() if line.strip()]
+    entries = [json.loads(line) for line in transcript.read_text(encoding="utf-8").split("\n") if line.strip()]  # splitlines()는 글 속 U+2028에서도 잘라 JSON 줄이 깨진다([550])
     start = max((i for i, e in enumerate(entries) if _is_human(e)), default=-1) + 1
     blocks = []
     for e in entries[start:]:
@@ -108,6 +148,9 @@ def turn_problems(transcript: Path) -> list[str]:
         found.append("권하기 전에 기록을 찾지 않았다(이 차례에 HISTORY.md·docs/experiment.md·HANDOFF.md·answer-forms.md·티켓을 찾은 호출이 없음). "
                      "그 주제를 기록에서 찾아 관련 결정 원문을 함께 들고, 못 찾으면 어디서 어떤 낱말로 찾았는지 쓴다. "
                      "까닭(사용자 원문): \"그러니까 왜 확인안하지?\", \"이런거 좀 찾아보라니까\" [392]")
+    if RESULTS.search(text) and not any(b.get("type") == "advisor_tool_result" for b in blocks):
+        found.append("실험 결과를 말하기 전에 advisor와 상의하지 않았다(이 차례에 advisor 결과 없음). advisor를 부르고 그 상의로 답을 고친다. advisor를 부를 수 없으면(도구 없음 등) 결론을 빼고 그 사실을 사용자에게 알린다. "
+                     "까닭(사용자 원문): \"앞으로 결론 내기전에 무조건 어드바이저 지금 페이블이잖아 상의하고 결로내\" [482], \"어떤 식으로든 실험 결과를 이야기할때만 상의하도록\" [485]")
     return found
 
 

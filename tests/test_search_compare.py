@@ -11,32 +11,32 @@ import numpy as np
 import pytest
 
 from blender_tutor.manual_chunks import Chunk, save_chunks
-from blender_tutor.search_compare import (
+from blender_tutor.tools.search_compare import (
     MODELS,
+    TRANSLATE_PROMPT,
     Bm25,
+    Condition,
     NarrowNames,
     Picked,
-    Scope,
-    area_of,
-    Condition,
     PoolChunk,
     Question,
-    TRANSLATE_PROMPT,
+    Scope,
     Searcher,
-    flow,
-    full_pool,
-    fuse_rounds,
-    rewrite,
-    sounds_alike,
     Text,
+    area_of,
     bm25_words,
     build_index,
     conditions,
+    flow,
+    full_pool,
+    fuse_rounds,
     hit,
     load_pool,
     load_questions,
     main,
     measure,
+    rewrite,
+    sounds_alike,
     summarize,
 )
 

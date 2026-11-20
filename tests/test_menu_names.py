@@ -9,23 +9,25 @@ from pathlib import Path
 import pytest
 
 from blender_tutor.manual_chunks import Chunk
-from blender_tutor.paths import MENU_ALIASES, MENU_CHOICES, MENU_TITLES
 from blender_tutor.menu_names import (
     MenuName,
     MenuNames,
     Source,
     Status,
     Translation,
+    _looks_like_value,
     build_menu_names,
     extra_names,
     load_extra_allow,
-    value_names,
-    _looks_like_value,
-    node_glyphs,
     load_menu_names,
+    node_glyphs,
+    prose_cut,
     read_po,
-    prose_cut, screen_marks, screen_path,
+    screen_marks,
+    screen_path,
+    value_names,
 )
+from blender_tutor.paths import MENU_ALIASES, MENU_CHOICES, MENU_TITLES
 
 PO = r'''
 msgid ""

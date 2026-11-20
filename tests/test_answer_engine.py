@@ -8,12 +8,23 @@ import json
 import threading
 import time
 from dataclasses import replace
+from types import SimpleNamespace
 
+import httpx2
 import pytest
 
 from blender_tutor.answer_engine import (
-    INSTRUCTIONS, AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source, _terms_for,
+    INSTRUCTIONS,
+    AnswerEngine,
+    Done,
+    Failure,
+    Piece,
+    Reasoning,
+    Settings,
+    Source,
+    _terms_for,
 )
+from blender_tutor.claude_model import ClaudeModel
 from blender_tutor.manual_chunks import Chunk, Example, MediaKind
 from blender_tutor.menu_names import MenuName, MenuNames, Translation
 from blender_tutor.menu_names import Source as MenuSource
@@ -89,9 +100,9 @@ class FakeModel:
         self.calls: list[list[dict[str, str]]] = []
         self.timeouts: list[float] = []
 
-    def stream(self, messages: list[dict[str, str]], timeout: float):
+    def stream(self, messages: list[dict[str, str]], timeout: float, first_timeout: float | None = None):
         self.calls.append(messages)
-        self.timeouts.append(timeout)
+        self.timeouts.append((timeout, first_timeout))
         yield from self.pieces
         if self.error:
             raise self.error
@@ -523,9 +534,10 @@ def test_최근_대화를_차례대로_넘기고_지난_질문은_기억하지_�
 def test_응답_없음_한도를_모델과_임베딩에_넘긴다():
     embedder, model = FakeEmbedder(), FakeModel()
     ask(embedder=embedder, model=model)
-    assert (embedder.timeouts, model.timeouts) == ([10.0], [10.0])  # 기본 10초(사용자 결정, 2026-10-21)
-    ask(embedder=embedder, model=model, settings=Settings(timeout=3.0))
-    assert (embedder.timeouts[-1], model.timeouts[-1]) == (3.0, 3.0)
+    # 임베딩 10초(2026-10-21), 답 모델은 글 뒤 5초·첫 글자까지 20초(사용자 결정 [561])
+    assert (embedder.timeouts, model.timeouts) == ([10.0], [(5.0, 20.0)])
+    ask(embedder=embedder, model=model, settings=Settings(timeout=3.0, answer_timeout=2.0, answer_first_timeout=7.0))
+    assert (embedder.timeouts[-1], model.timeouts[-1]) == (3.0, (2.0, 7.0))
 
 
 # 오류·시간 초과
@@ -1339,3 +1351,40 @@ def test_질문에_영어로_쓴_이름은_괄호_안에서_사용자가_쓴_영
     text = "".join(event.text for event in engine.answer("Frame All 어디 있어요?", KOREAN_SCREEN, []) if isinstance(event, Piece))
     assert text == "A(또는 Frame All)를 누르고, 다시 Frame All(모든 프레임)을 누릅니다."
 
+
+
+class _ClaudeClient:
+    """ClaudeModel에 끼울 가짜 anthropic client: 정해 둔 조각을 낸 뒤 error를 내거나 stop으로 끝난다."""
+
+    def __init__(self, pieces=(), error=None, stop="end_turn"):
+        self.pieces, self.error, self.stop = pieces, error, stop
+        self.messages = SimpleNamespace(stream=lambda **_: self)
+        self.text_stream = self._text()
+
+    def with_options(self, timeout):
+        return self
+
+    def _text(self):
+        yield from self.pieces
+        if self.error:
+            raise self.error
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def get_final_message(self):
+        return SimpleNamespace(usage=SimpleNamespace(input_tokens=10, output_tokens=4096), stop_reason=self.stop)
+
+
+def test_실제_Claude_연결에서_답_도중_바이트가_끊겨_늦으면_시간_초과_문구를_보인다():
+    error = httpx2.ReadTimeout("The read operation timed out")
+    model = ClaudeModel("claude-haiku-5-5", "k", "medium", client=_ClaudeClient(error=error))
+    assert ask(model=model) == [Failure(TIMEOUT_MESSAGE, SEARCHED)]
+
+
+def test_실제_Claude_연결에서_생각이_한도를_다_써_글이_0자면_빈_답_대신_오류_표시():
+    model = ClaudeModel("claude-haiku-5-5", "k", "medium", client=_ClaudeClient(stop="max_tokens"))
+    assert ask(model=model) == [Failure(ERROR_MESSAGE, SEARCHED)]
