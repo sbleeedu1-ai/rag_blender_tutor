@@ -14,6 +14,7 @@ dependencies = [
     "rank-bm25>=0.2.2",
     "PySide6-Essentials>=6.12",
     "anthropic>=2.7",  # 질문 바꾸기·분야 고르기·답변(Claude Haiku 5.5, HISTORY [270])
+    "httpx2>=2.0,<3",  # anthropic이 쓰는 연결 라이브러리. 흘려 받는 도중의 시간 초과를 직접 잡는다(claude_model.stream, 1-1)
     # Mac에서 도우미 창이 Blender를 따라가게 앞 프로그램·창을 읽고 옮긴다(blender_tutor/macapi.py, HISTORY [312])
     "pyobjc-framework-Cocoa>=13; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=13; sys_platform == 'darwin'",

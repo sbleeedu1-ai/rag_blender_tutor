@@ -15,6 +15,7 @@ import logging
 from collections.abc import Iterator
 
 import anthropic
+import httpx2
 
 from blender_tutor.beginner_scope import api_key
 
@@ -71,16 +72,23 @@ class ClaudeModel:
 
     def stream(self, messages: list[dict[str, str]], timeout: float | None = None) -> Iterator[str]:
         """답 글 조각을 오는 대로 돌려준다. timeout초 동안 다음 조각이 없으면 TimeoutError(라이브러리의 시간 초과를 바꿔 낸다).
-        생각 블록은 글이 아니라서 내지 않는다. 답이 max_tokens에서 잘리면 기록만 남긴다(받은 데까지는 이미 보였다)."""
+        흘려 받는 도중의 시간 초과는 anthropic이 감싸지 않은 httpx2.TimeoutException으로 올라와 그것도 바꾼다(05 Q22·Q23, 1-1).
+        생각 블록은 글이 아니라서 내지 않는다. 글이 0자인 채 끝나면(생각이 max_tokens를 다 씀 등) 토큰을 센 뒤 ValueError.
+        글이 나오다 max_tokens에서 잘리면 기록만 남긴다(받은 데까지는 이미 보였다)."""
         limit = self.timeout if timeout is None else timeout
+        said = False
         try:
             with self._client_for(limit).messages.stream(**self._body(messages, self.schema)) as response:
                 self.requests += 1
-                yield from response.text_stream
+                for text in response.text_stream:
+                    said = said or bool(text)
+                    yield text
                 final = response.get_final_message()
-        except anthropic.APITimeoutError as error:
+        except (anthropic.APITimeoutError, httpx2.TimeoutException) as error:
             raise TimeoutError(f"{self.model}이 {limit}초 안에 다음 조각을 보내지 않음") from error
         self._count(final.usage)
+        if not said:
+            raise ValueError(f"{self.model} 답이 글 없이 {final.stop_reason}로 끝남")
         if final.stop_reason != "end_turn":
             log.warning("%s 답이 %s로 끝남", self.model, final.stop_reason)
 
