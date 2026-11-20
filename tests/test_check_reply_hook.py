@@ -140,3 +140,24 @@ def test_따옴표_속_세로막대가_있는_grep도_기록_찾기로_본다():
     command = 'cd /Volumes/mac_ssd/proj/rag_blender_tutor && grep -n -E "③ Q38|④ 보고서|빠졌던 것" HANDOFF.md | head -3 | cut -c1-200'
     assert check_reply._reads_records("Bash", {"command": command})
     assert not check_reply._reads_records("Bash", {"command": 'echo "grep|x" >> HANDOFF.md'})
+
+
+# 11-20 밤 답에서 그대로 옮긴 줄(용어 정리로 바꾼 옛 말을 다시 씀)
+OLD_TERM_MISTAKE = "- **새 판:** 11-12에 만든 긴 지시문(\"2b\")에서 예시만 뺐습니다. 2번 질문 바꾸기만 바꾼 시험이라"
+
+
+def test_용어_정리로_바꾼_옛_말을_쓰면_막힌다():
+    hits = check_reply.problems(OLD_TERM_MISTAKE)
+    assert any("'질문 바꾸기' → '쿼리 재작성'" in h for h in hits)
+
+
+def test_옛_말도_따옴표_안의_인용이면_통과():
+    assert check_reply.old_term_problems('사용자 원문 "질문 바꾸기 지시문 고쳐"와 `rewrite_trial_run.py`를 봤습니다.') == []
+
+
+def test_여러_뜻인_말은_막지_않는다():
+    assert check_reply.old_term_problems("조각 모드에서 마스크를 지우고, 패널을 접어 둡니다. 생각 low가 빠릅니다. 채점 지시문을 읽고 none_조각만 폴더를 봤습니다.") == []
+
+
+def test_옛_말과_새_말을_같은_줄에서_견주면_통과():
+    assert check_reply.old_term_problems("| 질문 바꾸기 | 쿼리 재작성 |\n| 다시 줄 세우기 | 리랭킹 |") == []
