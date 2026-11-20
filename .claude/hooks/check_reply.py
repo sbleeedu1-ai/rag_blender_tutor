@@ -75,7 +75,7 @@ def _is_human(entry: dict) -> bool:
 
 def _turn_blocks(transcript: Path) -> list[dict]:
     """마지막 사람 메시지 뒤 Claude 메시지의 내용 조각(글·도구 호출)."""
-    entries = [json.loads(line) for line in transcript.read_text(encoding="utf-8").splitlines() if line.strip()]
+    entries = [json.loads(line) for line in transcript.read_text(encoding="utf-8").split("\n") if line.strip()]  # splitlines()는 글 속 U+2028에서도 잘라 JSON 줄이 깨진다([550])
     start = max((i for i, e in enumerate(entries) if _is_human(e)), default=-1) + 1
     blocks = []
     for e in entries[start:]:

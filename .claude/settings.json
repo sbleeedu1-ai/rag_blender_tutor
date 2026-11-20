@@ -46,6 +46,16 @@
             "onFailure": "block"
           }
         ]
+      },
+      {
+        "matcher": "mcp__ccd_turn__wrap_up|AskUserQuestion|Agent|Workflow|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.venv/Scripts/python.exe\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/check_plan_steps.py\" pre",
+            "timeout": 30
+          }
+        ]
       }
     ],
     "PreCompact": [
@@ -104,6 +114,22 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.venv/Scripts/python.exe\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/check_reply.py\"",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.venv/Scripts/python.exe\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/check_plan_steps.py\" stop",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.venv/Scripts/python.exe\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/check_plan_steps.py\" prompt",
             "timeout": 30
           }
         ]

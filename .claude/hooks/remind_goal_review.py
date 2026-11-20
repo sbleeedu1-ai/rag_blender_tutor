@@ -134,7 +134,7 @@ def session_calls(transcript_path: str) -> tuple[list[str], list[str]]:
     for log in logs:
         # 지금 쓰이는 세션은 마지막 줄이 덜 적혀 있을 수 있어 완성된 줄만 읽는다
         complete = log.read_text(encoding="utf-8", errors="replace").rpartition("\n")[0]
-        for line in complete.splitlines():
+        for line in complete.split("\n"):  # splitlines()는 글 속 U+2028에서도 잘라 JSON 줄이 깨진다([550])
             if '"Agent"' not in line and _DOC_TOOL not in line:
                 continue
             content = (json.loads(line).get("message") or {}).get("content")

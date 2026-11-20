@@ -37,7 +37,7 @@ def promise_lines(transcript: Path) -> list[tuple[str, str]]:
     """끝에서 두 번째 압축 요약 뒤의 약속 줄을 (시각, 줄) 차례대로."""
     complete = transcript.read_text(encoding="utf-8", errors="replace").rpartition("\n")[0] + "\n"
     segments: list[list[tuple[str, str]]] = [[]]
-    for line in complete.splitlines():
+    for line in complete.split("\n"):  # splitlines()는 글 속 U+2028에서도 잘라 JSON 줄이 깨진다([550])
         if '"isCompactSummary"' not in line and '"assistant"' not in line:
             continue
         entry = json.loads(line)
