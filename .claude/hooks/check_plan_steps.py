@@ -31,6 +31,11 @@ PLAN = ROOT / "results" / "20261119" / "222431_실패분석" / "7_전체계획.m
 PLAN_NAME = "7_전체계획.md"
 # 사용자 "지금 만드는 훅은 우리 아스트라 검토 이후 최종 완성된 계획에만 쓰여야 한다"(11-20): Astra 검토를 반영한 판에만 붙는 표시가 있어야 건다
 FINAL_MARK = "Astra 검토 뒤 주 세션 고침, [544]"
+# 계획 전용 세션에서만 건다. 같은 프로젝트의 다른 세션(스킬 분류 등)까지 막아서, 사용자 "그냥 계획 전용 세션을 따로 만들어서
+# 그거 전용으로 걸어놓는게 안전하겠다. 계속 컴팩트 하면서 써야지 뭐"(11-20, [553]). 컴팩트해도 번호는 그대로이고,
+# 새 대화를 열어 계획을 이어 가면 그 세션 번호(훅 입력의 session_id, 세션 기록 파일 이름)로 여기만 바꾼다.
+# 사용자 메시지마다 규칙 상자가 문맥에 안 뜨면 이 번호가 어긋나 훅이 꺼진 것이다.
+PLAN_SESSION = "46b41117-1c3c-45a1-9ac0-da55988e25cd"
 WHY = ("까닭(사용자 원문): \"체크가 다 됐으면 다시 되짚어봐서 빠진거 없는지 보고나서\", \"이거봐이거봐 적어놔도 안지키네 너?\" [548]·[550]")
 RECOMMENDS = re.compile(r"권함|권하는|권합니다|권해|추천|제안")
 PAST = re.compile(r"실수|잘못|했습니다|였습니다|했던|한 것|한 게|어긴|거두|거뒀")
@@ -154,7 +159,7 @@ def stop_problems(blocks: list[dict], plan_text: str = "") -> list[str]:
 
 def run(mode: str, payload: dict, plan: Path = PLAN) -> dict | None:
     """훅 하나의 답(출력할 JSON). 계획 문서가 없거나 하위 에이전트면 None."""
-    if not plan.exists() or payload.get("agent_id"):
+    if payload.get("session_id") != PLAN_SESSION or not plan.exists() or payload.get("agent_id"):
         return None
     text = plan.read_text(encoding="utf-8")
     if FINAL_MARK not in text:  # Astra 검토 전 판·다른 계획에는 걸지 않는다

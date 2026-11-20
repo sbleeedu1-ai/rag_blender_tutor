@@ -64,14 +64,14 @@ def test_계획을_안_읽고_권하면_막고_읽었으면_통과():
 
 def test_계획_문서가_없으면_아무것도_안_한다(tmp_path):
     missing = tmp_path / "없음.md"
-    assert hook.run("pre", {"tool_name": "AskUserQuestion", "tool_input": {}}, missing) is None
-    assert hook.run("prompt", {}, missing) is None
+    assert hook.run("pre", {"session_id": hook.PLAN_SESSION, "tool_name": "AskUserQuestion", "tool_input": {}}, missing) is None
+    assert hook.run("prompt", {"session_id": hook.PLAN_SESSION}, missing) is None
 
 
 def test_사용자_메시지마다_규칙_상자와_안_된_줄을_넣는다(tmp_path):
     path = tmp_path / "7_전체계획.md"
     path.write_text(plan(OPEN_REVIEW), encoding="utf-8")
-    context = hook.run("prompt", {}, path)["hookSpecificOutput"]["additionalContext"]
+    context = hook.run("prompt", {"session_id": hook.PLAN_SESSION}, path)["hookSpecificOutput"]["additionalContext"]
     assert "반드시 먼저 읽는다" in context and "검색 관문 ④" in context and "(사용자) 승인" in context
     assert "계획 본문의 체크 줄" not in context
 
@@ -95,9 +95,9 @@ def test_Astra_검토를_반영한_최종_계획이_아니면_걸지_않는다(t
     # 사용자 "지금 만드는 훅은 우리 아스트라 검토 이후 최종 완성된 계획에만 쓰여야 한다"(11-20)
     path = tmp_path / "7_전체계획.md"
     path.write_text(plan(OPEN_REVIEW).replace("(11-20 Astra 검토 뒤 주 세션 고침, [544])", ""), encoding="utf-8")
-    assert hook.run("pre", {"tool_name": "AskUserQuestion", "tool_input": {}}, path) is None
+    assert hook.run("pre", {"session_id": hook.PLAN_SESSION, "tool_name": "AskUserQuestion", "tool_input": {}}, path) is None
     path.write_text(plan(OPEN_REVIEW), encoding="utf-8")
-    assert hook.run("pre", {"tool_name": "AskUserQuestion", "tool_input": {}}, path) is not None
+    assert hook.run("pre", {"session_id": hook.PLAN_SESSION, "tool_name": "AskUserQuestion", "tool_input": {}}, path) is not None
 
 
 def test_지금_절에_되짚기_줄이_없으면_시작을_막는다():
@@ -108,3 +108,13 @@ def test_지금_절에_되짚기_줄이_없으면_시작을_막는다():
 def test_wrap_up_물음을_낸_차례도_Stop에서_본다():
     blocks = [{"type": "tool_use", "name": "mcp__ccd_turn__wrap_up", "input": ASK}]
     assert any("되짚기" in p for p in hook.stop_problems(blocks, plan(OPEN_REVIEW)))
+
+
+def test_계획_전용_세션이_아니면_걸지_않는다(tmp_path):
+    # 사용자 "그냥 계획 전용 세션을 따로 만들어서 그거 전용으로 걸어놓는게 안전하겠다"(11-20): 다른 세션의 질문·권유까지 막았다
+    path = tmp_path / "7_전체계획.md"
+    path.write_text(plan(OPEN_REVIEW), encoding="utf-8")
+    ask = {"tool_name": "AskUserQuestion", "tool_input": {}}
+    assert hook.run("pre", {**ask, "session_id": "다른-세션"}, path) is None
+    assert hook.run("pre", ask, path) is None
+    assert hook.run("pre", {**ask, "session_id": hook.PLAN_SESSION}, path) is not None
