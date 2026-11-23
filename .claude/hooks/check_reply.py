@@ -23,6 +23,12 @@
   그 차례의 advisor 결과가 하나라도 있으면 통과한다(새 근거가 오기 전에 부른 advisor여도 통과).
 - 규칙 5([575]): 용어 정리(PR #48)에서 바꾼 옛 말 가운데 뜻이 하나뿐인 것(OLD_TERMS)을 따옴표·백틱 밖에서 쓰면 막는다.
   한계: 여러 줄에 걸친 인용은 못 뺀다, 짝이 안 맞는 따옴표가 있으면 짝이 밀려 인용을 잘못 뺄 수 있다, 여러 뜻인 말은 안 본다.
+- 규칙 6([602]): 답 글 조각(진행 중 짧은 말 하나하나)이 영어로 쓰였으면 막는다. 코드 블록·백틱·따옴표 인용·주소·경로를 뺀 뒤
+  로마자가 20자 이상이고 한글의 2배보다 많고 영어 문장 낱말(the·is·I'll 등, 대소문자 안 가림)이 둘 이상이면, 또는 한글이 하나도 없으면 영어 답으로 본다.
+  작은따옴표 짝은 빼지 않는다(I've … I'll 사이를 통째로 지움).
+  Blender 화면 이름을 늘어놓은 한국어 답("Color Management에서 Working Space(Linear Rec.709)…를 봤습니다")을 살리려고 둘째·셋째 조건을 뒀다. 11-23 차례 7번 준비 중 진행 말 30여 개와 마지막 답을 영어로 써도 안 막혔다
+  (사용자 "훅이 재 프롬프트 했지만 영어로 말하는건 안잡았네?").
+  한계: 한국어 답 안의 영어 문장 하나는 못 본다(조각 전체를 셈), 로마자 20자 밑의 아주 짧은 영어 말도 못 본다.
 - 못 보는 것: 거부한 꼴을 다른 모양으로 바꿔 쓴 것, 정해 둔 차례를 어긴 권유, 말이 길고 어려운 것, 찾긴 했으나 다른 낱말로 찾아 놓친 것.
   화면을 안 보고 화면 글자를 단정한 것(11-17 잰 결과 헛막음이 많아 안 넣음, rules-enforced.md·[434]).
 """
@@ -56,6 +62,9 @@ OLD_TERMS = (
     (r"보낸 글|넘긴 글", "모델에 보낸 내용 전체"), (r"천장", "상한"), (r"얼리기|얼린 ", "코드 동결"),
     (r"문턱|통과선", "기준값"), (r"(?:지금|새) 뼈대", "분야 선택 있음·없음"), (r"첫 글자(?:까지| 시간|가 나오)", "첫 토큰"),
 )
+CODE = re.compile(r"```.*?```|https?://\S+|[\w./-]*/[\w./-]+|\b[\w-]+\.(?:py|md|json|jsonl|txt|log|png)\b", re.S)  # 규칙 6에서 셈에 넣지 않는 것
+FUNCTION_WORDS = re.compile(r"\b(?:the|a|an|is|are|was|to|of|and|so|it|this|that|I|I'll|I'm|I've|now|then|with|for)\b", re.I)  # 영어 문장에만 나오는 낱말(문장 첫 The·Now도 셈)
+QUOTES_EN = re.compile(r"\"[^\"\n]*\"|“[^”\n]*”|`[^`\n]*`")  # 규칙 6은 작은따옴표 짝을 빼지 않는다(I've … I'll 사이를 통째로 지움)
 QUOTES = re.compile(r"\"[^\"\n]*\"|“[^”\n]*”|`[^`\n]*`|'[^'\n]*'")  # 인용·파일 이름·코드 안은 옛 말이어도 그대로 둔다(대응표 "그대로 둘 것")
 
 
@@ -101,6 +110,17 @@ def old_term_problems(text: str) -> list[str]:
             "까닭(사용자 원문): \"니만 아는 한국어\", \"우리 합의본 단어들? 말고는 전부 고쳐\" [575]"]
 
 
+def english_problems(blocks: list[str]) -> list[str]:
+    """규칙 6: 영어로 쓴 답 글 조각을 막는다(코드·인용·주소·경로는 빼고 로마자와 한글 수를 견줌)."""
+    for text in blocks:
+        bare = QUOTES_EN.sub("", CODE.sub("", text))
+        latin, hangul = len(re.findall(r"[A-Za-z]", bare)), len(re.findall(r"[가-힣]", bare))
+        if latin >= 20 and (hangul == 0 or (latin > 2 * hangul and len(FUNCTION_WORDS.findall(bare)) >= 2)):  # 한글이 하나도 없으면 짧은 말도 막음  # 한글 한 글자가 로마자 2-3자 몫이라 2배로 견줌(Blender 화면 용어가 많은 한국어 답을 살림)
+            return [f"답을 영어로 썼다(로마자 {latin}자·한글 {hangul}자: \"{text.strip()[:60]}\"). 진행 중 짧은 말까지 쉬운 한국어로 다시 쓴다(영어 용어·코드·인용은 그대로 둬도 됨). "
+                    "까닭(사용자 원문): \"훅이 재 프롬프트 했지만 영어로 말하는건 안잡았네?\" [602], 전역 지침 \"설명은 쉬운 한국어로 하고\""]
+    return []
+
+
 def _is_human(entry: dict) -> bool:
     return (entry.get("type") == "user" and (entry.get("origin") or {}).get("kind") == "human"
             and not (entry.get("isMeta") or entry.get("isCompactSummary") or entry.get("isSidechain")))
@@ -138,10 +158,11 @@ def turn_text(transcript: Path) -> str:
 
 
 def turn_problems(transcript: Path) -> list[str]:
-    """규칙 1·2(답 글)와 규칙 3(권하는데 그 차례에 기록을 안 찾음)."""
+    """규칙 1·2·5(답 글), 3(권하는데 기록을 안 찾음), 4(advisor 없이 결과), 6(영어 답)."""
     blocks = _turn_blocks(transcript)
     text = "\n".join(b.get("text", "") for b in blocks if b.get("type") == "text")
     found = problems(text)
+    found += english_problems([b.get("text", "") for b in blocks if b.get("type") == "text"])
     searched = any(b.get("type") == "tool_use" and _reads_records(b.get("name", ""), b.get("input") or {}) for b in blocks)
     recommends = any(RECOMMENDS.search(line) and not PAST.search(line) for line in text.splitlines())
     if recommends and not searched:

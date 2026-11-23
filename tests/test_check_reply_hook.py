@@ -161,3 +161,51 @@ def test_여러_뜻인_말은_막지_않는다():
 
 def test_옛_말과_새_말을_같은_줄에서_견주면_통과():
     assert check_reply.old_term_problems("| 질문 바꾸기 | 쿼리 재작성 |\n| 다시 줄 세우기 | 리랭킹 |") == []
+
+
+# 11-23 차례 7번 실행을 시작한 답에서 그대로 옮긴 줄(사용자 "훅이 재 프롬프트 했지만 영어로 말하는건 안잡았네?" [602])
+ENGLISH_REPLY = "I've started the step 7 run (the Fix 1 test, search group 2) in the background. It should take about 50 minutes, and I'll pick it back up when it finishes."
+ENGLISH_NOTE = "Now changing the run script's arms to Fix 1."  # 같은 세션 진행 중 짧은 말
+ENGLISH_WITH_KOREAN = "Next is the pre-run checklist for step 7 (차례 7번). Reading the plan's table row for step 7, the search section (묶음 2)."
+
+
+def test_영어로_쓴_답은_막힌다(tmp_path):
+    for reply in (ENGLISH_REPLY, ENGLISH_NOTE, ENGLISH_WITH_KOREAN):
+        assert any("영어" in h and "[602]" in h for h in check_reply.turn_problems(_turn(tmp_path, reply))), reply
+
+
+def test_진행_중_짧은_말이_영어여도_막힌다(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    note = {"type": "assistant", "message": {"content": [{"type": "text", "text": ENGLISH_NOTE}]}}
+    final = {"type": "assistant", "message": {"content": [{"type": "text", "text": "차례 7번 실행을 백그라운드로 시작했습니다. 끝나면 판정을 계산해 보고드립니다. " * 3}]}}
+    assert any("영어" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, note, final])))
+
+
+def test_한국어_답에_영어_용어_코드_인용이_섞여도_통과(tmp_path):
+    replies = (
+        "Object Mode에서 Apply Scale(Ctrl-A)을 누르면 크기가 1로 돌아갑니다.",
+        "`fix_trial_extra.py`로 지표를 셉니다. 사용자 원문 \"Now changing the run script's arms\"는 영어였습니다.",
+        "```\nTraceback (most recent call last): TimeoutError while reading the response body\n```\n실행 기록 끝에 위 오류가 남았습니다.",
+        "결과 폴더는 results/20261123/143613_차례7_고침안1/ 입니다. 자세한 건 https://docs.blender.org/manual/en/latest/ 를 봅니다.",
+    )
+    for reply in replies:
+        assert not any("영어" in h for h in check_reply.turn_problems(_turn(tmp_path, reply))), reply
+
+
+def test_Blender_화면_이름을_늘어놓은_한국어_답은_통과(tmp_path):
+    # 지난 세션 실제 답 두 줄(2배 기준만으로는 걸렸던 꼴)
+    for reply in ("노드 기본값 7개가 화면과 같습니다(Bump·Displacement·Normal Map·Vector Displacement·Bevel·Hair IOR·Output All). Metallic 색 값을 봅니다.",
+                  "Color Management에서 Working Space(Linear Rec.709)·Sequencer(sRGB)·White Balance(6500 K)를 봤습니다. 다음은 Output 탭입니다."):
+        assert not any("영어" in h for h in check_reply.turn_problems(_turn(tmp_path, reply))), reply
+
+
+def test_문장_첫_대문자_낱말과_아포스트로피가_있어도_막힌다(tmp_path):
+    # advisor가 짚은 놓침: 대소문자를 가려 The·Now를 못 세고, 작은따옴표 짝이 I've … I'll 사이를 지웠다(11-23 실제 진행 말)
+    for reply in ("The commit hook requires advisor for hook commits.", "Now adding CSV, Text and OpenVDB.",
+                  "No other runs are going. I'll continue once the independent review comes back."):
+        assert any("영어" in h for h in check_reply.turn_problems(_turn(tmp_path, reply))), reply
+
+
+def test_한글이_없는_짧은_영어_말도_막힌다(tmp_path):
+    for reply in ("Writing the failing tests first.", "Pack 01's count matches (60 answers). Starting pack 14."):  # 지난 세션 실제 진행 말
+        assert any("영어" in h for h in check_reply.turn_problems(_turn(tmp_path, reply))), reply
