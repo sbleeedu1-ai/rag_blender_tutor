@@ -80,14 +80,24 @@ def test_답_조각을_이어_붙이고_문장마다_줄을_바꾼다(window):
     assert texts(window, "answer") == ["Tab을 눌러요.\nBlender 5.2에서도 같아요."]
 
 
+def test_쿼리_재작성을_건너뛴_엔진에서도_지금_점은_찾기_자리다(window):
+    type_and_enter(window, "가")
+    window.show_answer_event(Stage.SEARCH)  # 쿼리 재작성이 없는 엔진은 REWRITE를 내지 않는다
+    [line] = window.findChildren(QLabel, "thinking")
+    assert line.text().count("●") == 3 and line.text().count("○") == 1
+
+
 def test_답을_기다리는_동안_지금_단계와_흐른_초를_한_줄로_보이고_첫_조각에서_멈춘다(window):
     type_and_enter(window, "가")
     window.show_answer_event(Stage.REWRITE)
     window.show_answer_event(Stage.SEARCH)
-    assert texts(window, "thinking") == ["설명서에서 찾는 중 · 0초"]  # 단계를 늘어놓지 않고 지금 것 하나만
+    [line] = window.findChildren(QLabel, "thinking")
+    assert line.textFormat() == Qt.RichText and line.text().endswith("설명서에서 찾는 중 · 0초")  # 단계 이름은 지금 것 하나만
+    assert line.text().count("●") == 3 and line.text().count("○") == 1  # 점 넷 가운데 셋째가 지금
     assert window.waiting.isActive()
-    window.show_answer_event(Piece("답이에요."))
-    assert texts(window, "answer") == ["답이에요."] and not window.waiting.isActive()
+    window.show_answer_event(Piece("<b>답</b>이에요."))
+    [answer] = window.findChildren(QLabel, "answer")
+    assert answer.text() == "<b>답</b>이에요." and answer.textFormat() == Qt.PlainText and not window.waiting.isActive()  # 답은 다시 서식 없이
 
 
 def test_기다리는_동안_타이머가_흐른_초를_고친다(window):
@@ -95,7 +105,8 @@ def test_기다리는_동안_타이머가_흐른_초를_고친다(window):
     window.show_answer_event(Stage.ANSWER)
     window._sent_at -= 3  # 3초 전에 보낸 것으로
     window.waiting.timeout.emit()
-    assert texts(window, "thinking") == ["답을 만드는 중 · 3초"]
+    [line] = window.findChildren(QLabel, "thinking")
+    assert line.text().endswith("답을 만드는 중 · 3초")
 
 
 def test_단계만_보이다_실패하면_기다림_줄을_거두고_멈춘다(window):

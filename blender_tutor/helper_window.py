@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
 from blender_tutor.answer_engine import Done, Event, Failure, Piece, Source, Stage
 from blender_tutor.course_desk import Line, LineKind, StepView
 from blender_tutor.progress import Course
-from blender_tutor.window_rules import SENDING, by_sentence, waiting_line
+from blender_tutor.window_rules import SENDING, by_sentence, waiting_html
 
 WIDTH, HEIGHT = 420, 560  # 처음 크기(시제품 위젯 판에서 사용자가 써 본 크기)
 MIN_WIDTH, MIN_HEIGHT = 300, 220  # 줄여도 입력칸과 최근 답 몇 줄은 보이는 크기
@@ -125,9 +125,9 @@ class HelperWindow(QWidget):
         self._typing = False  # 입력칸에 쓰던 글이 있나(started_typing을 질문마다 한 번만 알리려고)
         self._answer: QLabel | None = None
         self._answer_text = ""
-        self._stage: str | None = None  # 답을 기다리는 동안 보일 지금 단계(티켓 51)
+        self._stage: Stage | None = None  # 답을 기다리는 동안 보일 지금 단계(티켓 51)
         self._sent_at = 0.0  # 보낸 시각(time.monotonic), 흐른 초를 셀 때
-        self.waiting = QTimer(self, interval=200, timeout=self._show_waiting)  # 첫 글자까지 흐른 초를 고친다(1초 간격이면 최대 1초 늦게 보여 0.2초)
+        self.waiting = QTimer(self, interval=100, timeout=self._show_waiting)  # 첫 토큰까지 흐른 초와 지금 점의 밝기를 고친다(밝기가 끊겨 보이지 않게 0.1초)
         self._course_labels: tuple[str, ...] = ()  # 고르기 버튼·바꾸기 메뉴를 만든 연습 과정 목록
         self._steps_for: Course | None = None  # 단계 목록을 만든 연습 과정
         self._marked = -1  # 단계 목록에서 ▶로 표시한 줄(0부터)
@@ -374,12 +374,13 @@ class HelperWindow(QWidget):
     def show_answer_event(self, event: Event) -> None:
         """답 사건 하나를 그린다: 단계는 기다림 줄을 바꾸고, 조각은 이어 붙이고, 끝이면 근거 카드, 오류면 짧은 문구."""
         if isinstance(event, Stage):
-            self._stage = event.value
+            self._stage = event
             self._show_waiting()
             return
         self.waiting.stop()  # 지운 기다림 줄에 글을 쓰지 않게 바꾸거나 지우기 전에 멈춘다
         if isinstance(event, Piece):
-            if not self._answer_text:  # 첫 조각: 기다림 줄을 답 글씨로 바꾼다
+            if not self._answer_text:  # 첫 조각: 기다림 줄을 답 글씨로 바꾸고 다시 서식 없이 읽게 한다
+                self._answer.setTextFormat(Qt.PlainText)
                 self._restyle(self._answer, "answer")
             self._answer_text += event.text
             self._answer.setText(by_sentence(self._answer_text))
@@ -395,7 +396,9 @@ class HelperWindow(QWidget):
 
     def _show_waiting(self) -> None:
         """기다림 줄을 지금 단계와 보낸 뒤 흐른 초로 고친다. 타이머는 첫 조각·끝·실패에서 멈추므로 기다리는 동안에만 불린다."""
-        self._answer.setText(waiting_line(self._stage, time.monotonic() - self._sent_at))
+        current = 0 if self._stage is None else list(Stage).index(self._stage)  # 보낸 직후에는 첫 점이 깜빡인다
+        self._answer.setTextFormat(Qt.RichText)  # 점 색은 서식 글이라 기다림 줄만 서식으로 읽는다(단계 이름은 waiting_html이 바꿔 둠)
+        self._answer.setText(waiting_html(current, len(Stage), self._stage, time.monotonic() - self._sent_at))
 
     def _label(self, text: str, name: str) -> QLabel:
         label = QLabel(text)
