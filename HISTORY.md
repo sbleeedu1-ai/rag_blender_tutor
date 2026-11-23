@@ -4865,3 +4865,17 @@
 - 사용자: "AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해." HANDOFF "진짜 할 일" 1번 차례대로 함([598]).
 - 새 세션 번호는 `ls -t ~/.claude/projects/-Volumes-mac-ssd-proj-rag-blender-tutor/*.jsonl | head -1`로 찾은 `bda88863-8f37-49b7-ae5d-6c0e322aaac1`(이 세션 스크래치패드 폴더 이름과 같음). `.claude/hooks/check_plan_steps.py` 38줄 `PLAN_SESSION`만 바꿈. `.venv/bin/python -m pytest tests/test_plan_steps_hook.py` 14 통과(Mac, 11-23). 이 시험은 `hook.PLAN_SESSION`을 그대로 넣어 부르므로 번호가 맞는지는 증명하지 못한다. 계획 파일에 Astra 표시 글자는 9곳 있음(grep).
 - 옮겨졌는지는 다음 사용자 메시지에 "[계획 진행 규칙, 7_전체계획.md 맨 위]" 상자가 뜨는지로 본다(아직 확인 못 함).
+
+### [600] 2026-11-23 · 설명서 대조에서 화면으로 못 본 두 건을 닫기 위해, 조합 키 6개를 Blender 이벤트 길로 누르고 R012 셔터 곡선을 화면으로 본다
+- 계기: HANDOFF "진짜 할 일" 2번, 계획 진행 기록 열린 줄 둘(조합 키는 "이 도구로는 Shift·Alt 조합이 Blender에 안 닿아 Keymap 화면으로만 봄. 다른 입력 방법을 찾거나 사용자에게 메뉴로 묶어 부탁").
+- 다른 입력 길: `Window.event_simulate`(공식 문서 `bpy.types.Window.txt` 68-84줄, `--enable-event-simulate`로 켠 Blender에서만 `bpy.app.txt` 147줄). OS 키보드 대신 Blender 창 이벤트 대기열에 키를 넣어, 키맵이 키를 조작으로 바꾸는 길은 실제 누름과 같다. 첫 시도는 시작 화면(스플래시)이 키를 먹어 아무것도 안 됨 → Esc로 닫는 단계를 넣고 Tab으로 길을 먼저 확인.
+- 결과(각 1회, `results/20261123/141930_조합키_이벤트/`): C004 Shift-E → extrude_forked(뼈 1→2, 설명서 "By default … like the standard extrusion"과 같음), C036 NLA Alt-D → duplicate_move(스트립 1→2), C079 Alt-D → rip_edge_move(꼭짓점 8→9), C170 Shift-L → select_linked_pick(선택 8→0), C167 Ctrl-I → mask_flood_fill(마스크 뒤집힘), C168 Alt-M → mask_flood_fill(마스크 지움). 6/6 에이전트 판정 "설명서 맞음"과 같음. Mac Cmd-I는 안 눌러 봄.
+- R012: Motion Blur → Shutter Curve 패널을 이벤트 클릭으로 펼쳐 1배로 봄. 점 셋·선이 모두 윗변(값 1)에 평평 → 앞의 "화면 확인은 못 가림"을 "설명서 맞음"으로 바꿈. 기록 `115637_설명서대조_후보확인/화면/화면확인.md` 마지막 절.
+- 덧: [599]의 계획 훅은 다음 사용자 차례에 "[계획 진행 규칙, 7_전체계획.md 맨 위]" 상자가 문맥에 떠서 새 세션으로 옮겨진 것을 확인함.
+
+### [601] 2026-11-23 · 차례 7번(G-2 고침안 1)을 돌리기 위해, 실행 전 목록을 채우고 결과를 읽는 규칙 둘을 미리 정한다
+- [595]에서 "none·low 가운데 어느 답 모델 수준으로 잴지와 금액은 실행 전 체크리스트에서 다시 적음"으로 남긴 것: 이 시험은 답 모델(본·예비)을 가짜로 바꿔 돌려 `Settings.reasoning`이 측정에도 금액에도 안 닿는다(`소스 코드` engine_setup.py 48-53·103줄, 실행 전 독립 검토도 코드로 같음). 그래서 고를 것이 없어짐. 금액 어림 Anthropic 약 $0.45(계획 안, 미리 승인), OpenAI 약 $0.004([596] 안).
+- 고침안 문구는 눈가림 목록 짧은 판 9/9 글자 그대로, 더한 2항목(3·14번)은 상태 글을 줄여 쓰고 3번의 `Selection`을 뺌. 사용자가 이 글로 정해([595]) 고치지 않음.
+- "방법만 묻는 문항"·"원인을 이미 말한 문항"(함께 볼 지표 4)은 정답·결과를 모르는 하위 에이전트(Sonnet medium)가 질문 글만 보고 나눔: 방법 17·원인 말함 2·애매 2(Q03·Q37)·증상 33.
+- 실행 전 독립 검토(Opus 5.5 medium) 지적 9개를 반영하며 주 세션이 advisor와 정한 것: ① 판정이 3줄(차이 없음)이어도 Q14·Q28·Q37 가운데 하나 이상이 고침안에서 3회 이상·지금 조건 3회 미만이고 48문항에서 고침안에서만 떨어진 문항이 0이면 "들었는데 규칙을 못 넘음"으로 버리지 않고 사용자에게 보인다(판정 줄 자체는 [595] 그대로) ② 연결 끊김·인증서·401로 멈추면 그 회차만 다시 돌리고 적는다(차례 5번 실행 뒤 검토 A).
+- 실험 기록 `docs/experiment.md` "차례 7번 G-2 고침안 1" 절, 스크립트 `data/eval/dev50/fix_trial_run.py`·`fix_trial_judge.py`·`fix_trial_extra.py`(Git 밖).
