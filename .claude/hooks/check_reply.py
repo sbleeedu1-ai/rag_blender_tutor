@@ -6,7 +6,7 @@
 거부된 '곧' 꼴을 다시 권하고 ㉠ 같은 기호를 풀지 않고 썼다. pstack `correct` 스킬(cursor/plugins, MIT)의 "글 규칙은 아무것도
 실패시키지 않는다 → 검사로 막고, 그 검사가 실제 지난 실수를 잡는지 증명한다"를 따랐다.
 
-- 본다: 마지막 사람 메시지 뒤 Claude가 쓴 답 글 전부(진행 중 짧은 말 포함).
+- 본다: 마지막 사람 메시지 뒤 Claude가 쓴 답 글(진행 중 짧은 말 포함). 이 훅이 그 차례에 막았으면 막은 뒤의 글만(아래 "글을 보는 범위").
 - 규칙 1: 동그라미 기호(㉠-㉻)만 쓴 줄은 사용자가 뜻을 모른다. 같은 줄에 실제 꼴(따옴표 속 문장)을 함께 쓴다.
 - 규칙 2: 답이 무엇을 권하면(권함·권하는·권합니다·추천·제안), 거부한 꼴(answer-forms.md 표의 "검사" 칸 정규식)이 든 줄을 찾는다.
   같은 줄에 거부·지금 제품·지금 꼴 같은 말이 있으면 설명으로 보고 넘긴다.
@@ -29,6 +29,10 @@
   Blender 화면 이름을 늘어놓은 한국어 답("Color Management에서 Working Space(Linear Rec.709)…를 봤습니다")을 살리려고 둘째·셋째 조건을 뒀다. 11-23 차례 7번 준비 중 진행 말 30여 개와 마지막 답을 영어로 써도 안 막혔다
   (사용자 "훅이 재 프롬프트 했지만 영어로 말하는건 안잡았네?").
   한계: 한국어 답 안의 영어 문장 하나는 못 본다(조각 전체를 셈), 로마자 20자 밑의 아주 짧은 영어 말도 못 본다.
+- 글을 보는 범위([604]): 글 규칙(1·2·5·6과 3·4의 글 쪽)은 그 차례에서 이 훅이 마지막으로 막은 뒤의 글만 본다.
+  이미 고쳐 낸 글에 백그라운드 알림 차례마다 다시 막혔다(11-23 같은 영어 줄에 세 번: 처음 1번은 맞게, 되풀이 2번). advisor 결과·기록 찾기 호출은 차례 전체에서 본다.
+  마지막 답은 Stop 입력 `last_assistant_message`에서 더한다. 공식 문서(code.claude.com/docs/en/hooks.md Stop input)
+  "the transcript file isn't guaranteed to include the final message at Stop time"대로 11-23에 마지막 답의 '문턱'을 못 봤다.
 - 못 보는 것: 거부한 꼴을 다른 모양으로 바꿔 쓴 것, 정해 둔 차례를 어긴 권유, 말이 길고 어려운 것, 찾긴 했으나 다른 낱말로 찾아 놓친 것.
   화면을 안 보고 화면 글자를 단정한 것(11-17 잰 결과 헛막음이 많아 안 넣음, rules-enforced.md·[434]).
 """
@@ -126,12 +130,22 @@ def _is_human(entry: dict) -> bool:
             and not (entry.get("isMeta") or entry.get("isCompactSummary") or entry.get("isSidechain")))
 
 
+def _is_feedback(entry: dict) -> bool:
+    """이 훅(Stop)이 막으며 돌려준 글이 기록에 들어간 항목."""
+    content = (entry.get("message") or {}).get("content")
+    text = content if isinstance(content, str) else " ".join(c.get("text", "") for c in content or [] if isinstance(c, dict))
+    return entry.get("type") == "user" and text.startswith("Stop hook feedback")
+
+
 def _turn_blocks(transcript: Path) -> list[dict]:
-    """마지막 사람 메시지 뒤 Claude 메시지의 내용 조각(글·도구 호출)."""
+    """마지막 사람 메시지 뒤 Claude 메시지의 내용 조각(글·도구 호출). 훅이 막은 자리는 {"type": "feedback"}로 남긴다."""
     entries = [json.loads(line) for line in transcript.read_text(encoding="utf-8").split("\n") if line.strip()]  # splitlines()는 글 속 U+2028에서도 잘라 JSON 줄이 깨진다([550])
     start = max((i for i, e in enumerate(entries) if _is_human(e)), default=-1) + 1
     blocks = []
     for e in entries[start:]:
+        if _is_feedback(e):
+            blocks.append({"type": "feedback"})
+            continue
         content = (e.get("message") or {}).get("content") if e.get("type") == "assistant" else None
         if isinstance(content, list):
             blocks += [c for c in content if isinstance(c, dict)]
@@ -157,12 +171,17 @@ def turn_text(transcript: Path) -> str:
     return "\n".join(b.get("text", "") for b in _turn_blocks(transcript) if b.get("type") == "text")
 
 
-def turn_problems(transcript: Path) -> list[str]:
-    """규칙 1·2·5(답 글), 3(권하는데 기록을 안 찾음), 4(advisor 없이 결과), 6(영어 답)."""
+def turn_problems(transcript: Path, last_message: str = "") -> list[str]:
+    """규칙 1·2·5(답 글), 3(권하는데 기록을 안 찾음), 4(advisor 없이 결과), 6(영어 답).
+    글은 마지막으로 막은 뒤의 것 + 기록에 아직 없을 수 있는 마지막 답(last_message), 도구 호출은 차례 전체."""
     blocks = _turn_blocks(transcript)
-    text = "\n".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+    cut = max((i for i, b in enumerate(blocks) if b.get("type") == "feedback"), default=-1) + 1
+    texts = [b.get("text", "") for b in blocks[cut:] if b.get("type") == "text"]
+    if last_message.strip() and last_message.strip() not in "\n".join(texts):
+        texts.append(last_message)
+    text = "\n".join(texts)
     found = problems(text)
-    found += english_problems([b.get("text", "") for b in blocks if b.get("type") == "text"])
+    found += english_problems(texts)
     searched = any(b.get("type") == "tool_use" and _reads_records(b.get("name", ""), b.get("input") or {}) for b in blocks)
     recommends = any(RECOMMENDS.search(line) and not PAST.search(line) for line in text.splitlines())
     if recommends and not searched:
@@ -179,7 +198,7 @@ def main() -> int:
     data = json.load(sys.stdin)
     if data.get("stop_hook_active") or not data.get("transcript_path"):
         return 0
-    found = turn_problems(Path(data["transcript_path"]))
+    found = turn_problems(Path(data["transcript_path"]), data.get("last_assistant_message") or "")
     if found:
         print(json.dumps({"decision": "block", "reason": "답을 고쳐 다시 낸다(HISTORY [378]): " + " / ".join(found)}, ensure_ascii=False))
     return 0

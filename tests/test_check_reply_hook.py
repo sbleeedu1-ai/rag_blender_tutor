@@ -209,3 +209,33 @@ def test_문장_첫_대문자_낱말과_아포스트로피가_있어도_막힌�
 def test_한글이_없는_짧은_영어_말도_막힌다(tmp_path):
     for reply in ("Writing the failing tests first.", "Pack 01's count matches (60 answers). Starting pack 14."):  # 지난 세션 실제 진행 말
         assert any("영어" in h for h in check_reply.turn_problems(_turn(tmp_path, reply))), reply
+
+
+# 11-23 실제 일([604]): 이미 고쳐 낸 영어 줄에 백그라운드 알림 차례마다 다시 막혔고, 마지막 답의 '문턱'은 기록 파일에 늦게 써져 못 봤다.
+FEEDBACK = {"type": "user", "isMeta": True, "message": {"content": "Stop hook feedback:\n답을 고쳐 다시 낸다(HISTORY [378]): 답을 영어로 썼다"}}
+
+
+def test_훅이_막은_뒤에는_그_뒤_글만_본다(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    old = {"type": "assistant", "message": {"content": [{"type": "text", "text": ENGLISH_NOTE}]}}
+    fixed = {"type": "assistant", "message": {"content": [{"type": "text", "text": "아까 영어로 쓴 줄을 한국어로 고칩니다. 기록을 먼저 커밋합니다."}]}}
+    assert check_reply.turn_problems(_transcript(tmp_path, [human, old, FEEDBACK, fixed])) == []
+
+
+def test_훅이_막은_뒤_새로_쓴_영어는_막힌다(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    new = {"type": "assistant", "message": {"content": [{"type": "text", "text": "Now commit the record (durable), then advisor."}]}}
+    assert any("영어" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, FEEDBACK, new])))
+
+
+def test_기록에_아직_없는_마지막_답도_본다(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    last = "- Q14가 5회 중 0회에서 3회로 올랐고, 3회는 읽기 규칙의 문턱 그대로입니다."  # 11-23 실제 보고 줄
+    hits = check_reply.turn_problems(_transcript(tmp_path, [human]), last)
+    assert any("'문턱' → '기준값'" in h for h in hits)
+
+
+def test_막은_뒤에도_advisor와_기록_찾기는_차례_전체에서_본다(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    text = {"type": "assistant", "message": {"content": [{"type": "text", "text": NO_ADVISOR_1}]}}
+    assert not any("advisor" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, ADVISOR_RESULT, FEEDBACK, text])))
