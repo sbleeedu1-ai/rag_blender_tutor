@@ -4860,3 +4860,8 @@
 - 사용자: "오토 컴팩트를 줄여서 새로운 세션으로 이어 할거거든? 지금까지 한거 잘 기록해두고 그리고 이 세션 전용으로 걸린 훅도 옮겨야 하는거로 아는데 말이야".
 - 세션 전용인 훅은 `check_plan_steps.py` 하나다(38줄 `PLAN_SESSION`, [553]). `.claude/settings.json`의 다른 훅과 `~/.claude/settings.json`(빈 칸)은 세션 번호를 쓰지 않는다(grep으로 확인). 새 세션 번호는 그 세션이 시작해야 생기므로 지금 바꿀 수 없다. 그래서 HANDOFF "진짜 할 일" 1번에 새 세션이 첫 일로 번호를 찾아 바꾸고 시험을 돌리는 차례를 적었다.
 - HANDOFF 맨 위·진짜 할 일 3개를 오늘 상태로 고치고, 계획 문서 진행 기록 맨 앞에 "11-23 새 세션 여기서부터" 줄을 더함.
+
+### [599] 2026-11-23 · 계획 진행 규칙 훅이 새 세션에서도 걸리게, 훅의 세션 번호를 새 세션으로 바꾼다
+- 사용자: "AGENTS.md와 HANDOFF.md를 읽고 '다음 할 일' 1번부터 이어서 해." HANDOFF "진짜 할 일" 1번 차례대로 함([598]).
+- 새 세션 번호는 `ls -t ~/.claude/projects/-Volumes-mac-ssd-proj-rag-blender-tutor/*.jsonl | head -1`로 찾은 `bda88863-8f37-49b7-ae5d-6c0e322aaac1`(이 세션 스크래치패드 폴더 이름과 같음). `.claude/hooks/check_plan_steps.py` 38줄 `PLAN_SESSION`만 바꿈. `.venv/bin/python -m pytest tests/test_plan_steps_hook.py` 14 통과(Mac, 11-23). 이 시험은 `hook.PLAN_SESSION`을 그대로 넣어 부르므로 번호가 맞는지는 증명하지 못한다. 계획 파일에 Astra 표시 글자는 9곳 있음(grep).
+- 옮겨졌는지는 다음 사용자 메시지에 "[계획 진행 규칙, 7_전체계획.md 맨 위]" 상자가 뜨는지로 본다(아직 확인 못 함).
