@@ -3,7 +3,7 @@
 Windows를 직접 만지지 않는 판단만 본다. 실제로 창이 그렇게 움직이는지는 강의실 PC 눈 확인으로 본다.
 """
 
-from blender_tutor.window_rules import FrontBlender, Place, Screen, by_sentence, needs_move, place
+from blender_tutor.window_rules import FrontBlender, Place, Screen, by_sentence, needs_move, place, waiting_line
 
 ME = 900  # 도우미 프로그램의 프로세스 번호
 BLENDER_A, BLENDER_B, BROWSER = 111, 222, 333
@@ -90,3 +90,8 @@ def test_맨_위와_숨김은_앞_프로그램이_바뀌어도_다시_하지_않
     assert not needs_move(Place.TOP, 60, (Place.TOP, 50))  # Blender 둘 사이를 오감
     assert not needs_move(Place.HIDDEN, 60, (Place.HIDDEN, 50))
     assert needs_move(Place.TOP, 50, (Place.BEHIND, 50))
+
+
+def test_기다림_줄은_단계_이름과_보낸_뒤_흐른_초다():
+    assert waiting_line("설명서에서 찾는 중", 3.9) == "설명서에서 찾는 중 · 3초"
+    assert waiting_line(None, 0.2) == "질문을 보내는 중 · 0초"  # 첫 단계가 오기 전

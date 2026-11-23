@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 
-from blender_tutor.answer_engine import AnswerEngine, Done, Settings
+from blender_tutor.answer_engine import AnswerEngine, Done, Settings, Stage
 from blender_tutor.setting_fields import (
     MAX_LINES,
     SettingLines,
@@ -166,6 +166,15 @@ def test_분야_고르기가_한도를_넘기면_기다리지_않고_실패로_�
     events = list(engine(FakeFieldModel(wait=hold), FakeModel(), fallback, Settings(field_timeout=0.05)).answer("베벨", STATE, [], settings=SETTINGS))
     hold.set()
     assert events[-1].field_failed and fallback.calls
+
+
+def test_답_단계는_분야_고르기를_기다린_뒤에_낸다():
+    # 분야 고르기는 찾기와 나란히 돌고, 답변 모델은 고른 분야의 줄을 받아야 부를 수 있다(티켓 51, 실행 뒤 검토 M3)
+    hold = threading.Event()
+    threading.Timer(0.2, hold.set).start()
+    for event in engine(FakeFieldModel({"분야": ["MO"]}, wait=hold)).answer("베벨", STATE, [], settings=SETTINGS):
+        if event is Stage.ANSWER:
+            assert hold.is_set()
 
 
 def test_분야_묶음을_끄면_분야를_고르지_않고_늘_보내는_줄만_넘긴다():

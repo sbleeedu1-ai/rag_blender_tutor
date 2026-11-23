@@ -7,7 +7,7 @@
 from collections.abc import Callable
 from typing import Protocol
 
-from blender_tutor.answer_engine import Event, Failure
+from blender_tutor.answer_engine import Event, Failure, Stage
 from blender_tutor.conversation import Conversation, settings_record
 from blender_tutor.course_desk import CourseDesk
 from blender_tutor.receiver import Receiver
@@ -64,6 +64,8 @@ class QuestionFlow:
         step = self._desk.step(window)  # 답이 끝나도 진행은 그대로라 카드는 같은 단계에 머문다
 
         def work() -> None:
+            lap.saw(Stage.SETTINGS)
+            self._window_side.show(Stage.SETTINGS)
             # 설정 값은 입력을 시작할 때 미리 청해 둔다(helper). 지금 상태에서 읽은 것이 없으면 여기서 기다린다(답 스레드라 창은 안 멈춤)
             found = self._receiver.settings_for(window, self._settings_wait)
             # 설정 값이 있으면 그것을 읽은 순간의 작업 상태로 묻는다(기다리는 사이 Blender가 바뀌어도 둘이 어긋나지 않게)

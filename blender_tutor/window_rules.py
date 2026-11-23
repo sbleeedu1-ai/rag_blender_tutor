@@ -82,3 +82,11 @@ _SENTENCE_END = re.compile(r"((?<![0-9])\.|[!?])[ \t]+")
 def by_sentence(text: str) -> str:
     """문장 끝(. ! ? 뒤 빈칸)마다 줄을 바꾼다(HISTORY [18], 사용자 요청)."""
     return _SENTENCE_END.sub(r"\1\n", text)
+
+
+SENDING = "질문을 보내는 중"  # 보낸 뒤 첫 단계가 오기 전(답 모델 thinking을 꺼도 참인 말, 검토 1(b))
+
+
+def waiting_line(stage: str | None, seconds: float) -> str:
+    """답을 기다리는 동안 보일 한 줄: 지금 단계 이름과 보낸 뒤 흐른 초(티켓 51, 단계를 늘어놓지 않고 지금 것 하나만)."""
+    return f"{stage or SENDING} · {int(seconds)}초"

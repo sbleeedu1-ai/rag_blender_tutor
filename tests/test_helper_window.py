@@ -8,11 +8,11 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")  # QApplication보다 먼저
 
 import pytest
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
-from blender_tutor.answer_engine import Done, Failure, Piece, Source
+from blender_tutor.answer_engine import Done, Failure, Piece, Source, Stage
 from blender_tutor.course_desk import Line, LineKind, StepView
 from blender_tutor.helper_window import COURSES_UNREADABLE, PICK_HINT, HelperWindow, resize_edges
 from blender_tutor.progress import Course, Operation, Step
@@ -78,6 +78,32 @@ def test_답_조각을_이어_붙이고_문장마다_줄을_바꾼다(window):
     for text in ("Tab을 눌", "러요. Blender 5.", "2에서도 같아요."):
         window.show_answer_event(Piece(text))
     assert texts(window, "answer") == ["Tab을 눌러요.\nBlender 5.2에서도 같아요."]
+
+
+def test_답을_기다리는_동안_지금_단계와_흐른_초를_한_줄로_보이고_첫_조각에서_멈춘다(window):
+    type_and_enter(window, "가")
+    window.show_answer_event(Stage.REWRITE)
+    window.show_answer_event(Stage.SEARCH)
+    assert texts(window, "thinking") == ["설명서에서 찾는 중 · 0초"]  # 단계를 늘어놓지 않고 지금 것 하나만
+    assert window.waiting.isActive()
+    window.show_answer_event(Piece("답이에요."))
+    assert texts(window, "answer") == ["답이에요."] and not window.waiting.isActive()
+
+
+def test_기다리는_동안_타이머가_흐른_초를_고친다(window):
+    type_and_enter(window, "가")
+    window.show_answer_event(Stage.ANSWER)
+    window._sent_at -= 3  # 3초 전에 보낸 것으로
+    window.waiting.timeout.emit()
+    assert texts(window, "thinking") == ["답을 만드는 중 · 3초"]
+
+
+def test_단계만_보이다_실패하면_기다림_줄을_거두고_멈춘다(window):
+    type_and_enter(window, "가")
+    window.show_answer_event(Stage.ANSWER)
+    window.show_answer_event(Failure("답이 너무 늦어져 멈췄어요."))
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)  # deleteLater로 지운 줄을 지금 치운다
+    assert texts(window, "thinking") == [] and not window.waiting.isActive()
 
 
 def test_근거는_끝에_접힌_한_줄로_붙고_누르면_링크와_그림_영상_표시가_펼쳐지며_다시_보낼_수_있다(window):

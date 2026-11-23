@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from blender_tutor.answer_engine import Done, Failure, Piece, Settings
+from blender_tutor.answer_engine import Done, Failure, Piece, Settings, Stage
 from blender_tutor.conversation import Conversation
 from blender_tutor.course_desk import CourseDesk
 from blender_tutor.progress import Course, Step
@@ -110,10 +110,10 @@ def test_F10을_누른_Blender의_작업_상태와_지금_단계로_답하고_�
     desk.forward(2)  # 2단계(부품 합치기)
     make(engine := FakeEngine()).ask("합치려면?")
     assert engine.got == [(WorkState.from_json(OBJECT_MODE), [], SWORD.steps[1])]
-    assert side.shown == [Piece("합치려면?의 "), Piece("답"), Done((), ())]
+    assert side.shown == [Stage.SETTINGS, Piece("합치려면?의 "), Piece("답"), Done((), ())]  # 설정 값을 기다리는 동안도 창이 비지 않게
     [line] = timings(tmp_path)
     assert (line["engine"], line["settings"]["recent_pairs"], line["outcome"]) == ("stand_in", 3, "done")
-    assert line["first_piece"] is not None
+    assert line["first_piece"] is not None and [name for name, _ in line["stages"]] == ["Blender 설정을 읽는 중"]
 
 
 def test_중간에_실패한_답은_다음_질문의_최근_대화에_들어가지_않는다(tmp_path, make, receiver, side):
@@ -134,3 +134,12 @@ def test_그_Blender가_지금_상태에서_읽은_설정_값을_엔진에_넘�
     send(receiver, 1, 100, EDITING, settings=lines)
     make(engine := FakeEngine()).ask("베벨은?")
     assert engine.settings_got == SettingLines.from_json(lines)
+
+
+def test_설정_읽기_단계는_설정_값을_기다리기_전에_창에_보인다(make, receiver, side, monkeypatch):
+    seen_when_waiting = []
+    wait = receiver.settings_for
+    monkeypatch.setattr(receiver, "settings_for", lambda *args: (seen_when_waiting.append(list(side.shown)), wait(*args))[1])
+    send(receiver, 1, 100, EDITING)
+    make(FakeEngine()).ask("베벨은?")
+    assert seen_when_waiting == [[Stage.SETTINGS]]  # 기다리는 몇 초 동안 창이 이 단계를 보인다(검토 M1)

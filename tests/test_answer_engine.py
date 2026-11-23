@@ -22,6 +22,7 @@ from blender_tutor.answer_engine import (
     Reasoning,
     Settings,
     Source,
+    Stage,
     _terms_for,
 )
 from blender_tutor.claude_model import ClaudeModel
@@ -71,6 +72,7 @@ STATE = WorkState(
 )
 TIMEOUT_MESSAGE = "답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
 ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물어봐 주세요."
+ANSWERING = [Stage.SEARCH, Stage.ANSWER]  # 질문 바꾸기 없는 엔진이 답변 모델을 부르기까지 내는 단계(티켓 51)
 
 
 class FakeEmbedder:
@@ -128,8 +130,8 @@ def sources_by_url(events) -> dict[str, Source]:
 
 def test_답_조각이_나오는_대로_흐르고_끝에_근거가_붙는다():
     events = ask()
-    assert events[:3] == [Piece("베벨 "), Piece("모디파이어의 "), Piece("Width를 바꾸세요.")]
-    assert isinstance(events[3], Done) and len(events) == 4
+    assert events[:5] == [*ANSWERING, Piece("베벨 "), Piece("모디파이어의 "), Piece("Width를 바꾸세요.")]
+    assert isinstance(events[5], Done) and len(events) == 6
 
 
 def test_같은_질문을_두_번_하면_같은_답과_근거가_나온다():
@@ -406,7 +408,7 @@ def test_임베딩이_글_수와_다른_개수의_벡터를_주면_잘못된_응
             return super().embed(texts, timeout)[:-1]
 
     model = FakeModel()
-    assert ask(embedder=OneShort(), model=model) == [Failure(ERROR_MESSAGE)]
+    assert ask(embedder=OneShort(), model=model) == [Stage.SEARCH, Failure(ERROR_MESSAGE)]
     assert model.calls == []
 
 
@@ -546,33 +548,33 @@ SEARCHED = tuple(found(ask()))  # 기본 질문("베벨")의 검색 결과. 검�
 
 
 def test_답변_모델이_시간_초과면_짧은_오류_표시():
-    assert ask(model=FakeModel(pieces=(), error=TimeoutError())) == [Failure(TIMEOUT_MESSAGE, SEARCHED)]
+    assert ask(model=FakeModel(pieces=(), error=TimeoutError())) == [*ANSWERING, Failure(TIMEOUT_MESSAGE, SEARCHED)]
 
 
 def test_답변_모델이_첫_조각_전에_실패하면_오류_표시():
-    assert ask(model=FakeModel(pieces=(), error=ConnectionError("끊김"))) == [Failure(ERROR_MESSAGE, SEARCHED)]
+    assert ask(model=FakeModel(pieces=(), error=ConnectionError("끊김"))) == [*ANSWERING, Failure(ERROR_MESSAGE, SEARCHED)]
 
 
 def test_답_도중_오류가_나면_나온_조각_뒤에_오류_표시와_검색_결과가_오고_근거는_없다():
     events = ask(model=FakeModel(pieces=("베벨 ",), error=ConnectionError("끊김")))
-    assert events == [Piece("베벨 "), Failure(ERROR_MESSAGE, SEARCHED)]
+    assert events == [*ANSWERING, Piece("베벨 "), Failure(ERROR_MESSAGE, SEARCHED)]
     assert len(SEARCHED) == 6  # 검색 결과는 평가용으로 그대로 남는다
 
 
 def test_답_도중_시간_초과도_나온_조각_뒤에_오류_표시():
     events = ask(model=FakeModel(pieces=("베벨 ", "모디파이어의 "), error=TimeoutError()))
-    assert events == [Piece("베벨 "), Piece("모디파이어의 "), Failure(TIMEOUT_MESSAGE, SEARCHED)]
+    assert events == [*ANSWERING, Piece("베벨 "), Piece("모디파이어의 "), Failure(TIMEOUT_MESSAGE, SEARCHED)]
 
 
 def test_임베딩이_시간_초과면_검색_전이라_검색_결과_없이_오류_표시를_내고_답변_모델은_부르지_않는다():
     model = FakeModel()
-    assert ask(embedder=FakeEmbedder(error=TimeoutError()), model=model) == [Failure(TIMEOUT_MESSAGE)]
+    assert ask(embedder=FakeEmbedder(error=TimeoutError()), model=model) == [Stage.SEARCH, Failure(TIMEOUT_MESSAGE)]
     assert model.calls == []
 
 
 def test_임베딩이_실패하면_오류_표시를_내고_답변_모델은_부르지_않는다():
     model = FakeModel()
-    assert ask(embedder=FakeEmbedder(error=ConnectionError("끊김")), model=model) == [Failure(ERROR_MESSAGE)]
+    assert ask(embedder=FakeEmbedder(error=ConnectionError("끊김")), model=model) == [Stage.SEARCH, Failure(ERROR_MESSAGE)]
     assert model.calls == []
 
 
@@ -587,7 +589,7 @@ def test_우리_코드의_오류는_오류_표시로_덮지_않고_그대로_올
 def test_임베딩이_모두_0인_벡터를_주면_잘못된_응답으로_보고_오류_표시():
     # 모두 0이면 뜻 점수가 다 같아 청크 저장 순서가 그대로 순위가 된다(의미 없는 검색 결과)
     model = FakeModel()
-    assert ask(embedder=FakeEmbedder([0.0, 0.0, 0.0]), model=model) == [Failure(ERROR_MESSAGE)]
+    assert ask(embedder=FakeEmbedder([0.0, 0.0, 0.0]), model=model) == [Stage.SEARCH, Failure(ERROR_MESSAGE)]
     assert model.calls == []
 
 
@@ -692,7 +694,7 @@ def test_표시가_닫히기_전에_답이_끊겨도_받은_글을_내고_오류
     names = MenuNames(SCREEN_NAMES)
     model = FakeModel(("[[Add >",), error=ConnectionError("끊김"))
     events = list(AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), model, menu_names=names).answer("추가", KOREAN_SCREEN, []))
-    assert events[0] == Piece("Add >") and isinstance(events[1], Failure)
+    assert events[:3] == [*ANSWERING, Piece("Add >")] and isinstance(events[3], Failure)
 
 
 def test_답변_모델에게_메뉴_이름을_영어로_표시해_쓰라고_지시한다():
@@ -821,16 +823,56 @@ def test_맥락이_있으면_질문_아래에_참고로_붙이고_먼저_볼_소
     )
 
 
+# 기다리는 동안 단계 보이기(티켓 51)
+
+
+class Journal:
+    """가짜 부품이 불린 차례와 엔진이 낸 단계를 한 줄로 적는다(단계가 그 호출보다 먼저 왔는지 보려고)."""
+
+    def __init__(self):
+        self.lines: list[str] = []
+
+    def wrap(self, name, method):
+        def called(*args, **kwargs):
+            self.lines.append(name)
+            return method(*args, **kwargs)
+        return called
+
+
+def test_단계는_엔진이_그_단계의_호출에_들어가기_바로_전에_하나씩_낸다():
+    journal = Journal()
+    rewriter, embedder, model = FakeRewriter(), FakeEmbedder(), FakeModel()
+    rewriter.stream = journal.wrap("질문 바꾸기 부름", rewriter.stream)
+    embedder.embed = journal.wrap("임베딩 부름", embedder.embed)
+    model.stream = journal.wrap("답변 모델 부름", model.stream)
+    engine = AnswerEngine(CHUNKS, VECTORS, embedder, model, rewriters=[rewriter])
+    for event in engine.answer("배열로 복사하려면?", STATE, []):
+        journal.lines.append(event.value if isinstance(event, Stage) else type(event).__name__)
+    assert journal.lines == [
+        Stage.REWRITE.value, "질문 바꾸기 부름", Stage.SEARCH.value, "임베딩 부름", Stage.ANSWER.value, "답변 모델 부름",
+        "Piece", "Piece", "Piece", "Done",
+    ]
+
+
+def test_질문_바꾸기가_없는_엔진은_그_단계를_내지_않는다():
+    assert [event for event in ask() if isinstance(event, Stage)] == [Stage.SEARCH, Stage.ANSWER]
+
+
+def test_단계_이름은_생각을_끄든_켜든_참인_쉬운_말이다():
+    # 답 모델 thinking이 none이 될 수 있어([578]) '생각하는 중'처럼 켠 때만 맞는 말은 쓰지 않는다
+    assert [stage.value for stage in Stage] == ["Blender 설정을 읽는 중", "질문을 정리하는 중", "설명서에서 찾는 중", "답을 만드는 중"]
+
+
 def test_질문_바꾸기가_모두_실패하면_한국어_질문으로_찾지_않고_오류_표시로_멈춘다():
     embedder, model = FakeEmbedder(), FakeModel()
     events = ask_rewritten([FakeRewriter(error=OSError("연결 끊김")), FakeRewriter("검색어 아님")], embedder=embedder, model=model)
-    assert events == [Failure(ERROR_MESSAGE)]
+    assert events == [Stage.REWRITE, Failure(ERROR_MESSAGE)]  # 찾기·답 단계는 들어가지 않았으니 내지 않는다
     assert embedder.calls == [] and model.calls == []
 
 
 def test_오류_표시로_멈추면_어떤_답이_와서_실패했는지_기록에_남긴다(caplog):
     events = ask_rewritten([FakeRewriter("[]")])
-    assert events == [Failure(ERROR_MESSAGE)]
+    assert events == [Stage.REWRITE, Failure(ERROR_MESSAGE)]
     assert "ValueError" in caplog.text and "'[]'" in caplog.text
 
 
@@ -839,7 +881,7 @@ def test_질문_바꾸기가_한도_안에_하나도_오지_않으면_시간_초
     model = FakeModel()
     events = ask_rewritten([FakeRewriter(release=never), FakeRewriter(release=never)], model=model, settings=Settings(rewrite_timeout=0.05))
     never.set()
-    assert events == [Failure(TIMEOUT_MESSAGE)] and model.calls == []
+    assert events == [Stage.REWRITE, Failure(TIMEOUT_MESSAGE)] and model.calls == []
 
 
 def test_예열은_질문_바꾸기_하나와_임베딩을_한_번씩_부른다():
@@ -1382,12 +1424,12 @@ class _ClaudeClient:
 def test_실제_Claude_연결에서_답_도중_바이트가_끊겨_늦으면_시간_초과_문구를_보인다():
     error = httpx2.ReadTimeout("The read operation timed out")
     model = ClaudeModel("claude-haiku-5-5", "k", "medium", client=_ClaudeClient(error=error))
-    assert ask(model=model) == [Failure(TIMEOUT_MESSAGE, SEARCHED)]
+    assert ask(model=model) == [*ANSWERING, Failure(TIMEOUT_MESSAGE, SEARCHED)]
 
 
 def test_실제_Claude_연결에서_생각이_한도를_다_써_글이_0자면_빈_답_대신_오류_표시():
     model = ClaudeModel("claude-haiku-5-5", "k", "medium", client=_ClaudeClient(stop="max_tokens"))
-    assert ask(model=model) == [Failure(ERROR_MESSAGE, SEARCHED)]
+    assert ask(model=model) == [*ANSWERING, Failure(ERROR_MESSAGE, SEARCHED)]
 
 
 # 차례 9번(계획 4-1): 환경 설정 안의 탭으로 가는 길인데 여는 길이 없으면 "편집(Edit) > "을 채운다(설명서 "Menu: Edit ‣ Preferences…",

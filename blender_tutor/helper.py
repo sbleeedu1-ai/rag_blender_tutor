@@ -61,7 +61,7 @@ class _Bridge(QObject):
 
     summoned = Signal(int, object)  # F10을 누른 Blender 창 번호, 누른 시각(없으면 None)
     message = Signal(object)  # 받은 봉투(진행 관리에 넘긴다)
-    answer_event = Signal(object)  # 답 사건(Piece·Done·Failure)
+    answer_event = Signal(object)  # 답 사건(Stage·Piece·Done·Failure)
     no_blender = Signal()  # 켜진 Blender가 없어 끝낼 때
 
 

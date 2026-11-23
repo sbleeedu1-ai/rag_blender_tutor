@@ -211,6 +211,16 @@ class Settings:
         object.__setattr__(self, "fallback_reasoning", Reasoning(self.fallback_reasoning))
 
 
+class Stage(StrEnum):
+    """답을 기다리는 동안 창에 보일 지금 단계(티켓 51). 엔진·질문 한 번이 실제로 그 단계에 들어가기 바로 전에 낸다.
+    답 모델 thinking을 끈 때도 참인 말로 쓴다([578]로 none이 될 수 있음)."""
+
+    SETTINGS = "Blender 설정을 읽는 중"  # 질문 한 번이 애드온의 설정 값을 기다림
+    REWRITE = "질문을 정리하는 중"  # 쿼리 재작성
+    SEARCH = "설명서에서 찾는 중"  # 임베딩·검색(분야 선택도 이때 함께 돈다)
+    ANSWER = "답을 만드는 중"  # 답변 모델을 부른 뒤 첫 글자까지
+
+
 @dataclass(frozen=True)
 class Piece:
     """답 글 조각 하나. 나오는 대로 창에 이어 붙인다."""
@@ -258,7 +268,7 @@ class Failure:
     results: tuple[Chunk, ...] = ()
 
 
-Event = Piece | Done | Failure
+Event = Stage | Piece | Done | Failure
 
 
 class AnswerEngine:
@@ -333,12 +343,15 @@ class AnswerEngine:
         # 검색·글 만들기 같은 우리 코드의 오류는 그대로 올려 보내 버그가 "잠시 뒤 다시"에 숨지 않게 한다.
         # 질문 바꾸기가 모두 실패하거나 늦으면 한국어 질문으로 찾지 않고 멈춘다(엉뚱한 근거로 답하지 않게, [127])
         try:
+            if rewrite:
+                yield Stage.REWRITE
             query = self._rewritten(rewrite) if rewrite else "\n".join([question, *context.values()])
             # 분야 고르기는 바꾼 검색어가 나온 뒤 임베딩과 동시에 부른다(명세). 실패해도 답은 멈추지 않는다(묶음 없이 답함)
             chosen = self._start_fields(question, query, state) if settings is not None and self._field_model and self._settings.field_lines else None
             # 비슷한 연습 과정은 검색어(직전 질문·조작에 끌림)가 아니라 질문만으로 고른다.
             # 질문만의 벡터는 따로 부르지 않고 같은 호출에 글을 하나 더 실어 받는다(비용은 질문 길이만큼 늚)
             texts = [query, question] if recommend and question != query else [query]
+            yield Stage.SEARCH
             vectors = self._embedder.embed(texts, self._settings.timeout)
             if len(vectors) != len(texts):
                 raise ValueError(f"임베딩이 글 {len(texts)}개에 벡터 {len(vectors)}개를 돌려줌")
@@ -357,6 +370,7 @@ class AnswerEngine:
         similar = self._similar_courses(vectors[-1]) if recommend else []
         messages = _messages(question, state, recent, self._widened(sent, preview), similar, step, lines)
         marks = _MenuMarks(self._menu_names if state.korean_screen else None, question, _object_names(state))
+        yield Stage.ANSWER
         try:
             for text in model.stream(messages, self._settings.answer_timeout, first_timeout=self._settings.answer_first_timeout):
                 if text := marks.feed(text):

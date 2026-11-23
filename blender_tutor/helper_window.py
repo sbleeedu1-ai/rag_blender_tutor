@@ -11,8 +11,9 @@
 
 import html
 import sys
+import time
 
-from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRect, Qt, Signal
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -33,10 +34,10 @@ from PySide6.QtWidgets import (
     QWidgetAction,
 )
 
-from blender_tutor.answer_engine import Done, Event, Failure, Piece, Source
+from blender_tutor.answer_engine import Done, Event, Failure, Piece, Source, Stage
 from blender_tutor.course_desk import Line, LineKind, StepView
 from blender_tutor.progress import Course
-from blender_tutor.window_rules import by_sentence
+from blender_tutor.window_rules import SENDING, by_sentence, waiting_line
 
 WIDTH, HEIGHT = 420, 560  # 처음 크기(시제품 위젯 판에서 사용자가 써 본 크기)
 MIN_WIDTH, MIN_HEIGHT = 300, 220  # 줄여도 입력칸과 최근 답 몇 줄은 보이는 크기
@@ -46,7 +47,6 @@ CORNER = 24  # 모서리에서 이만큼 안쪽 네모를 끌면 대각선 조�
 MOVE_BAND = 40  # 맨 위 이 높이 안을 끌면 창 옮기기
 PANEL_ALPHA = 235  # 판 진하기(0-255, 사용자 결정 HISTORY [18])
 FONT = "Apple SD Gothic Neo" if sys.platform == "darwin" else "Malgun Gothic"  # 운영체제 기본 한글 글꼴(HISTORY [312])
-THINKING = "생각 중…"
 COURSES_UNREADABLE = "연습 과정 파일을 읽지 못했어요. 질문은 그대로 할 수 있어요."  # 검 파일이 늘 있으니 빈 목록은 읽기 실패
 STEP_ROWS = 5  # '단계 ▼' 목록에 한 번에 보이는 줄 수(넘으면 스크롤, 사용자 결정)
 PICK_HINT = "목록에 없으면 만들고 싶은 것을 아래에 물어보세요. 비슷한 연습 과정을 알려 드려요. 연습 과정 없이 질문만 해도 돼요."
@@ -125,6 +125,9 @@ class HelperWindow(QWidget):
         self._typing = False  # 입력칸에 쓰던 글이 있나(started_typing을 질문마다 한 번만 알리려고)
         self._answer: QLabel | None = None
         self._answer_text = ""
+        self._stage: str | None = None  # 답을 기다리는 동안 보일 지금 단계(티켓 51)
+        self._sent_at = 0.0  # 보낸 시각(time.monotonic), 흐른 초를 셀 때
+        self.waiting = QTimer(self, interval=200, timeout=self._show_waiting)  # 첫 글자까지 흐른 초를 고친다(1초 간격이면 최대 1초 늦게 보여 0.2초)
         self._course_labels: tuple[str, ...] = ()  # 고르기 버튼·바꾸기 메뉴를 만든 연습 과정 목록
         self._steps_for: Course | None = None  # 단계 목록을 만든 연습 과정
         self._marked = -1  # 단계 목록에서 ▶로 표시한 줄(0부터)
@@ -361,19 +364,27 @@ class HelperWindow(QWidget):
         self._typing = False
         self._busy = True
         self._label(question, "question")
-        self._answer = self._label(THINKING, "thinking")
+        self._answer = self._label(SENDING, "thinking")
         self._answer_text = ""
+        self._stage, self._sent_at = None, time.monotonic()
+        self._show_waiting()
+        self.waiting.start()
         self.asked.emit(question)
 
     def show_answer_event(self, event: Event) -> None:
-        """답 사건 하나를 그린다: 조각은 이어 붙이고, 끝이면 근거 카드, 오류면 짧은 문구."""
+        """답 사건 하나를 그린다: 단계는 기다림 줄을 바꾸고, 조각은 이어 붙이고, 끝이면 근거 카드, 오류면 짧은 문구."""
+        if isinstance(event, Stage):
+            self._stage = event.value
+            self._show_waiting()
+            return
+        self.waiting.stop()  # 지운 기다림 줄에 글을 쓰지 않게 바꾸거나 지우기 전에 멈춘다
         if isinstance(event, Piece):
-            if not self._answer_text:  # 첫 조각: "생각 중…"을 답 글씨로 바꾼다
+            if not self._answer_text:  # 첫 조각: 기다림 줄을 답 글씨로 바꾼다
                 self._restyle(self._answer, "answer")
             self._answer_text += event.text
             self._answer.setText(by_sentence(self._answer_text))
             return
-        if not self._answer_text:  # 조각 없이 끝났으면 "생각 중…"을 치운다
+        if not self._answer_text:  # 조각 없이 끝났으면 기다림 줄을 치운다
             self._answer.deleteLater()
         if isinstance(event, Done) and event.sources:
             self._chat.addWidget(_sources_card(event.sources))
@@ -381,6 +392,10 @@ class HelperWindow(QWidget):
             self._label(event.message, "failure")
         self._answer = None
         self._busy = False
+
+    def _show_waiting(self) -> None:
+        """기다림 줄을 지금 단계와 보낸 뒤 흐른 초로 고친다. 타이머는 첫 조각·끝·실패에서 멈추므로 기다리는 동안에만 불린다."""
+        self._answer.setText(waiting_line(self._stage, time.monotonic() - self._sent_at))
 
     def _label(self, text: str, name: str) -> QLabel:
         label = QLabel(text)
