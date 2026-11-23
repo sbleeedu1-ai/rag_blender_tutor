@@ -194,9 +194,11 @@ class Settings:
     rewrite_timeout: float = 5.0  # 질문 바꾸기를 동시에 부른 것 중 하나라도 올 때까지 기다리는 한도(초, [127])
     field_timeout: float = 5.0  # 분야 고르기 한도(초). 넘기면 묶음 없이 답한다(명세 "분야 고르기", Claude가 정한 값)
     use_bm25: bool = False  # 낱말 검색(BM25)을 섞을지. 끄면 뜻 검색만(티켓 40 결과로 끔, HISTORY [102])
-    # 답변 모델의 생각 수준(명세 기본 none). 엔진을 만들 때 답변 모델에 넘기고(engine_setup), 시간 기록에 남긴다
-    reasoning: Reasoning = Reasoning.NONE
-    # 분야 고르기가 실패해 묶음 없이 답할 때의 생각 수준(명세 처음 low, 사용자 "묶음이 실패해서 빠질 경우엔 생각을 키도록", [270])
+    # 답변 모델의 생각 수준. 엔진을 만들 때 답변 모델에 넘기고(engine_setup), 시간 기록에 남긴다.
+    # 기본 low(결정 7, 사용자 "그럼 답 모델은 일단 low 로 가자", [578]). 검색 차례가 모두 실패하면 none으로 되돌린다(같은 결정)
+    reasoning: Reasoning = Reasoning.LOW
+    # 분야 고르기가 실패해 묶음 없이 답할 때의 생각 수준(명세 처음 low, 사용자 "묶음이 실패해서 빠질 경우엔 생각을 키도록", [270]).
+    # 본 수준도 low라 지금은 올리지 않는다(fallback_level이 높은 쪽을 고름, medium은 low보다 나은 곳이 없고 느렸음, [578])
     fallback_reasoning: Reasoning = Reasoning.LOW
     # 설정 값의 1-a(그 상황일 때 늘)·2(계산) 초안 줄을 넘길지. 개발셋에서 끈 판과 견준다(사용자 "어차피 할거면 … 지금 하는게", [270])
     situation_lines: bool = True

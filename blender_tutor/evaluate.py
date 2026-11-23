@@ -45,9 +45,10 @@ EMBEDDINGS = engine_setup.EMBEDDINGS
 # 차례 하나의 어림 요금(달러). Haiku 5.5 실측에 약 10%를 얹었다(적게 보이지 않게). 잰 적 없는 조합은 숫자를 두지 않는다(docs/plan/01 E).
 # 답변(생각 수준, 설정 값을 보낸 차례인가): 생각 끔 + 설정 값 있음은 11-17 마지막 확인 54차례 $0.0976·11-14 천장 측정 바탕 $0.0954·
 # [410] 324차례 $0.577 → 약 $0.0018, 생각 끔 + 설정 값 없음은 11-17 설정값off 10차례 × 3번 $0.0080-0.0084 → 약 $0.00082.
-# 생각을 켠 Haiku 답(low·medium)은 evaluate로 잰 기록이 없다. 질문 바꾸기 3번은 [279] 147질문 $0.0882 → 약 $0.0006.
+# 생각 low + 설정 값 있음은 차례 4번 L 조건(low·분야 있음·실제 검색 270답, 1회, evaluate가 아닌 실행 스크립트) 답 하나 $0.00215 → 약 $0.0024.
+# medium과 설정 값 없는 low는 숫자를 두지 않는다(기본은 low, [578]). 질문 바꾸기 3번은 [279] 147질문 $0.0882 → 약 $0.0006.
 # 분야 고르기·임베딩은 기록이 없어 넣지 않는다(호출.jsonl의 호출 종류별 요금으로 처음 잰다). 이전 값(none $0.00064)은 luna 때 것이었다
-ANSWER_DOLLARS = {(Reasoning.NONE, True): 0.0020, (Reasoning.NONE, False): 0.0009}
+ANSWER_DOLLARS = {(Reasoning.NONE, True): 0.0020, (Reasoning.NONE, False): 0.0009, (Reasoning.LOW, True): 0.0024}
 REWRITE_DOLLARS = 0.00066
 RERANKERS = ("끔",)
 

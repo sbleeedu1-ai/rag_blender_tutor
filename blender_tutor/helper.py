@@ -44,7 +44,7 @@ from blender_tutor.timing import Stopwatch
 from blender_tutor.window_rules import FrontBlender, Place, Screen, needs_move, place
 
 WARM_UP_ENV = "BLENDER_TUTOR_WARM_UP"  # 1이면 엔진을 만든 뒤 예열한다(질문 바꾸기·임베딩을 한 번씩, 돈이 아주 조금 든다)
-REASONING_ENV = "BLENDER_TUTOR_REASONING"  # 답변 모델의 생각 수준(none·low·medium). 없으면 명세 기본 none(티켓 33 실측용)
+REASONING_ENV = "BLENDER_TUTOR_REASONING"  # 답변 모델의 생각 수준(none·low·medium). 없으면 Settings 기본 low([578])
 
 FOLLOW_EVERY_MS = 100  # Blender를 따라 창 자리를 다시 보는 간격
 ACTIVATION_SETTLE_MS = 120  # Mac: 앞 앱이 바뀐 뒤 그 앱의 창이 맨 위로 올라올 때까지 기다렸다 자리를 다시 맞추는 시간

@@ -706,7 +706,7 @@ def test_생각_수준은_정해_둔_이름만_받는다():
 
     값은 명세의 none·low·medium. 실제 모델이 받는 값은 티켓 33에서 맞춘다.
     """
-    assert Settings().reasoning is Reasoning.NONE
+    assert Settings().reasoning is Reasoning.LOW  # 결정 7: 기본 low(사용자 "그럼 답 모델은 일단 low 로 가자", HISTORY [578])
     assert Settings(reasoning="low").reasoning is Reasoning.LOW
     with pytest.raises(ValueError):
         Settings(reasoning="nnoe")

@@ -425,11 +425,14 @@ def test_아직_없는_리랭커나_임베딩은_고를_수_없다(tmp_path):
 def test_run은_yes가_없으면_어림_비용만_보이고_돌리지_않는다(tmp_path, capsys):
     made_models.clear()
     argv = ["run", *options(tmp_path, "--name", "기준", "--data", str(tmp_path / "data"))]
-    assert main(argv, now=datetime(2026, 10, 26, 9, 5)) == 2
+    # 이 두 차례는 설정 값이 없어, 그 꼴을 잰 생각 끔으로 어림을 본다(기본 low는 설정 값 없음을 잰 적이 없다)
+    assert main([*argv, "--reasoning", "none"], now=datetime(2026, 10, 26, 9, 5)) == 2
     said = capsys.readouterr().err
     assert "차례 2개(설정 값 있음 0개) 어림 약 $0.0031 = 답변 $0.0018 + 질문 바꾸기 $0.0013" in said
     assert "분야 고르기·임베딩은 잰 적이 없어 뺐음" in said
-    # 잰 적 없는 생각 수준은 숫자를 지어내지 않는다
+    # 잰 적 없는 생각 수준(기본 low의 설정 값 없음 포함)은 숫자를 지어내지 않는다
+    assert main(argv, now=datetime(2026, 10, 26, 9, 5)) == 2
+    assert "low은 잰 적이 없어" in capsys.readouterr().err
     assert main([*argv, "--reasoning", "medium"], now=datetime(2026, 10, 26, 9, 5)) == 2
     assert "medium은 잰 적이 없어" in capsys.readouterr().err
     assert made_models == [] and not (tmp_path / "results").exists()
@@ -511,17 +514,24 @@ def test_설정_값_파일을_적은_차례는_그것을_읽고_없으면_설정
     (30, 0, 0.024698),  # 11-17 설정값off_1·2·3_재(설정 값 없음 10 × 3) 합
 ])
 def test_어림_답변_요금은_지난_실제_요금과_20퍼센트_안이다(turns, with_settings, actual):
-    answer, rewrite = evaluate.estimate_dollars(turns, with_settings, Settings())
+    answer, rewrite = evaluate.estimate_dollars(turns, with_settings, Settings(reasoning="none"))  # 견줄 실제 요금이 생각 끔 실행
     assert abs(answer / actual - 1) < 0.2
 
 
 def test_어림_질문_바꾸기_요금은_지난_실제_요금과_20퍼센트_안이다():
-    _, rewrite = evaluate.estimate_dollars(147, 147, Settings())
+    _, rewrite = evaluate.estimate_dollars(147, 147, Settings(reasoning="none"))
     assert abs(rewrite / 0.0881949 - 1) < 0.2  # [279] Haiku 질문 바꾸기 3번 × 147질문
 
 
 def test_잰_적_없는_생각_수준은_어림하지_않는다():
-    assert evaluate.estimate_dollars(10, 5, Settings(reasoning="low")) is None
+    assert evaluate.estimate_dollars(10, 5, Settings(reasoning="medium")) is None
+    assert evaluate.estimate_dollars(10, 5, Settings(reasoning="low")) is None  # low는 설정 값 있음만 잼(차례 4번 L 조건)
+
+
+def test_어림_답변_요금은_low_실측과_20퍼센트_안이다():
+    """기본이 low라(HISTORY [578]) 평가 실행 전 어림이 보여야 한다. 실제 요금은 차례 4번 L 조건(low·분야 있음·실제 검색, 설정 값 있음 270답, 1회)의 답 하나 값."""
+    answer, _ = evaluate.estimate_dollars(270, 270, Settings(reasoning="low"))
+    assert abs(answer / (270 * 0.00215) - 1) < 0.2
 
 
 def test_뒤에서_도는_호출을_기다리다_넘기면_멈추지_않고_그_차례에_표시한다():
