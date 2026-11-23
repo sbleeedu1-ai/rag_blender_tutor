@@ -102,12 +102,12 @@ PULSE = 1.2  # 지금 점의 밝기가 한 번 오르내리는 초
 def waiting_html(current: int, total: int, stage: str | None, seconds: float) -> str:
     """기다림 줄 앞에 단계 점을 붙인 서식 글(사용자 11-23 "o - o - o - o … 한 단계 넘어갈때마다 초록색으로").
 
-    지난 단계는 초록 ●, 지금 단계는 밝기가 오르내리는 초록 ●, 남은 단계는 회색 ○. 단계 이름은 서식으로 읽히지 않게 바꾼다.
+    지난 단계는 초록 ●, 지금 단계는 밝기가 오르내리는 빈 초록 ○(단계를 넘어가야 칠함), 남은 단계는 회색 ○. 단계 이름은 서식으로 읽히지 않게 바꾼다.
     """
     pulse = 0.35 + 0.65 * (0.5 + 0.5 * math.cos(2 * math.pi * seconds / PULSE))
     dots = []
     for i in range(total):
-        rgb, alpha, shape = (GREEN, 1.0, "●") if i < current else (GREEN, pulse, "●") if i == current else (GREY, 1.0, "○")
+        rgb, alpha, shape = (GREEN, 1.0, "●") if i < current else (GREEN, pulse, "○") if i == current else (GREY, 1.0, "○")
         dots.append(f"<span style='color:rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha:.2f})'>{shape}</span>")
     line = f"<span style='color:rgb{GREY}'> ─ </span>".join(dots)
     return f"{line}&nbsp;&nbsp;{html.escape(waiting_line(stage, seconds))}"

@@ -84,16 +84,18 @@ def test_쿼리_재작성을_건너뛴_엔진에서도_지금_점은_찾기_자�
     type_and_enter(window, "가")
     window.show_answer_event(Stage.SEARCH)  # 쿼리 재작성이 없는 엔진은 REWRITE를 내지 않는다
     [line] = window.findChildren(QLabel, "thinking")
-    assert line.text().count("●") == 3 and line.text().count("○") == 1
+    assert line.text().count("●") == 2 and line.text().count("○") == 2
 
 
 def test_답을_기다리는_동안_지금_단계와_흐른_초를_한_줄로_보이고_첫_조각에서_멈춘다(window):
     type_and_enter(window, "가")
+    [line] = window.findChildren(QLabel, "thinking")
+    assert line.text().count("●") == 0 and line.text().count("○") == 4  # 보내자마자 칠한 점이 없다(사용자 "왜 처음부터 1칸은 칠해져있지?")
     window.show_answer_event(Stage.REWRITE)
     window.show_answer_event(Stage.SEARCH)
     [line] = window.findChildren(QLabel, "thinking")
     assert line.textFormat() == Qt.RichText and line.text().endswith("설명서에서 찾는 중 · 0초")  # 단계 이름은 지금 것 하나만
-    assert line.text().count("●") == 3 and line.text().count("○") == 1  # 점 넷 가운데 셋째가 지금
+    assert line.text().count("●") == 2 and line.text().count("○") == 2  # 점 넷 가운데 셋째가 지금(빈 점)
     assert window.waiting.isActive()
     window.show_answer_event(Piece("<b>답</b>이에요."))
     [answer] = window.findChildren(QLabel, "answer")
