@@ -14,17 +14,17 @@ import sys
 import time
 
 from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRect, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPainterPath, QPen, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
     QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMenu,
+    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -69,7 +69,7 @@ QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::su
 #sourcesToggle {{ background: transparent; border: none; color: rgba(235,235,245,0.55); font-size: 12px; font-weight: 700; text-align: left; padding: 0; }}
 #sourcesToggle:hover {{ color: rgba(235,235,245,0.85); }}
 #input {{ background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px;
-          padding: 0 16px; font-size: 15px; color: white; selection-background-color: rgba(120,140,255,0.6); }}
+          padding: 6px 10px; font-size: 15px; color: white; selection-background-color: rgba(120,140,255,0.6); }}
 #input:focus {{ border: 1px solid rgba(160,175,255,0.45); }}
 #courseCard {{ background: rgba(255,255,255,0.07); border-radius: 14px; }}
 #stepHeader, #pickTitle {{ color: rgba(235,235,245,0.55); font-size: 12px; font-weight: 700; }}
@@ -92,6 +92,66 @@ QMenu::item {{ padding: 5px 14px; border-radius: 6px; }}
 QMenu::item:selected {{ background: rgba(120,140,255,0.45); }}
 """
 
+
+
+class QuestionBox(QPlainTextEdit):
+    """질문 입력칸: Enter는 보내고 Shift+Enter는 줄을 바꾼다(사용자 11-23 "쉬프트 엔터로 줄 바꾼 문장 입력도 안되네", HISTORY [617]).
+
+    줄이 늘면 칸이 MAX_LINES줄까지 자라고, 그 위로는 칸 안에서 넘긴다. 한 줄 칸(QLineEdit)일 때의 이름(text·setText·returnPressed·textEdited)을 그대로 둔다.
+    """
+
+    MAX_LINES = 5
+    returnPressed = Signal()
+    textEdited = Signal(str)  # 글이 바뀔 때마다 지금 글(프로그램이 바꾼 것 포함, 보낼 때 비우면 빈 글로 와 쓰던 표시가 풀린다)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setTabChangesFocus(True)
+        self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.textChanged.connect(self._changed)
+        self._fit()
+
+    def text(self) -> str:
+        return self.toPlainText()
+
+    def setText(self, text: str) -> None:
+        self.setPlainText(text)
+        self.moveCursor(QTextCursor.End)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            if event.modifiers() & Qt.ShiftModifier:
+                self.insertPlainText("\n")  # Qt 기본(Shift+Enter)은 줄 구분 글자 U+2028을 넣어(실행으로 확인, toRawText 'a\u2028b') 직접 줄바꿈 글자를 넣는다
+            else:
+                self.returnPressed.emit()
+            return
+        super().keyPressEvent(event)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._fit()  # 폭이 바뀌면 줄 접힘이 바뀐다
+
+    def _changed(self) -> None:
+        self._fit()
+        self.textEdited.emit(self.toPlainText())
+
+    def _fit(self) -> None:
+        """보이는 줄 수(접힌 줄 포함)에 맞춰 높이를 정한다. 한 줄이면 예전 한 줄 칸과 같은 42."""
+        lines = 0
+        block = self.document().begin()
+        while block.isValid():
+            lines += max(1, block.layout().lineCount())
+            block = block.next()
+        shown = min(max(lines, 1), self.MAX_LINES)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded if lines > self.MAX_LINES else Qt.ScrollBarAlwaysOff)
+        self.setFixedHeight(42 + (shown - 1) * self.fontMetrics().lineSpacing())  # 한 줄 가운데 맞춤은 스타일의 위아래 padding 6
+
+
+# 기다림 줄의 점이 가리키는 단계. 설정 읽기는 거의 늘 0초에 지나가 점을 따로 두지 않는다
+# (사용자 11-23 "1단계는 아무 짝에도 쓸모 없어보인다", 시간 기록 5/5에서 0.000초, HISTORY [617]).
+DOTTED = [Stage.REWRITE, Stage.SEARCH, Stage.ANSWER]
 
 class HelperWindow(QWidget):
     """도우미 창. Enter로 보낸 질문은 asked로 알리고, 답 사건은 show_answer_event로 받아 그린다(화면 스레드에서).
@@ -167,10 +227,9 @@ class HelperWindow(QWidget):
         root.addWidget(self._scroll, 1)
         root.addWidget(self._build_prompt())
 
-        self.input = QLineEdit()
+        self.input = QuestionBox()
         self.input.setObjectName("input")
-        self.input.setPlaceholderText("질문을 쓰고 Enter")
-        self.input.setFixedHeight(42)
+        self.input.setPlaceholderText("질문을 쓰고 Enter (줄 바꿈은 Shift+Enter)")
         self.input.returnPressed.connect(self._send)
         self.input.textEdited.connect(self._typed)
         root.addWidget(self.input)
@@ -360,7 +419,7 @@ class HelperWindow(QWidget):
         question = self.input.text().strip()
         if not question or self._busy:
             return
-        self.input.clear()  # 프로그램이 비운 것은 textEdited로 오지 않아 직접 되돌린다
+        self.input.clear()  # 비우면 칸 높이도 한 줄로 돌아간다
         self._typing = False
         self._busy = True
         self._label(question, "question")
@@ -396,9 +455,9 @@ class HelperWindow(QWidget):
 
     def _show_waiting(self) -> None:
         """기다림 줄을 지금 단계와 보낸 뒤 흐른 초로 고친다. 타이머는 첫 조각·끝·실패에서 멈추므로 기다리는 동안에만 불린다."""
-        current = 0 if self._stage is None else list(Stage).index(self._stage)  # 보낸 직후에는 첫 점이 깜빡인다
+        current = DOTTED.index(self._stage) if self._stage in DOTTED else 0  # 보낸 직후·설정 읽기는 첫 점이 깜빡인다
         self._answer.setTextFormat(Qt.RichText)  # 점 색은 서식 글이라 기다림 줄만 서식으로 읽는다(단계 이름은 waiting_html이 바꿔 둠)
-        self._answer.setText(waiting_html(current, len(Stage), self._stage, time.monotonic() - self._sent_at))
+        self._answer.setText(waiting_html(current, len(DOTTED), self._stage, time.monotonic() - self._sent_at))
 
     def _label(self, text: str, name: str) -> QLabel:
         label = QLabel(text)

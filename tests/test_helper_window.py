@@ -65,6 +65,29 @@ def test_Enter_한_번에_질문을_보내고_입력칸을_비운다(window):
     assert texts(window, "question") == ["베벨 어디 있어요?"]
 
 
+def test_Shift_Enter는_보내지_않고_줄을_바꾼다(window):
+    # 사용자 11-23 "쉬프트 엔터로 줄 바꾼 문장 입력도 안되네"
+    window.input.setText("베벨이")
+    QTest.keyClick(window.input, Qt.Key_Return, Qt.ShiftModifier)
+    QTest.keyClicks(window.input, "ok")  # 한글은 키 흉내가 안 돼(Qt가 멈춤) 영문으로
+    assert window.asked_questions == [] and window.input.text() == "베벨이\nok"
+    high = window.input.height()
+    QTest.keyClick(window.input, Qt.Key_Enter)  # 숫자판 Enter도 보낸다
+    assert window.asked_questions == ["베벨이\nok"] and texts(window, "question") == ["베벨이\nok"]
+    assert window.input.text() == "" and window.input.height() < high  # 보내면 칸이 다시 한 줄 높이로
+
+
+def test_빈_칸에_쓰기_시작하면_질문마다_한_번_알린다(window):
+    # 설정 값을 미리 청하는 때(HISTORY [270]). 입력칸을 여러 줄 칸으로 바꿔 알림 길이 바뀌어 지킨다([617])
+    started = []
+    window.started_typing.connect(lambda: started.append(1))
+    QTest.keyClicks(window.input, "ab")
+    assert len(started) == 1
+    QTest.keyClick(window.input, Qt.Key_Return)
+    QTest.keyClicks(window.input, "c")
+    assert len(started) == 2
+
+
 def test_빈_질문과_답을_기다리는_동안의_질문은_보내지_않는다(window):
     type_and_enter(window, "   ")
     type_and_enter(window, "가")
@@ -84,18 +107,26 @@ def test_쿼리_재작성을_건너뛴_엔진에서도_지금_점은_찾기_자�
     type_and_enter(window, "가")
     window.show_answer_event(Stage.SEARCH)  # 쿼리 재작성이 없는 엔진은 REWRITE를 내지 않는다
     [line] = window.findChildren(QLabel, "thinking")
-    assert line.text().count("●") == 2 and line.text().count("○") == 2
+    assert line.text().count("●") == 1 and line.text().count("○") == 2
+
+
+def test_설정_읽기는_점을_따로_두지_않고_첫_점_자리에서_이름만_보인다(window):
+    # 사용자 11-23 "1단계는 아무 짝에도 쓸모 없어보인다"(시간 기록 5/5에서 설정 단계 0.000초)
+    type_and_enter(window, "가")
+    window.show_answer_event(Stage.SETTINGS)
+    [line] = window.findChildren(QLabel, "thinking")
+    assert line.text().count("●") == 0 and line.text().count("○") == 3 and line.text().endswith("Blender 설정을 읽는 중 · 0초")
 
 
 def test_답을_기다리는_동안_지금_단계와_흐른_초를_한_줄로_보이고_첫_조각에서_멈춘다(window):
     type_and_enter(window, "가")
     [line] = window.findChildren(QLabel, "thinking")
-    assert line.text().count("●") == 0 and line.text().count("○") == 4  # 보내자마자 칠한 점이 없다(사용자 "왜 처음부터 1칸은 칠해져있지?")
+    assert line.text().count("●") == 0 and line.text().count("○") == 3  # 보내자마자 칠한 점이 없다(사용자 "왜 처음부터 1칸은 칠해져있지?")
     window.show_answer_event(Stage.REWRITE)
     window.show_answer_event(Stage.SEARCH)
     [line] = window.findChildren(QLabel, "thinking")
     assert line.textFormat() == Qt.RichText and line.text().endswith("설명서에서 찾는 중 · 0초")  # 단계 이름은 지금 것 하나만
-    assert line.text().count("●") == 2 and line.text().count("○") == 2  # 점 넷 가운데 셋째가 지금(빈 점)
+    assert line.text().count("●") == 1 and line.text().count("○") == 2  # 점 셋(정리·찾기·답) 가운데 둘째가 지금(빈 점)
     assert window.waiting.isActive()
     window.show_answer_event(Piece("<b>답</b>이에요."))
     [answer] = window.findChildren(QLabel, "answer")
