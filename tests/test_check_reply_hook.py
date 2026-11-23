@@ -174,11 +174,13 @@ def test_영어로_쓴_답은_막힌다(tmp_path):
         assert any("영어" in h and "[602]" in h for h in check_reply.turn_problems(_turn(tmp_path, reply))), reply
 
 
-def test_진행_중_짧은_말이_영어여도_막힌다(tmp_path):
+def test_진행_중_짧은_말은_영어여도_통과하고_마지막_답만_본다(tmp_path):
+    # 사용자 11-23 "최종 결론 답변 … 저럴때만 영어 체크하면 될거같은데", "ㅇㅇ 그렇게 하셈"([605])
     human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
     note = {"type": "assistant", "message": {"content": [{"type": "text", "text": ENGLISH_NOTE}]}}
     final = {"type": "assistant", "message": {"content": [{"type": "text", "text": "차례 7번 실행을 백그라운드로 시작했습니다. 끝나면 판정을 계산해 보고드립니다. " * 3}]}}
-    assert any("영어" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, note, final])))
+    assert not any("영어" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, note, final])))
+    assert any("영어" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, final]), ENGLISH_REPLY))  # 마지막 답(Stop 입력)이 영어면 막힘
 
 
 def test_한국어_답에_영어_용어_코드_인용이_섞여도_통과(tmp_path):
@@ -217,7 +219,7 @@ FEEDBACK = {"type": "user", "isMeta": True, "message": {"content": "Stop hook fe
 
 def test_훅이_막은_뒤에는_그_뒤_글만_본다(tmp_path):
     human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
-    old = {"type": "assistant", "message": {"content": [{"type": "text", "text": ENGLISH_NOTE}]}}
+    old = {"type": "assistant", "message": {"content": [{"type": "text", "text": "권하는 꼴은 이것입니다.\n\"옆면 개수(버텍스, Vertices)를\""}]}}
     fixed = {"type": "assistant", "message": {"content": [{"type": "text", "text": "아까 영어로 쓴 줄을 한국어로 고칩니다. 기록을 먼저 커밋합니다."}]}}
     assert check_reply.turn_problems(_transcript(tmp_path, [human, old, FEEDBACK, fixed])) == []
 
@@ -239,3 +241,10 @@ def test_막은_뒤에도_advisor와_기록_찾기는_차례_전체에서_본다
     human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
     text = {"type": "assistant", "message": {"content": [{"type": "text", "text": NO_ADVISOR_1}]}}
     assert not any("advisor" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, ADVISOR_RESULT, FEEDBACK, text])))
+
+
+def test_기록이_영어_진행_말로_끝나도_마지막_답이_한국어면_통과(tmp_path):
+    # 11-23 실제 순서: 기록 파일에는 영어 진행 말이 마지막이고, 한국어 마지막 답은 아직 안 써짐([604]·[605])
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    note = {"type": "assistant", "message": {"content": [{"type": "text", "text": "Now commit the record (durable), then advisor."}]}}
+    assert not any("영어" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, note]), "차례 7번 결과를 정리했습니다. 판정은 차이 없음입니다."))

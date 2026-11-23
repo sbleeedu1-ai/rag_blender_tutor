@@ -23,13 +23,14 @@
   그 차례의 advisor 결과가 하나라도 있으면 통과한다(새 근거가 오기 전에 부른 advisor여도 통과).
 - 규칙 5([575]): 용어 정리(PR #48)에서 바꾼 옛 말 가운데 뜻이 하나뿐인 것(OLD_TERMS)을 따옴표·백틱 밖에서 쓰면 막는다.
   한계: 여러 줄에 걸친 인용은 못 뺀다, 짝이 안 맞는 따옴표가 있으면 짝이 밀려 인용을 잘못 뺄 수 있다, 여러 뜻인 말은 안 본다.
-- 규칙 6([602]): 답 글 조각(진행 중 짧은 말 하나하나)이 영어로 쓰였으면 막는다. 코드 블록·백틱·따옴표 인용·주소·경로를 뺀 뒤
+- 규칙 6([602], [605]에서 좁힘): 마지막 답(Stop 입력 `last_assistant_message`, 없으면 기록의 마지막 글 조각)이 영어로 쓰였으면 막는다.
+  진행 중 짧은 말은 안 본다(사용자 11-23 "최종 결론 답변 … 저럴때만 영어 체크하면 될거같은데", "어차피 어지간해선 중간거 안읽고 짧고 쉬운 영어면 내가 대충 이해는 가는"). 코드 블록·백틱·따옴표 인용·주소·경로를 뺀 뒤
   로마자가 20자 이상이고 한글의 2배보다 많고 영어 문장 낱말(the·is·I'll 등, 대소문자 안 가림)이 둘 이상이면, 또는 한글이 하나도 없으면 영어 답으로 본다.
   작은따옴표 짝은 빼지 않는다(I've … I'll 사이를 통째로 지움).
   Blender 화면 이름을 늘어놓은 한국어 답("Color Management에서 Working Space(Linear Rec.709)…를 봤습니다")을 살리려고 둘째·셋째 조건을 뒀다. 11-23 차례 7번 준비 중 진행 말 30여 개와 마지막 답을 영어로 써도 안 막혔다
   (사용자 "훅이 재 프롬프트 했지만 영어로 말하는건 안잡았네?").
-  한계: 한국어 답 안의 영어 문장 하나는 못 본다(조각 전체를 셈), 로마자 20자 밑의 아주 짧은 영어 말도 못 본다.
-- 글을 보는 범위([604]): 글 규칙(1·2·5·6과 3·4의 글 쪽)은 그 차례에서 이 훅이 마지막으로 막은 뒤의 글만 본다.
+  한계: 한국어 답 안의 영어 문장 하나는 못 본다(답 전체를 셈), 로마자 20자 밑의 아주 짧은 영어 답도 못 본다.
+- 글을 보는 범위([604]): 글 규칙(1·2·5와 3·4의 글 쪽)은 그 차례에서 이 훅이 마지막으로 막은 뒤의 글만 본다(규칙 6은 마지막 답만).
   이미 고쳐 낸 글에 백그라운드 알림 차례마다 다시 막혔다(11-23 같은 영어 줄에 세 번: 처음 1번은 맞게, 되풀이 2번). advisor 결과·기록 찾기 호출은 차례 전체에서 본다.
   마지막 답은 Stop 입력 `last_assistant_message`에서 더한다. 공식 문서(code.claude.com/docs/en/hooks.md Stop input)
   "the transcript file isn't guaranteed to include the final message at Stop time"대로 11-23에 마지막 답의 '문턱'을 못 봤다.
@@ -115,13 +116,13 @@ def old_term_problems(text: str) -> list[str]:
 
 
 def english_problems(blocks: list[str]) -> list[str]:
-    """규칙 6: 영어로 쓴 답 글 조각을 막는다(코드·인용·주소·경로는 빼고 로마자와 한글 수를 견줌)."""
+    """규칙 6: 영어로 쓴 답을 막는다(turn_problems가 마지막 답만 넘김, 코드·인용·주소·경로는 빼고 로마자와 한글 수를 견줌)."""
     for text in blocks:
         bare = QUOTES_EN.sub("", CODE.sub("", text))
         latin, hangul = len(re.findall(r"[A-Za-z]", bare)), len(re.findall(r"[가-힣]", bare))
         if latin >= 20 and (hangul == 0 or (latin > 2 * hangul and len(FUNCTION_WORDS.findall(bare)) >= 2)):  # 한글이 하나도 없으면 짧은 말도 막음  # 한글 한 글자가 로마자 2-3자 몫이라 2배로 견줌(Blender 화면 용어가 많은 한국어 답을 살림)
-            return [f"답을 영어로 썼다(로마자 {latin}자·한글 {hangul}자: \"{text.strip()[:60]}\"). 진행 중 짧은 말까지 쉬운 한국어로 다시 쓴다(영어 용어·코드·인용은 그대로 둬도 됨). "
-                    "까닭(사용자 원문): \"훅이 재 프롬프트 했지만 영어로 말하는건 안잡았네?\" [602], 전역 지침 \"설명은 쉬운 한국어로 하고\""]
+            return [f"답을 영어로 썼다(로마자 {latin}자·한글 {hangul}자: \"{text.strip()[:60]}\"). 마지막 답을 쉬운 한국어로 다시 쓴다(영어 용어·코드·인용은 그대로 둬도 됨, 진행 중 짧은 말은 영어여도 됨). "
+                    "까닭(사용자 원문): \"훅이 재 프롬프트 했지만 영어로 말하는건 안잡았네?\" [602], \"최종 결론 답변 … 저럴때만 영어 체크하면 될거같은데\" [605], 전역 지침 \"설명은 쉬운 한국어로 하고\""]
     return []
 
 
@@ -181,7 +182,7 @@ def turn_problems(transcript: Path, last_message: str = "") -> list[str]:
         texts.append(last_message)
     text = "\n".join(texts)
     found = problems(text)
-    found += english_problems(texts)
+    found += english_problems([last_message if last_message.strip() else (texts[-1] if texts else "")])  # 마지막 답만([605])
     searched = any(b.get("type") == "tool_use" and _reads_records(b.get("name", ""), b.get("input") or {}) for b in blocks)
     recommends = any(RECOMMENDS.search(line) and not PAST.search(line) for line in text.splitlines())
     if recommends and not searched:
