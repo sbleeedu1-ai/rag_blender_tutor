@@ -200,6 +200,10 @@ class MenuNames:
     def __iter__(self):
         return iter(self._by_english.values())
 
+    def screen_words(self) -> set[str]:
+        """사전 번역과 넓힌 목록의 한국어 화면 글자 전부(긴 이름 속 낱말을 가려낼 때 쓴다)."""
+        return {t.korean for n in self._by_english.values() for t in n.translations} | set(self._extra.values())
+
     def common(self, english: str) -> tuple[str, ...]:
         """흔히 옮기는 말들(긴 것부터). 목록에 없으면 빈 묶음."""
         return self._common.get(_english_key(english), ())

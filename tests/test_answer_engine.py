@@ -1388,3 +1388,85 @@ def test_실제_Claude_연결에서_답_도중_바이트가_끊겨_늦으면_시
 def test_실제_Claude_연결에서_생각이_한도를_다_써_글이_0자면_빈_답_대신_오류_표시():
     model = ClaudeModel("claude-haiku-5-5", "k", "medium", client=_ClaudeClient(stop="max_tokens"))
     assert ask(model=model) == [Failure(ERROR_MESSAGE, SEARCHED)]
+
+
+# 차례 9번(계획 4-1): 환경 설정 안의 탭으로 가는 길인데 여는 길이 없으면 "편집(Edit) > "을 채운다(설명서 "Menu: Edit ‣ Preferences…",
+# Q20 채점 사유 "키맵 가는 길에 편집(Edit) > 환경 설정 없이 '환경 설정의 키맵'만 말함 = 부분")
+PREFS_EXTRA = {**SCREEN_EXTRA, "Edit": "편집", "Preferences": "환경 설정", "Keymap": "키맵", "Viewport": "뷰포트", "File": "파일",
+               "Defaults": "기본값", "Load Factory Preferences": "최초 환경 설정을 불러오기", "Add-on Preferences": "애드온 환경 설정"}
+
+
+def shown_prefs(pieces, question="메시 추가", state=KOREAN_SCREEN) -> str:
+    names = MenuNames(SCREEN_NAMES, extra=PREFS_EXTRA)
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
+    return "".join(event.text for event in engine.answer(question, state, []) if isinstance(event, Piece))
+
+
+@pytest.mark.parametrize(
+    "answer, expected",
+    [
+        # 탭으로 가는 길: 모델이 맨 글로 쓴 꼴, 표시 꼴, 띄어 쓰지 않은 꼴
+        ("환경 설정(Preferences)의 키맵을 여세요.", "편집(Edit) > 환경 설정(Preferences)의 키맵을 여세요."),
+        ("[[Preferences > Keymap]]에서 찾으세요.", "편집(Edit) > 환경 설정(Preferences) > 키맵(Keymap)에서 찾으세요."),
+        ("[[Preferences]]의 [[Keymap]] 탭", "편집(Edit) > 환경 설정(Preferences)의 키맵(Keymap) 탭"),
+        ("환경설정의 키맵을 여세요.", "편집(Edit) > 환경설정의 키맵을 여세요."),
+        # 이미 길이 있으면 그대로(한 표시, 나눠 쓴 길, 뒤에 길이 나오는 꼴)
+        ("[[Edit > Preferences > Keymap]]을 여세요.", "편집(Edit) > 환경 설정(Preferences) > 키맵(Keymap)을 여세요."),
+        ("[[Edit]] 메뉴를 열고 [[Preferences]]의 [[Keymap]]을 누릅니다.", "편집(Edit) 메뉴를 열고 환경 설정(Preferences)의 키맵(Keymap)을 누릅니다."),
+        ("1. 환경 설정(Preferences)을 엽니다. 메뉴에서 [[Edit > Preferences]]를 누르고", "1. 환경 설정(Preferences)을 엽니다. 메뉴에서 편집(Edit) > 환경 설정을 누르고"),
+        # 상태를 설명하는 말은 두고, 처음 언급만 본다
+        ("현재 환경 설정에서 버튼이 꺼져 있어요. 다시 켜려면 환경 설정의 뷰포트로.", "현재 환경 설정에서 버튼이 꺼져 있어요. 다시 켜려면 환경 설정의 뷰포트로."),
+        ("1. 환경 설정의 키맵을 엽니다.\n2. 환경 설정의 키맵에서 찾습니다.", "1. 편집(Edit) > 환경 설정의 키맵을 엽니다.\n2. 환경 설정의 키맵에서 찾습니다."),
+        # 괄호·코드 속, 더 긴 이름의 일부는 건너뛴다
+        ("(설명서의 환경 설정 쪽입니다) 그리고 환경 설정의 키맵", "(설명서의 환경 설정 쪽입니다) 그리고 편집(Edit) > 환경 설정의 키맵"),
+        ("`환경 설정의 키맵` 다음", "`환경 설정의 키맵` 다음"),
+        ("애드온 환경 설정의 키맵", "애드온 환경 설정의 키맵"),  # 넓힌 목록의 더 긴 이름(이 건너뛰기가 없으면 채워진다)
+        # 다른 프로그램·운영체제의 환경 설정, ">" 뒤가 탭 이름이 아닌 꼴
+        ("macOS 시스템 환경 설정 > 키보드에서 단축키를 끄세요.", "macOS 시스템 환경 설정 > 키보드에서 단축키를 끄세요."),
+        ("윈도우 환경 설정 > 키맵", "윈도우 환경 설정 > 키맵"),
+        ("환경 설정 > 다른 곳에서 바꿉니다.", "환경 설정 > 다른 곳에서 바꿉니다."),
+        # 표·제목 줄은 둔다
+        ("| 환경 설정의 키맵 | 값 |", "| 환경 설정의 키맵 | 값 |"),
+        ("## 환경 설정의 키맵", "## 환경 설정의 키맵"),
+        # 붙잡은 글 바로 뒤 표시도 붙잡은 글을 앞 글로 본다(괄호 안 이름은 화면 글자만, [458])
+        ("현재 환경 설정에서 꺼져 있어요 (예: [[Keymap]] 탭)", "현재 환경 설정에서 꺼져 있어요 (예: 키맵 탭)"),
+        ("환경 설정 메뉴에서 [[Render]] 탭", "환경 설정 메뉴에서 Render 탭"),  # HEAD와 같다(이 지어낸 사전의 Render는 짝을 안 고른 이름)
+        # 붙잡는 동안 표시 뒤 단축키도 글 순서대로(앞 문장 끝에 붙지 않는다, [423])
+        ("환경 설정의 키맵을 여세요. [[Face]](Alt-F)를 누르면 면이 생겨요.",
+         "편집(Edit) > 환경 설정의 키맵을 여세요. 페이스(Face)를 누르면 면이 생겨요. 단축키는 Alt-F입니다."),
+        ("현재 환경 설정에서 꺼져 있어요. [[Face]](Alt-F)를 누르면 면이 생겨요.",
+         "현재 환경 설정에서 꺼져 있어요. 페이스(Face)를 누르면 면이 생겨요. 단축키는 Alt-F입니다."),
+        # 넣은 글은 앞에 "(Edit)"이 보였는지로만 괄호를 정한다(뒤 글은 HEAD와 같게 둔다. 그래서 뒤에 "편집(Edit)"이 또 나올 수 있다)
+        ("환경 설정의 키맵에서 고친 뒤 [[Edit]] 메뉴를 보세요.", "편집(Edit) > 환경 설정의 키맵에서 고친 뒤 편집(Edit) 메뉴를 보세요."),
+        ("[[File > Defaults > Load Factory Preferences]]를 누른 뒤", "파일(File) > 기본값(Defaults) > '최초 환경 설정을 불러오기'(Load Factory Preferences) 항목을 누른 뒤"),  # 따옴표·'항목'은 [356] 꼴
+        # 앞에 편집이 이미 나왔으면 영어 괄호는 처음 한 번만([353])
+        ("[[Edit]] 메뉴를 봅니다. 그다음 줄에서 한참 다른 이야기를 한 뒤 환경 설정의 키맵", "편집(Edit) 메뉴를 봅니다. 그다음 줄에서 한참 다른 이야기를 한 뒤 편집 > 환경 설정의 키맵"),
+    ],
+)
+def test_환경_설정_탭으로_가는_길에_여는_길이_없으면_편집을_채운다(answer, expected):
+    assert shown_prefs((answer,)) == expected
+
+
+def test_환경_설정_채우기는_질문이_영어면_괄호_속이라_두고_영어_화면은_손대지_않는다():
+    assert shown_prefs(("[[Preferences]]의 [[Keymap]]",), question="Preferences 어디") == "Preferences(환경 설정)의 키맵(Keymap)"
+    assert shown_prefs(("[[Preferences]]의 [[Keymap]]",), state=STATE) == "Preferences의 Keymap"
+
+
+def test_환경_설정_채우기는_조각을_어떻게_나눠_흘려도_같고_끊겨도_붙잡은_글을_낸다():
+    import random
+
+    from blender_tutor.answer_engine import _MenuMarks
+
+    text = "단축키를 보려면 환경 설정(Preferences)의 키맵을 여세요. 다시 [[Preferences]]에서.\n현재 환경 설정에서 꺼짐\n그리고 환경 설정의 키맵에서 다시 봅니다\n환경 설정에서 [[Face]](Alt-F)를 누르면 돼요."
+    whole = shown_prefs((text,))
+    assert whole.startswith("단축키를 보려면 편집(Edit) > 환경 설정(Preferences)의") and whole.count("편집") == 1  # 처음 언급만
+    rng = random.Random(9)
+    for _ in range(300):
+        pieces, i = [], 0
+        while i < len(text):
+            k = rng.randint(1, 12)
+            pieces.append(text[i : i + k])
+            i += k
+        assert shown_prefs(tuple(pieces)) == whole, pieces
+    marks = _MenuMarks(MenuNames(SCREEN_NAMES, extra=PREFS_EXTRA))
+    assert marks.feed("그럼 환경 설정의 키") + marks.finish(cut=True) == "그럼 환경 설정의 키"

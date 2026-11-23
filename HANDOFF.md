@@ -28,7 +28,7 @@
 
 ## 지금 상태 (11-20)
 
-- 브랜치 `docs/redesign-handoff` = 원격, [PR #47](https://github.com/sbleeedu1-ai/rag_blender_tutor/pull/47) 열림. 11-20에 제품은 `blender_tutor/claude_model.py`만 바뀜(차례 1번, [545]). 훅은 `check_plan_steps.py` 새로 만듦, 기록을 읽는 훅 넷 고침([550]). 그 앞 11-19에 바뀐 것은 개발 도구·시험(`.claude/hooks/check_reply.py`, `.claude/tools/answer_facts.py`·`menu_tree.py`·`needed_count.py`, 그 시험 셋)과 기록.
+- 브랜치 `docs/redesign-handoff` = 원격, [PR #47](https://github.com/sbleeedu1-ai/rag_blender_tutor/pull/47) 열림. 11-20에 제품은 `blender_tutor/claude_model.py`만 바뀜(차례 1번, [545]). 11-23에 제품 `answer_engine.py`·`menu_names.py`가 바뀜(차례 9번 환경 설정 여는 길 채우기, [610]). 훅은 `check_plan_steps.py` 새로 만듦, 기록을 읽는 훅 넷 고침([550]). 그 앞 11-19에 바뀐 것은 개발 도구·시험(`.claude/hooks/check_reply.py`, `.claude/tools/answer_facts.py`·`menu_tree.py`·`needed_count.py`, 그 시험 셋)과 기록.
 - 검증: 11-20 훅 고친 뒤 Mac `pytest` 1109 통과, `ruff check .` 통과, `mypy` 41파일 문제 없음. 이 브랜치 c589807(차례 1번 버그 고침)의 GitHub 검사(Windows 테스트) 성공. 그 뒤 커밋(훅)의 GitHub 검사는 안 봄.
 - 계획 자료(Git 밖, 이 Mac에만): `results/20261119/222431_실패분석/` — `5_최종계획.md`(7번이 대체한 초안), `6_재고/`(A-E 275줄), `7_전체계획.md`(지금 계획. 11-20 주 세션이 고친 곳: 1-6 ⑦ Q31 화면 확인, 2-8 질문 꼴 변형, 7-3 트레이 오류, 8-1 홀드아웃 기준([165]), 대조표 D21, 그리고 Astra 검토 반영 아홉 곳([544]: 3-1절 숫자, 2절 15번·4-3 Q36, 1-4 실행 전 목록, 물음 19 시점, 3-1 채점 날짜, 7-0을 7-3 뒤로, 9절 채점 분모), `8_주세션_대조.md`(대조 결과), `사본/merge_check.py`(합침 따라가기, 그 폴더에서 `python3 사본/merge_check.py`), `사본/recount_basis.py`(차례 근거 숫자 다시 세기, 저장소 루트에서 `.venv/bin/python results/20261119/222431_실패분석/사본/recount_basis.py`).
 - 열린 티켓: 35·37·42(ready-for-agent), 45·47·48(needs-triage), 49(ready-for-human), 51(needs-triage). 자리는 7번 계획 대조표(C 번호)에 있다.

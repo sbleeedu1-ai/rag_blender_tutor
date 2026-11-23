@@ -549,6 +549,14 @@ _OTHER_KEY = re.compile(r"(?:Ctrl|Alt|Shift|Cmd|Option)\s*[-+]|(?<![A-Za-z0-9])(
                         r"|(?<![A-Za-z0-9.'’])[A-Z0-9](?![A-Za-z0-9.'’])(?=\s*(?:키|로|으로|를|을|와|과|,|\)|$))")
 
 
+# 환경 설정 안의 탭(설명서 editors/preferences/ 쪽 제목, 5.2). 이 이름이 바로 뒤에 오면 "환경 설정"이 여는 길을 가리킨다(차례 9번)
+PREFS_TABS = ("Interface", "Themes", "Viewport", "Lights", "Editing", "Animation", "Get Extensions", "Add-ons", "Input",
+              "Navigation", "Keymap", "System", "Save & Load", "File Paths", "Asset Libraries", "Experimental", "Developer Tools")
+# 바로 앞 낱말이 이것이면 Blender가 아닌 다른 프로그램·운영체제의 환경 설정이다(영어 낱말 "macOS"·"Windows"·"Blender"도 뺀다)
+_OTHER_PREFS = re.compile(r"(?:[A-Za-z0-9]+|시스템|윈도우|운영 ?체제|맥|컴퓨터|프로그램|브라우저|드라이버|그래픽 ?카드)\s*$")
+PREFS_AFTER = 40  # 환경 설정 뒤에서 볼 글자 수("(Preferences)의 " 뒤 가장 긴 탭 이름까지)
+
+
 class _MenuMarks:
     """답 글 속 [[Add > Mesh]] 표시를 화면 글로 바꾼다(티켓 23). 표시가 조각 사이에 갈려 와도 닫힐 때까지 모아 둔다.
 
@@ -561,6 +569,9 @@ class _MenuMarks:
     지운 괄호가 단축키 하나뿐이면(표시 뒤·맨 영어 뒤 모두) 그 문장 끝에 "단축키는 Alt-F입니다."로 옮긴다([353] 사용자 예문, [423]).
     넣는 곳은 내보내는 길 한 곳(_send)이라 조각을 어떻게 나눠 흘려도 같다. 한 문장에 둘 이상이거나, 그 단축키가 답에 이미 나왔거나,
     표·제목 줄·코드 안이면 넣지 않고 지우기만 한다.
+    한국어 화면 답이 "환경 설정"을 처음 말할 때, 그 말이 안의 탭으로 가는 길("환경 설정의 키맵", "환경 설정 > 입력")인데
+    앞에 여는 길("편집")이 없으면 "편집(Edit) > "을 앞에 넣는다(차례 9번, 설명서 "Menu: Edit ‣ Preferences…"). 상태를 설명하는 말
+    ("현재 환경 설정에서 꺼져 있어요")·괄호·코드 속·더 긴 이름("최초 환경 설정을 불러오기")은 두고, 답 하나에 처음 언급만 본다(_fill_prefs).
     """
 
     def __init__(self, names: MenuNames | None, question: str = "", keep: tuple[str, ...] = ()):
@@ -578,6 +589,18 @@ class _MenuMarks:
         self._tail = ""  # 문장 끝인지 보려고 붙잡은 마지막 '.'·'?'·'!'(다음 한 글자만 기다린다, "0.5")
         self._line = ""  # 내보낸 글의 지금 줄(표·제목 줄인지 보려고)
         self._said = ""  # 내보낸 글 전체(단축키가 이미 나왔는지 보려고)
+        prefs, edit = (names.korean("Preferences"), names.korean("Edit")) if names else (None, None)
+        # 환경 설정 화면 글자(띄어 쓰지 않은 꼴도)와 여는 길 머리. 둘 중 하나가 화면에 영어면 채우지 않는다
+        words = prefs.split() if prefs and edit else []
+        self._prefs = re.compile(r" ?".join(map(re.escape, words))) if words else None
+        # 조각 끝이 환경 설정의 앞부분이면 다음 조각까지 붙잡는다("환경 |설정")
+        self._prefs_heads = sorted({w[:k] for w in (" ".join(words), "".join(words)) for k in range(1, len(w))}, key=len, reverse=True)
+        self._prefs_longer = sorted(k for k in names.screen_words() if prefs in k and k != prefs) if words else []
+        tabs = [*PREFS_TABS, *(k for t in PREFS_TABS if (k := names.korean(t)))] if words else []
+        self._prefs_tab = re.compile("|".join(map(re.escape, sorted(tabs, key=len, reverse=True)))) if tabs else None
+        self._edit = edit or ""
+        self._prefs_seen = False  # 이 답에서 환경 설정을 이미 봤나(처음 언급만 본다)
+        self._prefs_wait = ""  # 환경 설정 뒤 글을 볼 때까지 붙잡은 글(_send 앞에서)
 
     def feed(self, text: str, done: bool = False) -> str:
         """조각 하나를 받아 지금 내보낼 수 있는 글을 돌려준다. done이면 더 올 글이 없다(닫힌 표시를 더 붙잡지 않음)."""
@@ -614,9 +637,9 @@ class _MenuMarks:
                     break  # 표시 뒤 괄호·조사를 볼 때까지 모은다
                 # 앞 글을 먼저 다 내보낸 뒤 표시를 바꾼다(되풀이 이름을 나온 차례대로 기억해야 흘려 넣어도 같다)
                 before = self._plain(held[:start]) + self._plain("", done=True)
-                tab = self._names is not None and tab_place(self._shown, rest)  # 속성 창 탭이면 탭 글자로
+                tab = self._names is not None and tab_place((self._shown + self._prefs_wait)[-40:], rest)  # 속성 창 탭이면 탭 글자로(붙잡은 글도 앞 글)
                 # 괄호 안이거나 뒤에 지우지 않은 괄호가 남으면 괄호 영어 없이 화면 글자만([458])
-                bare = self._names is not None and (paren_depth(self._line) > 0 or bool(re.match(r" ?\(", rest)))
+                bare = self._names is not None and (paren_depth(self._line + self._prefs_wait) > 0 or bool(re.match(r" ?\(", rest)))
                 shown = screen_path(held[inner:end], self._names, self._question, self._seen if self._names else None, tab, bare)
                 if self._mark_item:  # 머리 제목이 계산 이름인 노드 뒤 계산 이름([436]). 맨 글 바꾸기를 다시 지나지 않게 이름과 함께 내고,
                     item, rest = with_particle(_shown_part(*self._mark_item, self._question, self._seen, bare), rest)  # 조사·'항목'은 계산 이름에
@@ -625,7 +648,10 @@ class _MenuMarks:
                     shown, rest = with_particle(shown, rest)
                 out += [before, self._send(shown)]
                 if self._mark_key:
-                    self._keys.append(self._mark_key)  # 이름을 내보낸 뒤에 올려야 앞 글의 문장 끝에 붙지 않는다
+                    if self._prefs_wait:  # 이름이 아직 붙잡혀 있으면 글 순서대로 지나가게 자리 표로 붙인다(_send가 읽는다)
+                        self._prefs_wait += f"{SHORTCUT_OPEN}{self._mark_key}{SHORTCUT_CLOSE}"
+                    else:
+                        self._keys.append(self._mark_key)  # 이름을 내보낸 뒤에 올려야 앞 글의 문장 끝에 붙지 않는다
                 held = rest
         else:
             start = len(held) - 1 if held.endswith(MARK_OPEN[0]) else len(held)
@@ -643,6 +669,7 @@ class _MenuMarks:
             out += self._fixed(held[len(MARK_OPEN) :])
         else:
             out += self._plain(held, done=True)
+        out += self._send("", final=True)  # 환경 설정 뒤 글을 기다리며 붙잡은 글
         tail, self._tail = self._tail, ""
         if cut:
             self._keys = []
@@ -679,7 +706,9 @@ class _MenuMarks:
         cut = len(text) if done else prose_cut(text, self._names.common_prefixes, tabs=True)
         text, self._prose = text[:cut], text[cut:]
         # 끝부분 앞에서 코드가 열려 있었으면 백틱 하나를 앞에 붙여 짝을 맞춘다
-        before = ("`" if (self._ticks - self._shown.count("`")) % 2 else "") + self._shown
+        # 환경 설정 채우기가 붙잡은 글(_prefs_wait)도 이미 낸 글의 끝으로 본다(안 그러면 "환경 |설정(Preferences)"의 앞말을 잃는다)
+        shown = self._shown + self._prefs_wait
+        before = ("`" if (self._ticks - shown.count("`") + self._prefs_wait.count("`")) % 2 else "") + shown
         return self._send(screen_prose(before + text, self._names, self._question, self._keep, len(before), seen=self._seen, keys=True,
                                        depth=paren_depth(self._line))[len(before) :])
 
@@ -687,9 +716,10 @@ class _MenuMarks:
         """표시를 바꾼 글: 붙잡은 표시 밖 글을 먼저 다 내고, 이 글은 그대로 낸다."""
         return self._plain("", done=True) + self._send(text)
 
-    def _send(self, text: str) -> str:
+    def _send(self, text: str, final: bool = False) -> str:
         """사용자에게 내보내는 글이 모두 지나는 곳. 단축키 자리 표를 떼어 모으고, 모은 단축키는 문장 끝에 넣는다."""
-        text, self._tail, out, i = self._tail + text, "", [], 0
+        text, self._tail, self._prefs_wait, out, i = self._tail + self._prefs_wait + text, "", "", [], 0
+        text, self._prefs_wait = self._fill_prefs(text, final)
         while i < len(text):
             ch = text[i]
             if ch == SHORTCUT_OPEN:
@@ -713,6 +743,45 @@ class _MenuMarks:
             out.append(self._said_now(ch))
             i += 1
         return "".join(out)
+
+    def _fill_prefs(self, text: str, final: bool) -> tuple[str, str]:
+        """(지금 내보낼 글, 붙잡을 글). 첫 "환경 설정"이 탭으로 가는 길인데 앞 20자에 여는 길이 없으면 "편집(Edit) > "을 넣는다.
+
+        뒤 글(PREFS_AFTER자나 줄 끝까지)을 봐야 정해서 그동안 그 자리부터 붙잡는다. 정하는 글이 늘 같은 창이라 흘려 넣어도 같다."""
+        if not self._prefs or self._prefs_seen:
+            return text, ""
+        for found in self._prefs.finditer(text):
+            before, after = text[: found.start()], text[found.end() :]
+            line = (self._line + before).rsplit("\n", 1)[-1].lstrip()
+            if paren_depth(self._line + before) > 0 or (self._ticks + before.count("`")) % 2 or line.startswith(("|", "#")):
+                continue  # "Preferences(환경 설정)", "(설명서의 환경 설정입니다)", 코드 속, 표·제목 줄은 둔다
+            window = re.sub(f"{SHORTCUT_OPEN}[^{SHORTCUT_CLOSE}]*{SHORTCUT_CLOSE}", "", after)[:PREFS_AFTER].split("\n", 1)[0]
+            if not final and len(window) < PREFS_AFTER and "\n" not in after:
+                return before, text[found.start() :]
+            around, here = self._said[-30:] + text, len(self._said[-30:]) + found.start()
+            if any(0 <= (at := around.find(k, max(0, here - len(k)))) <= here and at + len(k) >= here + len(found[0])
+                   for k in self._prefs_longer):
+                continue  # 더 긴 이름의 일부("최초 환경 설정을 불러오기", "애드온 환경 설정")
+            if _OTHER_PREFS.search((self._said + before)[-20:]):
+                continue  # 다른 프로그램·운영체제의 환경 설정("macOS 시스템 환경 설정 > 키보드")
+            self._prefs_seen = True
+            if re.search(rf"{re.escape(self._edit)}|Edit|[>‣]\s*$", (self._said + before)[-20:]) or not self._to_tab(window):
+                return text, ""
+            # 영어 괄호는 이 자리 앞에 "(Edit)"이 이미 보였는지로만 정하고 되풀이 기억(_seen)은 건드리지 않는다. 뒤 글이 이미 바뀌었는지는
+            # 조각 나눔에 따라 달라서, 그것을 보면 흘려 넣은 결과가 달라진다. 대가로 뒤에 "편집(Edit)"이 한 번 더 나올 수 있다([353] 어긋남)
+            edit = self._edit if "(Edit)" in self._said + before else f"{self._edit}(Edit)"
+            return f"{before}{edit} > {text[found.start():]}", ""
+        if not final:
+            head = next((h for h in self._prefs_heads if text.endswith(h)), "")
+            if head:
+                return text[: len(text) - len(head)], head
+        return text, ""
+
+    def _to_tab(self, after: str) -> bool:
+        """환경 설정 뒤 글이 안의 탭으로 가는 길인가: "(Preferences)"를 건너 "> …", "의/에서 키맵"처럼 탭 이름이 바로 온다."""
+        after = re.sub(r"^ ?\([^()]*\)", "", after)
+        tab = re.match(r"\s*[>‣]\s*|(?:의|에서|에 있는|창의|창에서)\s+[*'\"“‘]*", after)  # "> 키맵"도 뒤가 탭 이름이어야 한다
+        return bool(tab and self._prefs_tab and self._prefs_tab.match(after, tab.end()))
 
     def _said_now(self, text: str) -> str:
         self._shown = (self._shown + text)[-40:]
