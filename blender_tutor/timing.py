@@ -70,7 +70,7 @@ class Stopwatch:
         sent = self._clock()
         if f10 is not None and sent - (f10.ready or f10.received) > F10_VALID:
             f10 = None
-        record = {
+        record: dict = {  # 칸마다 값 종류가 달라 dict로 둔다(빈 stages 목록 때문에 mypy가 묻는다)
             "pc": self._pc,
             "engine": None if engine is None else engine["name"],
             "settings": None if engine is None else engine["settings"],
