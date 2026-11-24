@@ -43,6 +43,8 @@ import re
 import sys
 from pathlib import Path
 
+from hook_notice import with_notice
+
 ROOT = Path(__file__).resolve().parents[2]
 FORMS = ROOT / "docs" / "agents" / "answer-forms.md"
 SYMBOLS = re.compile(r"[㉠-㉻]")
@@ -201,7 +203,7 @@ def main() -> int:
         return 0
     found = turn_problems(Path(data["transcript_path"]), data.get("last_assistant_message") or "")
     if found:
-        print(json.dumps({"decision": "block", "reason": "답을 고쳐 다시 낸다(HISTORY [378]): " + " / ".join(found)}, ensure_ascii=False))
+        print(json.dumps(with_notice("check_reply", data, {"decision": "block", "reason": "답을 고쳐 다시 낸다(HISTORY [378]): " + " / ".join(found)}), ensure_ascii=False))
     return 0
 
 

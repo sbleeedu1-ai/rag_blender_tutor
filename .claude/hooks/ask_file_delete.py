@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 
 from ask_branch_delete import pieces
+from hook_notice import with_notice
 
 DELETE_COMMANDS = {"rm", "rmdir", "remove-item"}
 # Remove-Item에서 값을 받는 옵션(그 값은 지울 대상이 아니다). -Path·-LiteralPath 뒤 값은 대상이다.
@@ -174,7 +175,7 @@ def main() -> None:
     command = (payload.get("tool_input") or {}).get("command") or ""
     answer = decide(command, payload.get("cwd") or ".")
     if answer:
-        print(json.dumps({"hookSpecificOutput": answer}, ensure_ascii=False))
+        print(json.dumps(with_notice("ask_file_delete", payload, {"hookSpecificOutput": answer}), ensure_ascii=False))
 
 
 if __name__ == "__main__":

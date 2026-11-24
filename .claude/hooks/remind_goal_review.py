@@ -19,6 +19,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+from hook_notice import with_notice
+
 _PYTHON_RUN = re.compile(r"""python(?:\.exe)?["']?\s+(?:-\S+\s+)*["']?([^\s"';&|]+_run\.py)""", re.IGNORECASE)
 _BLENDER_SCRIPT = re.compile(r"""(?:--python|-P)\s+["']?[^\s"']*state_generic""")
 _GOAL = "목표 검토"
@@ -169,7 +171,7 @@ def main() -> None:
     record = Path(__file__).resolve().parents[2] / "docs" / "experiment.md"
     answer = decide(command, payload.get("cwd") or ".", record, payload["transcript_path"])
     if answer:
-        print(json.dumps({"hookSpecificOutput": answer}, ensure_ascii=False))
+        print(json.dumps(with_notice("remind_goal_review", payload, {"hookSpecificOutput": answer}), ensure_ascii=False))
 
 
 if __name__ == "__main__":

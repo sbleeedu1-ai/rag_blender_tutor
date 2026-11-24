@@ -26,6 +26,8 @@ import re
 import sys
 from pathlib import Path
 
+from hook_notice import with_notice
+
 ROOT = Path(__file__).resolve().parents[2]
 PLAN = ROOT / "results" / "20261119" / "222431_실패분석" / "7_전체계획.md"
 PLAN_NAME = "7_전체계획.md"
@@ -181,9 +183,10 @@ def run(mode: str, payload: dict, plan: Path = PLAN) -> dict | None:
 def main() -> None:
     sys.stdin.reconfigure(encoding="utf-8")
     sys.stdout.reconfigure(encoding="utf-8")
-    answer = run(sys.argv[1] if len(sys.argv) > 1 else "", json.load(sys.stdin))
+    payload = json.load(sys.stdin)
+    answer = run(sys.argv[1] if len(sys.argv) > 1 else "", payload)
     if answer:
-        print(json.dumps(answer, ensure_ascii=False))
+        print(json.dumps(with_notice("check_plan_steps", payload, answer), ensure_ascii=False))
 
 
 if __name__ == "__main__":

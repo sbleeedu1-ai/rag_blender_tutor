@@ -5293,3 +5293,12 @@
 - 바로잡음: 주 세션이 11-24 밤 대화에서 앞세우기를 "규칙대로면 넣지 않는다"고 네 번 말함. 실험 기록은 "미리 고정한 8문항 규칙으로는 통과"였고, 리랭킹 input(규칙으로 떨어짐)과 한 줄로 묶으면서 섞음(advisor가 짚음). [662]의 나눔(앞세우기를 "기록 잘못으로 넘어옴"에 둠)은 그대로 맞음.
 - 다시 본 것(돈 0, 1회 채점, `docs/experiment.md` 개정 4번 절): 원인 줄 C − B 맞음(30답씩)은 채점자 1만 +3, 채점자 2만 +4, 다수결 +4, 주 세션 읽기 +4. 갈린 B 답 MUMF는 사실과 다른 말이라 틀림. C 맞음 4답은 원문을 다시 읽어 모두 맞음.
 - 판정: 통과 유지(원인 줄 +4 기준값에 딱 걸림, 대조 −2, 갈린 답 정하는 법을 결과 뒤 정해 낙관적). 07 견줄 조건 후보이고, 넣으려면 애드온을 고쳐야 해(07 3절) 사용자가 정함. 판정의 날에 여쭐 것은 셋(앞세우기, "리랭킹 끔" 조건, 개정 8-21번 넣는 규칙).
+
+### [666] 2026-11-24 · 훅이 막을 때 사용자가 까닭을 바로 알게, 막거나 묻는 훅 8개가 화면에 "어느 훅·어디서·왜"를 띄운다
+
+- 사용자 원문: "모든 훅들에 그거도 추가해라 어떤 자리에서 뭐때문에 걸렸는지좀 미리 출력하고 이어서 하라고 가능하지? 맨날 왜이리 오래걸리나 보면 다 훅걸린건데 뭔지 몰라서 답답함"
+- 까닭: 막는 까닭(`permissionDecisionReason`·`reason`)은 Claude에게만 간다. 공식 문서(code.claude.com/docs/en/hooks, JSON output 절, web-fetch 에이전트가 읽음)의 공통 칸 `systemMessage`는 "Warning message shown to the user"다. 앞선 [199]-[200]에서 `notice_after_clear.py`에 이 칸을 썼지만 "실제 `/clear`에서 `systemMessage`가 화면에 뜨는지는 아직 안 봄"이었다.
+- 바꾼 것: 새 `.claude/hooks/hook_notice.py`의 `with_notice()`가 막음(deny·block)·물음(ask) 출력에 `[훅 이름 막음] 도구 \`명령 앞 60자\` — 까닭 앞 300자`를 붙인다. 붙인 훅 8개: ask_branch_delete, ask_file_delete, check_history_ref, check_plan_steps(pre·stop), check_reply, deny_cut_output, remind_goal_review, require_advisor. 테스트가 훅 폴더를 가져오게 `pyproject.toml` pytest 경로에 `.claude/hooks`를 더함.
+- 안 붙인 것과 까닭: check_plan_steps의 prompt 모드(막지 않고 Claude에게 글만 줌), restore_after_compact·restore_promises_after_compact(압축 뒤 글만 줌), notice_after_clear(이미 `systemMessage`를 씀), check_records_before_compact(직접 친 /compact를 막을 때 stderr가 이미 사용자에게 보임).
+- 확인: 테스트 `tests/test_hook_notice.py` 4개(실제 deny_cut_output 실행 포함), 전체 1208 통과. 이 세션에서 일부러 막히는 명령을 보내 대화 기록에 `"type":"hook_system_message"` 첨부로 알림 글이 남은 것을 봄(PreToolUse 확인함). Stop 훅 알림은 실제로 걸린 것을 아직 못 봄. 화면에 어떻게 그려지는지는 사용자 눈으로는 아직 못 봄.
+- 함께 한 것: agent 훅 시험(임시 폴더, `--settings`로 Stop agent 훅 하나)은 판단 불가. 앱에 든 claude를 셸에서 부르면 로그인이 안 되어 있어(`auth status` loggedIn false) 두 번 모두 1초 만에 "Not logged in"으로 끝남, 돈 0.

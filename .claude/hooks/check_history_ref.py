@@ -17,6 +17,8 @@ import re
 import sys
 from pathlib import Path
 
+from hook_notice import with_notice
+
 ROOT = Path(__file__).resolve().parents[2]
 TARGETS = ("HANDOFF.md", "HISTORY.md")
 HEADING = re.compile(r"^### \[(\d+)\]", re.MULTILINE)
@@ -72,7 +74,7 @@ def main() -> None:
     payload = json.load(sys.stdin)
     answer = decide(payload.get("tool_name") or "", payload.get("tool_input") or {})
     if answer:
-        print(json.dumps({"hookSpecificOutput": answer}, ensure_ascii=False))
+        print(json.dumps(with_notice("check_history_ref", payload, {"hookSpecificOutput": answer}), ensure_ascii=False))
 
 
 if __name__ == "__main__":

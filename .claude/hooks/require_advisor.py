@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 from deny_cut_output import git_subcommand, linked_pieces
+from hook_notice import with_notice
 
 SCOPES = ("blender_tutor", "addon", ".claude/hooks")
 PATHSPECS = [f":(top){s}" for s in SCOPES]
@@ -157,7 +158,7 @@ def main() -> None:
         return  # 커밋이 아니면 기록을 읽지 않는다(transcript_path가 없는 입력에서도 막지 않게)
     answer = decide(command, payload.get("cwd") or os.getcwd(), Path(payload["transcript_path"]))
     if answer:
-        print(json.dumps({"hookSpecificOutput": answer}, ensure_ascii=False))
+        print(json.dumps(with_notice("require_advisor", payload, {"hookSpecificOutput": answer}), ensure_ascii=False))
 
 
 if __name__ == "__main__":

@@ -37,7 +37,7 @@ packages = ["blender_tutor", "blender_tutor.tools"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", ".claude/hooks"]  # 훅은 옆 파일(hook_notice 등)을 가져온다. 실제 실행 때는 훅 폴더가 저절로 경로에 든다
 
 # 린트(HISTORY [472]): 진짜 실수(F)와 import 순서(I)만 켜고, 코드 경계(TID251)는 애드온 본체에만 건다.
 # 이 판의 ruff는 설정이 없으면 넓은 규칙 묶음을 켜므로 select를 늘 적어 둔다
