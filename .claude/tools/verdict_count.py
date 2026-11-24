@@ -118,7 +118,7 @@ def main(paths: list[str]) -> None:
             if not lines:
                 continue
             with_verdict += 1
-            bad = [ln for ln in lines if not CITE.search(ln)] if read else lines
+            bad = [] if read else [ln for ln in lines if not CITE.search(ln)]  # 읽었거나 출처를 붙였으면 통과([669] 뒤, 결과 본 뒤 바꿈·낙관적)
             if bad:
                 blocked += 1
                 why = "판정 자료 안 읽음" if not read else "출처 없음"
