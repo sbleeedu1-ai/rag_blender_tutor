@@ -248,3 +248,38 @@ def test_기록이_영어_진행_말로_끝나도_마지막_답이_한국어면_
     human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
     note = {"type": "assistant", "message": {"content": [{"type": "text", "text": "Now commit the record (durable), then advisor."}]}}
     assert not any("영어" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, note]), "차례 7번 결과를 정리했습니다. 판정은 차이 없음입니다."))
+
+
+# 규칙 7([670]): 11-24 밤 실제로 틀린 판정 답 줄(앞세우기는 실험 기록상 "규칙으로는 통과"였다, [665]).
+WRONG_VERDICT = "**앞세우기:** 좋아진 질문도 있고 나빠진 질문도 있었지만, 둘 다 채점이 흔들리는 정도여서 효과가 있다고 보기 어렵습니다. 그래서 규칙대로 넣지 않습니다."  # 11:11 차례, 도구 호출 없음
+WRITE_ONLY = [("Bash", {"command": "cat >> HISTORY.md <<'EOF'\n### [664] ...\nEOF\ngit add HISTORY.md && git commit -q -m x"})]  # 11:22 차례처럼 기록에 쓰기만 함
+
+
+def test_판정을_기록_안_읽고_출처_없이_말하면_막힌다(tmp_path):
+    assert any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, WRONG_VERDICT)))
+    assert any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, "앞세우기는 이미 규칙대로 넣지 않는 쪽입니다.", WRITE_ONLY)))
+
+
+def test_판정_자료를_읽었거나_출처를_붙이면_통과(tmp_path):
+    read = [("Bash", {"command": "grep -n \"개정 차례 4번\" docs/experiment.md"})]
+    assert not any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, WRONG_VERDICT, read)))
+    cited = "앞세우기는 규칙으로는 통과입니다([665], docs/experiment.md:2969)."
+    assert not any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, "앞세우기는 규칙대로 통과입니다 [665].")))
+    assert not any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, cited)))
+
+
+def test_코드_시험_통과와_인용은_판정이_아니다(tmp_path):
+    assert not any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, "pytest는 규칙대로 통과했습니다.")))
+    assert not any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, "그때 \"규칙대로 안 넣음\"이라고 한 말이 틀렸습니다.")))
+
+
+def test_훅을_실제로_돌리면_막고_화면_알림을_낸다(tmp_path):
+    """check_reply.py를 Stop 입력으로 실제 실행한다(main이 깨지면 규칙 1-7이 소리 없이 꺼진다, [550])."""
+    import subprocess
+    path = _turn(tmp_path, WRONG_VERDICT)
+    payload = {"hook_event_name": "Stop", "transcript_path": str(path), "last_assistant_message": WRONG_VERDICT}
+    done = subprocess.run([sys.executable, str(HOOKS / "check_reply.py")], input=json.dumps(payload, ensure_ascii=False),
+                          capture_output=True, text=True, encoding="utf-8", check=True)
+    out = json.loads(done.stdout)
+    assert out["decision"] == "block" and "[670]" in out["reason"]
+    assert out["systemMessage"].startswith("[훅 check_reply 막음] 답을 끝내려던 자리")

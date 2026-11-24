@@ -30,6 +30,11 @@
   Blender 화면 이름을 늘어놓은 한국어 답("Color Management에서 Working Space(Linear Rec.709)…를 봤습니다")을 살리려고 둘째·셋째 조건을 뒀다. 11-23 차례 7번 준비 중 진행 말 30여 개와 마지막 답을 영어로 써도 안 막혔다
   (사용자 "훅이 재 프롬프트 했지만 영어로 말하는건 안잡았네?").
   한계: 한국어 답 안의 영어 문장 하나는 못 본다(답 전체를 셈), 로마자 20자 밑의 아주 짧은 영어 답도 못 본다.
+- 규칙 7([670]): 마지막 답이 시험 판정("규칙대로 안 넣음"·"규칙으로는 통과" 꼴)을 말하는데, 그 차례에 판정 자료(docs/experiment.md·판정*.json·셈 결과)를
+  읽은 호출도 없고 그 줄에 출처([번호]·docs/experiment.md:줄)도 없으면 막는다. 11-24 밤 실험 기록을 안 보고 앞세우기를 "규칙대로 안 넣음"이라고
+  네 번 틀리게 말함([665]). 11-24 기록 319차례에 돌리니 12번 막힘(틀린 판정 4·맞지만 근거 없이 말함 7·판정 아님 1, [670]).
+  agent 훅(다른 AI가 판단)도 재 봤으나 낫지 않아 안 씀([669]). 한계: 꼴은 그날 틀린 넷을 보고 만듦, 기록 자체가 낡은 실수(Q18-2)는 못 잡음.
+  셈 도구 verdict_count.py와 읽기 판정이 조금 다르다(여기 READS에는 python이 없고 WRITES는 > 넘기기도 쓰기로 봄). 11-24 기록에서는 같은 13차례.
 - 글을 보는 범위([604]): 글 규칙(1·2·5와 3·4의 글 쪽)은 그 차례에서 이 훅이 마지막으로 막은 뒤의 글만 본다(규칙 6은 마지막 답만).
   이미 고쳐 낸 글에 백그라운드 알림 차례마다 다시 막혔다(11-23 같은 영어 줄에 세 번: 처음 1번은 맞게, 되풀이 2번). advisor 결과·기록 찾기 호출은 차례 전체에서 본다.
   마지막 답은 Stop 입력 `last_assistant_message`에서 더한다. 공식 문서(code.claude.com/docs/en/hooks.md Stop input)
@@ -69,6 +74,11 @@ OLD_TERMS = (
     (r"보낸 글|넘긴 글", "모델에 보낸 내용 전체"), (r"천장", "상한"), (r"얼리기|얼린 ", "코드 동결"),
     (r"문턱|통과선", "기준값"), (r"(?:지금|새) 뼈대", "분야 선택 있음·없음"), (r"첫 글자(?:까지| 시간|가 나오)", "첫 토큰"),
 )
+# 규칙 7([670]): 시험 판정 말. 11-24 밤 앞세우기를 "규칙대로 안 넣음"이라고 네 번 틀리게 말한 꼴에서 만들었다(낙관적, 하루치로 잼).
+VERDICT = re.compile(r"규칙(대로|상|으로)[^.。]{0,12}(통과|안 넣|넣지 않|버림|버린|떨어)")
+NOT_EXPERIMENT = re.compile(r"pytest|테스트|시험 \d+ 통과|훅 시험|CI|ruff|검사.{0,6}통과|그대로 통과")  # 코드 시험 통과는 시험 판정이 아니다
+CITE = re.compile(r"\[\d{3}\]|docs/experiment\.md:\d+|판정\.json|실험 기록 \d+줄|experiment\.md \d+줄")
+VERDICT_SOURCE = re.compile(r"docs/experiment\.md|판정[^\s\"']*\.json|셈_결과|읽기별_셈|먼저볼_셈")
 CODE = re.compile(r"```.*?```|https?://\S+|[\w./-]*/[\w./-]+|\b[\w-]+\.(?:py|md|json|jsonl|txt|log|png)\b", re.S)  # 규칙 6에서 셈에 넣지 않는 것
 FUNCTION_WORDS = re.compile(r"\b(?:the|a|an|is|are|was|to|of|and|so|it|this|that|I|I'll|I'm|I've|now|then|with|for)\b", re.I)  # 영어 문장에만 나오는 낱말(문장 첫 The·Now도 셈)
 QUOTES_EN = re.compile(r"\"[^\"\n]*\"|“[^”\n]*”|`[^`\n]*`")  # 규칙 6은 작은따옴표 짝을 빼지 않는다(I've … I'll 사이를 통째로 지움)
@@ -169,13 +179,36 @@ def _reads_records(name: str, args: dict) -> bool:
     return False
 
 
+def _reads_verdict_source(name: str, args: dict) -> bool:
+    """규칙 7: 판정 자료(실험 기록·판정 파일·셈 결과)를 읽은 호출인가. 쓰기는 읽기로 치지 않는다."""
+    if name in ("Grep", "Read"):
+        return bool(VERDICT_SOURCE.search(json.dumps(args, ensure_ascii=False)))
+    if name != "Bash":
+        return False
+    command = re.sub(r"\"[^\"]*\"|'[^']*'", '""', args.get("command", ""))  # 따옴표 속 |에서 쪼개지 않게([434])
+    return any(VERDICT_SOURCE.search(p) and READS.search(p) and not WRITES.search(p) for p in re.split(r"[;&|\n]+", command))
+
+
+def verdict_problems(last: str, blocks: list[dict]) -> list[str]:
+    """규칙 7: 마지막 답이 시험 판정을 말하는데, 그 차례에 판정 자료를 안 읽었고 그 줄에 출처도 없으면 막는다."""
+    if any(b.get("type") == "tool_use" and _reads_verdict_source(b.get("name", ""), b.get("input") or {}) for b in blocks):
+        return []
+    lines = [ln.strip() for ln in last.splitlines()
+             if VERDICT.search(QUOTES.sub("", ln)) and not NOT_EXPERIMENT.search(ln) and not CITE.search(ln)]
+    if not lines:
+        return []
+    return [f"시험 판정을 근거 없이 말했다(\"{lines[0][:60]}\"). 이 차례에 판정 자료(docs/experiment.md·판정 파일·셈 결과)를 읽은 호출도, 그 줄에 출처([번호]·docs/experiment.md:줄)도 없다. "
+            "실험 기록을 열어 판정을 확인하고 출처를 붙여 다시 쓴다. "
+            "까닭(사용자 원문): \"실험 기록을 안보고 뭘 근거로 판단한거야 대체?\", \"반드시 뭔가 판정하거나 … 근거를 생각해서 대답했는지\" [665]·[670]"]
+
+
 def turn_text(transcript: Path) -> str:
     """마지막 사람 메시지 뒤 Claude가 쓴 글."""
     return "\n".join(b.get("text", "") for b in _turn_blocks(transcript) if b.get("type") == "text")
 
 
 def turn_problems(transcript: Path, last_message: str = "") -> list[str]:
-    """규칙 1·2·5(답 글), 3(권하는데 기록을 안 찾음), 4(advisor 없이 결과), 6(영어 답).
+    """규칙 1·2·5(답 글), 3(권하는데 기록을 안 찾음), 4(advisor 없이 결과), 6(영어 답), 7(근거 없는 판정 말).
     글은 마지막으로 막은 뒤의 것 + 기록에 아직 없을 수 있는 마지막 답(last_message), 도구 호출은 차례 전체."""
     blocks = _turn_blocks(transcript)
     cut = max((i for i, b in enumerate(blocks) if b.get("type") == "feedback"), default=-1) + 1
@@ -184,7 +217,9 @@ def turn_problems(transcript: Path, last_message: str = "") -> list[str]:
         texts.append(last_message)
     text = "\n".join(texts)
     found = problems(text)
-    found += english_problems([last_message if last_message.strip() else (texts[-1] if texts else "")])  # 마지막 답만([605])
+    last = last_message if last_message.strip() else (texts[-1] if texts else "")
+    found += english_problems([last])  # 마지막 답만([605])
+    found += verdict_problems(last, blocks)  # 규칙 7, 마지막 답만([670])
     searched = any(b.get("type") == "tool_use" and _reads_records(b.get("name", ""), b.get("input") or {}) for b in blocks)
     recommends = any(RECOMMENDS.search(line) and not PAST.search(line) for line in text.splitlines())
     if recommends and not searched:
