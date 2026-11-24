@@ -159,7 +159,6 @@ class _TimedEmbedder(_Timed):
             self._log._end(record, self.inner, before, "오류" not in record)
 
 
-
 class _TimedReranker(_Timed):
     """리랭킹 판정기 겉(judge(query, passages, timeout)). 글 200개는 길어 남기지 않고 글 수만 적는다."""
 

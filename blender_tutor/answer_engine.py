@@ -215,7 +215,8 @@ class Settings:
     field_lines: bool = True
     # 위 200 리랭킹(사용자 "그래도 아예 의미가 없지는 않아서 넣기로 하자", [626]): 뜻 검색 위 rerank_depth개를 판정기 확률 순으로
     # 다시 세워 위 top_k개를 넘긴다. 판정기가 rerank_timeout초 안에 답하지 않거나 실패하면 뜻 검색 위 top_k개로 답한다.
-    # 5초: 차례 13번 시험 왕복 441번 중 5초를 넘은 것 4번(중앙 1.50초), 질문 바꾸기·분야 고르기 한도와 같은 값(Claude가 advisor와 정함)
+    # 5초: 차례 13번 시험 왕복 441번 중 5초를 넘은 것 4번(중앙 1.50초), 질문 바꾸기·분야 고르기 한도와 같은 값(Claude가 advisor와 정함).
+    # 임베딩처럼 urllib의 timeout이라 연결·읽기 한 번마다의 한도다(왕복 전체가 5초를 조금 넘을 수 있음)
     rerank: bool = True
     rerank_depth: int = 200
     rerank_timeout: float = 5.0
@@ -530,15 +531,17 @@ class AnswerEngine:
     def _ranked(self, query: str, vector: Sequence[float]) -> tuple[list[Chunk], bool]:
         """(넘길 검색 결과, 리랭킹 실패했나). 리랭킹이 켜져 있으면 뜻 검색 위 rerank_depth개를 판정기 확률 순으로 세운 위 top_k개.
         판정기는 바깥 서비스라 실패(시간 초과·오류·글 수와 다른 답)를 기록하고 뜻 검색 결과로 답한다(분야 고르기 실패와 같은 길).
-        리랭킹 없이 답하던 것이 [626] 전의 제품이라 엉뚱한 근거가 되지는 않는다."""
+        리랭킹 없이 답하던 것이 [626] 전의 제품이라 엉뚱한 근거가 되지는 않는다. 후보는 뜻 검색만 쓴다(낱말 검색 use_bm25는
+        리랭킹이 꺼졌거나 실패했을 때의 search에만 든다. 시험한 것이 뜻 검색 위 200이라서)."""
         if not (self._reranker and self._settings.rerank):
             return self.search(query, vector), False
         candidates = self._by_meaning(vector)[: self._settings.rerank_depth]
-        try:
-            probs = self._reranker.judge(query, [self._chunks[i].text for i in candidates], self._settings.rerank_timeout)
+        passages = [self._chunks[i].text for i in candidates]
+        try:  # 바깥 서비스 실패만: 연결·HTTP 오류·시간 초과(OSError 아래), 답 꼴이 틀림(ValueError, JSON 풀기 포함). 그 밖은 버그라 올린다
+            probs = self._reranker.judge(query, passages, self._settings.rerank_timeout)
             if len(probs) != len(candidates):
                 raise ValueError(f"리랭킹이 글 {len(candidates)}개에 확률 {len(probs)}개를 돌려줌")
-        except Exception as error:
+        except (OSError, ValueError) as error:
             log.warning("리랭킹 실패, 뜻 검색 순위로 답함: %r", error)
             return self.search(query, vector), True
         return [self._chunks[i] for i in rerank(candidates, probs)[: self._settings.top_k]], False

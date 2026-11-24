@@ -272,6 +272,12 @@ def test_리랭커가_실패하면_뜻_검색_위_k개로_답하고_실패를_�
     assert "리랭킹 실패" in caplog.text
 
 
+def test_리랭커가_우리_코드_오류를_내면_숨기지_않고_올린다():
+    # 바깥 서비스 실패(연결·시간 초과·답 꼴)만 뜻 검색 길로 보낸다. 다른 오류는 버그라 "리랭킹 실패"로 숨기지 않는다
+    with pytest.raises(KeyError):
+        ask_reranked(FakeReranker(error=KeyError("c00")))
+
+
 def test_리랭커를_끄면_부르지_않는다():
     reranker = FakeReranker({SELECT.text: 0.99})
     assert found(ask_reranked(reranker, Settings(top_k=2, rerank=False))) == [BEVEL, BEVEL_MORE]

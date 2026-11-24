@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from blender_tutor import engine_setup
+from blender_tutor import decision_rerank, engine_setup
 from blender_tutor.answer_engine import AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source
 from blender_tutor.answer_model import OpenAIAnswerModel
 from blender_tutor.call_log import SENT_KINDS, CallLog
@@ -39,8 +39,8 @@ from blender_tutor.progress import Course, Step, load_courses
 from blender_tutor.setting_fields import SettingLines
 from blender_tutor.work_state import WorkState
 
-# 지금 고를 수 있는 임베딩 종류·리랭커. 리랭커와 bge-m3 같은 다른 임베딩은 아직 없어서, 켠 척하지 않게 고를 수 없게 막는다.
-# 생기는 티켓(임베딩은 31, 리랭커는 개발 평가에서 켜 보기로 할 때)에서 값을 더하고 엔진에 실제로 넘긴다
+# 지금 고를 수 있는 임베딩 종류·리랭커. bge-m3 같은 다른 임베딩은 아직 없어서, 켠 척하지 않게 고를 수 없게 막는다.
+# 생기는 티켓에서 값을 더하고 엔진에 실제로 넘긴다. 리랭커는 [626]에서 제품에 넣은 gemini-decision-1과 끔
 EMBEDDINGS = engine_setup.EMBEDDINGS
 # 차례 하나의 어림 요금(달러). Haiku 5.5 실측에 약 10%를 얹었다(적게 보이지 않게). 잰 적 없는 조합은 숫자를 두지 않는다(docs/plan/01 E).
 # 답변(생각 수준, 설정 값을 보낸 차례인가): 생각 끔 + 설정 값 있음은 11-17 마지막 확인 54차례 $0.0976·11-14 천장 측정 바탕 $0.0954·
@@ -53,7 +53,7 @@ REWRITE_DOLLARS = 0.00066
 # 리랭킹 한 번(검색어 하나, 위 200)의 어림 요금: 차례 13번 위 200 전체 시험 441요청 입력 19,057,509토큰(약 4.32만/요청) × $0.10/100만
 # → 약 $0.0043에 약 10%를 얹음. 고를 수 있는 리랭커는 제품 기본(앞)과 끔([626] 전과 견주려고)
 RERANK_DOLLARS = 0.0048
-RERANKERS = ("gemini-decision-1", "끔")
+RERANKERS = (decision_rerank.MODEL, "끔")
 
 # 칸 이름 → 꼭 있어야 하나. 연습 과정 밖 질문이면 연습 과정·단계를 빼거나 null로 둔다
 # 설정 값: Ctrl+F10이 작업 상태 옆에 남긴 <같은 이름>.settings.json(HISTORY [270]). 없으면 설정 값 없이 묻는다
@@ -106,6 +106,7 @@ class TurnResult:
     query: str = ""  # 검색에 쓴 글(바꾼 검색어). 답이 끝까지 안 나왔으면 빈 글
     lines: tuple[str, ...] = ()  # 답변 모델에 실제로 넘긴 설정 줄. 답이 끝까지 안 나왔으면 빈 묶음
     calls: tuple[dict, ...] = ()  # 바깥 호출 기록(call_log, 보낸 차례). 기록을 주지 않고 돌렸으면 빈 묶음
+    rerank_failed: bool = False  # 리랭킹이 실패해 뜻 검색 순위로 답했나(리랭킹 판 결과에 섞인 리랭킹 없는 차례를 세려고)
 
 
 def run(
@@ -126,6 +127,7 @@ def run(
         conversation.engine = engine
         for turn in dialogue.turns:
             pieces, failure, sources, results, similar, first_piece, fields, field_failed, query, lines = [], None, (), (), (), None, (), False, "", ()
+            rerank_failed = False
             if log:
                 log.start()
             start = clock()
@@ -137,6 +139,7 @@ def run(
                 elif isinstance(event, Done):
                     sources, results, similar = event.sources, event.results, event.similar
                     fields, field_failed, query, lines = event.fields, event.field_failed, event.query, event.lines
+                    rerank_failed = event.rerank_failed
                 elif isinstance(event, Failure):
                     failure, results = event.message, event.results
             done = clock() - start
@@ -150,7 +153,7 @@ def run(
             mentioned = tuple(course for course in similar if course.name in answer)
             found.append(TurnResult(
                 dialogue, turn, answer, failure, sources, results, hit(turn.locations, results), similar, mentioned, first_piece, done,
-                fields, field_failed, query, lines, calls,
+                fields, field_failed, query, lines, calls, rerank_failed,
             ))
     return found
 
@@ -416,7 +419,7 @@ def main(
         }
         rows = run(dialogues, engine, args.recent, log=log)
         about["답변 모델 요금(달러)"] = model.dollars()  # 주 답 모델만(분야 고르기가 실패한 차례의 예비 답변은 아래 종류별에)
-        about["호출 종류별 요금(달러)"] = log.dollars()  # 질문 바꾸기·분야 고르기·임베딩·답변·예비 답변. 셀 수 없는 부품은 None
+        about["호출 종류별 요금(달러)"] = log.dollars()  # 질문 바꾸기·분야 고르기·임베딩·리랭킹·답변·예비 답변. 셀 수 없는 부품은 None
         about["답변 모델 생각 토큰"] = model.reasoning_tokens  # 생각 수준이 실제로 생각을 쓰는지(출력 토큰에 이미 들어 있어 요금은 같음)
         _write_run(folder, args.name, about, rows)
         print(f"요금(달러): {json.dumps(log.dollars(), ensure_ascii=False)}")
@@ -493,7 +496,7 @@ def _write_run(folder: Path, name: str, about: dict, found: list[TurnResult]) ->
                 "답에 나온 연습 과정": [course.name for course in result.mentioned],
                 "첫 글자(초)": result.first_piece, "답 끝(초)": result.done,
                 "설정 값 있음": result.turn.settings is not None, "고른 분야": list(result.fields), "분야 고르기 실패": result.field_failed,
-                "검색어": result.query, "보낸 설정 줄": list(result.lines),
+                "검색어": result.query, "보낸 설정 줄": list(result.lines), "리랭킹 실패": result.rerank_failed,
             }
             file.write(json.dumps(row, ensure_ascii=False) + "\n")
     if any(result.calls for result in found):
@@ -511,6 +514,8 @@ def _write_run(folder: Path, name: str, about: dict, found: list[TurnResult]) ->
         f"- 검색 적중: {sum(result.hit is not None for result in counted)} / {len(counted)}"
         " (분모: 정답 위치가 있는 차례, 채점자: 프로그램)",
         f"- 차례 {len(found)}개 중 답이 실패로 끝난 차례 {sum(result.failure is not None for result in found)}개",
+        f"- 리랭킹이 실패해 뜻 검색 순위로 답한 차례 {sum(result.rerank_failed for result in found)}개"
+        f"({', '.join(result.turn.number for result in found if result.rerank_failed) or '없음'})",
         f"- 연습 과정 밖 차례 {len(outside)}개 중 답에 연습 과정 이름이 나온 차례 {len(recommended)}개"
         f"({', '.join(result.turn.number for result in recommended) or '없음'}). 단순한 질문에 권했으면 채점 때 틀림",
         f"- 엔진만 잰 시간(창 없음): 첫 글자 {_seconds(first)}, 답 끝 {_seconds(done)}."
@@ -524,20 +529,20 @@ def _write_run(folder: Path, name: str, about: dict, found: list[TurnResult]) ->
     (folder / "요약.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-STAGES = ("질문 바꾸기 닫힘", "분야 고르기 끝", "임베딩 끝", "답 모델 보냄", "답 모델 첫 조각", "화면 첫 조각", "답 끝")
+STAGES = ("질문 바꾸기 닫힘", "분야 고르기 끝", "임베딩 끝", "리랭킹 끝", "답 모델 보냄", "답 모델 첫 조각", "화면 첫 조각", "답 끝")
 
 
 def _stages(result: TurnResult) -> dict[str, float | None]:
-    """차례를 물은 때부터 단계마다 걸린 초(그 단계가 없었으면 None). 앞 다섯은 호출 기록의 시계, 뒤 둘은 run의 시계로 잰 값이다
+    """차례를 물은 때부터 단계마다 걸린 초(그 단계가 없었으면 None). 앞 여섯은 호출 기록의 시계, 뒤 둘은 run의 시계로 잰 값이다
     (두 시계는 같은 순간에 0이 된다). 질문 바꾸기는 가장 먼저 닫힌 검색어(엔진이 쓰는 것), 답 모델은 마지막 답변 호출
-    (분야 고르기가 실패하면 예비 답변). 오류로 끝난 질문 바꾸기·분야 고르기·임베딩 호출은 세지 않는다. "답 모델 첫 조각"과 "화면 첫 조각"의 차이가 화면 글자로 바꾸려고 글을 붙잡은 시간이다."""
+    (분야 고르기가 실패하면 예비 답변). 오류로 끝난 질문 바꾸기·분야 고르기·임베딩·리랭킹 호출은 세지 않는다. "답 모델 첫 조각"과 "화면 첫 조각"의 차이가 화면 글자로 바꾸려고 글을 붙잡은 시간이다."""
     calls = result.calls
 
     def earliest(kind: str, key: str) -> float | None:
         return min((call[key] for call in calls if call["종류"] == kind and key in call and "오류" not in call), default=None)
 
     answer = next((call for call in reversed(calls) if call["종류"] in SENT_KINDS), {})
-    found = [earliest("질문 바꾸기", "검색어 닫힘"), earliest("분야 고르기", "끝"), earliest("임베딩", "끝"),
+    found = [earliest("질문 바꾸기", "검색어 닫힘"), earliest("분야 고르기", "끝"), earliest("임베딩", "끝"), earliest("리랭킹", "끝"),
              answer.get("보냄"), answer.get("첫 조각"), result.first_piece, result.done]
     return dict(zip(STAGES, found))
 

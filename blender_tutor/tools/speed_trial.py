@@ -271,7 +271,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     folder = args.results / now.strftime("%Y%m%d") / f"{now.strftime('%H%M%S')}_{args.name}"
     if folder.exists():
         raise SystemExit(f"{folder}가 이미 있습니다(덮어쓰지 않음).")
-    settings, key, calls = Settings(), openai_key(), Calls()
+    # 리랭킹 전([626] 전) luna 판을 재던 도구라 리랭킹은 끈다(켜면 어림에 없는 Google 호출이 붙음). 리랭킹 든 시간은 evaluate로 잰다
+    settings, key, calls = Settings(rerank=False), openai_key(), Calls()
     inner_rewriters = engine_setup.rewriters_for(settings, "openai")  # 이 실측은 luna 판이다(HISTORY [127]-[135])
     inner_answer = OpenAIAnswerModel(MODEL, key, settings.reasoning.value)
     engine = engine_setup.build_engine(

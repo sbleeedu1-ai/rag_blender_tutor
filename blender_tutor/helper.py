@@ -129,8 +129,8 @@ class Helper:
             self._course_desk.menu_names = load_menu_names(PROJECT / "data")
             settings = Settings(reasoning=os.environ.get(REASONING_ENV, Settings().reasoning))
             self._conversation.engine = build_engine(PROJECT / "data", courses=self._courses, settings=settings, embedding=EMBEDDING)
-        except SystemExit as error:  # OpenAI 키가 없음(openai_key). 스레드 안이라 잡지 않으면 '읽는 중'에 머문다
-            log.warning("OpenAI 키 없음: %s", error)
+        except SystemExit as error:  # 키가 없음(OpenAI·Anthropic·Gemini, api_key). 스레드 안이라 잡지 않으면 '읽는 중'에 머문다
+            log.warning("키 없음: %s", error)
             self._conversation.waiting_message = str(error)
             return
         except FileNotFoundError as error:

@@ -51,6 +51,18 @@ def test_요청은_차례_13번_시험과_같은_꼴로_보낸다(monkeypatch):
     assert request.get_header("X-goog-api-key") == "가짜 키" and timeout == 5.0
 
 
+def test_지시_문구와_머리글은_시험_글자_그대로다(monkeypatch):
+    # 같은 상수끼리 견주면 문구가 바뀌어도 통과하므로, 시험 도구(rerank_trial.INSTRUCTION)의 글자를 그대로 적어 둔다
+    assert INSTRUCTION == (
+        "The input is a search query written by someone learning Blender 5.2. "
+        "Does the following passage from the Blender 5.2 manual contain information that helps answer that query?\n\nPassage:\n"
+    )
+    sent = serve(monkeypatch, answers(0.5))
+    DecisionReranker("k").judge("q", ["a"], timeout=5.0)
+    request = sent[0][0]
+    assert request.get_method() == "POST" and request.get_header("Content-type") == "application/json"
+
+
 def test_질문_이름은_100개를_넘어도_시험과_같다(monkeypatch):
     sent = serve(monkeypatch, answers(*[0.5] * 120))
     DecisionReranker("k").judge("q", ["t"] * 120, timeout=5.0)
