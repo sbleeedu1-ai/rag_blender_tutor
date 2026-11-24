@@ -5302,3 +5302,13 @@
 - 안 붙인 것과 까닭: check_plan_steps의 prompt 모드(막지 않고 Claude에게 글만 줌), restore_after_compact·restore_promises_after_compact(압축 뒤 글만 줌), notice_after_clear(이미 `systemMessage`를 씀), check_records_before_compact(직접 친 /compact를 막을 때 stderr가 이미 사용자에게 보임).
 - 확인: 테스트 `tests/test_hook_notice.py` 4개(실제 deny_cut_output 실행 포함), 전체 1208 통과. 이 세션에서 일부러 막히는 명령을 보내 대화 기록에 `"type":"hook_system_message"` 첨부로 알림 글이 남은 것을 봄(PreToolUse 확인함). Stop 훅 알림은 실제로 걸린 것을 아직 못 봄. 화면에 어떻게 그려지는지는 사용자 눈으로는 아직 못 봄.
 - 함께 한 것: agent 훅 시험(임시 폴더, `--settings`로 Stop agent 훅 하나)은 판단 불가. 앱에 든 claude를 셸에서 부르면 로그인이 안 되어 있어(`auth status` loggedIn false) 두 번 모두 1초 만에 "Not logged in"으로 끝남, 돈 0.
+
+### [667] 2026-11-24 · 판정 말 검사를 AI에게 맡길 수 있는지 보려고, Stop agent 훅을 이 세션에 임시로 걸어 틀린 답과 고친 답에 시험한다
+
+- 사용자 원문: "흠 그전에 에이전트 훅 실제 테스트를 해보고 싶은데? 애초에 api 연결해둔게 없어서 그냥 내 사용량이나 쓸거같은데 어떤식으로 만드는지는 적혀 있을거잖아", 고른 것 "이 세션에 임시로", 끝낸 뒤 "지우고 기록해"
+- 꼴(공식 문서 code.claude.com/docs/en/hooks, web-fetch 에이전트가 읽음): `"type": "agent"`, `prompt`에 `$ARGUMENTS`(훅 입력 JSON), 답은 `{"ok": true}` 또는 `{"ok": false, "reason": …}`. Stop에서 ok false면 reason이 Claude에게 가고 답을 이어 감. 문서에 "Agent hooks are experimental"이라 적힘.
+- 시험(1회, `.claude/settings.local.json`에 Stop agent 훅 하나, 가짜 기록 `실험기록.md` 1줄 "앞세우기 … 규칙대로 통과"): 검사 에이전트는 답에 `[훅시험]`이 있을 때만 대화 기록과 기록 파일을 읽어 ① 이번 차례에 기록을 읽었나 ② 판정에 출처(파일:줄)가 붙었나 ③ 판정이 기록과 맞나를 봄.
+  - 틀린 답("규칙대로 안 넣음", 안 읽음·출처 없음): 막음. 셋을 모두 맞게 짚음(①설정 파일 쓰기만 있음 ②출처 없음 ③기록은 통과라 반대). 답 끝 11:57:22 → 막음 11:57:42(약 20초).
+  - 고친 답(기록 Read 뒤 "통과(실험기록.md:2)"): 통과. 답 끝 11:58:05 → 끝남 11:58:31(약 26초).
+- 셸 시험(`claude -p --settings`)은 앱에 든 claude가 셸에서 로그인 안 되어 있어 못 돌림([666]).
+- 정리: 시험 훅 설정은 `/Volumes/mac_ssd/proj/trash/20261124/`로 옮김. 판정 말 훅을 넣을지(낱말 규칙 15/311 막힘 대 agent 훅)는 아직 사용자 결정 전. agent 훅은 답마다 20초 넘게 걸리고 사용량을 씀(얼마인지 못 셈), 예 1쌍만 시험함.
