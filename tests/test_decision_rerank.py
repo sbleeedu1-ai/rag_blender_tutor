@@ -21,13 +21,15 @@ class Reply(io.BytesIO):
 
 def serve(monkeypatch, answer: dict) -> list:
     """urlopen을 가짜로 바꿔 answer를 돌려주고, 받은 (요청, 시간 한도)를 모은다."""
-    sent = []
+    sent, contexts = [], []
 
-    def fake(request, timeout):
+    def fake(request, timeout, context=None):
         sent.append((request, timeout))
+        contexts.append(context)
         return Reply(json.dumps(answer).encode("utf-8"))
 
     monkeypatch.setattr(urllib.request, "urlopen", fake)
+    serve.contexts = contexts  # type: ignore[attr-defined]
     return sent
 
 
@@ -86,7 +88,7 @@ def test_답에_빠진_질문이_있으면_ValueError(monkeypatch):
 
 @pytest.mark.parametrize("error", [urllib.error.URLError(socket.timeout("timed out")), TimeoutError("timed out")])
 def test_연결이든_읽기든_시간_초과면_TimeoutError(monkeypatch, error):
-    def slow(request, timeout):
+    def slow(request, timeout, context=None):
         raise error
 
     monkeypatch.setattr(urllib.request, "urlopen", slow)
@@ -119,7 +121,7 @@ def test_읽다가_연결이_끊기면_OSError(monkeypatch):
         def read(self, *args):
             raise http.client.IncompleteRead(b"{")
 
-    monkeypatch.setattr(urllib.request, "urlopen", lambda request, timeout: Broken(b""))
+    monkeypatch.setattr(urllib.request, "urlopen", lambda request, timeout, context=None: Broken(b""))
     with pytest.raises(OSError):
         DecisionReranker("k").judge("q", ["a"], timeout=5.0)
 
@@ -129,3 +131,13 @@ def test_usage만_없으면_확률은_쓰고_토큰은_세지_못한다(monkeypa
     serve(monkeypatch, {"usage": None, "answers": {"c00": {"noul": 0.3}}})
     judge = DecisionReranker("k")
     assert judge.judge("q", ["a"], timeout=5.0) == [0.3] and judge.input_tokens == 0
+
+
+def test_인증서는_운영체제_저장소로_확인한다(monkeypatch):
+    # Mac의 python.org 파이썬은 기본 인증서 묶음이 없어 urllib 기본값으로는 모든 리랭킹이 SSL 오류로 실패했다(11-24 실제 키 확인).
+    # anthropic이 쓰는 httpcore2(_ssl.py)처럼 truststore로 운영체제 인증서를 쓴다
+    import truststore
+
+    serve(monkeypatch, answers(0.5))
+    DecisionReranker("k").judge("q", ["a"], timeout=5.0)
+    assert isinstance(serve.contexts[0], truststore.SSLContext)

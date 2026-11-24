@@ -8,9 +8,12 @@ noul 값이 클수록 "예"라는 방향은 시험 때 방향 시험으로 확�
 
 import http.client
 import json
+import ssl
 import urllib.error
 import urllib.request
 from collections.abc import Sequence
+
+import truststore
 
 from blender_tutor.beginner_scope import api_key
 
@@ -34,6 +37,9 @@ class DecisionReranker:
     def __init__(self, key: str, model: str = MODEL):
         self.key, self.model = key, model
         self.input_tokens = self.requests = 0
+        # 운영체제 인증서 저장소로 서버를 확인한다(anthropic의 httpcore2 _ssl.py와 같은 방식). Mac의 python.org 파이썬은
+        # 기본 인증서 묶음이 없어 urllib 기본값으로는 SSL 확인이 늘 실패했다(11-24 실제 키 확인, HISTORY [629])
+        self._tls = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
     def judge(self, query: str, passages: Sequence[str], timeout: float) -> list[float]:
         """passages 차례대로 예 확률. timeout초 안에 응답이 없으면 TimeoutError, 답에 빠진 글이 있으면 ValueError."""
@@ -43,7 +49,7 @@ class DecisionReranker:
         request = urllib.request.Request(URL, json.dumps(body).encode("utf-8"),
                                          {"Content-Type": "application/json", "x-goog-api-key": self.key}, method="POST")
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with urllib.request.urlopen(request, timeout=timeout, context=self._tls) as response:
                 answer = json.loads(response.read())
         except urllib.error.URLError as error:  # 연결 단계의 시간 초과는 URLError에 싸여 온다. 읽기 단계는 TimeoutError 그대로
             if isinstance(error.reason, TimeoutError):

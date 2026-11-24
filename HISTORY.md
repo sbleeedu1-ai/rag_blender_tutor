@@ -5061,3 +5061,10 @@
 - 확인: 시험 6개(`noul` null·글 칸 null·answers null·몸통이 목록·`usage` null·읽다가 끊김)가 고치기 전에 TypeError·AttributeError·IncompleteRead로 실패함을 봄. `http.client.IncompleteRead`는 OSError 아래가 아님(실행으로 확인: 계보 HTTPException → Exception).
 - 고침: 답 꼴이 틀리면 ValueError, 읽다가 끊기면 ConnectionError로 바꿔 엔진이 뜻 검색 순위로 답함. `usage`만 없으면 확률은 쓰고 토큰은 0(요금이 덜 잡힘, 시험으로 고정). STRUCTURE.md의 답.jsonl "리랭킹 실패" 칸·호출.jsonl "리랭킹 끝" 예도 맞춤(281b989에서 빠졌던 것).
 - 검사: pytest 1203 통과, ruff·mypy 통과.
+
+### [629] 2026-11-24 · Mac에서 리랭킹이 늘 실패하지 않게, 판정기가 운영체제 인증서로 Google에 붙게 고치고 실제 키로 확인한다
+- 사용자: 진짜 키 확인(10검색 약 $0.05 이하)에 "네, 실행".
+- 첫 실행(`results/20261124/124624_리랭킹_실제키확인/`, 요금 0): 확인 도구(`rerank_live_check.py`)에서 10/10 리랭킹 실패, `SSL: CERTIFICATE_VERIFY_FAILED`. 시험 도구는 `SSL_CERT_FILE=/etc/ssl/cert.pem`을 붙여 돌려 드러나지 않았던 것. 도우미 창은 돌려 보지 않았으나 같은 판정기라 Mac에서는 검색마다 뜻 검색 순위로 빠졌을 것(추측).
+- 고침: `DecisionReranker`가 `truststore.SSLContext`로 연결(anthropic이 쓰는 httpcore2 `_ssl.py` 26줄과 같은 방식, 소스 코드로 확인). `pyproject.toml`에 truststore를 적음. 시험이 고치기 전에 실패함을 봄, pytest 1204 통과. 키 안내는 따로 문서가 없고 키 없음 문구(beginner_scope.py 287줄)가 `GEMINI_API_KEY`를 이름으로 알림.
+- 다시 실행(`results/20261124/124802_리랭킹_실제키확인/`, `SSL_CERT_FILE` 없이, 표본 10/431·1회): 시험과 후보 차례가 같은 앞 10검색어에서 리랭킹 실패 0, 확률 차 최대 0.0(청크마다 시험 받음.jsonl과 견줌), 입력 토큰 487,977 = 시험의 같은 10검색 합, 요금 약 $0.049. 판정기만 잰 왕복 중앙 1.964초·최대 3.886초(10번이라 시험의 441번 중앙 1.502초를 대신하지 않음).
+- 못 본 것: Windows 연결(truststore는 Windows 인증서 저장소를 씀), 도우미 창·평가 프로그램 전체 길(호출 기록의 "리랭킹 끝" 포함)을 진짜 키로 돈 것 → 차례 14번 첫 실행을 1-2문항으로 먼저 돌려 확인.
