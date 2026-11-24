@@ -97,3 +97,35 @@ def test_연결이든_읽기든_시간_초과면_TimeoutError(monkeypatch, error
 def test_확률이_큰_순이고_같으면_원래_순위를_지킨다():
     assert rerank([7, 3, 9, 1], [0.2, 0.9, 0.9, 0.5]) == [3, 9, 1, 7]
     assert rerank([7, 3, 9], [0.5, 0.5, 0.5]) == [7, 3, 9]
+
+
+@pytest.mark.parametrize("answer", [
+    {"answers": {"c00": {"noul": None}}, "usage": {"total_input_tokens": 10}},  # 확률 칸이 null
+    {"answers": {"c00": None}, "usage": {"total_input_tokens": 10}},  # 글 칸이 null
+    {"answers": None, "usage": {"total_input_tokens": 10}},  # answers가 null
+    ["뜻밖의 목록"],  # 몸통이 객체가 아님
+])
+def test_서버가_이상한_꼴로_답하면_ValueError라_엔진이_뜻_검색으로_답한다(monkeypatch, answer):
+    # 엔진은 바깥 실패(OSError·ValueError)만 잡으므로, 서버 답 꼴 문제가 TypeError·AttributeError로 새면 답 전체가 죽는다
+    serve(monkeypatch, answer)
+    with pytest.raises(ValueError):
+        DecisionReranker("k").judge("q", ["a"], timeout=5.0)
+
+
+def test_읽다가_연결이_끊기면_OSError(monkeypatch):
+    import http.client  # IncompleteRead는 OSError 아래가 아니라 그대로 두면 엔진이 잡지 못한다
+
+    class Broken(Reply):
+        def read(self, *args):
+            raise http.client.IncompleteRead(b"{")
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda request, timeout: Broken(b""))
+    with pytest.raises(OSError):
+        DecisionReranker("k").judge("q", ["a"], timeout=5.0)
+
+
+def test_usage만_없으면_확률은_쓰고_토큰은_세지_못한다(monkeypatch):
+    # 확률이 멀쩡한데 요금 칸 하나 때문에 리랭킹을 버리지 않는다. 대신 요금이 덜 잡힌다
+    serve(monkeypatch, {"usage": None, "answers": {"c00": {"noul": 0.3}}})
+    judge = DecisionReranker("k")
+    assert judge.judge("q", ["a"], timeout=5.0) == [0.3] and judge.input_tokens == 0

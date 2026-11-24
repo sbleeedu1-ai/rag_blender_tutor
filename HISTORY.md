@@ -5055,3 +5055,9 @@
   - 주석만: bm25가 리랭킹 후보에 안 듦, 5초가 왕복 전체 한도가 아님.
   - 고침(사소): 도우미 창 로그 "OpenAI 키 없음" → "키 없음", 대조 도구 독스트링(엔진끼리 견주는 확인은 증명이 아님을 밝힘), 빈 줄.
 - 남은 것: 실제 키로 시간·요금 재기(유료, 금액 보이고), 푸시.
+
+### [628] 2026-11-24 · 좁힌 잡기 범위 때문에 서버 답 꼴 하나로 답 전체가 죽지 않게, 리랭킹 판정기가 받은 답을 들어오는 곳에서 검사한다
+- 누가: advisor가 [627] 뒤 짚음("a malformed reply now kills the answer").
+- 확인: 시험 6개(`noul` null·글 칸 null·answers null·몸통이 목록·`usage` null·읽다가 끊김)가 고치기 전에 TypeError·AttributeError·IncompleteRead로 실패함을 봄. `http.client.IncompleteRead`는 OSError 아래가 아님(실행으로 확인: 계보 HTTPException → Exception).
+- 고침: 답 꼴이 틀리면 ValueError, 읽다가 끊기면 ConnectionError로 바꿔 엔진이 뜻 검색 순위로 답함. `usage`만 없으면 확률은 쓰고 토큰은 0(요금이 덜 잡힘, 시험으로 고정). STRUCTURE.md의 답.jsonl "리랭킹 실패" 칸·호출.jsonl "리랭킹 끝" 예도 맞춤(281b989에서 빠졌던 것).
+- 검사: pytest 1203 통과, ruff·mypy 통과.

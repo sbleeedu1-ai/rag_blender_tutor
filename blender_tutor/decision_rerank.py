@@ -6,6 +6,7 @@ noul 값이 클수록 "예"라는 방향은 시험 때 방향 시험으로 확�
 돈이 든다(검색 한 번 약 4.3만 입력 토큰, 시험 기록의 중앙값).
 """
 
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -48,12 +49,31 @@ class DecisionReranker:
             if isinstance(error.reason, TimeoutError):
                 raise TimeoutError(f"리랭킹 응답이 {timeout}초 안에 오지 않음") from error
             raise
+        except http.client.HTTPException as error:  # 읽다가 끊김(IncompleteRead 등)은 OSError 아래가 아니라 연결 오류로 바꿔 알린다
+            raise ConnectionError(f"리랭킹 응답을 다 받지 못함: {error!r}") from error
         self.requests += 1
-        self.input_tokens += answer.get("usage", {}).get("total_input_tokens", 0)  # 빠진 답이 있어도 받은 요청의 값은 센다
-        answers = answer.get("answers", {})
-        if missing := [name for name in names if "noul" not in answers.get(name, {})]:
+        return self._probabilities(answer, names)
+
+    def _probabilities(self, answer: object, names: list[str]) -> list[float]:
+        """서버 답(바깥 값)을 여기서 검사한다. 꼴이 틀리면 ValueError(엔진이 뜻 검색 순위로 답하는 길)."""
+        if not isinstance(answer, dict):
+            raise ValueError(f"리랭킹 답이 객체가 아님: {type(answer).__name__}")
+        usage = answer.get("usage")
+        if isinstance(usage, dict) and isinstance(usage.get("total_input_tokens"), int):
+            self.input_tokens += usage["total_input_tokens"]  # 빠진 답이 있어도 받은 요청의 값은 센다. usage만 없으면 확률은 쓰고 토큰은 못 셈(요금이 덜 잡힘)
+        answers = answer.get("answers")
+        if not isinstance(answers, dict):
+            raise ValueError("리랭킹 답에 answers가 없음")
+        probs, missing = [], []
+        for name in names:
+            p = item.get("noul") if isinstance(item := answers.get(name), dict) else None
+            if isinstance(p, (int, float)) and not isinstance(p, bool):
+                probs.append(float(p))
+            else:
+                missing.append(name)
+        if missing:
             raise ValueError(f"리랭킹 답에 빠진 글 {len(missing)}개: {', '.join(missing[:5])}")
-        return [float(answers[name]["noul"]) for name in names]
+        return probs
 
     def dollars(self) -> float:
         return round(self.input_tokens / 1_000_000 * PRICE_PER_MILLION, 6)
