@@ -216,6 +216,75 @@ def test_낱말_검색을_끄면_뜻_검색_순서만_쓴다():
     assert found(ask("save file", settings=Settings(top_k=2, use_bm25=False))) == [BEVEL, BEVEL_MORE]
 
 
+# 리랭킹(위 200을 판정기 확률 순으로 다시 세움, HISTORY [626])
+
+# TOWARD_BEVEL일 때 뜻 검색 순서: BEVEL, BEVEL_MORE, SAVE, ARRAY, EXPORT, SELECT(EXPORT·SELECT는 점수 0, 저장 차례)
+BY_MEANING = [BEVEL, BEVEL_MORE, SAVE, ARRAY, EXPORT, SELECT]
+
+
+class FakeReranker:
+    """글마다 정해 둔 확률(없으면 default)을 돌려준다. 받은 검색어·글·시간 한도를 적어 둔다."""
+
+    def __init__(self, probs: dict | None = None, default=0.5, error: Exception | None = None, short=False):
+        self.probs, self.default, self.error, self.short = probs or {}, default, error, short
+        self.calls: list[tuple[str, list[str], float]] = []
+
+    def judge(self, query, passages, timeout):
+        self.calls.append((query, list(passages), timeout))
+        if self.error:
+            raise self.error
+        probs = [self.probs.get(text, self.default) for text in passages]
+        return probs[:-1] if self.short else probs
+
+
+def ask_reranked(reranker, settings=Settings(top_k=2)) -> list:
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(), settings, reranker=reranker)
+    return list(engine.answer("베벨", STATE, []))
+
+
+def test_리랭커가_가장_높게_본_청크는_뜻_순위가_맨_끝이어도_위로_올라온다():
+    events = ask_reranked(FakeReranker({SELECT.text: 0.99, SAVE.text: 0.8}))
+    assert found(events) == [SELECT, SAVE]
+    assert events[-1].rerank_failed is False
+
+
+def test_확률이_같으면_뜻_검색_순서를_지킨다():
+    assert found(ask_reranked(FakeReranker(default=0.5), Settings(top_k=6))) == BY_MEANING
+
+
+def test_리랭커에는_검색어와_뜻_검색_위_rerank_depth개의_글을_순서대로_한도와_함께_넘긴다():
+    reranker = FakeReranker()
+    ask_reranked(reranker, Settings(top_k=2, rerank_depth=4, rerank_timeout=3.0))
+    assert reranker.calls == [("베벨", [chunk.text for chunk in BY_MEANING[:4]], 3.0)]
+
+
+def test_위_rerank_depth_밖의_청크는_확률이_높아도_오르지_않는다():
+    events = ask_reranked(FakeReranker({SELECT.text: 0.99}), Settings(top_k=1, rerank_depth=5))
+    assert found(events) == [BEVEL]
+
+
+@pytest.mark.parametrize("reranker", [FakeReranker(error=TimeoutError("늦음")), FakeReranker(short=True)])
+def test_리랭커가_실패하면_뜻_검색_위_k개로_답하고_실패를_알린다(reranker, caplog):
+    events = ask_reranked(reranker)
+    assert isinstance(events[-1], Done) and "".join(e.text for e in events if isinstance(e, Piece))  # 답은 멈추지 않는다
+    assert found(events) == [BEVEL, BEVEL_MORE]
+    assert events[-1].rerank_failed is True
+    assert "리랭킹 실패" in caplog.text
+
+
+def test_리랭커를_끄면_부르지_않는다():
+    reranker = FakeReranker({SELECT.text: 0.99})
+    assert found(ask_reranked(reranker, Settings(top_k=2, rerank=False))) == [BEVEL, BEVEL_MORE]
+    assert reranker.calls == []
+
+
+def test_search는_리랭커를_부르지_않는다():
+    # 실측 프로그램(speed_trial)이 쓰지 않은 검색어도 search로 채점한다. 거기서 유료 판정기를 부르면 안 된다
+    reranker = FakeReranker({SELECT.text: 0.99})
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(), Settings(top_k=2), reranker=reranker)
+    assert engine.search("bevel", TOWARD_BEVEL) == [BEVEL, BEVEL_MORE] and reranker.calls == []
+
+
 # 검색어 만들기
 
 

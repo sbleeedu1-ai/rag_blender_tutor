@@ -50,7 +50,10 @@ EMBEDDINGS = engine_setup.EMBEDDINGS
 # 분야 고르기·임베딩은 기록이 없어 넣지 않는다(호출.jsonl의 호출 종류별 요금으로 처음 잰다). 이전 값(none $0.00064)은 luna 때 것이었다
 ANSWER_DOLLARS = {(Reasoning.NONE, True): 0.0020, (Reasoning.NONE, False): 0.0009, (Reasoning.LOW, True): 0.0024}
 REWRITE_DOLLARS = 0.00066
-RERANKERS = ("끔",)
+# 리랭킹 한 번(검색어 하나, 위 200)의 어림 요금: 차례 13번 위 200 전체 시험 441요청 입력 19,057,509토큰(약 4.32만/요청) × $0.10/100만
+# → 약 $0.0043에 약 10%를 얹음. 고를 수 있는 리랭커는 제품 기본(앞)과 끔([626] 전과 견주려고)
+RERANK_DOLLARS = 0.0048
+RERANKERS = ("gemini-decision-1", "끔")
 
 # 칸 이름 → 꼭 있어야 하나. 연습 과정 밖 질문이면 연습 과정·단계를 빼거나 null로 둔다
 # 설정 값: Ctrl+F10이 작업 상태 옆에 남긴 <같은 이름>.settings.json(HISTORY [270]). 없으면 설정 값 없이 묻는다
@@ -390,7 +393,7 @@ def main(
     if args.command == "run":
         settings = Settings(top_k=args.top_k, use_bm25=args.bm25, reasoning=args.reasoning,
                             situation_lines=not args.no_situation, computed_lines=not args.no_computed,
-                            field_lines=not args.no_fields)
+                            field_lines=not args.no_fields, rerank=args.reranker != "끔")
         if not args.yes:
             print(f"{_estimate(dialogues, settings)}. 확인받은 뒤 --yes를 붙여 다시 돌리세요.", file=sys.stderr)
             return 2
@@ -442,8 +445,9 @@ def _estimate(dialogues: Sequence[Dialogue], settings: Settings) -> str:
     if found is None:
         return f"차례 {len(turns)}개. 생각 수준 {settings.reasoning}은 잰 적이 없어 비용을 어림할 수 없음"
     answer, rewrite = found
-    return (f"차례 {len(turns)}개(설정 값 있음 {with_settings}개) 어림 약 ${answer + rewrite:.4f} = 답변 ${answer:.4f} + 질문 바꾸기 ${rewrite:.4f}"
-            "(Haiku 실측 + 약 10%). 분야 고르기·임베딩은 잰 적이 없어 뺐음")
+    rerank = len(turns) * RERANK_DOLLARS if settings.rerank else 0.0
+    return (f"차례 {len(turns)}개(설정 값 있음 {with_settings}개) 어림 약 ${answer + rewrite + rerank:.4f} = 답변 ${answer:.4f} + 질문 바꾸기 ${rewrite:.4f}"
+            f" + 리랭킹 ${rerank:.4f}(Haiku·Gemini 실측 + 약 10%). 분야 고르기·임베딩은 잰 적이 없어 뺐음")
 
 
 def _commit() -> str | None:

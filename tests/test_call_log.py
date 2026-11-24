@@ -73,6 +73,39 @@ def test_분야_고르기와_임베딩도_시각과_토큰을_남긴다():
     assert embedded["종류"] == "임베딩" and embedded["글 수"] == 2 and embedded["입력"] == 7 and "출력" not in embedded
 
 
+def test_리랭킹도_시각과_입력_토큰과_요금을_남긴다():
+    class Judge:
+        input_tokens = 0
+
+        def judge(self, query, passages, timeout):
+            self.input_tokens += 40
+            return [0.5] * len(passages)
+
+        def dollars(self):
+            return self.input_tokens / 1e6 * 0.10
+
+    log = CallLog()
+    judge = log.wrap("리랭킹", Judge())
+    log.start()
+    assert judge.judge("q", ["a", "b"], 5.0) == [0.5, 0.5]
+    (record,) = log.take()
+    assert record["종류"] == "리랭킹" and record["글 수"] == 2 and record["입력"] == 40 and "끝" in record
+    assert log.dollars() == {"리랭킹": 0.000004}
+
+
+def test_리랭킹이_실패하면_오류를_적고_그대로_올린다():
+    class Broken:
+        def judge(self, query, passages, timeout):
+            raise TimeoutError("늦음")
+
+    log = CallLog()
+    judge = log.wrap("리랭킹", Broken())
+    log.start()
+    with pytest.raises(TimeoutError):
+        judge.judge("q", ["a"], 5.0)
+    assert "TimeoutError" in log.take()[0]["오류"]
+
+
 def test_실패한_호출은_오류를_적고_오류를_그대로_올린다():
     class Broken:
         def stream(self, messages, timeout, first_timeout=None):

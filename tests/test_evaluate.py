@@ -349,11 +349,11 @@ def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약
     folder = tmp_path / "results" / "20261026" / "090500_기준"
     settings = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     assert settings["engine"] == "가짜 엔진(text-embedding-3-large)" and settings["임베딩"] == "text-embedding-3-large"
-    assert settings["리랭커"] == "끔" and settings["답변 모델 요금(달러)"] == 0.0012 and settings["답변 모델 생각 토큰"] == 37
+    assert settings["리랭커"] == "gemini-decision-1" and settings["답변 모델 요금(달러)"] == 0.0012 and settings["답변 모델 생각 토큰"] == 37
     assert made_models[-1].effort == "low"  # 생각 수준을 답변 모델에 넘긴다
     # 어느 코드로 잰 결과인지(홀드아웃은 동결한 커밋 번호를 적는다). 커밋 안 한 변경이 있으면 뒤에 표시가 붙는다
     assert re.fullmatch(r"[0-9a-f]{40}( \(커밋 안 한 변경 있음\))?", settings["커밋"])
-    assert settings["settings"] == {"top_k": 8, "timeout": 10.0, "answer_first_timeout": 20.0, "answer_timeout": 5.0, "rewrite_timeout": 5.0, "field_timeout": 5.0, "use_bm25": False, "reasoning": "low", "fallback_reasoning": "low", "situation_lines": True, "computed_lines": True, "field_lines": True, "recent_pairs": 5}
+    assert settings["settings"] == {"top_k": 8, "timeout": 10.0, "answer_first_timeout": 20.0, "answer_timeout": 5.0, "rewrite_timeout": 5.0, "field_timeout": 5.0, "use_bm25": False, "reasoning": "low", "fallback_reasoning": "low", "situation_lines": True, "computed_lines": True, "field_lines": True, "rerank": True, "rerank_depth": 200, "rerank_timeout": 5.0, "recent_pairs": 5}
     rows = [json.loads(text) for text in (folder / "답.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [(row["번호"], row["적중 순위"]) for row in rows] == [("D01", 1), ("D02", None)]
     assert rows[0]["검색 결과"][0]["주소"] == "files/blend/save.html#save"
@@ -416,6 +416,12 @@ def test_같은_날_같은_이름으로_다시_돌리면_덮어쓰지_않고_멈
     assert (tmp_path / "results" / "20261026" / "090500_기준" / "답.jsonl").read_text(encoding="utf-8") == before
 
 
+def test_run은_리랭커를_끈_판을_설정에_남긴다(tmp_path):
+    assert main(["run", *run_options(tmp_path, "--name", "끔", "--reranker", "끔")], now=datetime(2026, 10, 26, 9, 5)) == 0
+    about = json.loads((tmp_path / "results" / "20261026" / "090500_끔" / "설정.json").read_text(encoding="utf-8"))
+    assert about["리랭커"] == "끔" and about["settings"]["rerank"] is False
+
+
 def test_아직_없는_리랭커나_임베딩은_고를_수_없다(tmp_path):
     for more in (["--reranker", "켬"], ["--embedding", "bge-m3"]):
         with pytest.raises(SystemExit):
@@ -428,7 +434,10 @@ def test_run은_yes가_없으면_어림_비용만_보이고_돌리지_않는다(
     # 이 두 차례는 설정 값이 없어, 그 꼴을 잰 생각 끔으로 어림을 본다(기본 low는 설정 값 없음을 잰 적이 없다)
     assert main([*argv, "--reasoning", "none"], now=datetime(2026, 10, 26, 9, 5)) == 2
     said = capsys.readouterr().err
-    assert "차례 2개(설정 값 있음 0개) 어림 약 $0.0031 = 답변 $0.0018 + 질문 바꾸기 $0.0013" in said
+    # 리랭킹(기본 켬)은 차례마다 약 $0.0048(차례 13번 위 200 전체 시험 실측 + 약 10%)
+    assert "차례 2개(설정 값 있음 0개) 어림 약 $0.0127 = 답변 $0.0018 + 질문 바꾸기 $0.0013 + 리랭킹 $0.0096" in said
+    assert main([*argv, "--reasoning", "none", "--reranker", "끔"], now=datetime(2026, 10, 26, 9, 5)) == 2
+    assert "어림 약 $0.0031 = 답변 $0.0018 + 질문 바꾸기 $0.0013 + 리랭킹 $0.0000" in capsys.readouterr().err
     assert "분야 고르기·임베딩은 잰 적이 없어 뺐음" in said
     # 잰 적 없는 생각 수준(기본 low의 설정 값 없음 포함)은 숫자를 지어내지 않는다
     assert main(argv, now=datetime(2026, 10, 26, 9, 5)) == 2

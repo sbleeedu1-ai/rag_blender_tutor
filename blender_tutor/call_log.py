@@ -1,4 +1,4 @@
-"""호출 기록: 답 시험(evaluate run)이 차례마다 바깥 호출(질문 바꾸기·분야 고르기·임베딩·답변)의 시각·토큰·주고받은 글을 남긴다.
+"""호출 기록: 답 시험(evaluate run)이 차례마다 바깥 호출(질문 바꾸기·분야 고르기·임베딩·리랭킹·답변)의 시각·토큰·주고받은 글을 남긴다.
 
 무엇이 효과였는지 채점 없이 가르려고 모델이 실제로 받은 글과 단계별 시간을 남긴다(docs/plan/01 A, HISTORY [459]).
 부품을 겉으로 감쌀 뿐 주고받는 글은 그대로 넘기므로 답·검색 결과는 감싸기 전과 같다. 도우미 창은 쓰지 않는다.
@@ -33,6 +33,8 @@ class CallLog:
         self._parts[kind].append(part)
         if kind == "임베딩":
             return _TimedEmbedder(part, self, kind, slot)
+        if kind == "리랭킹":
+            return _TimedReranker(part, self, kind, slot)
         return _TimedModel(part, self, kind, slot)
 
     def start(self) -> None:
@@ -156,3 +158,18 @@ class _TimedEmbedder(_Timed):
         finally:
             self._log._end(record, self.inner, before, "오류" not in record)
 
+
+
+class _TimedReranker(_Timed):
+    """리랭킹 판정기 겉(judge(query, passages, timeout)). 글 200개는 길어 남기지 않고 글 수만 적는다."""
+
+    def judge(self, query, passages, timeout: float):
+        record, before = self._log._begin(self._kind, self._slot), _tokens(self.inner)
+        record["글 수"] = len(passages)
+        try:
+            return self.inner.judge(query, passages, timeout)
+        except Exception as error:
+            record["오류"] = repr(error)
+            raise
+        finally:
+            self._log._end(record, self.inner, before, "오류" not in record)

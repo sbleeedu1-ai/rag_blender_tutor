@@ -20,6 +20,7 @@ from typing import Protocol
 import numpy as np
 from rank_bm25 import BM25Okapi
 
+from blender_tutor.decision_rerank import rerank
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
 from blender_tutor.menu_names import (
     MARK_CLOSE,
@@ -154,6 +155,13 @@ class Embedder(Protocol):
     def embed(self, texts: Sequence[str], timeout: float) -> Sequence[Sequence[float]]: ...
 
 
+class Reranker(Protocol):
+    """판정기: 검색어와 글들을 받아 글마다 "검색어에 답하는 데 도움이 되나"의 확률을 글 차례대로 돌려준다(HISTORY [626]).
+    timeout초 안에 응답이 없으면 TimeoutError를 낸다."""
+
+    def judge(self, query: str, passages: Sequence[str], timeout: float) -> list[float]: ...
+
+
 class Rewriter(Protocol):
     """질문 바꾸기 모델: OpenAI 방식 채팅 글(역할 system·user)을 받아 답 글(JSON)을 조각으로 흘려 준다(티켓 44).
     주소를 바꿔 로컬 모델(llama-server, 티켓 42)로 바꿔 끼울 수 있게 이 모양만 약속한다."""
@@ -205,6 +213,12 @@ class Settings:
     computed_lines: bool = True
     # 분야 묶음을 넘길지. 끄면 분야를 고르지 않고 늘 보내는 줄만 넘긴다(개발셋에서 묶음 몫을 가르려고, 검토 A5)
     field_lines: bool = True
+    # 위 200 리랭킹(사용자 "그래도 아예 의미가 없지는 않아서 넣기로 하자", [626]): 뜻 검색 위 rerank_depth개를 판정기 확률 순으로
+    # 다시 세워 위 top_k개를 넘긴다. 판정기가 rerank_timeout초 안에 답하지 않거나 실패하면 뜻 검색 위 top_k개로 답한다.
+    # 5초: 차례 13번 시험 왕복 441번 중 5초를 넘은 것 4번(중앙 1.50초), 질문 바꾸기·분야 고르기 한도와 같은 값(Claude가 advisor와 정함)
+    rerank: bool = True
+    rerank_depth: int = 200
+    rerank_timeout: float = 5.0
 
     def __post_init__(self):
         object.__setattr__(self, "reasoning", Reasoning(self.reasoning))  # "low"처럼 글자로 줘도 받고, 모르는 이름이면 ValueError
@@ -255,6 +269,8 @@ class Done:
     # 평가에서 검색·답이 왜 흔들리는지 보려고 알린다(티켓 35). 창은 쓰지 않는다
     query: str = ""
     lines: tuple[str, ...] = ()
+    # 리랭킹을 부르려 했는데 실패해 뜻 검색 위 top_k개로 답했나. 평가에서 리랭킹 판과 섞이지 않게 센다(창은 쓰지 않음)
+    rerank_failed: bool = False
 
 
 @dataclass(frozen=True)
@@ -289,6 +305,7 @@ class AnswerEngine:
         field_model: FieldModel | None = None,
         fields: Mapping[str, str] | None = None,
         fallback_model: AnswerModel | None = None,
+        reranker: Reranker | None = None,
     ):
         """name은 시간 기록·평가 결과에 남길 엔진 이름(어떤 임베딩·답변 모델인지, 엔진을 만드는 곳이 정한다).
         menu_names는 답 글의 [[메뉴 이름]] 표시를 한국어 화면 이름으로 바꿀 사전(없으면 바꾸지 않음).
@@ -296,7 +313,8 @@ class AnswerEngine:
         rewriters는 질문 바꾸기 모델들(동시에 부를 수만큼, 하나씩 따로). 있으면 모두 동시에 불러 먼저 온 답의 영어 검색어로
         찾는다(늦는 답을 기다리지 않으려고, [127]). 없으면 질문과 맥락 줄을 그대로 검색어로 쓴다.
         field_model·fields는 분야 고르기 모델과 분야 목록(코드 → 쉬운 설명). 둘 다 있고 설정 값을 받은 질문이면 분야를 고른다.
-        fallback_model은 분야 고르기가 실패해 묶음 없이 답할 때 쓰는 답변 모델(생각 수준을 올린 것). 없으면 model을 쓴다."""
+        fallback_model은 분야 고르기가 실패해 묶음 없이 답할 때 쓰는 답변 모델(생각 수준을 올린 것). 없으면 model을 쓴다.
+        reranker는 위 200 리랭킹 판정기(settings.rerank가 켜져 있을 때만 부른다). 없으면 뜻 검색 순위 그대로 쓴다."""
         self.name = name
         self._chunks = list(chunks)
         self._menu_names = menu_names
@@ -322,6 +340,7 @@ class AnswerEngine:
             raise ValueError("분야 고르기 모델과 분야 목록은 함께 줘야 함")
         self._field_model, self._fields = field_model, dict(fields or {})
         self._fallback_model = fallback_model
+        self._reranker = reranker
         areas = sorted({area_of(chunk.page_path) for chunk in self._chunks})
         self._rewrite_prompt = REWRITE_PROMPT.format(areas="\n".join(areas))
 
@@ -360,10 +379,11 @@ class AnswerEngine:
         except Exception as error:
             yield _failure(error, [])
             return
+        # 리랭킹은 분야 고르기 결과를 기다리기 전에 부른다(분야 고르기는 뒤에서 돌고 있어 두 기다림이 겹친다)
+        results, rerank_failed = self._ranked(query, vectors[0])
         codes, field_failed = self._fields_from(chosen)
         lines = lines_for(settings, codes, situation=self._settings.situation_lines, computed=self._settings.computed_lines) if settings is not None else []
         model = self._fallback_model if field_failed and self._fallback_model else self._model
-        results = self.search(query, vectors[0])
         # 먼저 볼 소제목은 검색 상위를 대신하지 않고 그 위에 덧붙인다. 검색에도 걸렸으면 한 번만
         preview = self._preview(step)
         sent = list(dict.fromkeys(preview + results))
@@ -382,7 +402,7 @@ class AnswerEngine:
             return
         if text := marks.finish():
             yield Piece(text)
-        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed, query, tuple(lines))
+        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed, query, tuple(lines), rerank_failed)
 
     def _start_fields(self, question: str, query: str, state: WorkState) -> Future:
         """분야 고르기를 뒤에서 부른다. 결과(분야 코드 묶음)나 오류는 돌려준 Future에 담긴다."""
@@ -507,10 +527,31 @@ class AnswerEngine:
                 pass
         self._embedder.embed(["bevel"], self._settings.timeout)
 
-    def search(self, query: str, vector: Sequence[float]) -> list[Chunk]:
-        """뜻 검색과 낱말 검색 순위를 RRF로 합쳐 상위 top_k개를 고른다. 실측 프로그램(speed_trial)이 쓰지 않은 검색어도 채점하려고 부른다."""
+    def _ranked(self, query: str, vector: Sequence[float]) -> tuple[list[Chunk], bool]:
+        """(넘길 검색 결과, 리랭킹 실패했나). 리랭킹이 켜져 있으면 뜻 검색 위 rerank_depth개를 판정기 확률 순으로 세운 위 top_k개.
+        판정기는 바깥 서비스라 실패(시간 초과·오류·글 수와 다른 답)를 기록하고 뜻 검색 결과로 답한다(분야 고르기 실패와 같은 길).
+        리랭킹 없이 답하던 것이 [626] 전의 제품이라 엉뚱한 근거가 되지는 않는다."""
+        if not (self._reranker and self._settings.rerank):
+            return self.search(query, vector), False
+        candidates = self._by_meaning(vector)[: self._settings.rerank_depth]
+        try:
+            probs = self._reranker.judge(query, [self._chunks[i].text for i in candidates], self._settings.rerank_timeout)
+            if len(probs) != len(candidates):
+                raise ValueError(f"리랭킹이 글 {len(candidates)}개에 확률 {len(probs)}개를 돌려줌")
+        except Exception as error:
+            log.warning("리랭킹 실패, 뜻 검색 순위로 답함: %r", error)
+            return self.search(query, vector), True
+        return [self._chunks[i] for i in rerank(candidates, probs)[: self._settings.top_k]], False
+
+    def _by_meaning(self, vector: Sequence[float]) -> list[int]:
+        """청크 차례 번호를 뜻 점수(코사인) 큰 순으로. 같은 점수는 저장 차례(차례 13번 시험의 위 200과 같은 정렬)."""
         meaning_scores = self._vectors @ _normalized(np.asarray(vector, dtype=np.float32))
-        rankings = [np.argsort(-meaning_scores, kind="stable")[:RRF_DEPTH]]
+        return [int(i) for i in np.argsort(-meaning_scores, kind="stable")]
+
+    def search(self, query: str, vector: Sequence[float]) -> list[Chunk]:
+        """뜻 검색과 낱말 검색 순위를 RRF로 합쳐 상위 top_k개를 고른다(리랭킹은 하지 않음: 유료 판정기는 answer에서만 부른다).
+        실측 프로그램(speed_trial)이 쓰지 않은 검색어도 채점하려고 부른다."""
+        rankings = [self._by_meaning(vector)[:RRF_DEPTH]]
         if self._settings.use_bm25:
             word_scores = self._bm25.get_scores(_words(query))
             order = np.argsort(-word_scores, kind="stable")[:RRF_DEPTH]

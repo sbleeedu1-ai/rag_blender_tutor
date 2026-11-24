@@ -44,6 +44,15 @@ class AnswerModel:  # 진짜 답변 모델 대신: 만들 때 받은 값과 받�
         yield "답"
 
 
+class Reranker:  # Gemini 판정기 대신: 받은 검색어를 적고 모든 글에 같은 확률을 준다(뜻 검색 순서 그대로)
+    def __init__(self, key):
+        self.key, self.model, self.queries = key, "gemini-decision-1", []
+
+    def judge(self, query, passages, timeout):
+        self.queries.append(query)
+        return [0.5] * len(passages)
+
+
 class Claude:  # Claude 모델 대신: 만들 때 받은 값을 적고, 질문 바꾸기·분야 고르기·답변을 흉내 낸다
     def __init__(self, model, key, reasoning="none", max_tokens=4096, timeout=10.0, schema=None):
         self.model, self.settings, self.sent = model, (reasoning, max_tokens, timeout, schema is not None), []
@@ -67,7 +76,7 @@ def fakes(tmp_path, monkeypatch):
             return [[0.0, 1.0], [1.0, 0.0]]
 
     manual_vectors.build([ARRAY, BEVEL], Stored(), manual_vectors.path_for("text-embedding-3-large", tmp_path), "fake")
-    made = {"embedder": [], "rewriter": [], "model": [], "claude": []}
+    made = {"embedder": [], "rewriter": [], "model": [], "claude": [], "reranker": []}
 
     def keep(kind, cls):
         return lambda *args: made[kind].append(cls(*args)) or made[kind][-1]
@@ -78,6 +87,8 @@ def fakes(tmp_path, monkeypatch):
     monkeypatch.setattr(engine_setup, "OpenAIAnswerModel", keep("model", AnswerModel))
     monkeypatch.setattr(engine_setup, "anthropic_key", lambda: "가짜 Anthropic 키")
     monkeypatch.setattr(engine_setup, "ClaudeModel", keep("claude", Claude))
+    monkeypatch.setattr(engine_setup, "gemini_key", lambda: "가짜 Gemini 키")
+    monkeypatch.setattr(engine_setup, "DecisionReranker", keep("reranker", Reranker))
     return made
 
 
@@ -90,7 +101,15 @@ def test_만들어_둔_설명서_벡터를_읽고_바꾼_검색어만_임베딩�
     assert fakes["embedder"][0].texts == ["bevel width"]  # 바꾼 검색어 하나만, 설명서는 다시 임베딩하지 않는다
     assert [rewriter.settings for rewriter in fakes["rewriter"]] == [("gpt-6-luna", "none", 5.0)] * 3
     assert fakes["model"][0].settings == ("gpt-6-luna", "low")  # 생각 수준은 설정 값 그대로
-    assert engine.name == "text-embedding-3-large+gpt-6-luna×3+gpt-6-luna"
+    assert engine.name == "text-embedding-3-large+gemini-decision-1+gpt-6-luna×3+gpt-6-luna"
+    assert fakes["reranker"][0].key == "가짜 Gemini 키" and fakes["reranker"][0].queries == ["bevel width"]
+
+
+def test_리랭킹을_끄면_판정기와_Gemini_키_없이_만든다(tmp_path, fakes, monkeypatch):
+    monkeypatch.setattr(engine_setup, "gemini_key", lambda: pytest.fail("키를 읽으면 안 됨"))
+    engine = build_engine(tmp_path, settings=Settings(rerank=False), provider="openai")
+    list(engine.answer("베벨 너비", WorkState.from_json(EDITING), []))
+    assert fakes["reranker"] == [] and engine.name == "text-embedding-3-large+gpt-6-luna×3+gpt-6-luna"
 
 
 def test_답변_모델을_넘기면_그것을_쓴다(tmp_path, fakes):
@@ -130,22 +149,22 @@ def test_기본은_Claude로_질문_바꾸기_3개_분야_고르기_답변과_�
     # 질문 바꾸기 3개(스키마 있음, 생각 끔) + 답변(생각 끔) + 분야 고르기(생각 끔, 200토큰) + 예비 답변(생각 low)
     assert made == [("none", 600, 5.0, True)] * 3 + [("none", 16000, 10.0, False), ("none", 200, 5.0, False), ("low", 16000, 10.0, False)]
     assert events[-1].fields == ("MO",) and "b = 2" in str(fakes["claude"][3].sent[0])
-    assert engine.name == "text-embedding-3-large+claude-haiku-5-5×3+claude-haiku-5-5"
+    assert engine.name == "text-embedding-3-large+gemini-decision-1+claude-haiku-5-5×3+claude-haiku-5-5"
 
 
-def test_기록_겉을_주면_바깥_호출_부품_다섯_종류를_모두_감싼다(tmp_path, fakes):
+def test_기록_겉을_주면_바깥_호출_부품_여섯_종류를_모두_감싼다(tmp_path, fakes):
     from blender_tutor.call_log import CallLog
     from blender_tutor.setting_fields import SettingLines
 
     log = CallLog()
     engine = build_engine(tmp_path, wrap=log.wrap)
-    assert sorted(log.dollars()) == ["답변", "분야 고르기", "예비 답변", "임베딩", "질문 바꾸기"]  # 예비 답변은 분야 고르기가 실패할 때만 불림
+    assert sorted(log.dollars()) == ["답변", "리랭킹", "분야 고르기", "예비 답변", "임베딩", "질문 바꾸기"]  # 예비 답변은 분야 고르기가 실패할 때만 불림
     log.start()
     events = list(engine.answer("베벨 너비", WorkState.from_json(EDITING), [], settings=SettingLines(("a = 1",), {"MO": ("b = 2",)})))
     log.wait_idle(5.0)
     kinds = sorted(call["종류"] for call in log.take())
-    assert kinds == sorted(["질문 바꾸기"] * 3 + ["분야 고르기", "임베딩", "답변"])
-    assert events[-1].fields == ("MO",) and engine.name == "text-embedding-3-large+claude-haiku-5-5×3+claude-haiku-5-5"
+    assert kinds == sorted(["질문 바꾸기"] * 3 + ["분야 고르기", "임베딩", "리랭킹", "답변"])
+    assert events[-1].fields == ("MO",) and engine.name == "text-embedding-3-large+gemini-decision-1+claude-haiku-5-5×3+claude-haiku-5-5"
 
 
 def test_예비_답변은_본_답변보다_생각을_낮추지_않는다(tmp_path, fakes):
