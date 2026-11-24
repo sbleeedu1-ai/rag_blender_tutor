@@ -233,6 +233,8 @@ def turn_problems(transcript: Path, last_message: str = "") -> list[str]:
 
 
 def main() -> int:
+    sys.stdin.reconfigure(encoding="utf-8")  # Windows 기본(cp949)으로 읽고 쓰면 한글이 깨진다(CI 실패 11-24, 다른 훅과 같게)
+    sys.stdout.reconfigure(encoding="utf-8")
     data = json.load(sys.stdin)
     if data.get("stop_hook_active") or not data.get("transcript_path"):
         return 0
