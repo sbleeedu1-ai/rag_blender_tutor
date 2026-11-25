@@ -359,6 +359,7 @@ def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약
     assert settings["engine"] == "가짜 엔진(text-embedding-3-large)" and settings["임베딩"] == "text-embedding-3-large"
     rows = [json.loads(line) for line in (folder / "답.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [row["리랭킹 실패"] for row in rows] == [False, False]
+    assert [row["리랭킹 위 50"] for row in rows] == [[], []]  # 리랭킹이 꺼져 있으면 빈 목록
     assert settings["리랭커"] == "gemini-decision-1" and settings["답변 모델 요금(달러)"] == 0.0012 and settings["답변 모델 생각 토큰"] == 37
     assert made_models[-1].effort == "low"  # 생각 수준을 답변 모델에 넘긴다
     # 어느 코드로 잰 결과인지(홀드아웃은 동결한 커밋 번호를 적는다). 커밋 안 한 변경이 있으면 뒤에 표시가 붙는다
@@ -426,6 +427,25 @@ def test_같은_날_같은_이름으로_다시_돌리면_덮어쓰지_않고_멈
     assert (tmp_path / "results" / "20261026" / "090500_기준" / "답.jsonl").read_text(encoding="utf-8") == before
 
 
+class FixedJudge:
+    """판정기 대신: 저장하기 글만 높게 본다."""
+
+    def judge(self, query, passages, timeout):
+        return [0.9 if passage == SAVE.text else 0.2 for passage in passages]
+
+
+def test_리랭킹_위_50은_순위_주소_경로_확률로_남는다(tmp_path):
+    def build(*args, **kwargs):
+        return fake_build(*args, **kwargs, reranker=FixedJudge())
+
+    argv = ["run", *run_options(tmp_path, "--name", "순위")]
+    assert evaluate.main(argv, datetime(2026, 10, 26, 9, 5), make_model=PricedModel, build=build) == 0
+    rows = [json.loads(line) for line in (tmp_path / "results" / "20261026" / "090500_순위" / "답.jsonl").read_text(encoding="utf-8").splitlines()]
+    ranking = rows[0]["리랭킹 위 50"]
+    assert ranking[0] == {"순위": 1, "청크 번호": CHUNKS.index(SAVE), "주소": SAVE.address, "경로": SAVE.path, "확률": 0.9}
+    assert [item["순위"] for item in ranking] == [1, 2, 3] and {item["주소"] for item in ranking} == {chunk.address for chunk in CHUNKS}
+
+
 def test_리랭킹이_실패한_차례는_답과_요약에_남는다(tmp_path):
     def build(*args, **kwargs):
         return fake_build(*args, **kwargs, reranker=SlowJudge())
@@ -435,6 +455,7 @@ def test_리랭킹이_실패한_차례는_답과_요약에_남는다(tmp_path):
     folder = tmp_path / "results" / "20261026" / "090500_실패"
     rows = [json.loads(line) for line in (folder / "답.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [row["리랭킹 실패"] for row in rows] == [True, True]
+    assert [row["리랭킹 위 50"] for row in rows] == [[], []]
     assert "리랭킹이 실패해 뜻 검색 순위로 답한 차례 2개" in (folder / "요약.md").read_text(encoding="utf-8")
     calls = [json.loads(line) for line in (folder / "호출.jsonl").read_text(encoding="utf-8").splitlines()]
     assert "리랭킹 끝" in calls[0]["시각(초)"]

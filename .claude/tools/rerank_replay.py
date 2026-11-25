@@ -63,7 +63,7 @@ def main(folder: Path) -> dict:
         else:
             first = next(i for i, (a, b) in enumerate(zip(engine_order[q], wide[q])) if a != b)
             moved.append({"검색어": q, "처음 다른 자리": first + 1, "같은 글": chunks[engine_order[q][first]].text == chunks[wide[q][first]].text})
-        results, failed = engine._ranked(q, v)
+        results, failed, _ranking = engine._ranked(q, v)
         if failed:
             raise SystemExit(f"리랭킹 실패로 셈: {q}")
         orders[q] = [position[chunk] for chunk in results]

@@ -56,7 +56,7 @@ def main(folder: Path, n: int) -> dict:
     picked = [(q, v) for q, v in zip(queries, vectors) if engine._by_meaning(v)[: engine.settings.rerank_depth] == wide[q]][:n]
     failed, diffs = 0, []
     for q, v in picked:
-        _results, rerank_failed = engine._ranked(q, v)
+        _results, rerank_failed, _ranking = engine._ranked(q, v)
         failed += rerank_failed
         if not rerank_failed:
             diffs.append(max(abs(a - b) for a, b in zip(judge.got[q], saved[q])))

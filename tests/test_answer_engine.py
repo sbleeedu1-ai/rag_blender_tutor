@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import httpx2
 import pytest
 
+from blender_tutor import answer_engine
 from blender_tutor.answer_engine import (
     INSTRUCTIONS,
     AnswerEngine,
@@ -249,6 +250,21 @@ def test_리랭커가_가장_높게_본_청크는_뜻_순위가_맨_끝이어도
     assert events[-1].rerank_failed is False
 
 
+def test_리랭킹_순위는_top_k보다_길게_확률과_함께_기록으로_넘긴다():
+    # 답에는 위 top_k개만 쓰고, 기록에는 위 50개까지 남긴다(칸 수를 바꾼 판을 다시 부르지 않고 만들려고)
+    events = ask_reranked(FakeReranker({SELECT.text: 0.99, SAVE.text: 0.8}, default=0.1))
+    assert found(events) == [SELECT, SAVE]
+    ranking = events[-1].rerank_ranking
+    assert [(chunk, prob) for _, chunk, prob in ranking] == [(SELECT, 0.99), (SAVE, 0.8), (BEVEL, 0.1), (BEVEL_MORE, 0.1), (ARRAY, 0.1), (EXPORT, 0.1)]
+    assert all(CHUNKS[index] is chunk for index, chunk, _ in ranking)  # 번호는 청크 파일 차례
+
+
+def test_리랭킹_기록은_위_50개에서_자른다(monkeypatch):
+    monkeypatch.setattr(answer_engine, "RERANK_LOG", 3)
+    events = ask_reranked(FakeReranker(default=0.5))
+    assert [chunk for _, chunk, _ in events[-1].rerank_ranking] == BY_MEANING[:3]
+
+
 def test_확률이_같으면_뜻_검색_순서를_지킨다():
     assert found(ask_reranked(FakeReranker(default=0.5), Settings(top_k=6))) == BY_MEANING
 
@@ -269,7 +285,7 @@ def test_리랭커가_실패하면_뜻_검색_위_k개로_답하고_실패를_�
     events = ask_reranked(reranker)
     assert isinstance(events[-1], Done) and "".join(e.text for e in events if isinstance(e, Piece))  # 답은 멈추지 않는다
     assert found(events) == [BEVEL, BEVEL_MORE]
-    assert events[-1].rerank_failed is True
+    assert events[-1].rerank_failed is True and events[-1].rerank_ranking == ()
     assert "리랭킹 실패" in caplog.text
 
 

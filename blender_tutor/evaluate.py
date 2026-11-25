@@ -107,6 +107,7 @@ class TurnResult:
     lines: tuple[str, ...] = ()  # 답변 모델에 실제로 넘긴 설정 줄. 답이 끝까지 안 나왔으면 빈 묶음
     calls: tuple[dict, ...] = ()  # 바깥 호출 기록(call_log, 보낸 차례). 기록을 주지 않고 돌렸으면 빈 묶음
     rerank_failed: bool = False  # 리랭킹이 실패해 뜻 검색 순위로 답했나(리랭킹 판 결과에 섞인 리랭킹 없는 차례를 세려고)
+    rerank_ranking: tuple[tuple[int, Chunk, float], ...] = ()  # 리랭킹 순위 위 50(청크 파일 차례 번호, 청크, 확률). 칸 수를 바꾼 판을 다시 부르지 않고 만들려고
 
 
 def run(
@@ -127,7 +128,7 @@ def run(
         conversation.engine = engine
         for turn in dialogue.turns:
             pieces, failure, sources, results, similar, first_piece, fields, field_failed, query, lines = [], None, (), (), (), None, (), False, "", ()
-            rerank_failed = False
+            rerank_failed, ranking = False, ()
             if log:
                 log.start()
             start = clock()
@@ -140,6 +141,7 @@ def run(
                     sources, results, similar = event.sources, event.results, event.similar
                     fields, field_failed, query, lines = event.fields, event.field_failed, event.query, event.lines
                     rerank_failed = event.rerank_failed
+                    ranking = event.rerank_ranking
                 elif isinstance(event, Failure):
                     failure, results = event.message, event.results
             done = clock() - start
@@ -153,7 +155,7 @@ def run(
             mentioned = tuple(course for course in similar if course.name in answer)
             found.append(TurnResult(
                 dialogue, turn, answer, failure, sources, results, hit(turn.locations, results), similar, mentioned, first_piece, done,
-                fields, field_failed, query, lines, calls, rerank_failed,
+                fields, field_failed, query, lines, calls, rerank_failed, ranking,
             ))
     return found
 
@@ -497,6 +499,10 @@ def _write_run(folder: Path, name: str, about: dict, found: list[TurnResult]) ->
                 "첫 글자(초)": result.first_piece, "답 끝(초)": result.done,
                 "설정 값 있음": result.turn.settings is not None, "고른 분야": list(result.fields), "분야 고르기 실패": result.field_failed,
                 "검색어": result.query, "보낸 설정 줄": list(result.lines), "리랭킹 실패": result.rerank_failed,
+                "리랭킹 위 50": [
+                    {"순위": rank, "청크 번호": index, "주소": chunk.address, "경로": chunk.path, "확률": prob}
+                    for rank, (index, chunk, prob) in enumerate(result.rerank_ranking, start=1)
+                ],
             }
             file.write(json.dumps(row, ensure_ascii=False) + "\n")
     if any(result.calls for result in found):

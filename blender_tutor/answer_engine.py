@@ -81,6 +81,8 @@ ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물�
 # 메뉴·버튼·옵션 이름은 [[ ]] 표시로 프로그램이 바꾸므로 여기에는 문장 속에 일반 낱말로 나오는 것만 둔다.
 # 괄호: 영어 발음을 옮긴 낱말은 붙이지 않고, 한국어로 바꿔 영어가 안 보이는 낱말과 여러 낱말 이름은 처음 한 번 붙인다([83]).
 # 표 전체(약 360토큰)를 늘 넘기지 않고, 넘기는 청크 글에 나온 낱말의 줄만 지시에 붙인다(HISTORY [105]).
+RERANK_LOG = 50  # 평가 기록에 남길 리랭킹 순위 수(답에는 쓰지 않음)
+
 TERMS = (
     ("vertex", "버텍스"),  # 정점·꼭짓점 아님 [78]
     ("edge", "에지"),  # 모서리 아님. 선택 모드 버튼 이름은 화면 글자가 '엣지'라 [[Edge]]로 [78][80]
@@ -273,6 +275,9 @@ class Done:
     lines: tuple[str, ...] = ()
     # 리랭킹을 부르려 했는데 실패해 뜻 검색 위 top_k개로 답했나. 평가에서 리랭킹 판과 섞이지 않게 센다(창은 쓰지 않음)
     rerank_failed: bool = False
+    # 리랭킹 순위 위 RERANK_LOG개(청크 파일 차례 번호, 청크, 확률. 같은 소제목 주소에 청크가 여럿일 수 있어 번호를 같이 남긴다). 답에 쓰는 것은 위 top_k개뿐이고, 이것은 평가에서 칸 수를 바꾼 판을
+    # 다시 부르지 않고 만들려고 남긴다(11-25 사용자 "리랭킹 기록도 한 50개 까지 남기는건 어떤데? 기록만"). 리랭킹이 꺼졌거나 실패하면 빈 묶음
+    rerank_ranking: tuple[tuple[int, Chunk, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -382,7 +387,7 @@ class AnswerEngine:
             yield _failure(error, [])
             return
         # 리랭킹은 분야 고르기 결과를 기다리기 전에 부른다(분야 고르기는 뒤에서 돌고 있어 두 기다림이 겹친다)
-        results, rerank_failed = self._ranked(query, vectors[0])
+        results, rerank_failed, ranking = self._ranked(query, vectors[0])
         codes, field_failed = self._fields_from(chosen)
         lines = lines_for(settings, codes, situation=self._settings.situation_lines, computed=self._settings.computed_lines) if settings is not None else []
         model = self._fallback_model if field_failed and self._fallback_model else self._model
@@ -404,7 +409,7 @@ class AnswerEngine:
             return
         if text := marks.finish():
             yield Piece(text)
-        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed, query, tuple(lines), rerank_failed)
+        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed, query, tuple(lines), rerank_failed, ranking)
 
     def _start_fields(self, question: str, query: str, state: WorkState) -> Future:
         """분야 고르기를 뒤에서 부른다. 결과(분야 코드 묶음)나 오류는 돌려준 Future에 담긴다."""
@@ -529,13 +534,13 @@ class AnswerEngine:
                 pass
         self._embedder.embed(["bevel"], self._settings.timeout)
 
-    def _ranked(self, query: str, vector: Sequence[float]) -> tuple[list[Chunk], bool]:
-        """(넘길 검색 결과, 리랭킹 실패했나). 리랭킹이 켜져 있으면 뜻 검색 위 rerank_depth개를 판정기 확률 순으로 세운 위 top_k개.
+    def _ranked(self, query: str, vector: Sequence[float]) -> tuple[list[Chunk], bool, tuple[tuple[int, Chunk, float], ...]]:
+        """(넘길 검색 결과, 리랭킹 실패했나, 기록용 순위 위 RERANK_LOG개(차례 번호, 청크, 확률)). 리랭킹이 켜져 있으면 뜻 검색 위 rerank_depth개를 판정기 확률 순으로 세운 위 top_k개.
         판정기는 바깥 서비스라 실패(시간 초과·오류·글 수와 다른 답)를 기록하고 뜻 검색 결과로 답한다(분야 고르기 실패와 같은 길).
         리랭킹 없이 답하던 것이 [626] 전의 제품이라 엉뚱한 근거가 되지는 않는다. 후보는 뜻 검색만 쓴다(낱말 검색 use_bm25는
         리랭킹이 꺼졌거나 실패했을 때의 search에만 든다. 시험한 것이 뜻 검색 위 200이라서)."""
         if not (self._reranker and self._settings.rerank):
-            return self.search(query, vector), False
+            return self.search(query, vector), False, ()
         candidates = self._by_meaning(vector)[: self._settings.rerank_depth]
         passages = [self._chunks[i].text for i in candidates]
         try:  # 바깥 서비스 실패만: 연결·HTTP 오류·시간 초과(OSError 아래), 답 꼴이 틀림(ValueError, JSON 풀기 포함). 그 밖은 버그라 올린다
@@ -544,8 +549,11 @@ class AnswerEngine:
                 raise ValueError(f"리랭킹이 글 {len(candidates)}개에 확률 {len(probs)}개를 돌려줌")
         except (OSError, ValueError) as error:
             log.warning("리랭킹 실패, 뜻 검색 순위로 답함: %r", error)
-            return self.search(query, vector), True
-        return [self._chunks[i] for i in rerank(candidates, probs)[: self._settings.top_k]], False
+            return self.search(query, vector), True, ()
+        order = rerank(candidates, probs)
+        prob_of = dict(zip(candidates, probs))
+        ranking = tuple((i, self._chunks[i], float(prob_of[i])) for i in order[:RERANK_LOG])
+        return [self._chunks[i] for i in order[: self._settings.top_k]], False, ranking
 
     def _by_meaning(self, vector: Sequence[float]) -> list[int]:
         """청크 차례 번호를 뜻 점수(코사인) 큰 순으로. 같은 점수는 저장 차례(차례 13번 시험의 위 200과 같은 정렬)."""
