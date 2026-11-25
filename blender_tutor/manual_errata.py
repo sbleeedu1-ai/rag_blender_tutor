@@ -77,6 +77,10 @@ ERRATA: tuple[tuple[str, str, str, str], ...] = (
      "위 글의 Save Versions 기본값 2는 1이다."),
     ("C181", "files/import_export/fbx_legacy.html#id15", "10 is the default",
      "위 글의 Scale 기본값 10은 1.0이다."),
+    # 목록 밖에서 더함(11-25 겨눈 문항 채점에서 찾고 5.2.4 실행으로 확인, 실험 기록 "바로잡기 줄 제품 반영" 절, HISTORY [693]):
+    # 크기·위치·Z 회전을 준 정육면체를 bake_space_transform=True로 내보내 다시 가져와도 셋 다 물체에 남고 메시는 축·단위만 바뀌었다.
+    ("AT01", "files/import_export/fbx_legacy.html#id15", "Applies object Location, Rotation, and Scale to the mesh",
+     "위 글과 달리 Apply Transform은 물체의 위치·회전·크기를 메시에 적용하지 않는다."),
     ("R009", "render/cycles/light_settings.html#settings", "By default lights use only direct light sampling.",
      "위 글과 달리 Multiple Importance Sample은 기본으로 켜져 있다."),
     ("R045", "render/shader_nodes/shader/metallic.html#id2", "2.757, 2.512, 2.231",
