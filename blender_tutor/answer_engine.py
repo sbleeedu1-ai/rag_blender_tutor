@@ -22,6 +22,7 @@ from rank_bm25 import BM25Okapi
 
 from blender_tutor.decision_rerank import rerank
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
+from blender_tutor.manual_errata import with_errata
 from blender_tutor.menu_names import (
     MARK_CLOSE,
     MARK_OPEN,
@@ -893,10 +894,11 @@ def _messages(
     """답변 모델에 넘길 대화 글: 지시, 최근 대화, 그리고 설명서 내용·작업 상태·질문을 담은 마지막 글.
 
     groups는 넘길 청크마다 함께 읽을 묶음(찾은 청크와 그 형제 소제목). 묶음 사이를 ---로 가른다.
+    설명서 글이 5.2 화면과 다른 청크는 글 바로 아래에 바로잡기 줄을 붙인다(manual_errata, HISTORY [690]).
     similar는 연습 과정을 진행하지 않을 때만 붙이는 비슷한 연습 과정, step은 지금 단계(그 단계 내용만 넘긴다).
     lines는 설정 값 줄(늘 보내는 줄 + 고른 분야의 줄). 없으면 그 칸을 넣지 않는다.
     """
-    manual = "\n\n---\n\n".join("\n\n".join(chunk.text for chunk in group) for group in groups)
+    manual = "\n\n---\n\n".join("\n\n".join(with_errata(chunk) for chunk in group) for group in groups)
     messages = [{"role": "system", "content": INSTRUCTIONS + _terms_for(manual)}]
     for asked, answered in recent:
         messages += [{"role": "user", "content": asked}, {"role": "assistant", "content": answered}]

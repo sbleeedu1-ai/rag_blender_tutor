@@ -23,6 +23,7 @@ from blender_tutor.answer_engine import (
     Settings,
     Source,
     Stage,
+    _messages,
     _terms_for,
 )
 from blender_tutor.claude_model import ClaudeModel
@@ -1587,3 +1588,13 @@ def test_환경_설정_채우기는_조각을_어떻게_나눠_흘려도_같고_
         assert shown_prefs(tuple(pieces)) == whole, pieces
     marks = _MenuMarks(MenuNames(SCREEN_NAMES, extra=PREFS_EXTRA))
     assert marks.feed("그럼 환경 설정의 키") + marks.finish(cut=True) == "그럼 환경 설정의 키"
+
+
+def test_messages_put_errata_line_below_its_chunk():
+    # 바로잡기 줄은 그 청크 글 바로 아래, 다음 청크 앞에 들어간다(HISTORY [690])
+    fbx = Chunk(
+        "files/import_export/fbx_legacy", "id15", "files", "files/import_export", "FBX (Legacy)", ("Export",),
+        "Scale the exported data by this value. 10 is the default because this fits best.",
+    )
+    content = _messages("크기가 작아요", STATE, (), [[fbx, SAVE]], [], None)[-1]["content"]
+    assert f"{fbx.text}\n\n위 글의 Scale 기본값 10은 1.0이다.\n\n{SAVE.text}" in content
