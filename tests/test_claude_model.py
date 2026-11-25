@@ -1,6 +1,9 @@
 """Claude 모델 연결(HISTORY [270]). 공식 라이브러리 대신 가짜 client를 끼워 요청 모양과 응답 읽기만 본다(키·돈 없이 돈다)."""
 
+import http.server
 import json
+import threading
+import time
 from types import SimpleNamespace
 
 import anthropic
@@ -107,3 +110,122 @@ def test_구조화된_출력은_dict로_받고_끝까지_못_쓰면_ValueError()
         ClaudeModel("claude-haiku-5-5", "k", client=FakeClient(stop="max_tokens")).ask_json(MESSAGES, {"type": "object"})
     with pytest.raises(TimeoutError):
         ClaudeModel("claude-haiku-5-5", "k", client=FakeClient(error=timeout_error())).ask_json(MESSAGES, {"type": "object"})
+
+
+def test_답_도중_바이트가_한도보다_늦어_라이브러리_밖_시간_초과가_나도_TimeoutError로_바꾼다():
+    # 흘려 받는 도중의 시간 초과는 anthropic이 감싸지 않은 httpx2.ReadTimeout으로 올라온다(05 medium Q22·Q23 3회, 1-1)
+    model = ClaudeModel("claude-haiku-5-5", "k", client=FakeClient(pieces=(), error=httpx2.ReadTimeout("The read operation timed out")))
+    with pytest.raises(TimeoutError):
+        list(model.stream(MESSAGES, 1.0))
+
+
+@pytest.mark.parametrize("stop", ["max_tokens", "end_turn"])
+def test_글이_0자인_채_끝난_답은_실패로_알리고_받은_토큰은_센다(stop):
+    # 생각이 답 길이 한도를 다 쓰면 글 없이 끝난다. 빈 답을 끝난 답처럼 내지 않는다(1-1 버그 ②)
+    model = ClaudeModel("claude-haiku-5-5", "k", "medium", client=FakeClient(pieces=(), stop=stop))
+    with pytest.raises(ValueError, match=stop):
+        list(model.stream(MESSAGES, 1.0))
+    assert (model.requests, model.output_tokens) == (1, 200)
+
+
+def test_글이_나오다_한도에서_잘린_답은_받은_데까지_내고_실패로_보지_않는다():
+    model = ClaudeModel("claude-haiku-5-5", "k", client=FakeClient(pieces=("베벨 ", "모디"), stop="max_tokens"))
+    assert "".join(model.stream(MESSAGES, 1.0)) == "베벨 모디"
+
+
+class _SilentThinking(http.server.BaseHTTPRequestHandler):
+    """내 PC에 띄우는 가짜 Claude 서버: 생각 블록을 연 뒤 server.pause초 아무것도 보내지 않고, server.text가 있으면 그 글로 끝난다."""
+
+    def log_message(self, *_):
+        pass
+
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("content-length", 0)))
+        self.send_response(200)
+        self.send_header("content-type", "text/event-stream")
+        self.end_headers()
+        usage = {"input_tokens": 1, "output_tokens": 1}
+        self._send("message_start", {"type": "message_start", "message": {"id": "m", "type": "message", "role": "assistant", "model": "x", "content": [], "stop_reason": None, "stop_sequence": None, "usage": usage}})
+        self._send("content_block_start", {"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": "", "signature": ""}})
+        time.sleep(self.server.pause)
+        self._send("content_block_delta", {"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta", "signature": "s"}})
+        self._send("content_block_stop", {"type": "content_block_stop", "index": 0})
+        stop = "max_tokens"
+        if self.server.text:
+            stop = "end_turn"
+            self._send("content_block_start", {"type": "content_block_start", "index": 1, "content_block": {"type": "text", "text": ""}})
+            self._send("content_block_delta", {"type": "content_block_delta", "index": 1, "delta": {"type": "text_delta", "text": self.server.text}})
+            if self.server.stall:  # 글이 나오기 시작한 뒤 멈춤(생각 끝 → 글 조금 → 조용)
+                time.sleep(self.server.stall)
+                self._send("content_block_delta", {"type": "content_block_delta", "index": 1, "delta": {"type": "text_delta", "text": " 끝"}})
+            self._send("content_block_stop", {"type": "content_block_stop", "index": 1})
+        self._send("message_delta", {"type": "message_delta", "delta": {"stop_reason": stop, "stop_sequence": None}, "usage": {"output_tokens": 4096}})
+        self._send("message_stop", {"type": "message_stop"})
+
+    def _send(self, event, data):
+        self.wfile.write(f"event: {event}\ndata: {json.dumps(data)}\n\n".encode())
+        self.wfile.flush()
+
+
+class _QuietServer(http.server.ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        pass  # 우리 쪽이 먼저 끊어 쓰기가 실패하는 것은 시험이 노린 일이다
+
+
+@pytest.fixture
+def silent_server():
+    servers = []
+
+    def start(pause, text="", stall=0.0):
+        server = _QuietServer(("127.0.0.1", 0), _SilentThinking)
+        server.pause, server.text, server.stall = pause, text, stall
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        servers.append(server)
+        client = anthropic.Anthropic(api_key="x", base_url=f"http://127.0.0.1:{server.server_port}", max_retries=0)
+        return ClaudeModel("claude-haiku-5-5", "k", "medium", client=client)
+
+    yield start
+    for server in servers:
+        server.shutdown()
+        server.server_close()
+
+
+def test_진짜_라이브러리로_생각하는_동안_한도보다_오래_조용하면_TimeoutError(silent_server):
+    with pytest.raises(TimeoutError):
+        list(silent_server(pause=0.8).stream(MESSAGES, 0.3))
+
+
+def test_진짜_라이브러리로_생각만_하고_글_없이_한도에서_끝나면_ValueError(silent_server):
+    with pytest.raises(ValueError, match="max_tokens"):
+        list(silent_server(pause=0.0).stream(MESSAGES, 2.0))
+
+
+def test_진짜_라이브러리로_한도_안에_글이_오면_그대로_받는다(silent_server):
+    assert "".join(silent_server(pause=0.1, text="베벨").stream(MESSAGES, 2.0)) == "베벨"
+
+
+# 답 모델 한도 둘(사용자 결정 [561] "20초는 첫 질문 나오기까지 기다림 5초는 질문이 나오다 끊겼을때"):
+# 부른 때부터 첫 글자까지는 first_timeout, 첫 글자 뒤 조각 사이는 timeout. 생각하는 동안은 서버가 아무것도 안 보낸다([560]).
+def test_진짜_라이브러리로_글_뒤_한도보다_오래_생각해도_첫_글자_한도_안이면_답을_받는다(silent_server):
+    assert "".join(silent_server(pause=0.8, text="베벨").stream(MESSAGES, 0.3, first_timeout=3.0)) == "베벨"
+
+
+def test_진짜_라이브러리로_첫_글자가_한도_안에_안_오면_그_한도에서_TimeoutError(silent_server):
+    started = time.monotonic()
+    with pytest.raises(TimeoutError):
+        list(silent_server(pause=3.0, text="베벨").stream(MESSAGES, 5.0, first_timeout=0.6))
+    assert time.monotonic() - started < 2.0  # 글 뒤 한도(5초)나 생각 끝(3초)까지 기다리지 않는다
+
+
+def test_진짜_라이브러리로_글이_나오다_멈추면_글_뒤_한도에서_TimeoutError(silent_server):
+    pieces, started = [], time.monotonic()
+    with pytest.raises(TimeoutError):
+        for piece in silent_server(pause=0.0, text="베벨", stall=4.0).stream(MESSAGES, 0.5, first_timeout=3.0):
+            pieces.append(piece)
+    assert pieces == ["베벨"] and time.monotonic() - started < 2.5  # 첫 글자 한도(3초)보다 먼저 끊는다
+
+
+def test_첫_글자_한도를_안_주면_조각_사이_한도_하나로_잰다(silent_server):
+    with pytest.raises(TimeoutError):
+        list(silent_server(pause=0.8, text="베벨").stream(MESSAGES, 0.3))
+

@@ -19,6 +19,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+from hook_notice import with_notice
+
 _PYTHON_RUN = re.compile(r"""python(?:\.exe)?["']?\s+(?:-\S+\s+)*["']?([^\s"';&|]+_run\.py)""", re.IGNORECASE)
 _BLENDER_SCRIPT = re.compile(r"""(?:--python|-P)\s+["']?[^\s"']*state_generic""")
 _GOAL = "목표 검토"
@@ -134,7 +136,7 @@ def session_calls(transcript_path: str) -> tuple[list[str], list[str]]:
     for log in logs:
         # 지금 쓰이는 세션은 마지막 줄이 덜 적혀 있을 수 있어 완성된 줄만 읽는다
         complete = log.read_text(encoding="utf-8", errors="replace").rpartition("\n")[0]
-        for line in complete.splitlines():
+        for line in complete.split("\n"):  # splitlines()는 글 속 U+2028에서도 잘라 JSON 줄이 깨진다([550])
             if '"Agent"' not in line and _DOC_TOOL not in line:
                 continue
             content = (json.loads(line).get("message") or {}).get("content")
@@ -169,7 +171,7 @@ def main() -> None:
     record = Path(__file__).resolve().parents[2] / "docs" / "experiment.md"
     answer = decide(command, payload.get("cwd") or ".", record, payload["transcript_path"])
     if answer:
-        print(json.dumps({"hookSpecificOutput": answer}, ensure_ascii=False))
+        print(json.dumps(with_notice("remind_goal_review", payload, {"hookSpecificOutput": answer}), ensure_ascii=False))
 
 
 if __name__ == "__main__":

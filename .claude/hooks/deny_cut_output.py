@@ -13,6 +13,7 @@ import shlex
 import sys
 
 from ask_branch_delete import _SEPARATORS, _without_heredocs
+from hook_notice import with_notice
 
 # 출력을 잘라 보여 주는 명령. select·sls는 PowerShell에서 Select-Object·Select-String의 줄임 이름이다.
 CUTTERS = {"head", "tail", "grep", "cut", "sed", "awk", "select-object", "select-string", "findstr", "more", "select", "sls"}
@@ -97,7 +98,7 @@ def main() -> None:
     payload = json.load(sys.stdin)
     answer = decide((payload.get("tool_input") or {}).get("command") or "")
     if answer:
-        print(json.dumps({"hookSpecificOutput": answer}, ensure_ascii=False))
+        print(json.dumps(with_notice("deny_cut_output", payload, {"hookSpecificOutput": answer}), ensure_ascii=False))
 
 
 if __name__ == "__main__":

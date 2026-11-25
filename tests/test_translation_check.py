@@ -9,8 +9,8 @@ import pytest
 
 from blender_tutor.manual_chunks import Chunk
 from blender_tutor.menu_names import MenuName, MenuNames, Source, Translation
+from blender_tutor.tools.translation_check import Problem, check, english_dropped, reviewed
 from blender_tutor.translate import BodyNames, pieces
-from blender_tutor.translation_check import Problem, check, english_dropped, reviewed
 
 
 def name(english: str, *translations: tuple[str, tuple[str, ...]]) -> MenuName:

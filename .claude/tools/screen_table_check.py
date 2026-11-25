@@ -8,7 +8,9 @@
 공장 설정과 이 Mac 사용자 설정은 모두 켬이다([452]).
 쓰는 법: .venv/bin/python .claude/tools/screen_table_check.py 표.tsv [...]. 걸린 줄이 있으면 종료 코드 1.
 """
-import csv, re, sys
+import csv
+import re
+import sys
 from pathlib import Path
 
 SOURCE_ONLY = ("소스로만", "못 띄움", "실행으로만")

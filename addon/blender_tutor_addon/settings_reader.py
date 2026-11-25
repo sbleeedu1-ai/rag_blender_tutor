@@ -11,7 +11,6 @@ Blender 안 파이썬에서 돈다(bpy와 표준 라이브러리만, blender_tut
 한 줄 = "자리.칸 = 값"(예: Object[Cube].modifiers[Bevel].segments = 3). 값 글이 길면 잘라 총 글자 수를 붙인다.
 """
 
-import bmesh
 import heapq
 import itertools
 import json
@@ -19,6 +18,7 @@ import math
 import re
 from pathlib import Path
 
+import bmesh
 import bpy
 
 # ---- 값 읽기(op_walk_v7 snapshot) ----

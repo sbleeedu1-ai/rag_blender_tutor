@@ -2,7 +2,8 @@
 
 답 엔진의 약속을 지킨다.
 - 질문 바꾸기(Rewriter): stream(messages) → 답 글 조각. 지시는 OpenAI 방식 대화 글(역할 system·user)로 받아 Claude 모양으로 옮긴다.
-- 답변(AnswerModel): stream(messages, timeout) → 답 글 조각. timeout초 동안 다음 조각이 없으면 TimeoutError.
+- 답변(AnswerModel): stream(messages, timeout, first_timeout) → 답 글 조각. 부른 때부터 first_timeout초 안에 첫 글자가 없거나,
+  첫 글자 뒤 timeout초 동안 다음 조각이 없으면 TimeoutError(사용자 결정 [561]: 첫 글자까지 20초, 글 뒤 5초).
 - 분야 고르기: ask_json(messages, schema) → 구조화된 출력(JSON 스키마)으로 받은 dict.
 
 생각 수준(answer_engine.Reasoning): none이면 생각 끔(Haiku 5.5는 effort high 이하에서만 끌 수 있고 기본 effort는 medium),
@@ -12,9 +13,13 @@ low·medium이면 생각 켬(adaptive)과 그 effort(claude-api 스킬 Thinking 
 
 import json
 import logging
+import queue
+import threading
+import time
 from collections.abc import Iterator
 
 import anthropic
+import httpx2
 
 from blender_tutor.beginner_scope import api_key
 
@@ -69,20 +74,60 @@ class ClaudeModel:
     def _client_for(self, timeout: float):
         return self._client.with_options(timeout=anthropic.Timeout(timeout, connect=CONNECT_TIMEOUT))
 
-    def stream(self, messages: list[dict[str, str]], timeout: float | None = None) -> Iterator[str]:
-        """답 글 조각을 오는 대로 돌려준다. timeout초 동안 다음 조각이 없으면 TimeoutError(라이브러리의 시간 초과를 바꿔 낸다).
-        생각 블록은 글이 아니라서 내지 않는다. 답이 max_tokens에서 잘리면 기록만 남긴다(받은 데까지는 이미 보였다)."""
-        limit = self.timeout if timeout is None else timeout
+    def stream(self, messages: list[dict[str, str]], timeout: float | None = None, first_timeout: float | None = None) -> Iterator[str]:
+        """답 글 조각을 오는 대로 돌려준다. 생각 블록은 글이 아니라서 내지 않는다.
+        한도: 부른 때부터 first_timeout초 안에 첫 글자가 안 오거나(없으면 timeout과 같음), 첫 글자 뒤 timeout초 동안 다음 조각이 없으면 TimeoutError.
+        생각하는 동안 서버는 아무것도 보내지 않으므로([560]) 두 한도를 소켓 읽기 한도 하나로 가를 수 없다. 그래서 읽기는 뒤 스레드가 하고,
+        이쪽이 단계마다의 한도로 그 결과를 기다린다(판정을 내보내는 쪽에서 해 OS마다 연결 닫기 동작에 기대지 않는다).
+        글이 0자인 채 끝나면(생각이 max_tokens를 다 씀 등) 토큰을 센 뒤 ValueError. 글이 나오다 max_tokens에서 잘리면 기록만 남긴다."""
+        gap = self.timeout if timeout is None else timeout
+        first = gap if first_timeout is None else first_timeout
+        pieces: queue.Queue = queue.Queue()
+        stop = threading.Event()
+        threading.Thread(target=self._read, args=(messages, max(gap, first), pieces, stop), daemon=True).start()
+        deadline, said = time.monotonic() + first, False
+        try:
+            while True:
+                wait = deadline - time.monotonic() if not said else gap
+                try:
+                    kind, value = pieces.get(timeout=max(0.0, wait))
+                except queue.Empty:
+                    limit = f"첫 글자를 {first}초" if not said else f"다음 조각을 {gap}초"
+                    raise TimeoutError(f"{self.model}이 {limit} 안에 보내지 않음") from None
+                if kind == "text":
+                    said = said or bool(value)
+                    yield value
+                elif kind == "error":
+                    raise value
+                else:
+                    final = value
+                    break
+        finally:
+            stop.set()  # 소비하는 쪽이 멈췄거나 한도를 넘기면 읽는 스레드도 그만 읽는다
+        self._count(final.usage)
+        if not said:
+            raise ValueError(f"{self.model} 답이 글 없이 {final.stop_reason}로 끝남")
+        if final.stop_reason != "end_turn":
+            log.warning("%s 답이 %s로 끝남", self.model, final.stop_reason)
+
+    def _read(self, messages, limit: float, pieces: queue.Queue, stop: threading.Event) -> None:
+        """뒤 스레드: 흘려 받은 글 조각을 ('text', 글)로, 끝나면 ('done', 마지막 메시지)로, 오류면 ('error', 오류)로 넣는다.
+        소켓 읽기 한도(limit)는 두 한도 중 큰 쪽이라 연결이 정말 멈추면 이 스레드도 그 안에 끝난다.
+        흘려 받는 도중의 시간 초과는 anthropic이 감싸지 않은 httpx2.TimeoutException으로도 올라와 함께 바꾼다(05 Q22·Q23, 1-1)."""
         try:
             with self._client_for(limit).messages.stream(**self._body(messages, self.schema)) as response:
                 self.requests += 1
-                yield from response.text_stream
-                final = response.get_final_message()
-        except anthropic.APITimeoutError as error:
-            raise TimeoutError(f"{self.model}이 {limit}초 안에 다음 조각을 보내지 않음") from error
-        self._count(final.usage)
-        if final.stop_reason != "end_turn":
-            log.warning("%s 답이 %s로 끝남", self.model, final.stop_reason)
+                for text in response.text_stream:
+                    if stop.is_set():
+                        return
+                    pieces.put(("text", text))
+                pieces.put(("done", response.get_final_message()))
+        except (anthropic.APITimeoutError, httpx2.TimeoutException) as error:
+            timeout = TimeoutError(f"{self.model}이 {limit}초 안에 다음 조각을 보내지 않음")
+            timeout.__cause__ = error
+            pieces.put(("error", timeout))
+        except Exception as error:  # 이쪽 스레드의 오류를 부른 쪽으로 넘긴다(여기서 처리하지 않음)
+            pieces.put(("error", error))
 
     def ask_json(self, messages: list[dict[str, str]], schema: dict, timeout: float | None = None) -> dict:
         """구조화된 출력으로 한 번에 받아 dict로. 끝까지 쓰지 못했으면(max_tokens·거절) ValueError, 시간 초과면 TimeoutError."""

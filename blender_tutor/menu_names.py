@@ -119,7 +119,7 @@ class MenuName:
     translations: tuple[Translation, ...]  # 서로 다른 한국어만, 사전에 나온 차례로
     chunks: int  # 이 이름이 나온 청크 수
     example: str  # 처음 나온 청크 링크(검수 때 실제 쪽을 열어 본다)
-    sources: tuple[Source, ...] = ()  # 어디서 뽑았나
+    sources: tuple[Source, ...] = ()
 
     @property
     def status(self) -> Status:
@@ -199,6 +199,10 @@ class MenuNames:
 
     def __iter__(self):
         return iter(self._by_english.values())
+
+    def screen_words(self) -> set[str]:
+        """사전 번역과 넓힌 목록의 한국어 화면 글자 전부(긴 이름 속 낱말을 가려낼 때 쓴다)."""
+        return {t.korean for n in self._by_english.values() for t in n.translations} | set(self._extra.values())
 
     def common(self, english: str) -> tuple[str, ...]:
         """흔히 옮기는 말들(긴 것부터). 목록에 없으면 빈 묶음."""

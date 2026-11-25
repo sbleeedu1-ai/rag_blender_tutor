@@ -26,6 +26,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from blender_tutor.setting_fields import SettingLines
 from blender_tutor.work_state import WorkState
 
+
 class _LocalServer(HTTPServer):
     """내 PC 안(127.0.0.1)에서만 받는 HTTP 서버. 기본 HTTPServer는 켤 때 자기 주소의 이름을 네트워크에 물어(socket.getfqdn)
     Mac이 '로컬 네트워크' 권한을 물었다(추측, HISTORY [314]). 그 이름은 쓰지 않으니 묻지 않는다."""

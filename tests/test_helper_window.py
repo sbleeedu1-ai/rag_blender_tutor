@@ -8,11 +8,11 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")  # QApplication보다 먼저
 
 import pytest
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
-from blender_tutor.answer_engine import Done, Failure, Piece, Source
+from blender_tutor.answer_engine import Done, Failure, Piece, Source, Stage
 from blender_tutor.course_desk import Line, LineKind, StepView
 from blender_tutor.helper_window import COURSES_UNREADABLE, PICK_HINT, HelperWindow, resize_edges
 from blender_tutor.progress import Course, Operation, Step
@@ -65,6 +65,29 @@ def test_Enter_한_번에_질문을_보내고_입력칸을_비운다(window):
     assert texts(window, "question") == ["베벨 어디 있어요?"]
 
 
+def test_Shift_Enter는_보내지_않고_줄을_바꾼다(window):
+    # 사용자 11-23 "쉬프트 엔터로 줄 바꾼 문장 입력도 안되네"
+    window.input.setText("베벨이")
+    QTest.keyClick(window.input, Qt.Key_Return, Qt.ShiftModifier)
+    QTest.keyClicks(window.input, "ok")  # 한글은 키 흉내가 안 돼(Qt가 멈춤) 영문으로
+    assert window.asked_questions == [] and window.input.text() == "베벨이\nok"
+    high = window.input.height()
+    QTest.keyClick(window.input, Qt.Key_Enter)  # 숫자판 Enter도 보낸다
+    assert window.asked_questions == ["베벨이\nok"] and texts(window, "question") == ["베벨이\nok"]
+    assert window.input.text() == "" and window.input.height() < high  # 보내면 칸이 다시 한 줄 높이로
+
+
+def test_빈_칸에_쓰기_시작하면_질문마다_한_번_알린다(window):
+    # 설정 값을 미리 청하는 때(HISTORY [270]). 입력칸을 여러 줄 칸으로 바꿔 알림 길이 바뀌어 지킨다([617])
+    started = []
+    window.started_typing.connect(lambda: started.append(1))
+    QTest.keyClicks(window.input, "ab")
+    assert len(started) == 1
+    QTest.keyClick(window.input, Qt.Key_Return)
+    QTest.keyClicks(window.input, "c")
+    assert len(started) == 2
+
+
 def test_빈_질문과_답을_기다리는_동안의_질문은_보내지_않는다(window):
     type_and_enter(window, "   ")
     type_and_enter(window, "가")
@@ -78,6 +101,53 @@ def test_답_조각을_이어_붙이고_문장마다_줄을_바꾼다(window):
     for text in ("Tab을 눌", "러요. Blender 5.", "2에서도 같아요."):
         window.show_answer_event(Piece(text))
     assert texts(window, "answer") == ["Tab을 눌러요.\nBlender 5.2에서도 같아요."]
+
+
+def test_쿼리_재작성을_건너뛴_엔진에서도_지금_점은_찾기_자리다(window):
+    type_and_enter(window, "가")
+    window.show_answer_event(Stage.SEARCH)  # 쿼리 재작성이 없는 엔진은 REWRITE를 내지 않는다
+    [line] = window.findChildren(QLabel, "thinking")
+    assert line.text().count("●") == 1 and line.text().count("○") == 2
+
+
+def test_설정_읽기는_점을_따로_두지_않고_첫_점_자리에서_이름만_보인다(window):
+    # 사용자 11-23 "1단계는 아무 짝에도 쓸모 없어보인다"(시간 기록 5/5에서 설정 단계 0.000초)
+    type_and_enter(window, "가")
+    window.show_answer_event(Stage.SETTINGS)
+    [line] = window.findChildren(QLabel, "thinking")
+    assert line.text().count("●") == 0 and line.text().count("○") == 3 and line.text().endswith("Blender 설정을 읽는 중 · 0초")
+
+
+def test_답을_기다리는_동안_지금_단계와_흐른_초를_한_줄로_보이고_첫_조각에서_멈춘다(window):
+    type_and_enter(window, "가")
+    [line] = window.findChildren(QLabel, "thinking")
+    assert line.text().count("●") == 0 and line.text().count("○") == 3  # 보내자마자 칠한 점이 없다(사용자 "왜 처음부터 1칸은 칠해져있지?")
+    window.show_answer_event(Stage.REWRITE)
+    window.show_answer_event(Stage.SEARCH)
+    [line] = window.findChildren(QLabel, "thinking")
+    assert line.textFormat() == Qt.RichText and line.text().endswith("설명서에서 찾는 중 · 0초")  # 단계 이름은 지금 것 하나만
+    assert line.text().count("●") == 1 and line.text().count("○") == 2  # 점 셋(정리·찾기·답) 가운데 둘째가 지금(빈 점)
+    assert window.waiting.isActive()
+    window.show_answer_event(Piece("<b>답</b>이에요."))
+    [answer] = window.findChildren(QLabel, "answer")
+    assert answer.text() == "<b>답</b>이에요." and answer.textFormat() == Qt.PlainText and not window.waiting.isActive()  # 답은 다시 서식 없이
+
+
+def test_기다리는_동안_타이머가_흐른_초를_고친다(window):
+    type_and_enter(window, "가")
+    window.show_answer_event(Stage.ANSWER)
+    window._sent_at -= 3  # 3초 전에 보낸 것으로
+    window.waiting.timeout.emit()
+    [line] = window.findChildren(QLabel, "thinking")
+    assert line.text().endswith("답을 만드는 중 · 3초")
+
+
+def test_단계만_보이다_실패하면_기다림_줄을_거두고_멈춘다(window):
+    type_and_enter(window, "가")
+    window.show_answer_event(Stage.ANSWER)
+    window.show_answer_event(Failure("답이 너무 늦어져 멈췄어요."))
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)  # deleteLater로 지운 줄을 지금 치운다
+    assert texts(window, "thinking") == [] and not window.waiting.isActive()
 
 
 def test_근거는_끝에_접힌_한_줄로_붙고_누르면_링크와_그림_영상_표시가_펼쳐지며_다시_보낼_수_있다(window):

@@ -1,7 +1,6 @@
 """바꾸기 전후 문장 도구(.claude/tools/answer_diff.py, HISTORY [370]·[371]). 저장된 답 없이 돈다."""
 
 import importlib.util
-import random
 from pathlib import Path
 
 TOOL = Path(__file__).resolve().parents[1] / ".claude" / "tools" / "answer_diff.py"

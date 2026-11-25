@@ -31,20 +31,20 @@ else:  # Mac(HISTORY [312]): 같은 이름의 함수를 pyobjc로
 from blender_tutor.answer_engine import Event, Settings
 from blender_tutor.conversation import PROGRAM_ERROR, Conversation
 from blender_tutor.course_desk import CourseDesk, Line
+from blender_tutor.engine_setup import build_engine
 from blender_tutor.helper_window import FONT, HelperWindow, Tray
+from blender_tutor.manual_vectors import MODEL as EMBEDDING
+from blender_tutor.menu_names import load_menu_names
 from blender_tutor.paths import COURSES, PROJECT, default_progress_records
 from blender_tutor.progress import Course, load_courses
 from blender_tutor.question_flow import QuestionFlow
 from blender_tutor.receiver import PORT, TOKEN_ENV, Message, Receiver
-from blender_tutor.manual_vectors import MODEL as EMBEDDING
-from blender_tutor.engine_setup import build_engine
-from blender_tutor.menu_names import load_menu_names
 from blender_tutor.state_stream import RecordingDesk
 from blender_tutor.timing import Stopwatch
 from blender_tutor.window_rules import FrontBlender, Place, Screen, needs_move, place
 
 WARM_UP_ENV = "BLENDER_TUTOR_WARM_UP"  # 1이면 엔진을 만든 뒤 예열한다(질문 바꾸기·임베딩을 한 번씩, 돈이 아주 조금 든다)
-REASONING_ENV = "BLENDER_TUTOR_REASONING"  # 답변 모델의 생각 수준(none·low·medium). 없으면 명세 기본 none(티켓 33 실측용)
+REASONING_ENV = "BLENDER_TUTOR_REASONING"  # 답변 모델의 생각 수준(none·low·medium). 없으면 Settings 기본 low([578])
 
 FOLLOW_EVERY_MS = 100  # Blender를 따라 창 자리를 다시 보는 간격
 ACTIVATION_SETTLE_MS = 120  # Mac: 앞 앱이 바뀐 뒤 그 앱의 창이 맨 위로 올라올 때까지 기다렸다 자리를 다시 맞추는 시간
@@ -61,7 +61,7 @@ class _Bridge(QObject):
 
     summoned = Signal(int, object)  # F10을 누른 Blender 창 번호, 누른 시각(없으면 None)
     message = Signal(object)  # 받은 봉투(진행 관리에 넘긴다)
-    answer_event = Signal(object)  # 답 사건(Piece·Done·Failure)
+    answer_event = Signal(object)  # 답 사건(Stage·Piece·Done·Failure)
     no_blender = Signal()  # 켜진 Blender가 없어 끝낼 때
 
 
@@ -129,8 +129,8 @@ class Helper:
             self._course_desk.menu_names = load_menu_names(PROJECT / "data")
             settings = Settings(reasoning=os.environ.get(REASONING_ENV, Settings().reasoning))
             self._conversation.engine = build_engine(PROJECT / "data", courses=self._courses, settings=settings, embedding=EMBEDDING)
-        except SystemExit as error:  # OpenAI 키가 없음(openai_key). 스레드 안이라 잡지 않으면 '읽는 중'에 머문다
-            log.warning("OpenAI 키 없음: %s", error)
+        except SystemExit as error:  # 키가 없음(OpenAI·Anthropic·Gemini, api_key). 스레드 안이라 잡지 않으면 '읽는 중'에 머문다
+            log.warning("키 없음: %s", error)
             self._conversation.waiting_message = str(error)
             return
         except FileNotFoundError as error:

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from blender_tutor.answer_engine import Done, Event, Failure, Piece
+from blender_tutor.answer_engine import Done, Event, Failure, Piece, Stage
 
 # F10 시각을 붙이는 한도(초). 다른 창에서 복사해 붙여 넣느라 오가는 시간은 넉넉히 들고,
 # 묻지 않고 떠났다 돌아온 질문은 거른다(2026-10-26 사용자 결정)
@@ -70,7 +70,7 @@ class Stopwatch:
         sent = self._clock()
         if f10 is not None and sent - (f10.ready or f10.received) > F10_VALID:
             f10 = None
-        record = {
+        record: dict = {  # 칸마다 값 종류가 달라 dict로 둔다(빈 stages 목록 때문에 mypy가 묻는다)
             "pc": self._pc,
             "engine": None if engine is None else engine["name"],
             "settings": None if engine is None else engine["settings"],
@@ -80,6 +80,7 @@ class Stopwatch:
             "ready": None if f10 is None else f10.ready,
             "sent": sent,
             "first_piece": None,
+            "stages": [],  # [단계 이름, 그 단계에 들어간 시각] 차례대로(티켓 51, 창에 보인 단계가 실제 차례였는지 보려고)
         }
         return Lap(record, self._clock, self._write)
 
@@ -102,6 +103,9 @@ class Lap:
         self._pieces: list[str] = []
 
     def saw(self, event: Event) -> None:
+        if isinstance(event, Stage):
+            self._record["stages"].append([event.value, self._clock()])
+            return
         if isinstance(event, Piece):
             if self._record["first_piece"] is None:
                 self._record["first_piece"] = self._clock()

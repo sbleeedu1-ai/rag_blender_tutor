@@ -104,8 +104,182 @@ def test_제안이_없으면_기록_검사를_안_한다(tmp_path):
     assert check_reply.turn_problems(_turn(tmp_path, "시험이 끝났습니다. 결과는 13.0입니다.")) == []
 
 
+# 2026-11-19 실제 실수 둘([482]). advisor를 부르지 않은 차례의 답 줄을 그대로 옮겼다.
+NO_ADVISOR_1 = "- **겨냥한 3문항(Q19·Q23·Q28):** 원인을 짚은 답이 C에서 8/18개였습니다. 지금 판(A)은 1/18이었습니다. 효과는 있지만 미리 정한 채택 기준인 12 이상에는 못 미쳐 판정은 \"사이\"입니다."  # 01:06 차례
+NO_ADVISOR_2 = "- **도움**: 겨눈 3문항에서 원인을 짚은 답이 1/18에서 8/18로 늘었습니다. 엄격하게 세도 6/18입니다."  # 01:03 차례
+NOT_RESULT = "그래서 순서는 이렇게 되어야 합니다."  # 01:05 차례. 실험 결과가 아니라 순서 이야기라 [485]부터 안 막음
+ADVISOR_RESULT = {"type": "assistant", "message": {"content": [{"type": "advisor_tool_result", "content": "..."}]}}
+
+
+def test_advisor_없이_결론을_내면_막힌다(tmp_path):
+    for reply in (NO_ADVISOR_1, NO_ADVISOR_2):
+        hits = check_reply.turn_problems(_turn(tmp_path, reply))
+        assert any("advisor" in h and "[482]" in h for h in hits), reply
+
+
+def test_그_차례에_advisor를_불렀으면_결론도_통과(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    text = {"type": "assistant", "message": {"content": [{"type": "text", "text": NO_ADVISOR_1}]}}
+    assert not any("advisor" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, ADVISOR_RESULT, text])))
+
+
+def test_advisor_결과가_앞_차례에만_있으면_막힌다(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    text = {"type": "assistant", "message": {"content": [{"type": "text", "text": NO_ADVISOR_1}]}}
+    assert any("advisor" in h for h in check_reply.turn_problems(_transcript(tmp_path, [ADVISOR_RESULT, human, text])))
+
+
+def test_실험_결과가_아닌_말은_advisor를_안_본다(tmp_path):
+    path = "캡처 3장은 `results/20261118/201022_기계지표/화면확인/`에 두었습니다."  # 11-18 실제 답, 경로 숫자에 잘못 걸렸던 꼴
+    for reply in ("지금은 근거 자료를 모으는 중입니다.", NOT_RESULT, "다음은 04 실행 전 목록입니다.", path):
+        assert check_reply.turn_problems(_turn(tmp_path, reply)) == [], reply
+
+
 def test_따옴표_속_세로막대가_있는_grep도_기록_찾기로_본다():
     # 2026-11-17 오후 6시 차례에서 그대로 옮긴 명령. 따옴표 속 |에서 쪼개져 grep과 HANDOFF.md가 갈려 헛막음이 났다([434])
     command = 'cd /Volumes/mac_ssd/proj/rag_blender_tutor && grep -n -E "③ Q38|④ 보고서|빠졌던 것" HANDOFF.md | head -3 | cut -c1-200'
     assert check_reply._reads_records("Bash", {"command": command})
     assert not check_reply._reads_records("Bash", {"command": 'echo "grep|x" >> HANDOFF.md'})
+
+
+# 11-20 밤 답에서 그대로 옮긴 줄(용어 정리로 바꾼 옛 말을 다시 씀)
+OLD_TERM_MISTAKE = "- **새 판:** 11-12에 만든 긴 지시문(\"2b\")에서 예시만 뺐습니다. 2번 질문 바꾸기만 바꾼 시험이라"
+
+
+def test_용어_정리로_바꾼_옛_말을_쓰면_막힌다():
+    hits = check_reply.problems(OLD_TERM_MISTAKE)
+    assert any("'질문 바꾸기' → '쿼리 재작성'" in h for h in hits)
+
+
+def test_옛_말도_따옴표_안의_인용이면_통과():
+    assert check_reply.old_term_problems('사용자 원문 "질문 바꾸기 지시문 고쳐"와 `rewrite_trial_run.py`를 봤습니다.') == []
+
+
+def test_여러_뜻인_말은_막지_않는다():
+    assert check_reply.old_term_problems("조각 모드에서 마스크를 지우고, 패널을 접어 둡니다. 생각 low가 빠릅니다. 채점 지시문을 읽고 none_조각만 폴더를 봤습니다.") == []
+
+
+def test_옛_말과_새_말을_같은_줄에서_견주면_통과():
+    assert check_reply.old_term_problems("| 질문 바꾸기 | 쿼리 재작성 |\n| 다시 줄 세우기 | 리랭킹 |") == []
+
+
+# 11-23 차례 7번 실행을 시작한 답에서 그대로 옮긴 줄(사용자 "훅이 재 프롬프트 했지만 영어로 말하는건 안잡았네?" [602])
+ENGLISH_REPLY = "I've started the step 7 run (the Fix 1 test, search group 2) in the background. It should take about 50 minutes, and I'll pick it back up when it finishes."
+ENGLISH_NOTE = "Now changing the run script's arms to Fix 1."  # 같은 세션 진행 중 짧은 말
+ENGLISH_WITH_KOREAN = "Next is the pre-run checklist for step 7 (차례 7번). Reading the plan's table row for step 7, the search section (묶음 2)."
+
+
+def test_영어로_쓴_답은_막힌다(tmp_path):
+    for reply in (ENGLISH_REPLY, ENGLISH_NOTE, ENGLISH_WITH_KOREAN):
+        assert any("영어" in h and "[602]" in h for h in check_reply.turn_problems(_turn(tmp_path, reply))), reply
+
+
+def test_진행_중_짧은_말은_영어여도_통과하고_마지막_답만_본다(tmp_path):
+    # 사용자 11-23 "최종 결론 답변 … 저럴때만 영어 체크하면 될거같은데", "ㅇㅇ 그렇게 하셈"([605])
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    note = {"type": "assistant", "message": {"content": [{"type": "text", "text": ENGLISH_NOTE}]}}
+    final = {"type": "assistant", "message": {"content": [{"type": "text", "text": "차례 7번 실행을 백그라운드로 시작했습니다. 끝나면 판정을 계산해 보고드립니다. " * 3}]}}
+    assert not any("영어" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, note, final])))
+    assert any("영어" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, final]), ENGLISH_REPLY))  # 마지막 답(Stop 입력)이 영어면 막힘
+
+
+def test_한국어_답에_영어_용어_코드_인용이_섞여도_통과(tmp_path):
+    replies = (
+        "Object Mode에서 Apply Scale(Ctrl-A)을 누르면 크기가 1로 돌아갑니다.",
+        "`fix_trial_extra.py`로 지표를 셉니다. 사용자 원문 \"Now changing the run script's arms\"는 영어였습니다.",
+        "```\nTraceback (most recent call last): TimeoutError while reading the response body\n```\n실행 기록 끝에 위 오류가 남았습니다.",
+        "결과 폴더는 results/20261123/143613_차례7_고침안1/ 입니다. 자세한 건 https://docs.blender.org/manual/en/latest/ 를 봅니다.",
+    )
+    for reply in replies:
+        assert not any("영어" in h for h in check_reply.turn_problems(_turn(tmp_path, reply))), reply
+
+
+def test_Blender_화면_이름을_늘어놓은_한국어_답은_통과(tmp_path):
+    # 지난 세션 실제 답 두 줄(2배 기준만으로는 걸렸던 꼴)
+    for reply in ("노드 기본값 7개가 화면과 같습니다(Bump·Displacement·Normal Map·Vector Displacement·Bevel·Hair IOR·Output All). Metallic 색 값을 봅니다.",
+                  "Color Management에서 Working Space(Linear Rec.709)·Sequencer(sRGB)·White Balance(6500 K)를 봤습니다. 다음은 Output 탭입니다."):
+        assert not any("영어" in h for h in check_reply.turn_problems(_turn(tmp_path, reply))), reply
+
+
+def test_문장_첫_대문자_낱말과_아포스트로피가_있어도_막힌다(tmp_path):
+    # advisor가 짚은 놓침: 대소문자를 가려 The·Now를 못 세고, 작은따옴표 짝이 I've … I'll 사이를 지웠다(11-23 실제 진행 말)
+    for reply in ("The commit hook requires advisor for hook commits.", "Now adding CSV, Text and OpenVDB.",
+                  "No other runs are going. I'll continue once the independent review comes back."):
+        assert any("영어" in h for h in check_reply.turn_problems(_turn(tmp_path, reply))), reply
+
+
+def test_한글이_없는_짧은_영어_말도_막힌다(tmp_path):
+    for reply in ("Writing the failing tests first.", "Pack 01's count matches (60 answers). Starting pack 14."):  # 지난 세션 실제 진행 말
+        assert any("영어" in h for h in check_reply.turn_problems(_turn(tmp_path, reply))), reply
+
+
+# 11-23 실제 일([604]): 이미 고쳐 낸 영어 줄에 백그라운드 알림 차례마다 다시 막혔고, 마지막 답의 '문턱'은 기록 파일에 늦게 써져 못 봤다.
+FEEDBACK = {"type": "user", "isMeta": True, "message": {"content": "Stop hook feedback:\n답을 고쳐 다시 낸다(HISTORY [378]): 답을 영어로 썼다"}}
+
+
+def test_훅이_막은_뒤에는_그_뒤_글만_본다(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    old = {"type": "assistant", "message": {"content": [{"type": "text", "text": "권하는 꼴은 이것입니다.\n\"옆면 개수(버텍스, Vertices)를\""}]}}
+    fixed = {"type": "assistant", "message": {"content": [{"type": "text", "text": "아까 영어로 쓴 줄을 한국어로 고칩니다. 기록을 먼저 커밋합니다."}]}}
+    assert check_reply.turn_problems(_transcript(tmp_path, [human, old, FEEDBACK, fixed])) == []
+
+
+def test_훅이_막은_뒤_새로_쓴_영어는_막힌다(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    new = {"type": "assistant", "message": {"content": [{"type": "text", "text": "Now commit the record (durable), then advisor."}]}}
+    assert any("영어" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, FEEDBACK, new])))
+
+
+def test_기록에_아직_없는_마지막_답도_본다(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    last = "- Q14가 5회 중 0회에서 3회로 올랐고, 3회는 읽기 규칙의 문턱 그대로입니다."  # 11-23 실제 보고 줄
+    hits = check_reply.turn_problems(_transcript(tmp_path, [human]), last)
+    assert any("'문턱' → '기준값'" in h for h in hits)
+
+
+def test_막은_뒤에도_advisor와_기록_찾기는_차례_전체에서_본다(tmp_path):
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    text = {"type": "assistant", "message": {"content": [{"type": "text", "text": NO_ADVISOR_1}]}}
+    assert not any("advisor" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, ADVISOR_RESULT, FEEDBACK, text])))
+
+
+def test_기록이_영어_진행_말로_끝나도_마지막_답이_한국어면_통과(tmp_path):
+    # 11-23 실제 순서: 기록 파일에는 영어 진행 말이 마지막이고, 한국어 마지막 답은 아직 안 써짐([604]·[605])
+    human = {"type": "user", "origin": {"kind": "human"}, "message": {"content": "질문"}}
+    note = {"type": "assistant", "message": {"content": [{"type": "text", "text": "Now commit the record (durable), then advisor."}]}}
+    assert not any("영어" in h for h in check_reply.turn_problems(_transcript(tmp_path, [human, note]), "차례 7번 결과를 정리했습니다. 판정은 차이 없음입니다."))
+
+
+# 규칙 7([670]): 11-24 밤 실제로 틀린 판정 답 줄(앞세우기는 실험 기록상 "규칙으로는 통과"였다, [665]).
+WRONG_VERDICT = "**앞세우기:** 좋아진 질문도 있고 나빠진 질문도 있었지만, 둘 다 채점이 흔들리는 정도여서 효과가 있다고 보기 어렵습니다. 그래서 규칙대로 넣지 않습니다."  # 11:11 차례, 도구 호출 없음
+WRITE_ONLY = [("Bash", {"command": "cat >> HISTORY.md <<'EOF'\n### [664] ...\nEOF\ngit add HISTORY.md && git commit -q -m x"})]  # 11:22 차례처럼 기록에 쓰기만 함
+
+
+def test_판정을_기록_안_읽고_출처_없이_말하면_막힌다(tmp_path):
+    assert any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, WRONG_VERDICT)))
+    assert any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, "앞세우기는 이미 규칙대로 넣지 않는 쪽입니다.", WRITE_ONLY)))
+
+
+def test_판정_자료를_읽었거나_출처를_붙이면_통과(tmp_path):
+    read = [("Bash", {"command": "grep -n \"개정 차례 4번\" docs/experiment.md"})]
+    assert not any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, WRONG_VERDICT, read)))
+    cited = "앞세우기는 규칙으로는 통과입니다([665], docs/experiment.md:2969)."
+    assert not any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, "앞세우기는 규칙대로 통과입니다 [665].")))
+    assert not any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, cited)))
+
+
+def test_코드_시험_통과와_인용은_판정이_아니다(tmp_path):
+    assert not any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, "pytest는 규칙대로 통과했습니다.")))
+    assert not any("[670]" in h for h in check_reply.turn_problems(_turn(tmp_path, "그때 \"규칙대로 안 넣음\"이라고 한 말이 틀렸습니다.")))
+
+
+def test_훅을_실제로_돌리면_막고_화면_알림을_낸다(tmp_path):
+    """check_reply.py를 Stop 입력으로 실제 실행한다(main이 깨지면 규칙 1-7이 소리 없이 꺼진다, [550])."""
+    import subprocess
+    path = _turn(tmp_path, WRONG_VERDICT)
+    payload = {"hook_event_name": "Stop", "transcript_path": str(path), "last_assistant_message": WRONG_VERDICT}
+    done = subprocess.run([sys.executable, str(HOOKS / "check_reply.py")], input=json.dumps(payload, ensure_ascii=False),
+                          capture_output=True, text=True, encoding="utf-8", check=True)
+    out = json.loads(done.stdout)
+    assert out["decision"] == "block" and "[670]" in out["reason"]
+    assert out["systemMessage"].startswith("[훅 check_reply 막음] 답을 끝내려던 자리")

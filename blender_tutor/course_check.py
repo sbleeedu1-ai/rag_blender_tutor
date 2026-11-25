@@ -41,7 +41,7 @@ class Problem:
     """검사에서 찾은 문제 하나."""
 
     kind: Kind  # 문제 종류(테스트가 보는 값)
-    file: str  # 파일 이름
+    file: str
     where: str  # 파일 안 위치(예: 구간[1].단계[2].이름)
     message: str  # 사람이 읽을 설명
 

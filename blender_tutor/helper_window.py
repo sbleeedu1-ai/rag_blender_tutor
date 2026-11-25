@@ -11,18 +11,33 @@
 
 import html
 import sys
+import time
 
-from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRect, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPainterPath, QPen, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
-    QAbstractItemView, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-    QMenu, QPushButton, QScrollArea, QSizePolicy, QSystemTrayIcon, QVBoxLayout, QWidget, QWidgetAction,
+    QAbstractItemView,
+    QFrame,
+    QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMenu,
+    QPlainTextEdit,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSystemTrayIcon,
+    QVBoxLayout,
+    QWidget,
+    QWidgetAction,
 )
 
-from blender_tutor.answer_engine import Done, Event, Failure, Piece, Source
+from blender_tutor.answer_engine import Done, Event, Failure, Piece, Source, Stage
 from blender_tutor.course_desk import Line, LineKind, StepView
 from blender_tutor.progress import Course
-from blender_tutor.window_rules import by_sentence
+from blender_tutor.window_rules import SENDING, by_sentence, waiting_html
 
 WIDTH, HEIGHT = 420, 560  # 처음 크기(시제품 위젯 판에서 사용자가 써 본 크기)
 MIN_WIDTH, MIN_HEIGHT = 300, 220  # 줄여도 입력칸과 최근 답 몇 줄은 보이는 크기
@@ -32,7 +47,6 @@ CORNER = 24  # 모서리에서 이만큼 안쪽 네모를 끌면 대각선 조�
 MOVE_BAND = 40  # 맨 위 이 높이 안을 끌면 창 옮기기
 PANEL_ALPHA = 235  # 판 진하기(0-255, 사용자 결정 HISTORY [18])
 FONT = "Apple SD Gothic Neo" if sys.platform == "darwin" else "Malgun Gothic"  # 운영체제 기본 한글 글꼴(HISTORY [312])
-THINKING = "생각 중…"
 COURSES_UNREADABLE = "연습 과정 파일을 읽지 못했어요. 질문은 그대로 할 수 있어요."  # 검 파일이 늘 있으니 빈 목록은 읽기 실패
 STEP_ROWS = 5  # '단계 ▼' 목록에 한 번에 보이는 줄 수(넘으면 스크롤, 사용자 결정)
 PICK_HINT = "목록에 없으면 만들고 싶은 것을 아래에 물어보세요. 비슷한 연습 과정을 알려 드려요. 연습 과정 없이 질문만 해도 돼요."
@@ -55,7 +69,7 @@ QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::su
 #sourcesToggle {{ background: transparent; border: none; color: rgba(235,235,245,0.55); font-size: 12px; font-weight: 700; text-align: left; padding: 0; }}
 #sourcesToggle:hover {{ color: rgba(235,235,245,0.85); }}
 #input {{ background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px;
-          padding: 0 16px; font-size: 15px; color: white; selection-background-color: rgba(120,140,255,0.6); }}
+          padding: 6px 10px; font-size: 15px; color: white; selection-background-color: rgba(120,140,255,0.6); }}
 #input:focus {{ border: 1px solid rgba(160,175,255,0.45); }}
 #courseCard {{ background: rgba(255,255,255,0.07); border-radius: 14px; }}
 #stepHeader, #pickTitle {{ color: rgba(235,235,245,0.55); font-size: 12px; font-weight: 700; }}
@@ -78,6 +92,66 @@ QMenu::item {{ padding: 5px 14px; border-radius: 6px; }}
 QMenu::item:selected {{ background: rgba(120,140,255,0.45); }}
 """
 
+
+
+class QuestionBox(QPlainTextEdit):
+    """질문 입력칸: Enter는 보내고 Shift+Enter는 줄을 바꾼다(사용자 11-23 "쉬프트 엔터로 줄 바꾼 문장 입력도 안되네", HISTORY [617]).
+
+    줄이 늘면 칸이 MAX_LINES줄까지 자라고, 그 위로는 칸 안에서 넘긴다. 한 줄 칸(QLineEdit)일 때의 이름(text·setText·returnPressed·textEdited)을 그대로 둔다.
+    """
+
+    MAX_LINES = 5
+    returnPressed = Signal()
+    textEdited = Signal(str)  # 글이 바뀔 때마다 지금 글(프로그램이 바꾼 것 포함, 보낼 때 비우면 빈 글로 와 쓰던 표시가 풀린다)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setTabChangesFocus(True)
+        self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.textChanged.connect(self._changed)
+        self._fit()
+
+    def text(self) -> str:
+        return self.toPlainText()
+
+    def setText(self, text: str) -> None:
+        self.setPlainText(text)
+        self.moveCursor(QTextCursor.End)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            if event.modifiers() & Qt.ShiftModifier:
+                self.insertPlainText("\n")  # Qt 기본(Shift+Enter)은 줄 구분 글자 U+2028을 넣어(실행으로 확인, toRawText 'a\u2028b') 직접 줄바꿈 글자를 넣는다
+            else:
+                self.returnPressed.emit()
+            return
+        super().keyPressEvent(event)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._fit()  # 폭이 바뀌면 줄 접힘이 바뀐다
+
+    def _changed(self) -> None:
+        self._fit()
+        self.textEdited.emit(self.toPlainText())
+
+    def _fit(self) -> None:
+        """보이는 줄 수(접힌 줄 포함)에 맞춰 높이를 정한다. 한 줄이면 예전 한 줄 칸과 같은 42."""
+        lines = 0
+        block = self.document().begin()
+        while block.isValid():
+            lines += max(1, block.layout().lineCount())
+            block = block.next()
+        shown = min(max(lines, 1), self.MAX_LINES)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded if lines > self.MAX_LINES else Qt.ScrollBarAlwaysOff)
+        self.setFixedHeight(42 + (shown - 1) * self.fontMetrics().lineSpacing())  # 한 줄 가운데 맞춤은 스타일의 위아래 padding 6
+
+
+# 기다림 줄의 점이 가리키는 단계. 설정 읽기는 거의 늘 0초에 지나가 점을 따로 두지 않는다
+# (사용자 11-23 "1단계는 아무 짝에도 쓸모 없어보인다", 시간 기록 5/5에서 0.000초, HISTORY [617]).
+DOTTED = [Stage.REWRITE, Stage.SEARCH, Stage.ANSWER]
 
 class HelperWindow(QWidget):
     """도우미 창. Enter로 보낸 질문은 asked로 알리고, 답 사건은 show_answer_event로 받아 그린다(화면 스레드에서).
@@ -111,6 +185,9 @@ class HelperWindow(QWidget):
         self._typing = False  # 입력칸에 쓰던 글이 있나(started_typing을 질문마다 한 번만 알리려고)
         self._answer: QLabel | None = None
         self._answer_text = ""
+        self._stage: Stage | None = None  # 답을 기다리는 동안 보일 지금 단계(티켓 51)
+        self._sent_at = 0.0  # 보낸 시각(time.monotonic), 흐른 초를 셀 때
+        self.waiting = QTimer(self, interval=100, timeout=self._show_waiting)  # 첫 토큰까지 흐른 초와 지금 점의 밝기를 고친다(밝기가 끊겨 보이지 않게 0.1초)
         self._course_labels: tuple[str, ...] = ()  # 고르기 버튼·바꾸기 메뉴를 만든 연습 과정 목록
         self._steps_for: Course | None = None  # 단계 목록을 만든 연습 과정
         self._marked = -1  # 단계 목록에서 ▶로 표시한 줄(0부터)
@@ -150,10 +227,9 @@ class HelperWindow(QWidget):
         root.addWidget(self._scroll, 1)
         root.addWidget(self._build_prompt())
 
-        self.input = QLineEdit()
+        self.input = QuestionBox()
         self.input.setObjectName("input")
-        self.input.setPlaceholderText("질문을 쓰고 Enter")
-        self.input.setFixedHeight(42)
+        self.input.setPlaceholderText("질문을 쓰고 Enter (줄 바꿈은 Shift+Enter)")
         self.input.returnPressed.connect(self._send)
         self.input.textEdited.connect(self._typed)
         root.addWidget(self.input)
@@ -343,23 +419,32 @@ class HelperWindow(QWidget):
         question = self.input.text().strip()
         if not question or self._busy:
             return
-        self.input.clear()  # 프로그램이 비운 것은 textEdited로 오지 않아 직접 되돌린다
+        self.input.clear()  # 비우면 칸 높이도 한 줄로 돌아간다
         self._typing = False
         self._busy = True
         self._label(question, "question")
-        self._answer = self._label(THINKING, "thinking")
+        self._answer = self._label(SENDING, "thinking")
         self._answer_text = ""
+        self._stage, self._sent_at = None, time.monotonic()
+        self._show_waiting()
+        self.waiting.start()
         self.asked.emit(question)
 
     def show_answer_event(self, event: Event) -> None:
-        """답 사건 하나를 그린다: 조각은 이어 붙이고, 끝이면 근거 카드, 오류면 짧은 문구."""
+        """답 사건 하나를 그린다: 단계는 기다림 줄을 바꾸고, 조각은 이어 붙이고, 끝이면 근거 카드, 오류면 짧은 문구."""
+        if isinstance(event, Stage):
+            self._stage = event
+            self._show_waiting()
+            return
+        self.waiting.stop()  # 지운 기다림 줄에 글을 쓰지 않게 바꾸거나 지우기 전에 멈춘다
         if isinstance(event, Piece):
-            if not self._answer_text:  # 첫 조각: "생각 중…"을 답 글씨로 바꾼다
+            if not self._answer_text:  # 첫 조각: 기다림 줄을 답 글씨로 바꾸고 다시 서식 없이 읽게 한다
+                self._answer.setTextFormat(Qt.PlainText)
                 self._restyle(self._answer, "answer")
             self._answer_text += event.text
             self._answer.setText(by_sentence(self._answer_text))
             return
-        if not self._answer_text:  # 조각 없이 끝났으면 "생각 중…"을 치운다
+        if not self._answer_text:  # 조각 없이 끝났으면 기다림 줄을 치운다
             self._answer.deleteLater()
         if isinstance(event, Done) and event.sources:
             self._chat.addWidget(_sources_card(event.sources))
@@ -367,6 +452,12 @@ class HelperWindow(QWidget):
             self._label(event.message, "failure")
         self._answer = None
         self._busy = False
+
+    def _show_waiting(self) -> None:
+        """기다림 줄을 지금 단계와 보낸 뒤 흐른 초로 고친다. 타이머는 첫 조각·끝·실패에서 멈추므로 기다리는 동안에만 불린다."""
+        current = DOTTED.index(self._stage) if self._stage in DOTTED else 0  # 보낸 직후·설정 읽기는 첫 점이 깜빡인다
+        self._answer.setTextFormat(Qt.RichText)  # 점 색은 서식 글이라 기다림 줄만 서식으로 읽는다(단계 이름은 waiting_html이 바꿔 둠)
+        self._answer.setText(waiting_html(current, len(DOTTED), self._stage, time.monotonic() - self._sent_at))
 
     def _label(self, text: str, name: str) -> QLabel:
         label = QLabel(text)

@@ -8,12 +8,26 @@ import json
 import threading
 import time
 from dataclasses import replace
+from types import SimpleNamespace
 
+import httpx2
 import pytest
 
+from blender_tutor import answer_engine
 from blender_tutor.answer_engine import (
-    INSTRUCTIONS, AnswerEngine, Done, Failure, Piece, Reasoning, Settings, Source, _terms_for,
+    INSTRUCTIONS,
+    AnswerEngine,
+    Done,
+    Failure,
+    Piece,
+    Reasoning,
+    Settings,
+    Source,
+    Stage,
+    _messages,
+    _terms_for,
 )
+from blender_tutor.claude_model import ClaudeModel
 from blender_tutor.manual_chunks import Chunk, Example, MediaKind
 from blender_tutor.menu_names import MenuName, MenuNames, Translation
 from blender_tutor.menu_names import Source as MenuSource
@@ -60,6 +74,7 @@ STATE = WorkState(
 )
 TIMEOUT_MESSAGE = "답이 너무 늦어져 멈췄어요. 잠시 뒤 다시 물어봐 주세요."
 ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물어봐 주세요."
+ANSWERING = [Stage.SEARCH, Stage.ANSWER]  # 질문 바꾸기 없는 엔진이 답변 모델을 부르기까지 내는 단계(티켓 51)
 
 
 class FakeEmbedder:
@@ -89,9 +104,9 @@ class FakeModel:
         self.calls: list[list[dict[str, str]]] = []
         self.timeouts: list[float] = []
 
-    def stream(self, messages: list[dict[str, str]], timeout: float):
+    def stream(self, messages: list[dict[str, str]], timeout: float, first_timeout: float | None = None):
         self.calls.append(messages)
-        self.timeouts.append(timeout)
+        self.timeouts.append((timeout, first_timeout))
         yield from self.pieces
         if self.error:
             raise self.error
@@ -117,8 +132,8 @@ def sources_by_url(events) -> dict[str, Source]:
 
 def test_답_조각이_나오는_대로_흐르고_끝에_근거가_붙는다():
     events = ask()
-    assert events[:3] == [Piece("베벨 "), Piece("모디파이어의 "), Piece("Width를 바꾸세요.")]
-    assert isinstance(events[3], Done) and len(events) == 4
+    assert events[:5] == [*ANSWERING, Piece("베벨 "), Piece("모디파이어의 "), Piece("Width를 바꾸세요.")]
+    assert isinstance(events[5], Done) and len(events) == 6
 
 
 def test_같은_질문을_두_번_하면_같은_답과_근거가_나온다():
@@ -201,6 +216,96 @@ def test_한국어_질문에_섞인_영어_낱말이_순위를_올린다():
 
 def test_낱말_검색을_끄면_뜻_검색_순서만_쓴다():
     assert found(ask("save file", settings=Settings(top_k=2, use_bm25=False))) == [BEVEL, BEVEL_MORE]
+
+
+# 리랭킹(위 200을 판정기 확률 순으로 다시 세움, HISTORY [626])
+
+# TOWARD_BEVEL일 때 뜻 검색 순서: BEVEL, BEVEL_MORE, SAVE, ARRAY, EXPORT, SELECT(EXPORT·SELECT는 점수 0, 저장 차례)
+BY_MEANING = [BEVEL, BEVEL_MORE, SAVE, ARRAY, EXPORT, SELECT]
+
+
+class FakeReranker:
+    """글마다 정해 둔 확률(없으면 default)을 돌려준다. 받은 검색어·글·시간 한도를 적어 둔다."""
+
+    def __init__(self, probs: dict | None = None, default=0.5, error: Exception | None = None, short=False):
+        self.probs, self.default, self.error, self.short = probs or {}, default, error, short
+        self.calls: list[tuple[str, list[str], float]] = []
+
+    def judge(self, query, passages, timeout):
+        self.calls.append((query, list(passages), timeout))
+        if self.error:
+            raise self.error
+        probs = [self.probs.get(text, self.default) for text in passages]
+        return probs[:-1] if self.short else probs
+
+
+def ask_reranked(reranker, settings=Settings(top_k=2)) -> list:
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(), settings, reranker=reranker)
+    return list(engine.answer("베벨", STATE, []))
+
+
+def test_리랭커가_가장_높게_본_청크는_뜻_순위가_맨_끝이어도_위로_올라온다():
+    events = ask_reranked(FakeReranker({SELECT.text: 0.99, SAVE.text: 0.8}))
+    assert found(events) == [SELECT, SAVE]
+    assert events[-1].rerank_failed is False
+
+
+def test_리랭킹_순위는_top_k보다_길게_확률과_함께_기록으로_넘긴다():
+    # 답에는 위 top_k개만 쓰고, 기록에는 위 50개까지 남긴다(칸 수를 바꾼 판을 다시 부르지 않고 만들려고)
+    events = ask_reranked(FakeReranker({SELECT.text: 0.99, SAVE.text: 0.8}, default=0.1))
+    assert found(events) == [SELECT, SAVE]
+    ranking = events[-1].rerank_ranking
+    assert [(chunk, prob) for _, chunk, prob in ranking] == [(SELECT, 0.99), (SAVE, 0.8), (BEVEL, 0.1), (BEVEL_MORE, 0.1), (ARRAY, 0.1), (EXPORT, 0.1)]
+    assert all(CHUNKS[index] is chunk for index, chunk, _ in ranking)  # 번호는 청크 파일 차례
+
+
+def test_리랭킹_기록은_위_50개에서_자른다(monkeypatch):
+    monkeypatch.setattr(answer_engine, "RERANK_LOG", 3)
+    events = ask_reranked(FakeReranker(default=0.5))
+    assert [chunk for _, chunk, _ in events[-1].rerank_ranking] == BY_MEANING[:3]
+
+
+def test_확률이_같으면_뜻_검색_순서를_지킨다():
+    assert found(ask_reranked(FakeReranker(default=0.5), Settings(top_k=6))) == BY_MEANING
+
+
+def test_리랭커에는_검색어와_뜻_검색_위_rerank_depth개의_글을_순서대로_한도와_함께_넘긴다():
+    reranker = FakeReranker()
+    ask_reranked(reranker, Settings(top_k=2, rerank_depth=4, rerank_timeout=3.0))
+    assert reranker.calls == [("베벨", [chunk.text for chunk in BY_MEANING[:4]], 3.0)]
+
+
+def test_위_rerank_depth_밖의_청크는_확률이_높아도_오르지_않는다():
+    events = ask_reranked(FakeReranker({SELECT.text: 0.99}), Settings(top_k=1, rerank_depth=5))
+    assert found(events) == [BEVEL]
+
+
+@pytest.mark.parametrize("reranker", [FakeReranker(error=TimeoutError("늦음")), FakeReranker(short=True)])
+def test_리랭커가_실패하면_뜻_검색_위_k개로_답하고_실패를_알린다(reranker, caplog):
+    events = ask_reranked(reranker)
+    assert isinstance(events[-1], Done) and "".join(e.text for e in events if isinstance(e, Piece))  # 답은 멈추지 않는다
+    assert found(events) == [BEVEL, BEVEL_MORE]
+    assert events[-1].rerank_failed is True and events[-1].rerank_ranking == ()
+    assert "리랭킹 실패" in caplog.text
+
+
+def test_리랭커가_우리_코드_오류를_내면_숨기지_않고_올린다():
+    # 바깥 서비스 실패(연결·시간 초과·답 꼴)만 뜻 검색 길로 보낸다. 다른 오류는 버그라 "리랭킹 실패"로 숨기지 않는다
+    with pytest.raises(KeyError):
+        ask_reranked(FakeReranker(error=KeyError("c00")))
+
+
+def test_리랭커를_끄면_부르지_않는다():
+    reranker = FakeReranker({SELECT.text: 0.99})
+    assert found(ask_reranked(reranker, Settings(top_k=2, rerank=False))) == [BEVEL, BEVEL_MORE]
+    assert reranker.calls == []
+
+
+def test_search는_리랭커를_부르지_않는다():
+    # 실측 프로그램(speed_trial)이 쓰지 않은 검색어도 search로 채점한다. 거기서 유료 판정기를 부르면 안 된다
+    reranker = FakeReranker({SELECT.text: 0.99})
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(), Settings(top_k=2), reranker=reranker)
+    assert engine.search("bevel", TOWARD_BEVEL) == [BEVEL, BEVEL_MORE] and reranker.calls == []
 
 
 # 검색어 만들기
@@ -395,7 +500,7 @@ def test_임베딩이_글_수와_다른_개수의_벡터를_주면_잘못된_응
             return super().embed(texts, timeout)[:-1]
 
     model = FakeModel()
-    assert ask(embedder=OneShort(), model=model) == [Failure(ERROR_MESSAGE)]
+    assert ask(embedder=OneShort(), model=model) == [Stage.SEARCH, Failure(ERROR_MESSAGE)]
     assert model.calls == []
 
 
@@ -523,9 +628,10 @@ def test_최근_대화를_차례대로_넘기고_지난_질문은_기억하지_�
 def test_응답_없음_한도를_모델과_임베딩에_넘긴다():
     embedder, model = FakeEmbedder(), FakeModel()
     ask(embedder=embedder, model=model)
-    assert (embedder.timeouts, model.timeouts) == ([10.0], [10.0])  # 기본 10초(사용자 결정, 2026-10-21)
-    ask(embedder=embedder, model=model, settings=Settings(timeout=3.0))
-    assert (embedder.timeouts[-1], model.timeouts[-1]) == (3.0, 3.0)
+    # 임베딩 10초(2026-10-21), 답 모델은 글 뒤 5초·첫 글자까지 20초(사용자 결정 [561])
+    assert (embedder.timeouts, model.timeouts) == ([10.0], [(5.0, 20.0)])
+    ask(embedder=embedder, model=model, settings=Settings(timeout=3.0, answer_timeout=2.0, answer_first_timeout=7.0))
+    assert (embedder.timeouts[-1], model.timeouts[-1]) == (3.0, (2.0, 7.0))
 
 
 # 오류·시간 초과
@@ -534,33 +640,33 @@ SEARCHED = tuple(found(ask()))  # 기본 질문("베벨")의 검색 결과. 검�
 
 
 def test_답변_모델이_시간_초과면_짧은_오류_표시():
-    assert ask(model=FakeModel(pieces=(), error=TimeoutError())) == [Failure(TIMEOUT_MESSAGE, SEARCHED)]
+    assert ask(model=FakeModel(pieces=(), error=TimeoutError())) == [*ANSWERING, Failure(TIMEOUT_MESSAGE, SEARCHED)]
 
 
 def test_답변_모델이_첫_조각_전에_실패하면_오류_표시():
-    assert ask(model=FakeModel(pieces=(), error=ConnectionError("끊김"))) == [Failure(ERROR_MESSAGE, SEARCHED)]
+    assert ask(model=FakeModel(pieces=(), error=ConnectionError("끊김"))) == [*ANSWERING, Failure(ERROR_MESSAGE, SEARCHED)]
 
 
 def test_답_도중_오류가_나면_나온_조각_뒤에_오류_표시와_검색_결과가_오고_근거는_없다():
     events = ask(model=FakeModel(pieces=("베벨 ",), error=ConnectionError("끊김")))
-    assert events == [Piece("베벨 "), Failure(ERROR_MESSAGE, SEARCHED)]
+    assert events == [*ANSWERING, Piece("베벨 "), Failure(ERROR_MESSAGE, SEARCHED)]
     assert len(SEARCHED) == 6  # 검색 결과는 평가용으로 그대로 남는다
 
 
 def test_답_도중_시간_초과도_나온_조각_뒤에_오류_표시():
     events = ask(model=FakeModel(pieces=("베벨 ", "모디파이어의 "), error=TimeoutError()))
-    assert events == [Piece("베벨 "), Piece("모디파이어의 "), Failure(TIMEOUT_MESSAGE, SEARCHED)]
+    assert events == [*ANSWERING, Piece("베벨 "), Piece("모디파이어의 "), Failure(TIMEOUT_MESSAGE, SEARCHED)]
 
 
 def test_임베딩이_시간_초과면_검색_전이라_검색_결과_없이_오류_표시를_내고_답변_모델은_부르지_않는다():
     model = FakeModel()
-    assert ask(embedder=FakeEmbedder(error=TimeoutError()), model=model) == [Failure(TIMEOUT_MESSAGE)]
+    assert ask(embedder=FakeEmbedder(error=TimeoutError()), model=model) == [Stage.SEARCH, Failure(TIMEOUT_MESSAGE)]
     assert model.calls == []
 
 
 def test_임베딩이_실패하면_오류_표시를_내고_답변_모델은_부르지_않는다():
     model = FakeModel()
-    assert ask(embedder=FakeEmbedder(error=ConnectionError("끊김")), model=model) == [Failure(ERROR_MESSAGE)]
+    assert ask(embedder=FakeEmbedder(error=ConnectionError("끊김")), model=model) == [Stage.SEARCH, Failure(ERROR_MESSAGE)]
     assert model.calls == []
 
 
@@ -575,7 +681,7 @@ def test_우리_코드의_오류는_오류_표시로_덮지_않고_그대로_올
 def test_임베딩이_모두_0인_벡터를_주면_잘못된_응답으로_보고_오류_표시():
     # 모두 0이면 뜻 점수가 다 같아 청크 저장 순서가 그대로 순위가 된다(의미 없는 검색 결과)
     model = FakeModel()
-    assert ask(embedder=FakeEmbedder([0.0, 0.0, 0.0]), model=model) == [Failure(ERROR_MESSAGE)]
+    assert ask(embedder=FakeEmbedder([0.0, 0.0, 0.0]), model=model) == [Stage.SEARCH, Failure(ERROR_MESSAGE)]
     assert model.calls == []
 
 
@@ -680,7 +786,7 @@ def test_표시가_닫히기_전에_답이_끊겨도_받은_글을_내고_오류
     names = MenuNames(SCREEN_NAMES)
     model = FakeModel(("[[Add >",), error=ConnectionError("끊김"))
     events = list(AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), model, menu_names=names).answer("추가", KOREAN_SCREEN, []))
-    assert events[0] == Piece("Add >") and isinstance(events[1], Failure)
+    assert events[:3] == [*ANSWERING, Piece("Add >")] and isinstance(events[3], Failure)
 
 
 def test_답변_모델에게_메뉴_이름을_영어로_표시해_쓰라고_지시한다():
@@ -694,7 +800,7 @@ def test_생각_수준은_정해_둔_이름만_받는다():
 
     값은 명세의 none·low·medium. 실제 모델이 받는 값은 티켓 33에서 맞춘다.
     """
-    assert Settings().reasoning is Reasoning.NONE
+    assert Settings().reasoning is Reasoning.LOW  # 결정 7: 기본 low(사용자 "그럼 답 모델은 일단 low 로 가자", HISTORY [578])
     assert Settings(reasoning="low").reasoning is Reasoning.LOW
     with pytest.raises(ValueError):
         Settings(reasoning="nnoe")
@@ -809,16 +915,56 @@ def test_맥락이_있으면_질문_아래에_참고로_붙이고_먼저_볼_소
     )
 
 
+# 기다리는 동안 단계 보이기(티켓 51)
+
+
+class Journal:
+    """가짜 부품이 불린 차례와 엔진이 낸 단계를 한 줄로 적는다(단계가 그 호출보다 먼저 왔는지 보려고)."""
+
+    def __init__(self):
+        self.lines: list[str] = []
+
+    def wrap(self, name, method):
+        def called(*args, **kwargs):
+            self.lines.append(name)
+            return method(*args, **kwargs)
+        return called
+
+
+def test_단계는_엔진이_그_단계의_호출에_들어가기_바로_전에_하나씩_낸다():
+    journal = Journal()
+    rewriter, embedder, model = FakeRewriter(), FakeEmbedder(), FakeModel()
+    rewriter.stream = journal.wrap("질문 바꾸기 부름", rewriter.stream)
+    embedder.embed = journal.wrap("임베딩 부름", embedder.embed)
+    model.stream = journal.wrap("답변 모델 부름", model.stream)
+    engine = AnswerEngine(CHUNKS, VECTORS, embedder, model, rewriters=[rewriter])
+    for event in engine.answer("배열로 복사하려면?", STATE, []):
+        journal.lines.append(event.value if isinstance(event, Stage) else type(event).__name__)
+    assert journal.lines == [
+        Stage.REWRITE.value, "질문 바꾸기 부름", Stage.SEARCH.value, "임베딩 부름", Stage.ANSWER.value, "답변 모델 부름",
+        "Piece", "Piece", "Piece", "Done",
+    ]
+
+
+def test_질문_바꾸기가_없는_엔진은_그_단계를_내지_않는다():
+    assert [event for event in ask() if isinstance(event, Stage)] == [Stage.SEARCH, Stage.ANSWER]
+
+
+def test_단계_이름은_생각을_끄든_켜든_참인_쉬운_말이다():
+    # 답 모델 thinking이 none이 될 수 있어([578]) '생각하는 중'처럼 켠 때만 맞는 말은 쓰지 않는다
+    assert [stage.value for stage in Stage] == ["Blender 설정을 읽는 중", "질문을 정리하는 중", "설명서에서 찾는 중", "답을 만드는 중"]
+
+
 def test_질문_바꾸기가_모두_실패하면_한국어_질문으로_찾지_않고_오류_표시로_멈춘다():
     embedder, model = FakeEmbedder(), FakeModel()
     events = ask_rewritten([FakeRewriter(error=OSError("연결 끊김")), FakeRewriter("검색어 아님")], embedder=embedder, model=model)
-    assert events == [Failure(ERROR_MESSAGE)]
+    assert events == [Stage.REWRITE, Failure(ERROR_MESSAGE)]  # 찾기·답 단계는 들어가지 않았으니 내지 않는다
     assert embedder.calls == [] and model.calls == []
 
 
 def test_오류_표시로_멈추면_어떤_답이_와서_실패했는지_기록에_남긴다(caplog):
     events = ask_rewritten([FakeRewriter("[]")])
-    assert events == [Failure(ERROR_MESSAGE)]
+    assert events == [Stage.REWRITE, Failure(ERROR_MESSAGE)]
     assert "ValueError" in caplog.text and "'[]'" in caplog.text
 
 
@@ -827,7 +973,7 @@ def test_질문_바꾸기가_한도_안에_하나도_오지_않으면_시간_초
     model = FakeModel()
     events = ask_rewritten([FakeRewriter(release=never), FakeRewriter(release=never)], model=model, settings=Settings(rewrite_timeout=0.05))
     never.set()
-    assert events == [Failure(TIMEOUT_MESSAGE)] and model.calls == []
+    assert events == [Stage.REWRITE, Failure(TIMEOUT_MESSAGE)] and model.calls == []
 
 
 def test_예열은_질문_바꾸기_하나와_임베딩을_한_번씩_부른다():
@@ -1339,3 +1485,132 @@ def test_질문에_영어로_쓴_이름은_괄호_안에서_사용자가_쓴_영
     text = "".join(event.text for event in engine.answer("Frame All 어디 있어요?", KOREAN_SCREEN, []) if isinstance(event, Piece))
     assert text == "A(또는 Frame All)를 누르고, 다시 Frame All(모든 프레임)을 누릅니다."
 
+
+
+class _ClaudeClient:
+    """ClaudeModel에 끼울 가짜 anthropic client: 정해 둔 조각을 낸 뒤 error를 내거나 stop으로 끝난다."""
+
+    def __init__(self, pieces=(), error=None, stop="end_turn"):
+        self.pieces, self.error, self.stop = pieces, error, stop
+        self.messages = SimpleNamespace(stream=lambda **_: self)
+        self.text_stream = self._text()
+
+    def with_options(self, timeout):
+        return self
+
+    def _text(self):
+        yield from self.pieces
+        if self.error:
+            raise self.error
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def get_final_message(self):
+        return SimpleNamespace(usage=SimpleNamespace(input_tokens=10, output_tokens=4096), stop_reason=self.stop)
+
+
+def test_실제_Claude_연결에서_답_도중_바이트가_끊겨_늦으면_시간_초과_문구를_보인다():
+    error = httpx2.ReadTimeout("The read operation timed out")
+    model = ClaudeModel("claude-haiku-5-5", "k", "medium", client=_ClaudeClient(error=error))
+    assert ask(model=model) == [*ANSWERING, Failure(TIMEOUT_MESSAGE, SEARCHED)]
+
+
+def test_실제_Claude_연결에서_생각이_한도를_다_써_글이_0자면_빈_답_대신_오류_표시():
+    model = ClaudeModel("claude-haiku-5-5", "k", "medium", client=_ClaudeClient(stop="max_tokens"))
+    assert ask(model=model) == [*ANSWERING, Failure(ERROR_MESSAGE, SEARCHED)]
+
+
+# 차례 9번(계획 4-1): 환경 설정 안의 탭으로 가는 길인데 여는 길이 없으면 "편집(Edit) > "을 채운다(설명서 "Menu: Edit ‣ Preferences…",
+# Q20 채점 사유 "키맵 가는 길에 편집(Edit) > 환경 설정 없이 '환경 설정의 키맵'만 말함 = 부분")
+PREFS_EXTRA = {**SCREEN_EXTRA, "Edit": "편집", "Preferences": "환경 설정", "Keymap": "키맵", "Viewport": "뷰포트", "File": "파일",
+               "Defaults": "기본값", "Load Factory Preferences": "최초 환경 설정을 불러오기", "Add-on Preferences": "애드온 환경 설정"}
+
+
+def shown_prefs(pieces, question="메시 추가", state=KOREAN_SCREEN) -> str:
+    names = MenuNames(SCREEN_NAMES, extra=PREFS_EXTRA)
+    engine = AnswerEngine(CHUNKS, VECTORS, FakeEmbedder(), FakeModel(pieces), menu_names=names)
+    return "".join(event.text for event in engine.answer(question, state, []) if isinstance(event, Piece))
+
+
+@pytest.mark.parametrize(
+    "answer, expected",
+    [
+        # 탭으로 가는 길: 모델이 맨 글로 쓴 꼴, 표시 꼴, 띄어 쓰지 않은 꼴
+        ("환경 설정(Preferences)의 키맵을 여세요.", "편집(Edit) > 환경 설정(Preferences)의 키맵을 여세요."),
+        ("[[Preferences > Keymap]]에서 찾으세요.", "편집(Edit) > 환경 설정(Preferences) > 키맵(Keymap)에서 찾으세요."),
+        ("[[Preferences]]의 [[Keymap]] 탭", "편집(Edit) > 환경 설정(Preferences)의 키맵(Keymap) 탭"),
+        ("환경설정의 키맵을 여세요.", "편집(Edit) > 환경설정의 키맵을 여세요."),
+        # 이미 길이 있으면 그대로(한 표시, 나눠 쓴 길, 뒤에 길이 나오는 꼴)
+        ("[[Edit > Preferences > Keymap]]을 여세요.", "편집(Edit) > 환경 설정(Preferences) > 키맵(Keymap)을 여세요."),
+        ("[[Edit]] 메뉴를 열고 [[Preferences]]의 [[Keymap]]을 누릅니다.", "편집(Edit) 메뉴를 열고 환경 설정(Preferences)의 키맵(Keymap)을 누릅니다."),
+        ("1. 환경 설정(Preferences)을 엽니다. 메뉴에서 [[Edit > Preferences]]를 누르고", "1. 환경 설정(Preferences)을 엽니다. 메뉴에서 편집(Edit) > 환경 설정을 누르고"),
+        # 상태를 설명하는 말은 두고, 처음 언급만 본다
+        ("현재 환경 설정에서 버튼이 꺼져 있어요. 다시 켜려면 환경 설정의 뷰포트로.", "현재 환경 설정에서 버튼이 꺼져 있어요. 다시 켜려면 환경 설정의 뷰포트로."),
+        ("1. 환경 설정의 키맵을 엽니다.\n2. 환경 설정의 키맵에서 찾습니다.", "1. 편집(Edit) > 환경 설정의 키맵을 엽니다.\n2. 환경 설정의 키맵에서 찾습니다."),
+        # 괄호·코드 속, 더 긴 이름의 일부는 건너뛴다
+        ("(설명서의 환경 설정 쪽입니다) 그리고 환경 설정의 키맵", "(설명서의 환경 설정 쪽입니다) 그리고 편집(Edit) > 환경 설정의 키맵"),
+        ("`환경 설정의 키맵` 다음", "`환경 설정의 키맵` 다음"),
+        ("애드온 환경 설정의 키맵", "애드온 환경 설정의 키맵"),  # 넓힌 목록의 더 긴 이름(이 건너뛰기가 없으면 채워진다)
+        # 다른 프로그램·운영체제의 환경 설정, ">" 뒤가 탭 이름이 아닌 꼴
+        ("macOS 시스템 환경 설정 > 키보드에서 단축키를 끄세요.", "macOS 시스템 환경 설정 > 키보드에서 단축키를 끄세요."),
+        ("윈도우 환경 설정 > 키맵", "윈도우 환경 설정 > 키맵"),
+        ("환경 설정 > 다른 곳에서 바꿉니다.", "환경 설정 > 다른 곳에서 바꿉니다."),
+        # 표·제목 줄은 둔다
+        ("| 환경 설정의 키맵 | 값 |", "| 환경 설정의 키맵 | 값 |"),
+        ("## 환경 설정의 키맵", "## 환경 설정의 키맵"),
+        # 붙잡은 글 바로 뒤 표시도 붙잡은 글을 앞 글로 본다(괄호 안 이름은 화면 글자만, [458])
+        ("현재 환경 설정에서 꺼져 있어요 (예: [[Keymap]] 탭)", "현재 환경 설정에서 꺼져 있어요 (예: 키맵 탭)"),
+        ("환경 설정 메뉴에서 [[Render]] 탭", "환경 설정 메뉴에서 Render 탭"),  # HEAD와 같다(이 지어낸 사전의 Render는 짝을 안 고른 이름)
+        # 붙잡는 동안 표시 뒤 단축키도 글 순서대로(앞 문장 끝에 붙지 않는다, [423])
+        ("환경 설정의 키맵을 여세요. [[Face]](Alt-F)를 누르면 면이 생겨요.",
+         "편집(Edit) > 환경 설정의 키맵을 여세요. 페이스(Face)를 누르면 면이 생겨요. 단축키는 Alt-F입니다."),
+        ("현재 환경 설정에서 꺼져 있어요. [[Face]](Alt-F)를 누르면 면이 생겨요.",
+         "현재 환경 설정에서 꺼져 있어요. 페이스(Face)를 누르면 면이 생겨요. 단축키는 Alt-F입니다."),
+        # 넣은 글은 앞에 "(Edit)"이 보였는지로만 괄호를 정한다(뒤 글은 HEAD와 같게 둔다. 그래서 뒤에 "편집(Edit)"이 또 나올 수 있다)
+        ("환경 설정의 키맵에서 고친 뒤 [[Edit]] 메뉴를 보세요.", "편집(Edit) > 환경 설정의 키맵에서 고친 뒤 편집(Edit) 메뉴를 보세요."),
+        ("[[File > Defaults > Load Factory Preferences]]를 누른 뒤", "파일(File) > 기본값(Defaults) > '최초 환경 설정을 불러오기'(Load Factory Preferences) 항목을 누른 뒤"),  # 따옴표·'항목'은 [356] 꼴
+        # 앞에 편집이 이미 나왔으면 영어 괄호는 처음 한 번만([353])
+        ("[[Edit]] 메뉴를 봅니다. 그다음 줄에서 한참 다른 이야기를 한 뒤 환경 설정의 키맵", "편집(Edit) 메뉴를 봅니다. 그다음 줄에서 한참 다른 이야기를 한 뒤 편집 > 환경 설정의 키맵"),
+    ],
+)
+def test_환경_설정_탭으로_가는_길에_여는_길이_없으면_편집을_채운다(answer, expected):
+    assert shown_prefs((answer,)) == expected
+
+
+def test_환경_설정_채우기는_질문이_영어면_괄호_속이라_두고_영어_화면은_손대지_않는다():
+    assert shown_prefs(("[[Preferences]]의 [[Keymap]]",), question="Preferences 어디") == "Preferences(환경 설정)의 키맵(Keymap)"
+    assert shown_prefs(("[[Preferences]]의 [[Keymap]]",), state=STATE) == "Preferences의 Keymap"
+
+
+def test_환경_설정_채우기는_조각을_어떻게_나눠_흘려도_같고_끊겨도_붙잡은_글을_낸다():
+    import random
+
+    from blender_tutor.answer_engine import _MenuMarks
+
+    text = "단축키를 보려면 환경 설정(Preferences)의 키맵을 여세요. 다시 [[Preferences]]에서.\n현재 환경 설정에서 꺼짐\n그리고 환경 설정의 키맵에서 다시 봅니다\n환경 설정에서 [[Face]](Alt-F)를 누르면 돼요."
+    whole = shown_prefs((text,))
+    assert whole.startswith("단축키를 보려면 편집(Edit) > 환경 설정(Preferences)의") and whole.count("편집") == 1  # 처음 언급만
+    rng = random.Random(9)
+    for _ in range(300):
+        pieces, i = [], 0
+        while i < len(text):
+            k = rng.randint(1, 12)
+            pieces.append(text[i : i + k])
+            i += k
+        assert shown_prefs(tuple(pieces)) == whole, pieces
+    marks = _MenuMarks(MenuNames(SCREEN_NAMES, extra=PREFS_EXTRA))
+    assert marks.feed("그럼 환경 설정의 키") + marks.finish(cut=True) == "그럼 환경 설정의 키"
+
+
+def test_messages_put_errata_line_below_its_chunk():
+    # 바로잡기 줄은 그 청크 글 바로 아래, 다음 청크 앞에 들어간다(HISTORY [690])
+    fbx = Chunk(
+        "files/import_export/fbx_legacy", "id15", "files", "files/import_export", "FBX (Legacy)", ("Export",),
+        "Scale the exported data by this value. 10 is the default because this fits best.",
+    )
+    content = _messages("크기가 작아요", STATE, (), [[fbx, SAVE]], [], None)[-1]["content"]
+    assert f"{fbx.text}\n\n위 글의 Scale 기본값 10은 1.0이다.\n\n{SAVE.text}" in content

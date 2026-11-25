@@ -5,7 +5,7 @@
 """
 
 from blender_tutor.menu_names import MenuName, Source, Translation
-from blender_tutor.menu_review import Kind, draft_choices, draft_titles
+from blender_tutor.tools.menu_review import Kind, draft_choices, draft_titles
 
 
 def _name(english, *translations, sources=(Source.UI,)):

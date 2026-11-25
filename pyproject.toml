@@ -14,6 +14,8 @@ dependencies = [
     "rank-bm25>=0.2.2",
     "PySide6-Essentials>=6.12",
     "anthropic>=2.7",  # 질문 바꾸기·분야 고르기·답변(Claude Haiku 5.5, HISTORY [270])
+    "httpx2>=2.0,<3",  # anthropic이 쓰는 연결 라이브러리. 흘려 받는 도중의 시간 초과를 직접 잡는다(claude_model.stream, 1-1)
+    "truststore>=0.10",  # 리랭킹(decision_rerank)이 운영체제 인증서로 Google에 붙으려고. httpx2도 쓰지만 우리 코드가 직접 쓰므로 적는다
     # Mac에서 도우미 창이 Blender를 따라가게 앞 프로그램·창을 읽고 옮긴다(blender_tutor/macapi.py, HISTORY [312])
     "pyobjc-framework-Cocoa>=13; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=13; sys_platform == 'darwin'",
@@ -22,6 +24,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "ruff==0.17.5",  # 린트. Mac과 GitHub 검사가 같은 판으로 돌게 고정(HISTORY [472])
+    "mypy==2.4.1",  # 타입 검사(HISTORY [472])
 ]
 # 검색 비교의 로컬 BGE-M3·가벼운 후보 3개. PyTorch를 함께 받아 무거우므로 따로 설치한다
 compare = [
@@ -29,8 +33,60 @@ compare = [
 ]
 
 [tool.setuptools]
-packages = ["blender_tutor"]
+packages = ["blender_tutor", "blender_tutor.tools"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", ".claude/hooks"]  # 훅은 옆 파일(hook_notice 등)을 가져온다. 실제 실행 때는 훅 폴더가 저절로 경로에 든다
+
+# 린트(HISTORY [472]): 진짜 실수(F)와 import 순서(I)만 켜고, 코드 경계(TID251)는 애드온 본체에만 건다.
+# 이 판의 ruff는 설정이 없으면 넓은 규칙 묶음을 켜므로 select를 늘 적어 둔다
+[tool.ruff]
+line-length = 140
+extend-exclude = [".scratch", "archive", "prototype", ".claude/worktrees"]
+
+[tool.ruff.lint]
+select = ["F", "I", "TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# 애드온 본체는 Blender 안 파이썬에서 돌아 blender_tutor가 없다
+"blender_tutor".msg = "애드온 본체는 Blender 안 파이썬에서 돌아 blender_tutor를 불러올 수 없다(HISTORY [472])"
+
+[tool.ruff.lint.per-file-ignores]
+"!addon/blender_tutor_addon/**" = ["TID251"]
+
+# 타입 검사(HISTORY [472]): blender_tutor만 본다. 처음 켤 때 지적이 있던 23파일은 빚으로 적어 두고(ignore_errors) 고치지 않는다
+# (None 막기를 더하면 동작이 바뀌어 정리에 끼우지 않는다). 그 밖의 파일과 새 파일은 검사한다.
+# 외부 라이브러리(rank_bm25·PySide6 밖의 pyobjc·bpy 등)의 형 정보가 없는 것은 넘긴다
+[tool.mypy]
+files = ["blender_tutor"]
+ignore_missing_imports = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = [
+    "blender_tutor.answer_engine",
+    "blender_tutor.tools.blender_ui_labels",
+    "blender_tutor.conditions",
+    "blender_tutor.conversation",
+    "blender_tutor.course_check",
+    "blender_tutor.course_desk",
+    "blender_tutor.data_manifest",
+    "blender_tutor.engine_setup",
+    "blender_tutor.evaluate",
+    "blender_tutor.helper",
+    "blender_tutor.helper_window",
+    "blender_tutor.macapi",
+    "blender_tutor.manual_chunks",
+    "blender_tutor.menu_names",
+    "blender_tutor.tools.menu_review",
+    "blender_tutor.progress",
+    "blender_tutor.progress_record",
+    "blender_tutor.question_flow",
+    "blender_tutor.receiver",
+    "blender_tutor.tools.search_compare",
+    "blender_tutor.tools.speed_trial",
+    "blender_tutor.tools.translation_check",
+    "blender_tutor.winapi",
+]
+ignore_errors = true

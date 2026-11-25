@@ -11,7 +11,6 @@ Blender 안쪽 C 코드에서 그리는 글자는 뽑히지 않는다. 그래서
 """
 
 import json
-import os
 import subprocess
 import sys
 from collections.abc import Iterable, Mapping
@@ -118,7 +117,7 @@ def dump_labels(out: Path, blender: str) -> None:
 
 
 def main(argv: list[str]) -> int:
-    """사용법: python -m blender_tutor.menu_review <data 폴더>
+    """사용법: python -m blender_tutor.tools.menu_review <data 폴더>
 
     data/menu_names/ui_labels.json(Blender에서 뽑은 화면 글자, 없으면 Blender를 띄워 만듦)과
     data/menu_names/scope_review.json(초안: 여러 개 이름·제목에서만 뽑은 이름)을 쓴다. 이미 있는 초안은 덮어쓰지 않는다.

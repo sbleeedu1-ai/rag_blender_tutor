@@ -3,7 +3,7 @@
 Windows를 직접 만지지 않는 판단만 본다. 실제로 창이 그렇게 움직이는지는 강의실 PC 눈 확인으로 본다.
 """
 
-from blender_tutor.window_rules import FrontBlender, Place, Screen, by_sentence, needs_move, place
+from blender_tutor.window_rules import FrontBlender, Place, Screen, by_sentence, needs_move, place, waiting_html, waiting_line
 
 ME = 900  # 도우미 프로그램의 프로세스 번호
 BLENDER_A, BLENDER_B, BROWSER = 111, 222, 333
@@ -90,3 +90,33 @@ def test_맨_위와_숨김은_앞_프로그램이_바뀌어도_다시_하지_않
     assert not needs_move(Place.TOP, 60, (Place.TOP, 50))  # Blender 둘 사이를 오감
     assert not needs_move(Place.HIDDEN, 60, (Place.HIDDEN, 50))
     assert needs_move(Place.TOP, 50, (Place.BEHIND, 50))
+
+
+def test_기다림_줄은_단계_이름과_보낸_뒤_흐른_초다():
+    assert waiting_line("설명서에서 찾는 중", 3.9) == "설명서에서 찾는 중 · 3초"
+    assert waiting_line(None, 0.2) == "질문을 보내는 중 · 0초"  # 첫 단계가 오기 전
+
+
+def _dots(html: str) -> list[str]:
+    """점 표시 글에서 점마다 (색, 모양)을 차례대로 꺼낸다."""
+    import re
+    return re.findall(r"<span style='color:([^']+)'>([●○])</span>", html)
+
+
+def test_기다림_표시는_지난_단계만_칠한_초록_점_지금은_밝기가_바뀌는_빈_초록_점_남은_것은_회색_빈_점이다():
+    # 사용자 11-23 "o - o - o - o 이런걸 앞에 붙여서 한 단계 넘어갈때마다 초록색으로 바뀌게 하면서 약간의 애니메이션"
+    html = waiting_html(2, 4, "설명서에서 찾는 중", 1.0)
+    [(c1, s1), (c2, s2), (c3, s3), (c4, s4)] = _dots(html)
+    assert (s1, s2, s3, s4) == ("●", "●", "○", "○")  # 단계를 넘어가야 칠한다(사용자 11-23 "왜 처음부터 1칸은 칠해져있지?")
+    assert c1 == c2 == "rgba(52,199,89,1.00)" and c3.startswith("rgba(52,199,89,") and c4 != c1
+    assert html.endswith("설명서에서 찾는 중 · 1초")
+
+
+def test_지금_점은_시간에_따라_밝기가_바뀐다():
+    bright = _dots(waiting_html(0, 4, None, 0.0))[0][0]
+    dim = _dots(waiting_html(0, 4, None, 0.6))[0][0]
+    assert bright != dim and bright == "rgba(52,199,89,1.00)"
+
+
+def test_기다림_표시의_글은_서식으로_읽히지_않게_바꾼다():
+    assert "&lt;b&gt;" in waiting_html(0, 4, "<b>", 0.0)

@@ -10,8 +10,9 @@ from datetime import datetime
 
 import pytest
 
-from blender_tutor.answer_engine import AnswerEngine, Settings
 from blender_tutor import evaluate
+from blender_tutor.answer_engine import AnswerEngine, Settings
+from blender_tutor.call_log import CallLog
 from blender_tutor.evaluate import Dialogue, Spread, Turn, load_questions, run, timing_summary
 from blender_tutor.manual_chunks import Chunk, load_chunks, save_chunks
 from blender_tutor.progress import Course, Step
@@ -126,7 +127,7 @@ class Model:
         self.fail_on = fail_on
         self.text = text
 
-    def stream(self, messages, timeout):
+    def stream(self, messages, timeout, first_timeout=None):
         self.calls.append(messages)
         yield f"{self.text}{len(self.calls)}"
         if len(self.calls) == self.fail_on:
@@ -287,14 +288,20 @@ class KeywordEmbedder:
 
 
 class PricedModel(Model):
-    """평가 프로그램이 요금을 묻는 답변 모델."""
+    """평가 프로그램이 요금을 묻는 답변 모델. 진짜 모델처럼 받은 토큰을 쌓아 센다(부를 때마다 입력 100, 출력 10)."""
 
     def __init__(self, settings):
         super().__init__()
         self.effort = settings.reasoning.value
         self.model = "가짜 답변"
+        self.input_tokens = self.output_tokens = 0
 
     reasoning_tokens = 37
+
+    def stream(self, messages, timeout, first_timeout=None):
+        self.input_tokens += 100
+        self.output_tokens += 10
+        yield from super().stream(messages, timeout, first_timeout)
 
     def dollars(self):
         return 0.0012
@@ -303,13 +310,22 @@ class PricedModel(Model):
 made_models: list[PricedModel] = []
 
 
-def fake_build(data_dir, model, courses, settings, embedding):
-    """진짜 엔진 만들기 대신: data_dir의 청크 파일을 읽어(없으면 FileNotFoundError) 가짜 임베딩으로 엔진을 만든다."""
+class SlowJudge:
+    """판정기 대신: 늘 시간 초과(리랭킹 실패 길을 평가 결과에서 보려고)."""
+
+    def judge(self, query, passages, timeout):
+        raise TimeoutError("늦음")
+
+
+def fake_build(data_dir, model, courses, settings, embedding, wrap, reranker=None):
+    """진짜 엔진 만들기 대신: data_dir의 청크 파일을 읽어(없으면 FileNotFoundError) 가짜 임베딩으로 엔진을 만든다.
+    wrap은 진짜(engine_setup.build_engine)처럼 바깥 호출 부품을 기록 겉으로 감싼다. reranker를 주면 리랭킹도 감싸 끼운다."""
     chunks = load_chunks(data_dir / "chunks" / "manual_chunks.jsonl")
     vectors = [VECTORS[CHUNKS.index(chunk)] for chunk in chunks]
     return AnswerEngine(
-        chunks, vectors, KeywordEmbedder(), model, settings, courses=courses,
+        chunks, vectors, wrap("임베딩", KeywordEmbedder()), wrap("답변", model), settings, courses=courses,
         course_vectors=[[1.0, 0.0, 0.0]] * len(courses), name=f"가짜 엔진({embedding})",
+        reranker=wrap("리랭킹", reranker) if reranker else None,
     )
 
 
@@ -341,11 +357,14 @@ def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약
     folder = tmp_path / "results" / "20261026" / "090500_기준"
     settings = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
     assert settings["engine"] == "가짜 엔진(text-embedding-3-large)" and settings["임베딩"] == "text-embedding-3-large"
-    assert settings["리랭커"] == "끔" and settings["답변 모델 요금(달러)"] == 0.0012 and settings["답변 모델 생각 토큰"] == 37
+    rows = [json.loads(line) for line in (folder / "답.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [row["리랭킹 실패"] for row in rows] == [False, False]
+    assert [row["리랭킹 위 50"] for row in rows] == [[], []]  # 리랭킹이 꺼져 있으면 빈 목록
+    assert settings["리랭커"] == "gemini-decision-1" and settings["답변 모델 요금(달러)"] == 0.0012 and settings["답변 모델 생각 토큰"] == 37
     assert made_models[-1].effort == "low"  # 생각 수준을 답변 모델에 넘긴다
     # 어느 코드로 잰 결과인지(홀드아웃은 동결한 커밋 번호를 적는다). 커밋 안 한 변경이 있으면 뒤에 표시가 붙는다
     assert re.fullmatch(r"[0-9a-f]{40}( \(커밋 안 한 변경 있음\))?", settings["커밋"])
-    assert settings["settings"] == {"top_k": 8, "timeout": 10.0, "rewrite_timeout": 5.0, "field_timeout": 5.0, "use_bm25": False, "reasoning": "low", "fallback_reasoning": "low", "situation_lines": True, "computed_lines": True, "field_lines": True, "recent_pairs": 5}
+    assert settings["settings"] == {"top_k": 8, "timeout": 10.0, "answer_first_timeout": 20.0, "answer_timeout": 5.0, "rewrite_timeout": 5.0, "field_timeout": 5.0, "use_bm25": False, "reasoning": "low", "fallback_reasoning": "low", "situation_lines": True, "computed_lines": True, "field_lines": True, "rerank": True, "rerank_depth": 200, "rerank_timeout": 5.0, "recent_pairs": 5}
     rows = [json.loads(text) for text in (folder / "답.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [(row["번호"], row["적중 순위"]) for row in rows] == [("D01", 1), ("D02", None)]
     assert rows[0]["검색 결과"][0]["주소"] == "files/blend/save.html#save"
@@ -357,6 +376,40 @@ def test_run은_날짜_이름_폴더에_설정과_차례별_답과_적중_요약
     assert "연습 과정 밖 차례 2개 중 답에 연습 과정 이름이 나온 차례 0개(없음)" in summary
     assert rows[0]["첫 글자(초)"] >= 0 and rows[0]["답 끝(초)"] >= rows[0]["첫 글자(초)"]
     assert "엔진만 잰 시간(창 없음): 첫 글자 중앙값" in summary and "(분모 2)" in summary and "잰 것: 프로그램" in summary
+
+
+def test_run은_차례마다_답_모델에_보낸_글_전문과_단계별_시각과_호출별_토큰을_남긴다(tmp_path):
+    made_models.clear()
+    assert main(["run", *run_options(tmp_path, "--name", "기록")], now=datetime(2026, 10, 26, 9, 5)) == 0
+    folder = tmp_path / "results" / "20261026" / "090500_기록"
+    rows = [json.loads(text) for text in (folder / "호출.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [row["번호"] for row in rows] == ["D01", "D02"]  # 차례마다 한 줄
+    sent = made_models[-1].calls  # 답 모델이 실제로 받은 글
+    assert [row["보낸 글"] for row in rows] == sent and "# 질문\n\nsave the blend file" in rows[0]["보낸 글"][-1]["content"]
+    assert [row["답 모델 원문"] for row in rows] == ["답1", "답2"]
+    times = rows[0]["시각(초)"]
+    assert set(times) == {"질문 바꾸기 닫힘", "분야 고르기 끝", "임베딩 끝", "리랭킹 끝", "답 모델 보냄", "답 모델 첫 조각", "화면 첫 조각", "답 끝"}
+    assert times["질문 바꾸기 닫힘"] is None and times["분야 고르기 끝"] is None and times["리랭킹 끝"] is None  # 가짜 엔진에는 질문 바꾸기·분야 고르기·리랭킹이 없음
+    assert 0 <= times["임베딩 끝"] <= times["답 모델 보냄"] <= times["답 모델 첫 조각"] and times["화면 첫 조각"] is not None
+    answer = [call for call in rows[0]["호출"] if call["종류"] == "답변"]
+    assert [(call["입력"], call["출력"]) for call in answer] == [(100, 10)]  # 쌓인 셈이 아니라 그 호출의 몫
+    assert all("보낸 글" not in call for call in rows[0]["호출"])  # 전문은 줄 칸에 한 번만
+    settings = json.loads((folder / "설정.json").read_text(encoding="utf-8"))
+    assert settings["호출 종류별 요금(달러)"] == {"임베딩": None, "답변": 0.0012}  # 가짜 임베딩은 요금을 셀 수 없음
+
+
+def test_기록_겉으로_감싸도_답과_검색_결과는_그대로다():
+    plain, wrapped = Model(), Model()
+    log = CallLog()
+    dialogues = [Dialogue("S1", "시나리오형", (turn("S1-1", "처음", ["files/blend/save.html"]), turn("S1-2", "그다음")))]
+    before = run(dialogues, engine(plain))
+    after = run(dialogues, AnswerEngine(
+        CHUNKS, VECTORS, log.wrap("임베딩", Embedder()), log.wrap("답변", wrapped), Settings(top_k=3, use_bm25=False),
+        courses=[SWORD, SHIELD], course_vectors=[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+    ), log=log)
+    assert [(r.answer, r.results, r.hit, r.query) for r in before] == [(r.answer, r.results, r.hit, r.query) for r in after]
+    assert plain.calls == wrapped.calls
+    assert [len(r.calls) for r in after] == [2, 2] and before[0].calls == ()  # 임베딩 + 답변, 기록을 안 주면 빈 묶음
 
 
 def test_run은_설정_값의_1a_2_줄을_끈_판을_설정에_남긴다(tmp_path):
@@ -374,6 +427,46 @@ def test_같은_날_같은_이름으로_다시_돌리면_덮어쓰지_않고_멈
     assert (tmp_path / "results" / "20261026" / "090500_기준" / "답.jsonl").read_text(encoding="utf-8") == before
 
 
+class FixedJudge:
+    """판정기 대신: 저장하기 글만 높게 본다."""
+
+    def judge(self, query, passages, timeout):
+        return [0.9 if passage == SAVE.text else 0.2 for passage in passages]
+
+
+def test_리랭킹_위_50은_순위_주소_경로_확률로_남는다(tmp_path):
+    def build(*args, **kwargs):
+        return fake_build(*args, **kwargs, reranker=FixedJudge())
+
+    argv = ["run", *run_options(tmp_path, "--name", "순위")]
+    assert evaluate.main(argv, datetime(2026, 10, 26, 9, 5), make_model=PricedModel, build=build) == 0
+    rows = [json.loads(line) for line in (tmp_path / "results" / "20261026" / "090500_순위" / "답.jsonl").read_text(encoding="utf-8").splitlines()]
+    ranking = rows[0]["리랭킹 위 50"]
+    assert ranking[0] == {"순위": 1, "청크 번호": CHUNKS.index(SAVE), "주소": SAVE.address, "경로": SAVE.path, "확률": 0.9}
+    assert [item["순위"] for item in ranking] == [1, 2, 3] and {item["주소"] for item in ranking} == {chunk.address for chunk in CHUNKS}
+
+
+def test_리랭킹이_실패한_차례는_답과_요약에_남는다(tmp_path):
+    def build(*args, **kwargs):
+        return fake_build(*args, **kwargs, reranker=SlowJudge())
+
+    argv = ["run", *run_options(tmp_path, "--name", "실패")]
+    assert evaluate.main(argv, datetime(2026, 10, 26, 9, 5), make_model=PricedModel, build=build) == 0
+    folder = tmp_path / "results" / "20261026" / "090500_실패"
+    rows = [json.loads(line) for line in (folder / "답.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [row["리랭킹 실패"] for row in rows] == [True, True]
+    assert [row["리랭킹 위 50"] for row in rows] == [[], []]
+    assert "리랭킹이 실패해 뜻 검색 순위로 답한 차례 2개" in (folder / "요약.md").read_text(encoding="utf-8")
+    calls = [json.loads(line) for line in (folder / "호출.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert "리랭킹 끝" in calls[0]["시각(초)"]
+
+
+def test_run은_리랭커를_끈_판을_설정에_남긴다(tmp_path):
+    assert main(["run", *run_options(tmp_path, "--name", "끔", "--reranker", "끔")], now=datetime(2026, 10, 26, 9, 5)) == 0
+    about = json.loads((tmp_path / "results" / "20261026" / "090500_끔" / "설정.json").read_text(encoding="utf-8"))
+    assert about["리랭커"] == "끔" and about["settings"]["rerank"] is False
+
+
 def test_아직_없는_리랭커나_임베딩은_고를_수_없다(tmp_path):
     for more in (["--reranker", "켬"], ["--embedding", "bge-m3"]):
         with pytest.raises(SystemExit):
@@ -383,9 +476,17 @@ def test_아직_없는_리랭커나_임베딩은_고를_수_없다(tmp_path):
 def test_run은_yes가_없으면_어림_비용만_보이고_돌리지_않는다(tmp_path, capsys):
     made_models.clear()
     argv = ["run", *options(tmp_path, "--name", "기준", "--data", str(tmp_path / "data"))]
+    # 이 두 차례는 설정 값이 없어, 그 꼴을 잰 생각 끔으로 어림을 본다(기본 low는 설정 값 없음을 잰 적이 없다)
+    assert main([*argv, "--reasoning", "none"], now=datetime(2026, 10, 26, 9, 5)) == 2
+    said = capsys.readouterr().err
+    # 리랭킹(기본 켬)은 차례마다 약 $0.0048(차례 13번 위 200 전체 시험 실측 + 약 10%)
+    assert "차례 2개(설정 값 있음 0개) 어림 약 $0.0127 = 답변 $0.0018 + 질문 바꾸기 $0.0013 + 리랭킹 $0.0096" in said
+    assert main([*argv, "--reasoning", "none", "--reranker", "끔"], now=datetime(2026, 10, 26, 9, 5)) == 2
+    assert "어림 약 $0.0031 = 답변 $0.0018 + 질문 바꾸기 $0.0013 + 리랭킹 $0.0000" in capsys.readouterr().err
+    assert "분야 고르기·임베딩은 잰 적이 없어 뺐음" in said
+    # 잰 적 없는 생각 수준(기본 low의 설정 값 없음 포함)은 숫자를 지어내지 않는다
     assert main(argv, now=datetime(2026, 10, 26, 9, 5)) == 2
-    assert "차례 2개 × 약 $0.00064 = 약 $0.00128" in capsys.readouterr().err
-    # 잰 적 없는 생각 수준은 숫자를 지어내지 않는다
+    assert "low은 잰 적이 없어" in capsys.readouterr().err
     assert main([*argv, "--reasoning", "medium"], now=datetime(2026, 10, 26, 9, 5)) == 2
     assert "medium은 잰 적이 없어" in capsys.readouterr().err
     assert made_models == [] and not (tmp_path / "results").exists()
@@ -434,7 +535,7 @@ def test_답마다_엔진만_잰_첫_글자와_답_끝_시간을_붙인다():
     ticks = iter([10.0, 11.5, 14.0, 20.0, 26.0])  # 묻기 전, 첫 조각, 끝 / 둘째 차례는 조각 없이 실패
 
     class Silent(Model):  # 둘째 부름은 조각 없이 바로 오류
-        def stream(self, messages, timeout):
+        def stream(self, messages, timeout, first_timeout=None):
             self.calls.append(messages)
             if len(self.calls) == 2:
                 raise TimeoutError
@@ -459,3 +560,48 @@ def test_설정_값_파일을_적은_차례는_그것을_읽고_없으면_설정
     broken = {**SINGLE, "설정 값": "states/없음.settings.json"}
     with pytest.raises(ValueError, match="설정 값"):
         load_questions(write(tmp_path, [broken]), [SWORD])
+
+
+@pytest.mark.parametrize("turns, with_settings, actual", [
+    (54, 54, 0.097642),  # 11-17 마지막 확인 새_1(생각 끔, 설정 값 있음 54) 답변 모델 실제 요금
+    (324, 324, 0.577),  # [410] 새 지시문 3회
+    (30, 0, 0.024698),  # 11-17 설정값off_1·2·3_재(설정 값 없음 10 × 3) 합
+])
+def test_어림_답변_요금은_지난_실제_요금과_20퍼센트_안이다(turns, with_settings, actual):
+    answer, rewrite = evaluate.estimate_dollars(turns, with_settings, Settings(reasoning="none"))  # 견줄 실제 요금이 생각 끔 실행
+    assert abs(answer / actual - 1) < 0.2
+
+
+def test_어림_질문_바꾸기_요금은_지난_실제_요금과_20퍼센트_안이다():
+    _, rewrite = evaluate.estimate_dollars(147, 147, Settings(reasoning="none"))
+    assert abs(rewrite / 0.0881949 - 1) < 0.2  # [279] Haiku 질문 바꾸기 3번 × 147질문
+
+
+def test_잰_적_없는_생각_수준은_어림하지_않는다():
+    assert evaluate.estimate_dollars(10, 5, Settings(reasoning="medium")) is None
+    assert evaluate.estimate_dollars(10, 5, Settings(reasoning="low")) is None  # low는 설정 값 있음만 잼(차례 4번 L 조건)
+
+
+def test_어림_답변_요금은_low_실측과_20퍼센트_안이다():
+    """기본이 low라(HISTORY [578]) 평가 실행 전 어림이 보여야 한다. 실제 요금은 차례 4번 L 조건(low·분야 있음·실제 검색, 설정 값 있음 270답, 1회)의 답 하나 값."""
+    answer, _ = evaluate.estimate_dollars(270, 270, Settings(reasoning="low"))
+    assert abs(answer / (270 * 0.00215) - 1) < 0.2
+
+
+def test_뒤에서_도는_호출을_기다리다_넘기면_멈추지_않고_그_차례에_표시한다():
+    class Stuck(CallLog):
+        def wait_idle(self, timeout=60.0):
+            return False
+
+    log = Stuck()
+    [result] = run([Dialogue("D01", "정답형", (turn("D01", "하나"),))], AnswerEngine(
+        CHUNKS, VECTORS, log.wrap("임베딩", Embedder()), log.wrap("답변", Model()), Settings(top_k=3, use_bm25=False)), log=log)
+    assert result.answer == "답1" and result.calls[-1]["종류"] == "기다림 넘김"
+
+
+def test_단계별_시각은_오류로_끝난_호출을_세지_않는다():
+    calls = ({"종류": "분야 고르기", "몇째": 0, "보냄": 0.1, "끝": 5.0, "오류": "TimeoutError()"},
+             {"종류": "임베딩", "몇째": 0, "보냄": 0.5, "끝": 0.9}, {"종류": "예비 답변", "몇째": 0, "보냄": 5.1, "첫 조각": 6.0, "끝": 7.0})
+    result = evaluate.TurnResult(QUESTIONS[0], QUESTIONS[0].turns[0], "답", None, (), (), None, first_piece=6.2, done=7.1, calls=calls)
+    stages = evaluate._stages(result)
+    assert stages["분야 고르기 끝"] is None and stages["임베딩 끝"] == 0.9 and stages["답 모델 첫 조각"] == 6.0

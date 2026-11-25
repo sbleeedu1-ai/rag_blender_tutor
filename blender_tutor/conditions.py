@@ -200,7 +200,7 @@ CONDITIONS: dict[str, ConditionKind] = {
         lambda v, state, start: state.edit_selected.get("FACE") == v,
     ),
     "화면": ConditionKind(
-        lambda v: v in VIEW_CHANGES,
+        lambda v: isinstance(v, str) and v in VIEW_CHANGES,
         f"화면 조작입니다({', '.join(VIEW_CHANGES)}).",
         _view_is,
     ),

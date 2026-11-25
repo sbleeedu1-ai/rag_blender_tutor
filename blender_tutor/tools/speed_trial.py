@@ -27,7 +27,7 @@ from blender_tutor.answer_model import MODEL, PRICE, OpenAIAnswerModel
 from blender_tutor.beginner_scope import OpenAIModel, openai_key
 from blender_tutor.manual_chunks import load_chunks
 from blender_tutor.paths import PROJECT
-from blender_tutor.search_compare import hit
+from blender_tutor.tools.search_compare import hit
 from blender_tutor.translate import pieces
 from blender_tutor.work_state import WorkState
 
@@ -128,10 +128,10 @@ class TimedAnswer:
     def __init__(self, inner: OpenAIAnswerModel, calls: Calls, slot: int):
         self.inner, self.calls, self.slot, self.model = inner, calls, slot, inner.model
 
-    def stream(self, messages: list[dict[str, str]], timeout: float) -> Iterator[str]:
+    def stream(self, messages: list[dict[str, str]], timeout: float, first_timeout: float | None = None) -> Iterator[str]:
         record, before, text = self.calls.begin("답변", self.slot), _tokens(self.inner), ""
         try:
-            for piece in self.inner.stream(messages, timeout):
+            for piece in self.inner.stream(messages, timeout, first_timeout):
                 record.setdefault("첫 조각", self.calls.now())
                 text += piece
                 yield piece
@@ -271,7 +271,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     folder = args.results / now.strftime("%Y%m%d") / f"{now.strftime('%H%M%S')}_{args.name}"
     if folder.exists():
         raise SystemExit(f"{folder}가 이미 있습니다(덮어쓰지 않음).")
-    settings, key, calls = Settings(), openai_key(), Calls()
+    # 리랭킹 전([626] 전) luna 판을 재던 도구라 리랭킹은 끈다(켜면 어림에 없는 Google 호출이 붙음). 리랭킹 든 시간은 evaluate로 잰다
+    settings, key, calls = Settings(rerank=False), openai_key(), Calls()
     inner_rewriters = engine_setup.rewriters_for(settings, "openai")  # 이 실측은 luna 판이다(HISTORY [127]-[135])
     inner_answer = OpenAIAnswerModel(MODEL, key, settings.reasoning.value)
     engine = engine_setup.build_engine(

@@ -5,7 +5,7 @@
 
 import json
 
-from blender_tutor.answer_engine import Done, Failure, Piece, Source
+from blender_tutor.answer_engine import Done, Failure, Piece, Source, Stage
 from blender_tutor.timing import Stopwatch
 
 DONE = Done((), ())
@@ -46,6 +46,7 @@ def test_F10부터_답_끝까지_시각을_한_줄로_남긴다(tmp_path):
             "ready": 100.30,
             "sent": 105.0,
             "first_piece": 106.5,
+            "stages": [],
             "done": 108.0,
             "outcome": "done",
             "answer": "먼저 버텍스를",
@@ -118,3 +119,14 @@ def test_F10_뒤_60초가_지나서_보낸_질문에는_F10_시각을_붙이지_
     within, over = lines(path)
     assert (within["f10_pressed"], within["ready"]) == (0.5, 2.0)
     assert (over["f10_pressed"], over["f10_received"], over["ready"], over["sent"]) == (None, None, None, 200.0)
+
+
+def test_단계는_답을_끝내지_않고_바뀐_시각만_차례대로_남긴다(tmp_path):
+    path = tmp_path / "timings.jsonl"
+    watch = Stopwatch(path, pc="집", clock=Clock(10.0, 10.2, 11.0, 12.5, 14.0, 15.0))
+    lap = watch.asked("베벨?", ENGINE)  # 보냄 10.0
+    for event in (Stage.REWRITE, Stage.SEARCH, Stage.ANSWER, Piece("네"), DONE):
+        lap.saw(event)
+    [line] = lines(path)
+    assert line["stages"] == [["질문을 정리하는 중", 10.2], ["설명서에서 찾는 중", 11.0], ["답을 만드는 중", 12.5]]
+    assert (line["first_piece"], line["done"], line["answer"], line["outcome"]) == (14.0, 15.0, "네", "done")

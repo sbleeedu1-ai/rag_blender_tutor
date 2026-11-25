@@ -3,6 +3,8 @@
 창이 0.1초마다 화면 모습(Screen)을 읽어 place()에 묻고, 돌려받은 자리대로 winapi로 창을 옮긴다.
 """
 
+import html
+import math
 import re
 from dataclasses import dataclass
 from enum import StrEnum
@@ -21,7 +23,7 @@ class Place(StrEnum):
 class Screen:
     """한 번 읽은 화면 모습."""
 
-    foreground_pid: int  # 앞 프로그램의 프로세스 번호
+    foreground_pid: int
     foreground_is_taskbar: bool  # 앞 창이 작업 표시줄·트레이인가
     blender_pids: frozenset[int]  # 켜진 Blender들(작업 상태를 보낸 것)
     blender_visible: bool  # 최소화되지 않은 Blender 창이 하나라도 있나
@@ -82,3 +84,30 @@ _SENTENCE_END = re.compile(r"((?<![0-9])\.|[!?])[ \t]+")
 def by_sentence(text: str) -> str:
     """문장 끝(. ! ? 뒤 빈칸)마다 줄을 바꾼다(HISTORY [18], 사용자 요청)."""
     return _SENTENCE_END.sub(r"\1\n", text)
+
+
+SENDING = "질문을 보내는 중"  # 보낸 뒤 첫 단계가 오기 전(답 모델 thinking을 꺼도 참인 말, 검토 1(b))
+
+
+def waiting_line(stage: str | None, seconds: float) -> str:
+    """답을 기다리는 동안 보일 한 줄: 지금 단계 이름과 보낸 뒤 흐른 초(티켓 51, 단계를 늘어놓지 않고 지금 것 하나만)."""
+    return f"{stage or SENDING} · {int(seconds)}초"
+
+
+GREEN = (52, 199, 89)  # 지난 단계·지금 단계 점
+GREY = (142, 142, 147)  # 남은 단계 점과 점 사이 줄(밝은·어두운 테마 모두에서 보이는 중간 회색)
+PULSE = 1.2  # 지금 점의 밝기가 한 번 오르내리는 초
+
+
+def waiting_html(current: int, total: int, stage: str | None, seconds: float) -> str:
+    """기다림 줄 앞에 단계 점을 붙인 서식 글(사용자 11-23 "o - o - o - o … 한 단계 넘어갈때마다 초록색으로").
+
+    지난 단계는 초록 ●, 지금 단계는 밝기가 오르내리는 빈 초록 ○(단계를 넘어가야 칠함), 남은 단계는 회색 ○. 단계 이름은 서식으로 읽히지 않게 바꾼다.
+    """
+    pulse = 0.35 + 0.65 * (0.5 + 0.5 * math.cos(2 * math.pi * seconds / PULSE))
+    dots = []
+    for i in range(total):
+        rgb, alpha, shape = (GREEN, 1.0, "●") if i < current else (GREEN, pulse, "○") if i == current else (GREY, 1.0, "○")
+        dots.append(f"<span style='color:rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha:.2f})'>{shape}</span>")
+    line = f"<span style='color:rgb{GREY}'> ─ </span>".join(dots)
+    return f"{line}&nbsp;&nbsp;{html.escape(waiting_line(stage, seconds))}"

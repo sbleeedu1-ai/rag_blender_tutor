@@ -8,21 +8,38 @@ Blender·창 없이 부를 수 있고, 아무것도 기억하지 않는다(최�
 import json
 import logging
 import re
-from collections.abc import Iterable, Iterator, Sequence
 import threading
 import time
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from concurrent.futures import Future, as_completed
 from dataclasses import dataclass
 from enum import StrEnum
 from itertools import islice
-from collections.abc import Mapping
 from typing import Protocol
 
 import numpy as np
 from rank_bm25 import BM25Okapi
 
+from blender_tutor.decision_rerank import rerank
 from blender_tutor.manual_chunks import MAX_WORDS, Chunk
-from blender_tutor.menu_names import MARK_CLOSE, MARK_OPEN, PAREN_LIMIT, SHORTCUT_CLOSE, SHORTCUT_OPEN, MenuNames, _shown_part, paren_depth, prose_cut, prose_shows, screen_path, screen_prose, shortcut_in, tab_place, with_particle
+from blender_tutor.manual_errata import with_errata
+from blender_tutor.menu_names import (
+    MARK_CLOSE,
+    MARK_OPEN,
+    PAREN_LIMIT,
+    SHORTCUT_CLOSE,
+    SHORTCUT_OPEN,
+    MenuNames,
+    _shown_part,
+    paren_depth,
+    prose_cut,
+    prose_shows,
+    screen_path,
+    screen_prose,
+    shortcut_in,
+    tab_place,
+    with_particle,
+)
 from blender_tutor.progress import Course, Step
 from blender_tutor.setting_fields import FieldModel, SettingLines, choose_fields, lines_for
 from blender_tutor.work_state import WorkState
@@ -64,6 +81,8 @@ ERROR_MESSAGE = "답을 만들다 문제가 생겼어요. 잠시 뒤 다시 물�
 # 메뉴·버튼·옵션 이름은 [[ ]] 표시로 프로그램이 바꾸므로 여기에는 문장 속에 일반 낱말로 나오는 것만 둔다.
 # 괄호: 영어 발음을 옮긴 낱말은 붙이지 않고, 한국어로 바꿔 영어가 안 보이는 낱말과 여러 낱말 이름은 처음 한 번 붙인다([83]).
 # 표 전체(약 360토큰)를 늘 넘기지 않고, 넘기는 청크 글에 나온 낱말의 줄만 지시에 붙인다(HISTORY [105]).
+RERANK_LOG = 50  # 평가 기록에 남길 리랭킹 순위 수(답에는 쓰지 않음)
+
 TERMS = (
     ("vertex", "버텍스"),  # 정점·꼭짓점 아님 [78]
     ("edge", "에지"),  # 모서리 아님. 선택 모드 버튼 이름은 화면 글자가 '엣지'라 [[Edge]]로 [78][80]
@@ -139,6 +158,13 @@ class Embedder(Protocol):
     def embed(self, texts: Sequence[str], timeout: float) -> Sequence[Sequence[float]]: ...
 
 
+class Reranker(Protocol):
+    """판정기: 검색어와 글들을 받아 글마다 "검색어에 답하는 데 도움이 되나"의 확률을 글 차례대로 돌려준다(HISTORY [626]).
+    timeout초 안에 응답이 없으면 TimeoutError를 낸다."""
+
+    def judge(self, query: str, passages: Sequence[str], timeout: float) -> list[float]: ...
+
+
 class Rewriter(Protocol):
     """질문 바꾸기 모델: OpenAI 방식 채팅 글(역할 system·user)을 받아 답 글(JSON)을 조각으로 흘려 준다(티켓 44).
     주소를 바꿔 로컬 모델(llama-server, 티켓 42)로 바꿔 끼울 수 있게 이 모양만 약속한다."""
@@ -149,10 +175,11 @@ class Rewriter(Protocol):
 class AnswerModel(Protocol):
     """대화 글(역할 system·user·assistant)을 받아 답 글 조각을 나오는 대로 돌려준다.
 
-    timeout초 동안 다음 조각이 오지 않으면 TimeoutError를 낸다(답 전체 시간 한도가 아님).
+    부른 때부터 first_timeout초 안에 첫 글자가 안 오거나(없으면 timeout과 같음), 첫 글자 뒤 timeout초 동안 다음 조각이 오지 않으면
+    TimeoutError를 낸다(답 전체 시간 한도가 아님. 사용자 결정 [561]).
     """
 
-    def stream(self, messages: list[dict[str, str]], timeout: float) -> Iterable[str]: ...
+    def stream(self, messages: list[dict[str, str]], timeout: float, first_timeout: float | None = None) -> Iterable[str]: ...
 
 
 class Reasoning(StrEnum):
@@ -171,23 +198,45 @@ class Settings:
     """답 엔진 설정. 평가 때 바꿔 같은 문항을 다시 잰다."""
 
     top_k: int = 8  # 답변 모델에 넘길 검색 결과 수(명세 6-8개, [122]에서 8로 정함. 22번의 먼저 볼 소제목이 이 위에 더 붙는다)
-    timeout: float = 10.0  # 모델이 이만큼(초) 아무것도 보내지 않으면 멈춘 것으로 본다(사용자 결정, 2026-10-21)
+    timeout: float = 10.0  # 임베딩이 이만큼(초) 응답하지 않으면 멈춘 것으로 본다(사용자 결정 2026-10-21의 10초. 답 모델은 아래 둘)
+    # 답 모델 한도(사용자 결정 [561] "20초는 첫 질문 나오기까지 기다림 5초는 질문이 나오다 끊겼을때"). 생각하는 동안은 서버가 아무것도 안 보낸다([560])
+    answer_first_timeout: float = 20.0  # 부른 때부터 첫 글자까지
+    answer_timeout: float = 5.0  # 첫 글자 뒤 조각 사이
     rewrite_timeout: float = 5.0  # 질문 바꾸기를 동시에 부른 것 중 하나라도 올 때까지 기다리는 한도(초, [127])
     field_timeout: float = 5.0  # 분야 고르기 한도(초). 넘기면 묶음 없이 답한다(명세 "분야 고르기", Claude가 정한 값)
     use_bm25: bool = False  # 낱말 검색(BM25)을 섞을지. 끄면 뜻 검색만(티켓 40 결과로 끔, HISTORY [102])
-    # 답변 모델의 생각 수준(명세 기본 none). 엔진을 만들 때 답변 모델에 넘기고(engine_setup), 시간 기록에 남긴다
-    reasoning: Reasoning = Reasoning.NONE
-    # 분야 고르기가 실패해 묶음 없이 답할 때의 생각 수준(명세 처음 low, 사용자 "묶음이 실패해서 빠질 경우엔 생각을 키도록", [270])
+    # 답변 모델의 생각 수준. 엔진을 만들 때 답변 모델에 넘기고(engine_setup), 시간 기록에 남긴다.
+    # 기본 low(결정 7, 사용자 "그럼 답 모델은 일단 low 로 가자", [578]). 검색 차례가 모두 실패하면 none으로 되돌린다(같은 결정)
+    reasoning: Reasoning = Reasoning.LOW
+    # 분야 고르기가 실패해 묶음 없이 답할 때의 생각 수준(명세 처음 low, 사용자 "묶음이 실패해서 빠질 경우엔 생각을 키도록", [270]).
+    # 본 수준도 low라 지금은 올리지 않는다(fallback_level이 높은 쪽을 고름, medium은 low보다 나은 곳이 없고 느렸음, [578])
     fallback_reasoning: Reasoning = Reasoning.LOW
     # 설정 값의 1-a(그 상황일 때 늘)·2(계산) 초안 줄을 넘길지. 개발셋에서 끈 판과 견준다(사용자 "어차피 할거면 … 지금 하는게", [270])
     situation_lines: bool = True
     computed_lines: bool = True
     # 분야 묶음을 넘길지. 끄면 분야를 고르지 않고 늘 보내는 줄만 넘긴다(개발셋에서 묶음 몫을 가르려고, 검토 A5)
     field_lines: bool = True
+    # 위 200 리랭킹(사용자 "그래도 아예 의미가 없지는 않아서 넣기로 하자", [626]): 뜻 검색 위 rerank_depth개를 판정기 확률 순으로
+    # 다시 세워 위 top_k개를 넘긴다. 판정기가 rerank_timeout초 안에 답하지 않거나 실패하면 뜻 검색 위 top_k개로 답한다.
+    # 5초: 차례 13번 시험 왕복 441번 중 5초를 넘은 것 4번(중앙 1.50초), 질문 바꾸기·분야 고르기 한도와 같은 값(Claude가 advisor와 정함).
+    # 임베딩처럼 urllib의 timeout이라 연결·읽기 한 번마다의 한도다(왕복 전체가 5초를 조금 넘을 수 있음)
+    rerank: bool = True
+    rerank_depth: int = 200
+    rerank_timeout: float = 5.0
 
     def __post_init__(self):
         object.__setattr__(self, "reasoning", Reasoning(self.reasoning))  # "low"처럼 글자로 줘도 받고, 모르는 이름이면 ValueError
         object.__setattr__(self, "fallback_reasoning", Reasoning(self.fallback_reasoning))
+
+
+class Stage(StrEnum):
+    """답을 기다리는 동안 창에 보일 지금 단계(티켓 51). 엔진·질문 한 번이 실제로 그 단계에 들어가기 바로 전에 낸다.
+    답 모델 thinking을 끈 때도 참인 말로 쓴다([578]로 none이 될 수 있음)."""
+
+    SETTINGS = "Blender 설정을 읽는 중"  # 질문 한 번이 애드온의 설정 값을 기다림
+    REWRITE = "질문을 정리하는 중"  # 쿼리 재작성
+    SEARCH = "설명서에서 찾는 중"  # 임베딩·검색(분야 선택도 이때 함께 돈다)
+    ANSWER = "답을 만드는 중"  # 답변 모델을 부른 뒤 첫 글자까지
 
 
 @dataclass(frozen=True)
@@ -203,9 +252,9 @@ class Source:
 
     path: str  # 쪽 제목 > 소제목 경로(예: Bevel Modifier > Options)
     url: str  # /en/5.2/<경로>.html#<앵커>
-    has_image: bool  # 그림 있음
-    has_video: bool  # 영상 있음
-    videos: tuple[str, ...]  # 영상 링크
+    has_image: bool
+    has_video: bool
+    videos: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -224,6 +273,11 @@ class Done:
     # 평가에서 검색·답이 왜 흔들리는지 보려고 알린다(티켓 35). 창은 쓰지 않는다
     query: str = ""
     lines: tuple[str, ...] = ()
+    # 리랭킹을 부르려 했는데 실패해 뜻 검색 위 top_k개로 답했나. 평가에서 리랭킹 판과 섞이지 않게 센다(창은 쓰지 않음)
+    rerank_failed: bool = False
+    # 리랭킹 순위 위 RERANK_LOG개(청크 파일 차례 번호, 청크, 확률. 같은 소제목 주소에 청크가 여럿일 수 있어 번호를 같이 남긴다). 답에 쓰는 것은 위 top_k개뿐이고, 이것은 평가에서 칸 수를 바꾼 판을
+    # 다시 부르지 않고 만들려고 남긴다(11-25 사용자 "리랭킹 기록도 한 50개 까지 남기는건 어떤데? 기록만"). 리랭킹이 꺼졌거나 실패하면 빈 묶음
+    rerank_ranking: tuple[tuple[int, Chunk, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -237,7 +291,7 @@ class Failure:
     results: tuple[Chunk, ...] = ()
 
 
-Event = Piece | Done | Failure
+Event = Stage | Piece | Done | Failure
 
 
 class AnswerEngine:
@@ -258,6 +312,7 @@ class AnswerEngine:
         field_model: FieldModel | None = None,
         fields: Mapping[str, str] | None = None,
         fallback_model: AnswerModel | None = None,
+        reranker: Reranker | None = None,
     ):
         """name은 시간 기록·평가 결과에 남길 엔진 이름(어떤 임베딩·답변 모델인지, 엔진을 만드는 곳이 정한다).
         menu_names는 답 글의 [[메뉴 이름]] 표시를 한국어 화면 이름으로 바꿀 사전(없으면 바꾸지 않음).
@@ -265,7 +320,8 @@ class AnswerEngine:
         rewriters는 질문 바꾸기 모델들(동시에 부를 수만큼, 하나씩 따로). 있으면 모두 동시에 불러 먼저 온 답의 영어 검색어로
         찾는다(늦는 답을 기다리지 않으려고, [127]). 없으면 질문과 맥락 줄을 그대로 검색어로 쓴다.
         field_model·fields는 분야 고르기 모델과 분야 목록(코드 → 쉬운 설명). 둘 다 있고 설정 값을 받은 질문이면 분야를 고른다.
-        fallback_model은 분야 고르기가 실패해 묶음 없이 답할 때 쓰는 답변 모델(생각 수준을 올린 것). 없으면 model을 쓴다."""
+        fallback_model은 분야 고르기가 실패해 묶음 없이 답할 때 쓰는 답변 모델(생각 수준을 올린 것). 없으면 model을 쓴다.
+        reranker는 위 200 리랭킹 판정기(settings.rerank가 켜져 있을 때만 부른다). 없으면 뜻 검색 순위 그대로 쓴다."""
         self.name = name
         self._chunks = list(chunks)
         self._menu_names = menu_names
@@ -291,6 +347,7 @@ class AnswerEngine:
             raise ValueError("분야 고르기 모델과 분야 목록은 함께 줘야 함")
         self._field_model, self._fields = field_model, dict(fields or {})
         self._fallback_model = fallback_model
+        self._reranker = reranker
         areas = sorted({area_of(chunk.page_path) for chunk in self._chunks})
         self._rewrite_prompt = REWRITE_PROMPT.format(areas="\n".join(areas))
 
@@ -312,12 +369,15 @@ class AnswerEngine:
         # 검색·글 만들기 같은 우리 코드의 오류는 그대로 올려 보내 버그가 "잠시 뒤 다시"에 숨지 않게 한다.
         # 질문 바꾸기가 모두 실패하거나 늦으면 한국어 질문으로 찾지 않고 멈춘다(엉뚱한 근거로 답하지 않게, [127])
         try:
+            if rewrite:
+                yield Stage.REWRITE
             query = self._rewritten(rewrite) if rewrite else "\n".join([question, *context.values()])
             # 분야 고르기는 바꾼 검색어가 나온 뒤 임베딩과 동시에 부른다(명세). 실패해도 답은 멈추지 않는다(묶음 없이 답함)
             chosen = self._start_fields(question, query, state) if settings is not None and self._field_model and self._settings.field_lines else None
             # 비슷한 연습 과정은 검색어(직전 질문·조작에 끌림)가 아니라 질문만으로 고른다.
             # 질문만의 벡터는 따로 부르지 않고 같은 호출에 글을 하나 더 실어 받는다(비용은 질문 길이만큼 늚)
             texts = [query, question] if recommend and question != query else [query]
+            yield Stage.SEARCH
             vectors = self._embedder.embed(texts, self._settings.timeout)
             if len(vectors) != len(texts):
                 raise ValueError(f"임베딩이 글 {len(texts)}개에 벡터 {len(vectors)}개를 돌려줌")
@@ -326,18 +386,20 @@ class AnswerEngine:
         except Exception as error:
             yield _failure(error, [])
             return
+        # 리랭킹은 분야 고르기 결과를 기다리기 전에 부른다(분야 고르기는 뒤에서 돌고 있어 두 기다림이 겹친다)
+        results, rerank_failed, ranking = self._ranked(query, vectors[0])
         codes, field_failed = self._fields_from(chosen)
         lines = lines_for(settings, codes, situation=self._settings.situation_lines, computed=self._settings.computed_lines) if settings is not None else []
         model = self._fallback_model if field_failed and self._fallback_model else self._model
-        results = self.search(query, vectors[0])
         # 먼저 볼 소제목은 검색 상위를 대신하지 않고 그 위에 덧붙인다. 검색에도 걸렸으면 한 번만
         preview = self._preview(step)
         sent = list(dict.fromkeys(preview + results))
         similar = self._similar_courses(vectors[-1]) if recommend else []
         messages = _messages(question, state, recent, self._widened(sent, preview), similar, step, lines)
         marks = _MenuMarks(self._menu_names if state.korean_screen else None, question, _object_names(state))
+        yield Stage.ANSWER
         try:
-            for text in model.stream(messages, self._settings.timeout):
+            for text in model.stream(messages, self._settings.answer_timeout, first_timeout=self._settings.answer_first_timeout):
                 if text := marks.feed(text):
                     yield Piece(text)
         except Exception as error:
@@ -347,7 +409,7 @@ class AnswerEngine:
             return
         if text := marks.finish():
             yield Piece(text)
-        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed, query, tuple(lines))
+        yield Done(_sources(sent), tuple(results), tuple(similar), codes, field_failed, query, tuple(lines), rerank_failed, ranking)
 
     def _start_fields(self, question: str, query: str, state: WorkState) -> Future:
         """분야 고르기를 뒤에서 부른다. 결과(분야 코드 묶음)나 오류는 돌려준 Future에 담긴다."""
@@ -472,10 +534,36 @@ class AnswerEngine:
                 pass
         self._embedder.embed(["bevel"], self._settings.timeout)
 
-    def search(self, query: str, vector: Sequence[float]) -> list[Chunk]:
-        """뜻 검색과 낱말 검색 순위를 RRF로 합쳐 상위 top_k개를 고른다. 실측 프로그램(speed_trial)이 쓰지 않은 검색어도 채점하려고 부른다."""
+    def _ranked(self, query: str, vector: Sequence[float]) -> tuple[list[Chunk], bool, tuple[tuple[int, Chunk, float], ...]]:
+        """(넘길 검색 결과, 리랭킹 실패했나, 기록용 순위 위 RERANK_LOG개(차례 번호, 청크, 확률)). 리랭킹이 켜져 있으면 뜻 검색 위 rerank_depth개를 판정기 확률 순으로 세운 위 top_k개.
+        판정기는 바깥 서비스라 실패(시간 초과·오류·글 수와 다른 답)를 기록하고 뜻 검색 결과로 답한다(분야 고르기 실패와 같은 길).
+        리랭킹 없이 답하던 것이 [626] 전의 제품이라 엉뚱한 근거가 되지는 않는다. 후보는 뜻 검색만 쓴다(낱말 검색 use_bm25는
+        리랭킹이 꺼졌거나 실패했을 때의 search에만 든다. 시험한 것이 뜻 검색 위 200이라서)."""
+        if not (self._reranker and self._settings.rerank):
+            return self.search(query, vector), False, ()
+        candidates = self._by_meaning(vector)[: self._settings.rerank_depth]
+        passages = [self._chunks[i].text for i in candidates]
+        try:  # 바깥 서비스 실패만: 연결·HTTP 오류·시간 초과(OSError 아래), 답 꼴이 틀림(ValueError, JSON 풀기 포함). 그 밖은 버그라 올린다
+            probs = self._reranker.judge(query, passages, self._settings.rerank_timeout)
+            if len(probs) != len(candidates):
+                raise ValueError(f"리랭킹이 글 {len(candidates)}개에 확률 {len(probs)}개를 돌려줌")
+        except (OSError, ValueError) as error:
+            log.warning("리랭킹 실패, 뜻 검색 순위로 답함: %r", error)
+            return self.search(query, vector), True, ()
+        order = rerank(candidates, probs)
+        prob_of = dict(zip(candidates, probs))
+        ranking = tuple((i, self._chunks[i], float(prob_of[i])) for i in order[:RERANK_LOG])
+        return [self._chunks[i] for i in order[: self._settings.top_k]], False, ranking
+
+    def _by_meaning(self, vector: Sequence[float]) -> list[int]:
+        """청크 차례 번호를 뜻 점수(코사인) 큰 순으로. 같은 점수는 저장 차례(차례 13번 시험의 위 200과 같은 정렬)."""
         meaning_scores = self._vectors @ _normalized(np.asarray(vector, dtype=np.float32))
-        rankings = [np.argsort(-meaning_scores, kind="stable")[:RRF_DEPTH]]
+        return [int(i) for i in np.argsort(-meaning_scores, kind="stable")]
+
+    def search(self, query: str, vector: Sequence[float]) -> list[Chunk]:
+        """뜻 검색과 낱말 검색 순위를 RRF로 합쳐 상위 top_k개를 고른다(리랭킹은 하지 않음: 유료 판정기는 answer에서만 부른다).
+        실측 프로그램(speed_trial)이 쓰지 않은 검색어도 채점하려고 부른다."""
+        rankings = [self._by_meaning(vector)[:RRF_DEPTH]]
         if self._settings.use_bm25:
             word_scores = self._bm25.get_scores(_words(query))
             order = np.argsort(-word_scores, kind="stable")[:RRF_DEPTH]
@@ -528,6 +616,14 @@ _OTHER_KEY = re.compile(r"(?:Ctrl|Alt|Shift|Cmd|Option)\s*[-+]|(?<![A-Za-z0-9])(
                         r"|(?<![A-Za-z0-9.'’])[A-Z0-9](?![A-Za-z0-9.'’])(?=\s*(?:키|로|으로|를|을|와|과|,|\)|$))")
 
 
+# 환경 설정 안의 탭(설명서 editors/preferences/ 쪽 제목, 5.2). 이 이름이 바로 뒤에 오면 "환경 설정"이 여는 길을 가리킨다(차례 9번)
+PREFS_TABS = ("Interface", "Themes", "Viewport", "Lights", "Editing", "Animation", "Get Extensions", "Add-ons", "Input",
+              "Navigation", "Keymap", "System", "Save & Load", "File Paths", "Asset Libraries", "Experimental", "Developer Tools")
+# 바로 앞 낱말이 이것이면 Blender가 아닌 다른 프로그램·운영체제의 환경 설정이다(영어 낱말 "macOS"·"Windows"·"Blender"도 뺀다)
+_OTHER_PREFS = re.compile(r"(?:[A-Za-z0-9]+|시스템|윈도우|운영 ?체제|맥|컴퓨터|프로그램|브라우저|드라이버|그래픽 ?카드)\s*$")
+PREFS_AFTER = 40  # 환경 설정 뒤에서 볼 글자 수("(Preferences)의 " 뒤 가장 긴 탭 이름까지)
+
+
 class _MenuMarks:
     """답 글 속 [[Add > Mesh]] 표시를 화면 글로 바꾼다(티켓 23). 표시가 조각 사이에 갈려 와도 닫힐 때까지 모아 둔다.
 
@@ -540,6 +636,9 @@ class _MenuMarks:
     지운 괄호가 단축키 하나뿐이면(표시 뒤·맨 영어 뒤 모두) 그 문장 끝에 "단축키는 Alt-F입니다."로 옮긴다([353] 사용자 예문, [423]).
     넣는 곳은 내보내는 길 한 곳(_send)이라 조각을 어떻게 나눠 흘려도 같다. 한 문장에 둘 이상이거나, 그 단축키가 답에 이미 나왔거나,
     표·제목 줄·코드 안이면 넣지 않고 지우기만 한다.
+    한국어 화면 답이 "환경 설정"을 처음 말할 때, 그 말이 안의 탭으로 가는 길("환경 설정의 키맵", "환경 설정 > 입력")인데
+    앞에 여는 길("편집")이 없으면 "편집(Edit) > "을 앞에 넣는다(차례 9번, 설명서 "Menu: Edit ‣ Preferences…"). 상태를 설명하는 말
+    ("현재 환경 설정에서 꺼져 있어요")·괄호·코드 속·더 긴 이름("최초 환경 설정을 불러오기")은 두고, 답 하나에 처음 언급만 본다(_fill_prefs).
     """
 
     def __init__(self, names: MenuNames | None, question: str = "", keep: tuple[str, ...] = ()):
@@ -557,6 +656,18 @@ class _MenuMarks:
         self._tail = ""  # 문장 끝인지 보려고 붙잡은 마지막 '.'·'?'·'!'(다음 한 글자만 기다린다, "0.5")
         self._line = ""  # 내보낸 글의 지금 줄(표·제목 줄인지 보려고)
         self._said = ""  # 내보낸 글 전체(단축키가 이미 나왔는지 보려고)
+        prefs, edit = (names.korean("Preferences"), names.korean("Edit")) if names else (None, None)
+        # 환경 설정 화면 글자(띄어 쓰지 않은 꼴도)와 여는 길 머리. 둘 중 하나가 화면에 영어면 채우지 않는다
+        words = prefs.split() if prefs and edit else []
+        self._prefs = re.compile(r" ?".join(map(re.escape, words))) if words else None
+        # 조각 끝이 환경 설정의 앞부분이면 다음 조각까지 붙잡는다("환경 |설정")
+        self._prefs_heads = sorted({w[:k] for w in (" ".join(words), "".join(words)) for k in range(1, len(w))}, key=len, reverse=True)
+        self._prefs_longer = sorted(k for k in names.screen_words() if prefs in k and k != prefs) if words else []
+        tabs = [*PREFS_TABS, *(k for t in PREFS_TABS if (k := names.korean(t)))] if words else []
+        self._prefs_tab = re.compile("|".join(map(re.escape, sorted(tabs, key=len, reverse=True)))) if tabs else None
+        self._edit = edit or ""
+        self._prefs_seen = False  # 이 답에서 환경 설정을 이미 봤나(처음 언급만 본다)
+        self._prefs_wait = ""  # 환경 설정 뒤 글을 볼 때까지 붙잡은 글(_send 앞에서)
 
     def feed(self, text: str, done: bool = False) -> str:
         """조각 하나를 받아 지금 내보낼 수 있는 글을 돌려준다. done이면 더 올 글이 없다(닫힌 표시를 더 붙잡지 않음)."""
@@ -593,9 +704,9 @@ class _MenuMarks:
                     break  # 표시 뒤 괄호·조사를 볼 때까지 모은다
                 # 앞 글을 먼저 다 내보낸 뒤 표시를 바꾼다(되풀이 이름을 나온 차례대로 기억해야 흘려 넣어도 같다)
                 before = self._plain(held[:start]) + self._plain("", done=True)
-                tab = self._names is not None and tab_place(self._shown, rest)  # 속성 창 탭이면 탭 글자로
+                tab = self._names is not None and tab_place((self._shown + self._prefs_wait)[-40:], rest)  # 속성 창 탭이면 탭 글자로(붙잡은 글도 앞 글)
                 # 괄호 안이거나 뒤에 지우지 않은 괄호가 남으면 괄호 영어 없이 화면 글자만([458])
-                bare = self._names is not None and (paren_depth(self._line) > 0 or bool(re.match(r" ?\(", rest)))
+                bare = self._names is not None and (paren_depth(self._line + self._prefs_wait) > 0 or bool(re.match(r" ?\(", rest)))
                 shown = screen_path(held[inner:end], self._names, self._question, self._seen if self._names else None, tab, bare)
                 if self._mark_item:  # 머리 제목이 계산 이름인 노드 뒤 계산 이름([436]). 맨 글 바꾸기를 다시 지나지 않게 이름과 함께 내고,
                     item, rest = with_particle(_shown_part(*self._mark_item, self._question, self._seen, bare), rest)  # 조사·'항목'은 계산 이름에
@@ -604,7 +715,10 @@ class _MenuMarks:
                     shown, rest = with_particle(shown, rest)
                 out += [before, self._send(shown)]
                 if self._mark_key:
-                    self._keys.append(self._mark_key)  # 이름을 내보낸 뒤에 올려야 앞 글의 문장 끝에 붙지 않는다
+                    if self._prefs_wait:  # 이름이 아직 붙잡혀 있으면 글 순서대로 지나가게 자리 표로 붙인다(_send가 읽는다)
+                        self._prefs_wait += f"{SHORTCUT_OPEN}{self._mark_key}{SHORTCUT_CLOSE}"
+                    else:
+                        self._keys.append(self._mark_key)  # 이름을 내보낸 뒤에 올려야 앞 글의 문장 끝에 붙지 않는다
                 held = rest
         else:
             start = len(held) - 1 if held.endswith(MARK_OPEN[0]) else len(held)
@@ -622,6 +736,7 @@ class _MenuMarks:
             out += self._fixed(held[len(MARK_OPEN) :])
         else:
             out += self._plain(held, done=True)
+        out += self._send("", final=True)  # 환경 설정 뒤 글을 기다리며 붙잡은 글
         tail, self._tail = self._tail, ""
         if cut:
             self._keys = []
@@ -658,7 +773,9 @@ class _MenuMarks:
         cut = len(text) if done else prose_cut(text, self._names.common_prefixes, tabs=True)
         text, self._prose = text[:cut], text[cut:]
         # 끝부분 앞에서 코드가 열려 있었으면 백틱 하나를 앞에 붙여 짝을 맞춘다
-        before = ("`" if (self._ticks - self._shown.count("`")) % 2 else "") + self._shown
+        # 환경 설정 채우기가 붙잡은 글(_prefs_wait)도 이미 낸 글의 끝으로 본다(안 그러면 "환경 |설정(Preferences)"의 앞말을 잃는다)
+        shown = self._shown + self._prefs_wait
+        before = ("`" if (self._ticks - shown.count("`") + self._prefs_wait.count("`")) % 2 else "") + shown
         return self._send(screen_prose(before + text, self._names, self._question, self._keep, len(before), seen=self._seen, keys=True,
                                        depth=paren_depth(self._line))[len(before) :])
 
@@ -666,9 +783,10 @@ class _MenuMarks:
         """표시를 바꾼 글: 붙잡은 표시 밖 글을 먼저 다 내고, 이 글은 그대로 낸다."""
         return self._plain("", done=True) + self._send(text)
 
-    def _send(self, text: str) -> str:
+    def _send(self, text: str, final: bool = False) -> str:
         """사용자에게 내보내는 글이 모두 지나는 곳. 단축키 자리 표를 떼어 모으고, 모은 단축키는 문장 끝에 넣는다."""
-        text, self._tail, out, i = self._tail + text, "", [], 0
+        text, self._tail, self._prefs_wait, out, i = self._tail + self._prefs_wait + text, "", "", [], 0
+        text, self._prefs_wait = self._fill_prefs(text, final)
         while i < len(text):
             ch = text[i]
             if ch == SHORTCUT_OPEN:
@@ -692,6 +810,45 @@ class _MenuMarks:
             out.append(self._said_now(ch))
             i += 1
         return "".join(out)
+
+    def _fill_prefs(self, text: str, final: bool) -> tuple[str, str]:
+        """(지금 내보낼 글, 붙잡을 글). 첫 "환경 설정"이 탭으로 가는 길인데 앞 20자에 여는 길이 없으면 "편집(Edit) > "을 넣는다.
+
+        뒤 글(PREFS_AFTER자나 줄 끝까지)을 봐야 정해서 그동안 그 자리부터 붙잡는다. 정하는 글이 늘 같은 창이라 흘려 넣어도 같다."""
+        if not self._prefs or self._prefs_seen:
+            return text, ""
+        for found in self._prefs.finditer(text):
+            before, after = text[: found.start()], text[found.end() :]
+            line = (self._line + before).rsplit("\n", 1)[-1].lstrip()
+            if paren_depth(self._line + before) > 0 or (self._ticks + before.count("`")) % 2 or line.startswith(("|", "#")):
+                continue  # "Preferences(환경 설정)", "(설명서의 환경 설정입니다)", 코드 속, 표·제목 줄은 둔다
+            window = re.sub(f"{SHORTCUT_OPEN}[^{SHORTCUT_CLOSE}]*{SHORTCUT_CLOSE}", "", after)[:PREFS_AFTER].split("\n", 1)[0]
+            if not final and len(window) < PREFS_AFTER and "\n" not in after:
+                return before, text[found.start() :]
+            around, here = self._said[-30:] + text, len(self._said[-30:]) + found.start()
+            if any(0 <= (at := around.find(k, max(0, here - len(k)))) <= here and at + len(k) >= here + len(found[0])
+                   for k in self._prefs_longer):
+                continue  # 더 긴 이름의 일부("최초 환경 설정을 불러오기", "애드온 환경 설정")
+            if _OTHER_PREFS.search((self._said + before)[-20:]):
+                continue  # 다른 프로그램·운영체제의 환경 설정("macOS 시스템 환경 설정 > 키보드")
+            self._prefs_seen = True
+            if re.search(rf"{re.escape(self._edit)}|Edit|[>‣]\s*$", (self._said + before)[-20:]) or not self._to_tab(window):
+                return text, ""
+            # 영어 괄호는 이 자리 앞에 "(Edit)"이 이미 보였는지로만 정하고 되풀이 기억(_seen)은 건드리지 않는다. 뒤 글이 이미 바뀌었는지는
+            # 조각 나눔에 따라 달라서, 그것을 보면 흘려 넣은 결과가 달라진다. 대가로 뒤에 "편집(Edit)"이 한 번 더 나올 수 있다([353] 어긋남)
+            edit = self._edit if "(Edit)" in self._said + before else f"{self._edit}(Edit)"
+            return f"{before}{edit} > {text[found.start():]}", ""
+        if not final:
+            head = next((h for h in self._prefs_heads if text.endswith(h)), "")
+            if head:
+                return text[: len(text) - len(head)], head
+        return text, ""
+
+    def _to_tab(self, after: str) -> bool:
+        """환경 설정 뒤 글이 안의 탭으로 가는 길인가: "(Preferences)"를 건너 "> …", "의/에서 키맵"처럼 탭 이름이 바로 온다."""
+        after = re.sub(r"^ ?\([^()]*\)", "", after)
+        tab = re.match(r"\s*[>‣]\s*|(?:의|에서|에 있는|창의|창에서)\s+[*'\"“‘]*", after)  # "> 키맵"도 뒤가 탭 이름이어야 한다
+        return bool(tab and self._prefs_tab and self._prefs_tab.match(after, tab.end()))
 
     def _said_now(self, text: str) -> str:
         self._shown = (self._shown + text)[-40:]
@@ -745,10 +902,11 @@ def _messages(
     """답변 모델에 넘길 대화 글: 지시, 최근 대화, 그리고 설명서 내용·작업 상태·질문을 담은 마지막 글.
 
     groups는 넘길 청크마다 함께 읽을 묶음(찾은 청크와 그 형제 소제목). 묶음 사이를 ---로 가른다.
+    설명서 글이 5.2 화면과 다른 청크는 글 바로 아래에 바로잡기 줄을 붙인다(manual_errata, HISTORY [690]).
     similar는 연습 과정을 진행하지 않을 때만 붙이는 비슷한 연습 과정, step은 지금 단계(그 단계 내용만 넘긴다).
     lines는 설정 값 줄(늘 보내는 줄 + 고른 분야의 줄). 없으면 그 칸을 넣지 않는다.
     """
-    manual = "\n\n---\n\n".join("\n\n".join(chunk.text for chunk in group) for group in groups)
+    manual = "\n\n---\n\n".join("\n\n".join(with_errata(chunk) for chunk in group) for group in groups)
     messages = [{"role": "system", "content": INSTRUCTIONS + _terms_for(manual)}]
     for asked, answered in recent:
         messages += [{"role": "user", "content": asked}, {"role": "assistant", "content": answered}]

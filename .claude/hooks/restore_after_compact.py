@@ -45,7 +45,7 @@ def human_messages(transcript: Path) -> list[tuple[str, str]]:
     # 지금 쓰이는 기록은 마지막 줄이 덜 적혀 있을 수 있어 완성된 줄만 읽는다(remind_goal_review.py와 같은 방식)
     complete = transcript.read_text(encoding="utf-8", errors="replace").rpartition("\n")[0]
     found = []
-    for line in complete.splitlines():
+    for line in complete.split("\n"):  # splitlines()는 글 속 U+2028에서도 잘라 JSON 줄이 깨진다([550])
         if '"human"' not in line:
             continue
         entry = json.loads(line)

@@ -13,6 +13,8 @@ import shlex
 import subprocess
 import sys
 
+from hook_notice import with_notice
+
 MAIN = "origin/main"
 FETCH_SECONDS = 20
 
@@ -194,7 +196,7 @@ def main() -> None:
     command = (payload.get("tool_input") or {}).get("command") or ""
     answer = decide(command, payload.get("cwd") or ".")
     if answer:
-        print(json.dumps({"hookSpecificOutput": answer}, ensure_ascii=False))
+        print(json.dumps(with_notice("ask_branch_delete", payload, {"hookSpecificOutput": answer}), ensure_ascii=False))
 
 
 if __name__ == "__main__":
